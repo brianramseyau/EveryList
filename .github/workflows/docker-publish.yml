@@ -13,10 +13,9 @@ name: Docker Publish
 # but deliberately does NOT move `latest` or the `vX` major tag, so prereleases can't leak
 # into anyone pinned to a major version or tracking `latest`.
 #
-# `test` re-runs the same lint/typecheck/coverage-gated suite required on every PR, so nothing
-# gets published - nightly or release - without it passing, even for a tag pushed on an older
-# commit. If a standalone PR-gate workflow is added later, factor these steps out into a
-# `workflow_call` reusable workflow both can invoke, rather than letting the two drift apart.
+# `test` re-runs the same lint/typecheck/coverage-gated suite required on every PR (test.yml,
+# shared with ci.yml so the two pipelines can't drift apart), so nothing gets published -
+# nightly or release - without it passing, even for a tag pushed on an older commit.
 
 on:
   push:
@@ -33,25 +32,7 @@ concurrency:
 
 jobs:
   test:
-    name: Lint, typecheck, coverage-gated tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        # version comes from the root package.json's "packageManager" field (Phase 0)
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm -r lint
-      - run: pnpm -r typecheck
-      - run: pnpm -r test
-        # coverage thresholds (100%) are enforced by each workspace's own c8/vitest
-        # config - see foundational/PLAN.md §11 - so a plain test run is already the gate.
+    uses: ./.github/workflows/test.yml
 
   build-and-push:
     name: Build & push image

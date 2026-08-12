@@ -1,0 +1,53 @@
+name: Test
+
+# Reusable lint/typecheck/test job — the single source of truth for "does
+# this commit pass the gate" so ci.yml (PR gate) and docker-publish.yml
+# (which re-runs this as a hard prerequisite before ever publishing an
+# image) can't drift apart. See foundational/PLAN.md §12.
+#
+# Coverage thresholds (100%, per PLAN.md §11) are enforced per-workspace by
+# each package's own test config (packages/shared already does; apps/api
+# and apps/web pick this up as real application code lands on top of the
+# Phase 0 scaffold) — a plain `pnpm -r test` is already the gate once a
+# workspace opts in, no separate coverage step needed here.
+
+on:
+  workflow_call:
+
+jobs:
+  test:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+    env:
+      # Dummy, non-secret values so `node ace test` can boot apps/api (see
+      # apps/api/start/env.ts) — CI's SQLite database is an ephemeral tmp
+      # file thrown away at the end of the run.
+      HOST: 127.0.0.1
+      PORT: '3333'
+      NODE_ENV: test
+      LOG_LEVEL: info
+      APP_KEY: ci-3B65vVbNzQY6nqACpAxWnZUX2ZPfL5pI
+      APP_URL: http://127.0.0.1:3333
+      SESSION_DRIVER: cookie
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # version comes from the root package.json's "packageManager" field
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm -r lint
+      - run: pnpm -r typecheck
+
+      - name: Install Playwright Chromium
+        # apps/web's component tests run in a real headless browser
+        # (vitest-browser-svelte), so `pnpm -r test` below needs it present.
+        run: pnpm --filter @everylist/web exec playwright install --with-deps chromium
+
+      - run: pnpm -r test
