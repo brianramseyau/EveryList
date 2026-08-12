@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv sh
+#!/command/with-contenv sh
 # Remaps the baked-in "appuser" account to the PUID/PGID supplied at
 # `docker run` time (LSIO-style), defaulting to 99/100 (Unraid's
 # nobody/users) so a bare `docker run` with no -e flags still works.
