@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN corepack enable
 
 WORKDIR /app
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
@@ -37,6 +37,7 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build-web
 COPY packages/shared packages/shared
 COPY apps/web apps/web
+RUN pnpm --filter @everylist/shared build
 RUN pnpm --filter @everylist/web build
 
 # ---------------------------------------------------------------------------
@@ -53,6 +54,7 @@ FROM deps AS build-api
 COPY packages/shared packages/shared
 COPY apps/api apps/api
 COPY --from=build-web /app/apps/web/build apps/api/public
+RUN pnpm --filter @everylist/shared build
 RUN pnpm --filter @everylist/api build
 
 # ---------------------------------------------------------------------------
@@ -72,6 +74,14 @@ RUN corepack enable
 
 WORKDIR /srv/build
 COPY --from=build-api /app/apps/api/build .
+# `node ace build` copies apps/api/package.json's devDependencies into this
+# standalone package.json verbatim (including @everylist/shared, a
+# type-only devDependency never meant to leave the monorepo — see
+# apps/api/package.json). pnpm validates "workspace:*" specifiers before
+# `--prod` gets a chance to skip devDependencies, so it fails to resolve
+# outside a pnpm workspace regardless of dep type. Strip devDependencies
+# before installing — production has no business installing them anyway.
+RUN node -e "const fs=require('node:fs'); const p=JSON.parse(fs.readFileSync('package.json')); delete p.devDependencies; fs.writeFileSync('package.json', JSON.stringify(p, null, 2))"
 RUN pnpm install --prod
 
 # ---------------------------------------------------------------------------

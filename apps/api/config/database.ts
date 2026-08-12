@@ -28,6 +28,21 @@ const dbConfig = defineConfig({
        */
       useNullAsDefault: true,
 
+      /**
+       * better-sqlite3 doesn't enforce FK constraints (or ON DELETE
+       * CASCADE) unless "PRAGMA foreign_keys" is turned on per connection —
+       * required for the cascading deletes used by lists/categories/items.
+       */
+      pool: {
+        afterCreate: (
+          connection: { pragma: (statement: string) => unknown },
+          done: (error: Error | null, connection: unknown) => void
+        ) => {
+          connection.pragma('foreign_keys = ON')
+          done(null, connection)
+        },
+      },
+
       migrations: {
         /**
          * Sort migration files naturally by filename.

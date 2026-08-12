@@ -1,6 +1,6 @@
 # EveryList — Foundational Plan
 
-Status: **In progress — Phase 0 (Foundations) underway.**
+Status: **In progress — Phase 0 (Foundations) complete; Phase 1 (Auth & domain core) underway.**
 This document is the single source of truth for scope, architecture, and process until superseded by an updated version. Any deviation from it during implementation should come back here as an edit first.
 
 ---
@@ -310,4 +310,4 @@ No open questions remain blocking Phase 0.
 
 ---
 
-*Phase 0 — repo scaffold — is in progress.*
+*Phase 0 — repo scaffold — is complete. Phase 1 — auth & domain core — is in progress: List/Category/Item migrations, models, and default category seeding are done; the auth starter kit (signup/login/logout) now also supports token refresh; the Settings page shell with the `/api/v1/meta` version footer is done.*
