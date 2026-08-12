@@ -55,6 +55,7 @@ Full feature parity with AnyList (including Watch app, Siri, Alexa, Instacart fu
 | Premium themes | Premium | **Phase 6** | Flowbite theming makes this cheap; light/dark mode ships in MVP, extra themes later. |
 | Desktop & web access | Premium | **Already satisfied** | The product *is* the web app — no separate native client needed. |
 | Badge exclusion | Premium | **Phase 5** | Ships alongside badge counts. |
+| App version & build info visible in-app *(new — not from AnyList's list)* | Free | **MVP** | Self-hosted admins running a moving tag (`nightly` or a major-pin `vX`) need an easy way to confirm exactly what build is actually running. Shown at the bottom of the Settings page — see §8/§12. |
 
 ---
 
@@ -204,6 +205,7 @@ Core entities (fields abbreviated to the decision-relevant ones):
 - Real-time: clients subscribe to `list/:id` Transmit channels on list open; every mutation broadcasts a `SyncEvent` to that channel so other connected members see updates within roughly a second, with an optional "list was modified" toast per the AnyList "modification alerts" behavior. `Store` and `StoreCategoryOrder` changes broadcast on the same channel for every list the store is attached to, so a household member's aisle-order edit shows up live for co-shoppers.
 - Bulk import endpoint (`POST /lists/:id/items/import`) accepts raw pasted text, splits lines, and runs each line through the same auto-categorization pass as manual add.
 - Store endpoints: `GET/POST /lists/:id/stores` (list/attach-or-create stores visible to this list), `PATCH /stores/:id/categories` (reorder — replaces that store's `StoreCategoryOrder` rows), permission-checked against the requester's `ListMember` role on any list the store is attached to.
+- `GET /api/v1/meta` — unauthenticated, returns `{ version, commit, builtAt }` describing the *image*, not the request: `version` is `nightly` for a main-branch build or the exact tag (`v1.2.3`) for a release build, `commit` is the short git SHA, `builtAt` is the build timestamp. These are baked into the image at `docker build` time as `ARG`/`ENV` (`APP_VERSION`, `GIT_SHA`, `BUILD_DATE` — set by `.github/workflows/docker-publish.yml`, see §12), not computed at container startup, since they describe the image, not the running instance. The Settings page footer (§9) is this endpoint's only consumer.
 
 ---
 
@@ -215,6 +217,7 @@ Core entities (fields abbreviated to the decision-relevant ones):
 - **Sync queue:** durable queue table in Dexie of pending mutations, retried with backoff, flushed on `online` events and periodically via the Background Sync API where supported, with a manual "retry sync" affordance as a fallback for browsers without it.
 - **Installability:** web app manifest with icons/splash screens, `display: standalone`, theme color; install prompt surfaced contextually, not nagged. App icon source lives at `branding/icon.svg` (PNG exports alongside it) — a cheeky, deliberately distinct riff on AnyList's dated, thin/wispy iOS-7-era checklist icon: a bold cyan-to-blue gradient squircle, a tilted clipboard with every row already checked off (the "every" vs. "any" pun), and an oversized two-tone checkmark stamp sweeping past the card's edge. Manifest icons (192/512, maskable variant) and favicon sizes are generated from this SVG during Phase 0/4 rather than hand-drawn per size.
 - **Badge counts (Phase 5):** Web Badging API where available; degrades gracefully (in-app count only) where not.
+- **Settings page, version footer:** a plain-text row at the bottom of Settings — e.g. `EveryList v1.4.2 (a1b2c3d) · built Aug 12, 2026` or `EveryList nightly (a1b2c3d) · built Aug 12, 2026` — fetched from `GET /api/v1/meta` (§8) like any other GET request, so it rides the same stale-while-revalidate runtime cache: still shows the last-known build info offline, refreshes silently once back online. No special-casing needed beyond the endpoint existing.
 
 ---
 
@@ -282,7 +285,7 @@ Tag computation uses `docker/metadata-action`, which derives all of this from a 
 | Phase | Contents |
 |---|---|
 | **0 — Foundations** | This plan; repo scaffold (pnpm workspaces, local dev Docker Compose, CI skeleton, lint/format/typecheck config, shared `tsconfig`); empty Adonis + SvelteKit apps wired together; `docker/Dockerfile` (LSIO-style, PUID/PGID) and `docker/unraid-template.xml` producing a runnable single-container image from day one; `.github/workflows/docker-publish.yml` (already written, §12) goes green as soon as the pnpm scripts it calls (`lint`/`typecheck`/`test`) and `docker/Dockerfile` exist. |
-| **1 — Auth & domain core** | User auth (register/login/refresh), `List`/`Category`/`Item` migrations + models, default category seeding. |
+| **1 — Auth & domain core** | User auth (register/login/refresh), `List`/`Category`/`Item` migrations + models, default category seeding; minimal Settings page shell with the `GET /api/v1/meta` version/build-info footer (§8/§9) — cheap to ship early and useful as a deployment sanity check from the first runnable build onward. |
 | **2 — List & item CRUD** | Full list/item management UI + API, quantities/notes, auto-categorization, category customization, favorites, recent-items recovery, `Store`/`ListStore`/`StoreCategoryOrder` + the store selector and "reorder categories for this store" screen. |
 | **3 — Sharing & real-time** | `ListMember` roles, invite/join flow, Transmit channels, live update UI + modification toasts (also covers live updates to shared `Store`/`StoreCategoryOrder` edits from §7/§8). |
 | **4 — Offline & PWA** | Dexie local store (including the local-only store-selection state from §9), sync queue + conflict resolution, service worker, manifest/installability, offline E2E coverage. This phase is the MVP-complete milestone. |
