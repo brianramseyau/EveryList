@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+.svelte-kit
+apps/web/build
+coverage
+pnpm-lock.yaml
+CHANGELOG.md
