@@ -1,6 +1,6 @@
 # EveryList — Foundational Plan
 
-Status: **In progress — Phase 0 (Foundations) complete; Phase 1 (Auth & domain core) underway.**
+Status: **In progress — Phase 0 (Foundations) and Phase 1 (Auth & domain core) complete; Phase 2 (List & item CRUD) underway.**
 This document is the single source of truth for scope, architecture, and process until superseded by an updated version. Any deviation from it during implementation should come back here as an edit first.
 
 ---
@@ -310,4 +310,9 @@ No open questions remain blocking Phase 0.
 
 ---
 
-*Phase 0 — repo scaffold — is complete. Phase 1 — auth & domain core — is in progress: List/Category/Item migrations, models, and default category seeding are done; the auth starter kit (signup/login/logout) now also supports token refresh; the Settings page shell with the `/api/v1/meta` version footer is done.*
+*Phase 0 — repo scaffold — is complete. Phase 1 — auth & domain core — is complete: List/Category/Item migrations, models, and default category seeding are done; the auth starter kit (signup/login/logout) supports token refresh; the Settings page shell with the `/api/v1/meta` version footer is done.*
+
+*Phase 2 — list & item CRUD — backend is underway; frontend is not started:*
+- *Done: migrations/models/API for `FavoriteItem`, `Store`, `ListStore`, `StoreCategoryOrder`; REST endpoints for list CRUD, item CRUD (quantities/notes/checked/soft-delete+restore, bulk paste import), category customization (create/rename/reorder, with global defaults forked into list-scoped overrides tracked by a `forkedFromId` lineage column so renames don't un-shadow the original), basic keyword-based auto-categorization (`app/services/auto_categorize_service.ts`), the favorites master list with one-tap "add to list", and store attach/create + per-store category reordering. Functional test coverage (Japa) added for all of the above — not yet audited against the 100% coverage policy in §11, and `c8`'s coverage gate hasn't been re-run since these additions.*
+- *Deliberately deferred to Phase 3: all of this is owner-only for now (`List.ownerId` checks) since `ListMember`/sharing doesn't exist yet — the plan's "store visible to everyone the list is shared with" behavior (§7) will start working once Phase 3 lands membership.*
+- *Not started: the SvelteKit frontend for any of this (list view, item add/check/edit UI, category customization screen, store selector, "reorder categories for this store" screen) — Phase 2 is not shippable/demoable until that exists.*
