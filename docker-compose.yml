@@ -1,0 +1,46 @@
+# Local development only — runs the API and web app as separate processes
+# with hot reload and the repo bind-mounted for live editing. No external
+# services (DB, cache, etc.) are needed; SQLite lives under apps/api/tmp.
+#
+# First-time setup: cp apps/api/.env.example apps/api/.env
+# Then:             docker compose up
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/dev.Dockerfile
+    working_dir: /app
+    command: sh -c "pnpm install --frozen-lockfile && pnpm --filter @everylist/api dev"
+    environment:
+      HOST: 0.0.0.0
+    ports:
+      - "3333:3333"
+    volumes:
+      - .:/app
+      - pnpm-store:/root/.local/share/pnpm
+      - /app/node_modules
+      - /app/apps/api/node_modules
+      - /app/apps/web/node_modules
+      - /app/packages/shared/node_modules
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/dev.Dockerfile
+    working_dir: /app
+    command: sh -c "pnpm install --frozen-lockfile && pnpm --filter @everylist/web dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    volumes:
+      - .:/app
+      - pnpm-store:/root/.local/share/pnpm
+      - /app/node_modules
+      - /app/apps/api/node_modules
+      - /app/apps/web/node_modules
+      - /app/packages/shared/node_modules
+
+volumes:
+  pnpm-store:
