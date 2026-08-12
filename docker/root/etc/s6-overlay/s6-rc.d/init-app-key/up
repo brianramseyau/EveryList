@@ -1,0 +1,26 @@
+#!/command/with-contenv sh
+# AdonisJS needs APP_KEY to boot. Per foundational/PLAN.md §5's zero-config
+# startup rule, nothing that can be safely defaulted may block startup, but
+# APP_KEY can't ship with a shared baked-in default without breaking every
+# deployment's security. So: an explicitly-set APP_KEY always wins; otherwise
+# reuse the key persisted at /config/app_key from a previous boot; otherwise
+# generate one and persist it there so it survives restarts/updates.
+set -e
+
+if [ -n "${APP_KEY:-}" ]; then
+  echo "[init-app-key] using explicitly-set APP_KEY env var"
+  exit 0
+fi
+
+if [ -f /config/app_key ]; then
+  APP_KEY="$(cat /config/app_key)"
+  echo "[init-app-key] reusing key persisted at /config/app_key"
+else
+  APP_KEY="$(node /app/build/ace.js generate:key --show | sed -n 's/^APP_KEY = //p')"
+  printf '%s' "$APP_KEY" >/config/app_key
+  chown appuser:appuser /config/app_key
+  chmod 600 /config/app_key
+  echo "[init-app-key] generated a new key, persisted at /config/app_key"
+fi
+
+printf '%s' "$APP_KEY" >/var/run/s6/container_environment/APP_KEY

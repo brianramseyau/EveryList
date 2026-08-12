@@ -1,0 +1,117 @@
+# EveryList production image.
+#
+# Single Node process serving /api/v1/* and the prebuilt SvelteKit static
+# assets on one port, packaged behind an s6-overlay init (LSIO-style
+# PUID/PGID remap + APP_KEY persistence) so `docker run` with no flags at
+# all and only a /config mount is a valid, working invocation. See
+# foundational/PLAN.md §5.
+#
+# Build from the repo root: docker build -f docker/Dockerfile .
+
+# ---------------------------------------------------------------------------
+# deps: full monorepo install (dev deps included) — shared by every build
+# stage below so pnpm's content-addressable store is only populated once.
+# ---------------------------------------------------------------------------
+FROM node:24-bookworm-slim AS deps
+
+# build-essential + python3: required to compile better-sqlite3's native
+# addon (node-gyp) for both the workspace install and the standalone
+# production install done later in build-api.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN corepack enable
+
+WORKDIR /app
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY packages/shared/package.json packages/shared/package.json
+RUN pnpm install --frozen-lockfile
+
+# ---------------------------------------------------------------------------
+# build-web: static SvelteKit build (adapter-static, fully prerendered —
+# see apps/web/src/routes/+layout.ts).
+# ---------------------------------------------------------------------------
+FROM deps AS build-web
+COPY packages/shared packages/shared
+COPY apps/web apps/web
+RUN pnpm --filter @everylist/web build
+
+# ---------------------------------------------------------------------------
+# build-api: compiled AdonisJS build, with the web build copied into
+# apps/api/public so AdonisJS's own build step bundles it as a static asset
+# (see apps/api/adonisrc.ts metaFiles + config/static.ts), then a
+# production-only `pnpm install` inside the self-contained build output
+# (AdonisJS's own documented deploy step — see `node ace build`'s summary).
+# ---------------------------------------------------------------------------
+FROM deps AS build-api
+COPY packages/shared packages/shared
+COPY apps/api apps/api
+COPY --from=build-web /app/apps/web/build apps/api/public
+RUN pnpm --filter @everylist/api build
+RUN cd apps/api/build && pnpm install --prod
+
+# ---------------------------------------------------------------------------
+# release: minimal runtime image — no build toolchain, no pnpm workspace,
+# just Node, s6-overlay, and the self-contained apps/api/build output.
+# ---------------------------------------------------------------------------
+FROM node:24-bookworm-slim AS release
+
+ARG S6_OVERLAY_VERSION=3.2.0.2
+ARG APP_VERSION=nightly
+ARG GIT_SHA=unknown
+ARG BUILD_DATE=unknown
+
+# Install s6-overlay (curl/xz-utils are build-time-only, purged after).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    xz-utils \
+    ca-certificates \
+    && ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+    amd64) S6_ARCH=x86_64 ;; \
+    arm64) S6_ARCH=aarch64 ;; \
+    *) echo "unsupported architecture: $ARCH" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL -o /tmp/s6-overlay-noarch.tar.xz \
+    "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" \
+    && curl -fsSL -o /tmp/s6-overlay-arch.tar.xz \
+    "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" \
+    && tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz \
+    && tar -C / -Jxpf /tmp/s6-overlay-arch.tar.xz \
+    && rm -rf /tmp/*.tar.xz \
+    && apt-get purge -y curl xz-utils && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Baked-in default account, remapped to PUID/PGID at container start by
+# docker/root/etc/s6-overlay/s6-rc.d/init-remap-user (see that script).
+RUN groupadd -g 1000 appuser && useradd -u 1000 -g appuser -M -s /usr/sbin/nologin appuser
+
+WORKDIR /app
+COPY --from=build-api --chown=appuser:appuser /app/apps/api/build /app/build
+COPY docker/root/ /
+
+# Unraid's "nobody"/"users" defaults — see docker/unraid-template.xml and
+# foundational/PLAN.md §5's zero-config startup rule. APP_KEY is
+# deliberately absent here: init-app-key generates and persists one to
+# /config/app_key on first boot if it isn't supplied.
+ENV HOST=0.0.0.0 \
+    PORT=3000 \
+    NODE_ENV=production \
+    LOG_LEVEL=info \
+    APP_URL=http://0.0.0.0:3000 \
+    SESSION_DRIVER=cookie \
+    DATABASE_FILENAME=/config/everylist.sqlite3 \
+    PUID=99 \
+    PGID=100 \
+    APP_VERSION=${APP_VERSION} \
+    GIT_SHA=${GIT_SHA} \
+    BUILD_DATE=${BUILD_DATE}
+
+VOLUME /config
+EXPOSE 3000
+
+ENTRYPOINT ["/init"]

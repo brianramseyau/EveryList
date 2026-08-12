@@ -13,6 +13,10 @@ tmp/*
 # Frontend assets compiled code
 public/assets
 
+# apps/web's static build, copied in at Docker build time (see docker/Dockerfile)
+public/*
+!public/.gitkeep
+
 # Build tools specific
 npm-debug.log
 yarn-error.log
