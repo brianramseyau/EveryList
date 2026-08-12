@@ -1,6 +1,6 @@
 # EveryList — Foundational Plan
 
-Status: **Draft for review — no implementation has started.**
+Status: **In progress — Phase 0 (Foundations) underway.**
 This document is the single source of truth for scope, architecture, and process until superseded by an updated version. Any deviation from it during implementation should come back here as an edit first.
 
 ---
@@ -310,4 +310,4 @@ No open questions remain blocking Phase 0.
 
 ---
 
-*Next step after this plan is approved: Phase 0 — repo scaffold.*
+*Phase 0 — repo scaffold — is in progress.*
