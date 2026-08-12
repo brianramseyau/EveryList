@@ -34,7 +34,8 @@ Full feature parity with AnyList (including Watch app, Siri, Alexa, Instacart fu
 | Unlimited lists | Free | **MVP** | Core. |
 | Real-time sharing | Free | **MVP** | Core differentiator; SSE-based live updates. |
 | Smart autocomplete & auto-categorization | Free | **MVP** (basic) | Seeded category keyword matching; ML-personalized suggestions deferred to Phase 6. |
-| Category customization (reorder/rename/create) | Free | **MVP** | Needed for auto-categorization to be trustworthy. |
+| Category customization (reorder/rename/create) | Free | **MVP** | Needed for auto-categorization to be trustworthy. Ordering is scoped **per store** (see below), with a per-list default order as the fallback when no store is selected. |
+| Store selection & per-store aisle order *(new — not a literal AnyList feature)* | Free | **MVP** *(pulled forward from Phase 5)* | Pick the store you're shopping at; categories reorder to match that store's real aisle layout. The `Store` entity and its category-order data are shared with everyone the associated list(s) are shared with — see §7. This is the piece of AnyList's "Stores & Store Filtering" premium feature that matters most day-to-day; item-tagging/filtering (below) stays deferred. |
 | Favorites (master list) | Free | **MVP** | Core loop for repeat shopping. |
 | Recent items (restore checked/deleted) | Free | **MVP** | Cheap with soft-delete, high value. |
 | Quantities & notes | Free | **MVP** | Core item fields. |
@@ -45,7 +46,7 @@ Full feature parity with AnyList (including Watch app, Siri, Alexa, Instacart fu
 | Voice Assistant (Siri/Alexa) | Free | **Out of scope** | Requires native intents/skills; not achievable from a PWA. Revisit only if a Capacitor wrapper is built later. |
 | Online grocery fulfillment (Instacart, etc.) | Free | **Out of scope** | Requires commercial partner API agreements; not a lean-engineering decision. |
 | Item photos | Premium | **Phase 5** | Needs object storage; deferred, not architecturally hard. |
-| Stores & store filtering | Premium | **Phase 5** | Adds `Store` entity + item tagging + filtered view. |
+| Stores & store filtering | Premium | **Phase 5** *(narrowed)* | The `Store` entity itself ships in MVP (see above); Phase 5 adds tagging individual items with a store and filtering the list view to only that store's items. |
 | Prices & budget tracking | Premium | **Phase 5** | Adds price field + running total; depends on Stores. |
 | Apple Watch app | Premium | **Out of scope** | Native-only platform. |
 | List folders | Premium | **Phase 5** | Straightforward grouping entity. |
@@ -176,12 +177,16 @@ Core entities (fields abbreviated to the decision-relevant ones):
 - **User** — id, email, passwordHash, name, createdAt.
 - **List** — id, name, color/icon, ownerId, folderId (nullable, Phase 5), archived, badgeExcluded (Phase 5), passcodeHash (nullable, Phase 6), timestamps + `deletedAt`.
 - **ListMember** — listId, userId, role (`owner` \| `editor` \| `viewer`), invitedAt, acceptedAt. Backs real-time sharing.
-- **Category** — id, name, sortOrder, listId (nullable = global default), isDefault. Seeded with standard aisle categories (Produce, Dairy, Meat, Bakery, Frozen, Pantry, Household, Other); per-list overrides for reorder/rename/custom categories.
-- **Item** — id, listId, name, quantity, notes, categoryId, checked, checkedAt, sortOrder, storeId (nullable, Phase 5), price (nullable, Phase 5), photoUrl (nullable, Phase 5), createdBy, timestamps + `deletedAt` (backs Recent Items recovery).
+- **Category** — id, name, sortOrder, listId (nullable = global default), isDefault. Seeded with standard aisle categories (Produce, Dairy, Meat, Bakery, Frozen, Pantry, Household, Other); per-list overrides for reorder/rename/custom categories; `sortOrder` here is the **fallback** order used whenever no store is selected (see `StoreCategoryOrder` below).
+- **Item** — id, listId, name, quantity, notes, categoryId, checked, checkedAt, sortOrder, storeId (nullable, Phase 5 — item-to-store tagging), price (nullable, Phase 5), photoUrl (nullable, Phase 5), createdBy, timestamps + `deletedAt` (backs Recent Items recovery).
 - **FavoriteItem** — id, userId, name, defaultCategoryId, defaultQuantity. The "master list" for one-tap rebuild.
-- **Store** (Phase 5) — id, ownerId, name, color.
+- **Store** *(MVP)* — id, name, color, createdBy (audit only, not an access-control owner). Not owned by a single user or a single list — see `ListStore` below for how visibility works.
+- **ListStore** *(MVP)* — listId, storeId. Join table attaching a `Store` to one or more `List`s. A store becomes visible/selectable to everyone who is already a `ListMember` of any list it's attached to — this is how "shared via list membership" is implemented without inventing a second sharing/permission primitive; `editor`+ can rename the store or reorder its categories, `viewer` can select it and see the resulting order. Attaching an existing store to a second list (e.g. "Walmart" used for both a Groceries list and a Hardware list) just adds a row here — no duplication, and it becomes visible to that list's members too.
+- **StoreCategoryOrder** *(MVP)* — storeId, categoryId, sortOrder. The per-store override of category order, edited via a "reorder categories for this store" screen. When rendering a list with a store selected, the app looks up `(store, category)` here for each category the list uses and falls back to that list's own `Category.sortOrder` for any category not yet customized for that store.
 - **Folder** (Phase 5) — id, userId, name, color, sortOrder.
 - **SyncEvent** — id, entityType, entityId, op (`create`/`update`/`delete`), version, updatedAt. Backs both the offline conflict check (client sends `lastKnownVersion`) and the Transmit broadcast payload.
+
+**"Currently shopping at" is a local, per-device selection, not shared state:** the store you have selected while viewing a list is kept in the client (IndexedDB/localStorage), not written to the `List` row or broadcast over Transmit. Two household members shopping at different physical stores at the same time should each see categories ordered for *their* store, not have that flip out from under them because a co-shopper switched stores on a shared list. What *is* shared in real time is the underlying `Store` and `StoreCategoryOrder` data — so if one person edits "Walmart"'s aisle order, every household member's next visit to that store shows the update.
 
 **Conflict resolution:** last-write-wins per item, keyed on a monotonically increasing `version` column bumped server-side on every mutation. The client's offline queue attaches the last version it saw; the server accepts if the version matches or is newer than what it has recorded as synced from that client, otherwise flags a conflict the client resolves by taking the server's copy and re-applying the local diff as a new edit (no silent data loss, no CRDT complexity for v1).
 
@@ -189,16 +194,18 @@ Core entities (fields abbreviated to the decision-relevant ones):
 
 ## 8. API & Real-Time Design
 
-- REST, versioned under `/api/v1/...`, resource-oriented (`/lists`, `/lists/:id/items`, `/lists/:id/members`, `/favorites`, `/categories`).
+- REST, versioned under `/api/v1/...`, resource-oriented (`/lists`, `/lists/:id/items`, `/lists/:id/members`, `/favorites`, `/categories`, `/lists/:id/stores`, `/stores/:id/categories`).
 - All request/response bodies validated with VineJS; the inferred types are re-exported from `packages/shared` so the SvelteKit client is fully typed against the same contracts the backend enforces.
-- Real-time: clients subscribe to `list/:id` Transmit channels on list open; every mutation broadcasts a `SyncEvent` to that channel so other connected members see updates within roughly a second, with an optional "list was modified" toast per the AnyList "modification alerts" behavior.
+- Real-time: clients subscribe to `list/:id` Transmit channels on list open; every mutation broadcasts a `SyncEvent` to that channel so other connected members see updates within roughly a second, with an optional "list was modified" toast per the AnyList "modification alerts" behavior. `Store` and `StoreCategoryOrder` changes broadcast on the same channel for every list the store is attached to, so a household member's aisle-order edit shows up live for co-shoppers.
 - Bulk import endpoint (`POST /lists/:id/items/import`) accepts raw pasted text, splits lines, and runs each line through the same auto-categorization pass as manual add.
+- Store endpoints: `GET/POST /lists/:id/stores` (list/attach-or-create stores visible to this list), `PATCH /stores/:id/categories` (reorder — replaces that store's `StoreCategoryOrder` rows), permission-checked against the requester's `ListMember` role on any list the store is attached to.
 
 ---
 
 ## 9. Offline-First & PWA Strategy
 
 - **Local-first writes:** all mutations write to Dexie (IndexedDB) immediately and render optimistically; a background sync queue drains to the API when online.
+- **"Currently shopping at" store selection** is purely local/per-device (see §7) — stored in Dexie alongside the offline data, works fully offline, and is never part of the sync queue since it's never sent to the server.
 - **Service worker (Workbox via vite-plugin-pwa):** precache the app shell; runtime-cache GET requests with stale-while-revalidate; offline fallback route for full navigations.
 - **Sync queue:** durable queue table in Dexie of pending mutations, retried with backoff, flushed on `online` events and periodically via the Background Sync API where supported, with a manual "retry sync" affordance as a fallback for browsers without it.
 - **Installability:** web app manifest with icons/splash screens, `display: standalone`, theme color; install prompt surfaced contextually, not nagged.
@@ -262,10 +269,10 @@ GitHub Actions pipeline (per PR):
 |---|---|
 | **0 — Foundations** | This plan; repo scaffold (pnpm workspaces, local dev Docker Compose, CI skeleton, lint/format/typecheck config, shared `tsconfig`); empty Adonis + SvelteKit apps wired together; `docker/Dockerfile` (LSIO-style, PUID/PGID) and `docker/unraid-template.xml` producing a runnable single-container image from day one. |
 | **1 — Auth & domain core** | User auth (register/login/refresh), `List`/`Category`/`Item` migrations + models, default category seeding. |
-| **2 — List & item CRUD** | Full list/item management UI + API, quantities/notes, auto-categorization, category customization, favorites, recent-items recovery. |
-| **3 — Sharing & real-time** | `ListMember` roles, invite/join flow, Transmit channels, live update UI + modification toasts. |
-| **4 — Offline & PWA** | Dexie local store, sync queue + conflict resolution, service worker, manifest/installability, offline E2E coverage. This phase is the MVP-complete milestone. |
-| **5 — Stores, prices, folders, photos, export** | Store entity + filtering, price/budget tracking, list folders, item photos (local filesystem storage), badge counts/exclusion, email export. |
+| **2 — List & item CRUD** | Full list/item management UI + API, quantities/notes, auto-categorization, category customization, favorites, recent-items recovery, `Store`/`ListStore`/`StoreCategoryOrder` + the store selector and "reorder categories for this store" screen. |
+| **3 — Sharing & real-time** | `ListMember` roles, invite/join flow, Transmit channels, live update UI + modification toasts (also covers live updates to shared `Store`/`StoreCategoryOrder` edits from §7/§8). |
+| **4 — Offline & PWA** | Dexie local store (including the local-only store-selection state from §9), sync queue + conflict resolution, service worker, manifest/installability, offline E2E coverage. This phase is the MVP-complete milestone. |
+| **5 — Item-store tagging, prices, folders, photos, export** | Item-to-store tagging + filtered "show only this store's items" view (on top of the `Store` entity from Phase 2), price/budget tracking, list folders, item photos (local filesystem storage), badge counts/exclusion, email export. |
 | **6 — Polish** | Passcode lock, premium-equivalent themes, personalized autocomplete, performance/accessibility hardening pass. |
 
 No calendar dates are set here since team size/velocity aren't yet known — phases are ordered by dependency, not duration.
