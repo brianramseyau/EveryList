@@ -74,6 +74,14 @@ RUN corepack enable
 
 WORKDIR /srv/build
 COPY --from=build-api /app/apps/api/build .
+# `node ace build` copies apps/api/package.json's devDependencies into this
+# standalone package.json verbatim (including @everylist/shared, a
+# type-only devDependency never meant to leave the monorepo — see
+# apps/api/package.json). pnpm validates "workspace:*" specifiers before
+# `--prod` gets a chance to skip devDependencies, so it fails to resolve
+# outside a pnpm workspace regardless of dep type. Strip devDependencies
+# before installing — production has no business installing them anyway.
+RUN node -e "const fs=require('node:fs'); const p=JSON.parse(fs.readFileSync('package.json')); delete p.devDependencies; fs.writeFileSync('package.json', JSON.stringify(p, null, 2))"
 RUN pnpm install --prod
 
 # ---------------------------------------------------------------------------
