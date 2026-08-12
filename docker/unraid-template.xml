@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<!--
+  Unraid Community Applications template for EveryList.
+
+  Placeholders to update once the image is published:
+    - Repository / Registry: swap "brianramseyau" for the real GHCR namespace once
+      images are being published, and pin a tag if "latest" isn't desired.
+    - Icon: currently points at branding/icon-192.png on the `main` branch, per
+      raw.githubusercontent.com convention. Repoint this once the icon's canonical
+      home moves (e.g. if it gets copied into apps/web/static alongside the PWA
+      manifest icons during Phase 0/4) so it doesn't go stale.
+
+  Note: no TZ variable is defined here on purpose — Unraid injects TZ into every
+  container itself, so declaring it in this template would just create a
+  redundant/conflicting entry in the Unraid UI.
+-->
+<Container version="2">
+  <Name>everylist</Name>
+  <Repository>ghcr.io/brianramseyau/everylist:latest</Repository>
+  <Registry>https://github.com/brianramseyau/EveryList/pkgs/container/everylist</Registry>
+  <Branch/>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/brianramseyau/EveryList/issues</Support>
+  <Project>https://github.com/brianramseyau/EveryList</Project>
+  <Overview>EveryList is a narrowed, mobile-first, offline-capable shopping/task list PWA - a leaner alternative to AnyList. Create lists, share them in real time with your household, auto-categorize items by store aisle, and keep working with zero connectivity - it syncs when you're back online. Data is stored locally in SQLite under the appdata path, so backups are just a folder copy.</Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:3000]/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/brianramseyau/EveryList/main/branding/icon-192.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="3000" Default="3000" Mode="tcp" Description="Port the EveryList web UI and API are served on" Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="Appdata Config Path" Target="/config" Default="/mnt/user/appdata/everylist" Mode="rw" Description="Persistent storage for the SQLite database and (Phase 5) uploaded item photos" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/everylist</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID the app runs as inside the container. Matches Unraid's 'nobody' user by default - set to match the owner of your appdata share" Type="Variable" Display="always" Required="true" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID the app runs as inside the container. Matches Unraid's 'users' group by default - set to match the owner of your appdata share" Type="Variable" Display="always" Required="true" Mask="false">100</Config>
+  <Config Name="APP_KEY" Target="APP_KEY" Default="" Mode="" Description="AdonisJS application encryption/signing key. Optional - if left blank, the container generates one on first boot and persists it to /config/app_key, so it survives restarts/updates. Set this only if you want to pin a specific key (e.g. restoring onto a fresh /config) or rotate an existing one" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+</Container>
