@@ -32,8 +32,9 @@ pnpm-debug.log*
 !.vscode/extensions.json
 .idea/
 
-# Adonis
-apps/api/tmp/
+# Adonis (apps/api/.gitignore also covers tmp/* with a !tmp/.gitkeep exception)
+apps/api/tmp/*
+!apps/api/tmp/.gitkeep
 
 # Playwright
 apps/web/test-results/
