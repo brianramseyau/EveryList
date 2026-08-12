@@ -5,9 +5,39 @@
 
 /// <reference path="./manifest.d.ts" />
 import type { InferData, InferVariants } from '@adonisjs/core/types/transformers'
+import type CategoryTransformer from '#transformers/category_transformer'
+import type FavoriteItemTransformer from '#transformers/favorite_item_transformer'
+import type ItemTransformer from '#transformers/item_transformer'
+import type ListTransformer from '#transformers/list_transformer'
+import type StoreCategoryOrderTransformer from '#transformers/store_category_order_transformer'
+import type StoreTransformer from '#transformers/store_transformer'
 import type UserTransformer from '#transformers/user_transformer'
 
 export namespace Data {
+  export type Category = InferData<CategoryTransformer>
+  export namespace Category {
+    export type Variants = InferVariants<CategoryTransformer>
+  }
+  export type FavoriteItem = InferData<FavoriteItemTransformer>
+  export namespace FavoriteItem {
+    export type Variants = InferVariants<FavoriteItemTransformer>
+  }
+  export type Item = InferData<ItemTransformer>
+  export namespace Item {
+    export type Variants = InferVariants<ItemTransformer>
+  }
+  export type List = InferData<ListTransformer>
+  export namespace List {
+    export type Variants = InferVariants<ListTransformer>
+  }
+  export type StoreCategoryOrder = InferData<StoreCategoryOrderTransformer>
+  export namespace StoreCategoryOrder {
+    export type Variants = InferVariants<StoreCategoryOrderTransformer>
+  }
+  export type Store = InferData<StoreTransformer>
+  export namespace Store {
+    export type Variants = InferVariants<StoreTransformer>
+  }
   export type User = InferData<UserTransformer>
   export namespace User {
     export type Variants = InferVariants<UserTransformer>

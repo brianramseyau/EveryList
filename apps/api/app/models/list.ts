@@ -1,9 +1,10 @@
 import { ListSchema } from '#database/schema'
-import { belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
-import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
+import { belongsTo, column, hasMany, manyToMany } from '@adonisjs/lucid/orm'
+import type { BelongsTo, HasMany, ManyToMany } from '@adonisjs/lucid/types/relations'
 import User from '#models/user'
 import Category from '#models/category'
 import Item from '#models/item'
+import Store from '#models/store'
 
 export default class List extends ListSchema {
   // SQLite has no native boolean type — better-sqlite3 round-trips this
@@ -19,4 +20,13 @@ export default class List extends ListSchema {
 
   @hasMany(() => Item, { foreignKey: 'listId' })
   declare items: HasMany<typeof Item>
+
+  @manyToMany(() => Store, {
+    pivotTable: 'list_stores',
+    localKey: 'id',
+    pivotForeignKey: 'list_id',
+    relatedKey: 'id',
+    pivotRelatedForeignKey: 'store_id',
+  })
+  declare stores: ManyToMany<typeof Store>
 }

@@ -73,6 +73,33 @@ export class CategorySchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class FavoriteItemSchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'defaultCategoryId',
+    'defaultQuantity',
+    'id',
+    'name',
+    'updatedAt',
+    'userId',
+  ] as const
+  $columns = FavoriteItemSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare defaultCategoryId: number | null
+  @column()
+  declare defaultQuantity: string | null
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare name: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: number
+}
+
 export class ItemSchema extends BaseModel {
   static $columns = [
     'categoryId',
@@ -118,6 +145,21 @@ export class ItemSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class ListStoreSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'listId', 'storeId', 'updatedAt'] as const
+  $columns = ListStoreSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare listId: number
+  @column()
+  declare storeId: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
 export class ListSchema extends BaseModel {
   static $columns = [
     'archived',
@@ -147,6 +189,40 @@ export class ListSchema extends BaseModel {
   declare name: string
   @column()
   declare ownerId: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class StoreCategoryOrderSchema extends BaseModel {
+  static $columns = ['categoryId', 'createdAt', 'id', 'sortOrder', 'storeId', 'updatedAt'] as const
+  $columns = StoreCategoryOrderSchema.$columns
+  @column()
+  declare categoryId: number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare sortOrder: number
+  @column()
+  declare storeId: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class StoreSchema extends BaseModel {
+  static $columns = ['color', 'createdAt', 'createdBy', 'id', 'name', 'updatedAt'] as const
+  $columns = StoreSchema.$columns
+  @column()
+  declare color: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare createdBy: number
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare name: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
 }
