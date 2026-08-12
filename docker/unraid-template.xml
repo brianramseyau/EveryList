@@ -5,8 +5,10 @@
   Placeholders to update once the image is published:
     - Repository / Registry: swap "brianramseyau" for the real GHCR namespace once
       images are being published, and pin a tag if "latest" isn't desired.
-    - Icon: point at a real hosted icon (e.g. a raw.githubusercontent.com URL to
-      docker/icon.png) once one exists in the repo.
+    - Icon: currently points at branding/icon-192.png on the `main` branch, per
+      raw.githubusercontent.com convention. Repoint this once the icon's canonical
+      home moves (e.g. if it gets copied into apps/web/static alongside the PWA
+      manifest icons during Phase 0/4) so it doesn't go stale.
 
   Note: no TZ variable is defined here on purpose — Unraid injects TZ into every
   container itself, so declaring it in this template would just create a
@@ -27,7 +29,7 @@
   <Category>Productivity: Tools:</Category>
   <WebUI>http://[IP]:[PORT:3000]/</WebUI>
   <TemplateURL/>
-  <Icon>https://raw.githubusercontent.com/brianramseyau/EveryList/main/docker/icon.png</Icon>
+  <Icon>https://raw.githubusercontent.com/brianramseyau/EveryList/main/branding/icon-192.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
