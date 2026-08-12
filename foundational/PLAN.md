@@ -163,8 +163,8 @@ EveryList/
 │   └── shared/                   # shared TS types, DTOs, validation contracts
 ├── docker/
 │   ├── Dockerfile                 # LSIO-style single image (s6-overlay, PUID/PGID)
-│   ├── root/                      # s6-overlay service defs copied into the image
-│   │   └── etc/s6-overlay/s6-rc.d/...
+│   ├── root/                      # s6-overlay init scripts copied into the image
+│   │   └── etc/{cont-init.d,services.d}/...
 │   └── unraid-template.xml        # Community Applications template
 ├── .github/workflows/
 │   └── docker-publish.yml         # nightly (main) + semver/major/latest (tags) -> GHCR, see §12

@@ -1,4 +1,4 @@
-#!/command/with-contenv sh
+#!/usr/bin/with-contenv sh
 # Remaps the baked-in "appuser" account to the PUID/PGID supplied at
 # `docker run` time (LSIO-style), defaulting to 99/100 (Unraid's
 # nobody/users) so a bare `docker run` with no -e flags still works.
@@ -22,4 +22,4 @@ fi
 mkdir -p /config
 chown -R appuser:appuser /config
 
-echo "[init-remap-user] running as $(id appuser)"
+echo "[10-remap-user] running as $(id appuser)"

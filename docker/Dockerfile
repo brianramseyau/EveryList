@@ -107,8 +107,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Baked-in default account, remapped to PUID/PGID at container start by
-# docker/root/etc/s6-overlay/s6-rc.d/init-remap-user (see that script), so
-# the exact ID baked in here doesn't matter — no -u/-g pin, since
+# docker/root/etc/cont-init.d/10-remap-user (see that script), so the
+# exact ID baked in here doesn't matter — no -u/-g pin, since
 # node:24-bookworm-slim already ships a "node" user/group at GID/UID 1000.
 RUN groupadd appuser && useradd -g appuser -M -s /usr/sbin/nologin appuser
 
@@ -118,8 +118,9 @@ COPY docker/root/ /
 
 # Unraid's "nobody"/"users" defaults — see docker/unraid-template.xml and
 # foundational/PLAN.md §5's zero-config startup rule. APP_KEY is
-# deliberately absent here: init-app-key generates and persists one to
-# /config/app_key on first boot if it isn't supplied.
+# deliberately absent here: docker/root/etc/cont-init.d/20-app-key
+# generates and persists one to /config/app_key on first boot if it isn't
+# supplied.
 ENV HOST=0.0.0.0 \
     PORT=3000 \
     NODE_ENV=production \

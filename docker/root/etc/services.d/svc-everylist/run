@@ -1,4 +1,4 @@
-#!/command/with-contenv sh
+#!/usr/bin/with-contenv sh
 # The single Node process: AdonisJS serves /api/v1/* and the prebuilt
 # SvelteKit static assets from the same port. See foundational/PLAN.md §5.
 cd /app/build
