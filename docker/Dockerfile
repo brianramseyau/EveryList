@@ -87,8 +87,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Baked-in default account, remapped to PUID/PGID at container start by
-# docker/root/etc/s6-overlay/s6-rc.d/init-remap-user (see that script).
-RUN groupadd -g 1000 appuser && useradd -u 1000 -g appuser -M -s /usr/sbin/nologin appuser
+# docker/root/etc/s6-overlay/s6-rc.d/init-remap-user (see that script), so
+# the exact ID baked in here doesn't matter — no -u/-g pin, since
+# node:24-bookworm-slim already ships a "node" user/group at GID/UID 1000.
+RUN groupadd appuser && useradd -g appuser -M -s /usr/sbin/nologin appuser
 
 WORKDIR /app
 COPY --from=build-api --chown=appuser:appuser /app/apps/api/build /app/build
