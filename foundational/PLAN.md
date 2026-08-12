@@ -166,6 +166,7 @@ EveryList/
 │   │   └── etc/s6-overlay/s6-rc.d/...
 │   └── unraid-template.xml        # Community Applications template
 ├── .github/workflows/
+│   └── docker-publish.yml         # nightly (main) + semver/major/latest (tags) -> GHCR, see §12
 ├── docker-compose.yml            # local dev: api + web with hot reload (no external services needed)
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
@@ -255,6 +256,15 @@ GitHub Actions pipeline (per PR):
 5. Playwright E2E smoke against the built container.
 6. Merge blocked on any failing step, including coverage falling under 100%.
 
+**Docker publishing** (`.github/workflows/docker-publish.yml`, implemented) targets GHCR (`ghcr.io/brianramseyau/everylist`) and re-runs the same lint/typecheck/coverage-gated test suite as a hard prerequisite (`needs: test`) before ever pushing an image — a tag pushed against an old, broken commit can't slip a bad image out. Two triggers, two tagging behaviors:
+
+| Trigger | Tags produced | Intent |
+|---|---|---|
+| Push to `main` | `nightly` | A moving tag tracking the tip of `main` — for people who want the bleeding edge, not a stability guarantee. |
+| Push of a semver tag `vX.Y.Z` | `vX.Y.Z` (exact, never moves again) + `vX` (major, moves to the newest `vX.y.z` release) + `latest` (moves to the newest **stable** release) | Lets anyone pin however tight they want: `vX.Y.Z` for a fully pinned/reproducible deploy, `vX` for "stable, auto-patched within this major," or `latest` for "just the newest stable." A prerelease tag like `v1.2.3-beta.1` still gets its own exact tag but deliberately does **not** move `vX` or `latest`, so a prerelease can never leak into someone pinned to a major version. |
+
+Tag computation uses `docker/metadata-action`, which derives all of this from a single pushed git tag — there's no separate manual step to compute or push the major/latest tags.
+
 ---
 
 ## 13. Non-Functional Requirements
@@ -271,7 +281,7 @@ GitHub Actions pipeline (per PR):
 
 | Phase | Contents |
 |---|---|
-| **0 — Foundations** | This plan; repo scaffold (pnpm workspaces, local dev Docker Compose, CI skeleton, lint/format/typecheck config, shared `tsconfig`); empty Adonis + SvelteKit apps wired together; `docker/Dockerfile` (LSIO-style, PUID/PGID) and `docker/unraid-template.xml` producing a runnable single-container image from day one. |
+| **0 — Foundations** | This plan; repo scaffold (pnpm workspaces, local dev Docker Compose, CI skeleton, lint/format/typecheck config, shared `tsconfig`); empty Adonis + SvelteKit apps wired together; `docker/Dockerfile` (LSIO-style, PUID/PGID) and `docker/unraid-template.xml` producing a runnable single-container image from day one; `.github/workflows/docker-publish.yml` (already written, §12) goes green as soon as the pnpm scripts it calls (`lint`/`typecheck`/`test`) and `docker/Dockerfile` exist. |
 | **1 — Auth & domain core** | User auth (register/login/refresh), `List`/`Category`/`Item` migrations + models, default category seeding. |
 | **2 — List & item CRUD** | Full list/item management UI + API, quantities/notes, auto-categorization, category customization, favorites, recent-items recovery, `Store`/`ListStore`/`StoreCategoryOrder` + the store selector and "reorder categories for this store" screen. |
 | **3 — Sharing & real-time** | `ListMember` roles, invite/join flow, Transmit channels, live update UI + modification toasts (also covers live updates to shared `Store`/`StoreCategoryOrder` edits from §7/§8). |

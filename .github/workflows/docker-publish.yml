@@ -1,0 +1,94 @@
+name: Docker Publish
+
+# Publishes the EveryList image to GHCR on two triggers:
+#
+#   - every push to `main`      -> tagged `nightly` (moving, tracks the tip of main)
+#   - every pushed tag vX.Y.Z   -> tagged:
+#         vX.Y.Z   exact pin, never moves again      (safe to pin forever)
+#         vX       major pin, moves to the newest vX.y.z on each release within that major
+#                   (safe to pin for "stable, auto-patched within this major")
+#         latest   moves to the newest *stable* (non-prerelease) tagged release
+#
+# A pushed tag like v1.2.3-beta.1 is a prerelease: it still gets an exact vX.Y.Z-beta.1 tag,
+# but deliberately does NOT move `latest` or the `vX` major tag, so prereleases can't leak
+# into anyone pinned to a major version or tracking `latest`.
+#
+# `test` re-runs the same lint/typecheck/coverage-gated suite required on every PR, so nothing
+# gets published - nightly or release - without it passing, even for a tag pushed on an older
+# commit. If a standalone PR-gate workflow is added later, factor these steps out into a
+# `workflow_call` reusable workflow both can invoke, rather than letting the two drift apart.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, typecheck, coverage-gated tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # version comes from the root package.json's "packageManager" field (Phase 0)
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r lint
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+        # coverage thresholds (100%) are enforced by each workspace's own c8/vitest
+        # config - see foundational/PLAN.md §11 - so a plain test run is already the gate.
+
+  build-and-push:
+    name: Build & push image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags (nightly / semver exact / semver major / latest)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/brianramseyau/everylist
+          tags: |
+            type=raw,value=nightly,enable={{is_default_branch}}
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-') }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Unraid is x86_64-only, so single-arch keeps this fast and avoids flaky
+          # QEMU-emulated cross-builds of better-sqlite3's native addon. Revisit if
+          # there's ever a real arm64 target (e.g. Raspberry Pi self-hosting).
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
