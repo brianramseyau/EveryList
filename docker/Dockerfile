@@ -15,8 +15,7 @@
 FROM node:24-bookworm-slim AS deps
 
 # build-essential + python3: required to compile better-sqlite3's native
-# addon (node-gyp) for both the workspace install and the standalone
-# production install done later in build-api.
+# addon (node-gyp) for the workspace install below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3 \
@@ -43,16 +42,37 @@ RUN pnpm --filter @everylist/web build
 # ---------------------------------------------------------------------------
 # build-api: compiled AdonisJS build, with the web build copied into
 # apps/api/public so AdonisJS's own build step bundles it as a static asset
-# (see apps/api/adonisrc.ts metaFiles + config/static.ts), then a
-# production-only `pnpm install` inside the self-contained build output
-# (AdonisJS's own documented deploy step — see `node ace build`'s summary).
+# (see apps/api/adonisrc.ts metaFiles + config/static.ts). Deliberately
+# stops short of the production `pnpm install` — apps/api/build still lives
+# under /app here, which has the workspace's pnpm-workspace.yaml as an
+# ancestor, so pnpm would treat that install as workspace-scoped (and abort
+# non-interactively trying to reconcile all 4 projects) instead of the
+# standalone install AdonisJS's own build output expects. See prod-deps.
 # ---------------------------------------------------------------------------
 FROM deps AS build-api
 COPY packages/shared packages/shared
 COPY apps/api apps/api
 COPY --from=build-web /app/apps/web/build apps/api/public
 RUN pnpm --filter @everylist/api build
-RUN cd apps/api/build && pnpm install --prod
+
+# ---------------------------------------------------------------------------
+# prod-deps: production-only node_modules for the self-contained build
+# output, installed in a fresh directory with no pnpm-workspace.yaml
+# ancestor so pnpm treats it as the standalone project it actually is
+# (AdonisJS's own documented deploy step — see `node ace build`'s summary).
+# ---------------------------------------------------------------------------
+FROM node:24-bookworm-slim AS prod-deps
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN corepack enable
+
+WORKDIR /srv/build
+COPY --from=build-api /app/apps/api/build .
+RUN pnpm install --prod
 
 # ---------------------------------------------------------------------------
 # release: minimal runtime image — no build toolchain, no pnpm workspace,
@@ -93,7 +113,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd appuser && useradd -g appuser -M -s /usr/sbin/nologin appuser
 
 WORKDIR /app
-COPY --from=build-api --chown=appuser:appuser /app/apps/api/build /app/build
+COPY --from=prod-deps --chown=appuser:appuser /srv/build /app/build
 COPY docker/root/ /
 
 # Unraid's "nobody"/"users" defaults — see docker/unraid-template.xml and
