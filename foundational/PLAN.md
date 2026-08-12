@@ -1,6 +1,6 @@
 # EveryList — Foundational Plan
 
-Status: **Draft for review — no implementation has started.**
+Status: **In progress — Phase 0 (Foundations) underway.**
 This document is the single source of truth for scope, architecture, and process until superseded by an updated version. Any deviation from it during implementation should come back here as an edit first.
 
 ---
@@ -163,8 +163,8 @@ EveryList/
 │   └── shared/                   # shared TS types, DTOs, validation contracts
 ├── docker/
 │   ├── Dockerfile                 # LSIO-style single image (s6-overlay, PUID/PGID)
-│   ├── root/                      # s6-overlay service defs copied into the image
-│   │   └── etc/s6-overlay/s6-rc.d/...
+│   ├── root/                      # s6-overlay init scripts copied into the image
+│   │   └── etc/{cont-init.d,services.d}/...
 │   └── unraid-template.xml        # Community Applications template
 ├── .github/workflows/
 │   └── docker-publish.yml         # nightly (main) + semver/major/latest (tags) -> GHCR, see §12
@@ -310,4 +310,4 @@ No open questions remain blocking Phase 0.
 
 ---
 
-*Next step after this plan is approved: Phase 0 — repo scaffold.*
+*Phase 0 — repo scaffold — is in progress.*
