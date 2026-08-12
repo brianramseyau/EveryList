@@ -39,7 +39,7 @@ Full feature parity with AnyList (including Watch app, Siri, Alexa, Instacart fu
 | Recent items (restore checked/deleted) | Free | **MVP** | Cheap with soft-delete, high value. |
 | Quantities & notes | Free | **MVP** | Core item fields. |
 | Copy & paste import | Free | **MVP** | Simple parser, high leverage. |
-| Print & email export | Free | **MVP** (print only, email deferred) | Browser print stylesheet is trivial; outbound email requires transactional email service — Phase 5. |
+| Print & email export | Free | **MVP** (print only, email deferred) | Browser print stylesheet is trivial; outbound email (SMTP2GO, see §15) ships in Phase 5. |
 | Uncompleted item badge count | Free | **Phase 5** | Web Badging API, partial browser support; app-shell first. |
 | Home screen install (PWA) | Free (native widget) | **MVP** (install/manifest), widgets **out of scope** | PWA installability ≠ native home-screen widgets; widgets need a native shell (Capacitor), not planned. |
 | Voice Assistant (Siri/Alexa) | Free | **Out of scope** | Requires native intents/skills; not achievable from a PWA. Revisit only if a Capacitor wrapper is built later. |
@@ -71,6 +71,7 @@ Full feature parity with AnyList (including Watch app, Siri, Alexa, Instacart fu
 | Database | **SQLite 3 (WAL mode)** via `better-sqlite3` + Lucid | Single-file DB living under the container's `/config` volume; trivial Unraid appdata backups; sufficient for the household/small-shared-list concurrency this app targets — no separate DB service to run. |
 | Rate limiting store | **In-memory** (Adonis Limiter memory store) | No Redis or other external service — this app targets a single self-hosted instance (Unraid), not horizontal scaling, so an in-process store is the right level of complexity. |
 | File storage | **Local filesystem** (`/config/uploads`) | Item photos, Phase 5. Kept behind a storage-service interface so swapping in an S3-compatible backend later is a config change, not a rewrite. |
+| Outbound email | **SMTP2GO** (via Adonis `mail` SMTP transport) | Invite emails (Phase 3) and list export emails (Phase 5); credentials via env vars, not committed. |
 | Real-time transport | **Adonis Transmit (SSE)**, local (in-process) transport | Simpler than WebSockets for one-directional server→client push; sufficient for list sync events; local transport matches the single-instance deployment. |
 | Validation | **VineJS** (backend), shared Zod-free — DTOs generated from VineJS schemas shared via `packages/shared` | Single source of truth for request/response shapes. |
 | Backend testing | **Japa** (Adonis's native runner) + **c8** for coverage | |
@@ -271,14 +272,15 @@ No calendar dates are set here since team size/velocity aren't yet known — pha
 
 ## 15. Assumptions & Open Questions
 
-**Resolved:** hosting target is Docker on Unraid, packaged in a LinuxServer.io-style single-container image with `PUID`/`PGID` support (see §5 and `docker/unraid-template.xml`); the frontend build question is resolved as SvelteKit with `adapter-static`, served by AdonisJS from the same process/container.
+**Resolved:**
+1. **Hosting target** — Docker on Unraid, packaged in a LinuxServer.io-style single-container image with `PUID`/`PGID` support (see §5 and `docker/unraid-template.xml`).
+2. **Frontend build** — SvelteKit with `adapter-static`, served by AdonisJS from the same process/container.
+3. **Auth method** — email+password only for v1. No OAuth/social login in MVP; nothing in the `User` schema needs to reserve space for it since adding a provider later is an additive migration.
+4. **Monetization** — no premium tier, ever. Every feature in the §3 decision matrix is either shipped free or deferred/out-of-scope on engineering merit, not gated. `User`/`List` schemas carry no tier/plan field, now or later.
+5. **Email delivery provider** — **SMTP2GO**, for both Phase 5 email export and Phase 3 invite-by-email. Adonis's `mail` config will use the SMTP transport pointed at SMTP2GO; API key/credentials supplied via environment variables (`SMTP2GO_*`) at deploy time, not committed.
+6. **Container registry** — GHCR (`ghcr.io/brianramseyau/everylist`), per `docker/unraid-template.xml`'s `Repository` field.
 
-Still open, worth confirming before the relevant phase starts:
-
-1. **Auth method** — plan assumes email+password only for v1 (no OAuth/social login). Confirm whether Google/Apple sign-in should be pulled into MVP.
-2. **Monetization** — plan assumes **no** premium tier; everything is either shipped free or deferred/out-of-scope. Confirm this is the intent versus keeping a future paywall option open (which would affect the `List`/`User` schema now rather than later).
-3. **Email delivery provider** (for Phase 5 email export + invite emails) — not yet chosen (e.g. Resend, Postmark, SES); needed before Phase 3 invite-by-email ships.
-4. **Container registry** — plan assumes images are published to GHCR (`ghcr.io/<owner>/everylist`) for the Unraid template's `Repository` field; confirm this is the intended registry versus Docker Hub.
+No open questions remain blocking Phase 0.
 
 ---
 
