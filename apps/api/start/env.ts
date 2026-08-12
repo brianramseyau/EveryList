@@ -24,4 +24,10 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // Session
   SESSION_DRIVER: Env.schema.enum(['cookie', 'memory', 'database'] as const),
+
+  // Build/image metadata (baked in by docker/Dockerfile at build time — see
+  // GET /api/v1/meta and PLAN.md §8). Absent in local dev, hence optional.
+  APP_VERSION: Env.schema.string.optional(),
+  GIT_SHA: Env.schema.string.optional(),
+  BUILD_DATE: Env.schema.string.optional(),
 })

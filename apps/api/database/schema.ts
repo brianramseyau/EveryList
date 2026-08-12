@@ -43,6 +43,114 @@ export class AuthAccessTokenSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class CategorySchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'icon',
+    'id',
+    'isDefault',
+    'listId',
+    'name',
+    'sortOrder',
+    'updatedAt',
+  ] as const
+  $columns = CategorySchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare icon: string
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare isDefault: boolean
+  @column()
+  declare listId: number | null
+  @column()
+  declare name: string
+  @column()
+  declare sortOrder: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class ItemSchema extends BaseModel {
+  static $columns = [
+    'categoryId',
+    'checked',
+    'checkedAt',
+    'createdAt',
+    'createdBy',
+    'deletedAt',
+    'id',
+    'listId',
+    'name',
+    'notes',
+    'quantity',
+    'sortOrder',
+    'updatedAt',
+  ] as const
+  $columns = ItemSchema.$columns
+  @column()
+  declare categoryId: number | null
+  @column()
+  declare checked: boolean
+  @column.dateTime()
+  declare checkedAt: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare createdBy: number
+  @column.dateTime()
+  declare deletedAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare listId: number
+  @column()
+  declare name: string
+  @column()
+  declare notes: string | null
+  @column()
+  declare quantity: string | null
+  @column()
+  declare sortOrder: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class ListSchema extends BaseModel {
+  static $columns = [
+    'archived',
+    'color',
+    'createdAt',
+    'deletedAt',
+    'icon',
+    'id',
+    'name',
+    'ownerId',
+    'updatedAt',
+  ] as const
+  $columns = ListSchema.$columns
+  @column()
+  declare archived: boolean
+  @column()
+  declare color: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.dateTime()
+  declare deletedAt: DateTime | null
+  @column()
+  declare icon: string | null
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare name: string
+  @column()
+  declare ownerId: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
 export class UserSchema extends BaseModel {
   static $columns = ['createdAt', 'email', 'fullName', 'id', 'password', 'updatedAt'] as const
   $columns = UserSchema.$columns

@@ -29,9 +29,12 @@ router
       .group(() => {
         router.get('profile', [controllers.Profile, 'show'])
         router.post('logout', [controllers.AccessTokens, 'destroy'])
+        router.post('refresh', [controllers.AccessTokens, 'refresh'])
       })
       .prefix('account')
       .as('profile')
       .use(middleware.auth())
+
+    router.get('meta', [controllers.Metas, 'show'])
   })
   .prefix('/api/v1')

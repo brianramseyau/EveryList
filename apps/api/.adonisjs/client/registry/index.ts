@@ -30,6 +30,18 @@ const routes = {
     tokens: [{"old":"/api/v1/account/logout","type":0,"val":"api","end":""},{"old":"/api/v1/account/logout","type":0,"val":"v1","end":""},{"old":"/api/v1/account/logout","type":0,"val":"account","end":""},{"old":"/api/v1/account/logout","type":0,"val":"logout","end":""}],
     types: placeholder as Registry['profile.access_tokens.destroy']['types'],
   },
+  'profile.access_tokens.refresh': {
+    methods: ["POST"],
+    pattern: '/api/v1/account/refresh',
+    tokens: [{"old":"/api/v1/account/refresh","type":0,"val":"api","end":""},{"old":"/api/v1/account/refresh","type":0,"val":"v1","end":""},{"old":"/api/v1/account/refresh","type":0,"val":"account","end":""},{"old":"/api/v1/account/refresh","type":0,"val":"refresh","end":""}],
+    types: placeholder as Registry['profile.access_tokens.refresh']['types'],
+  },
+  'metas.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/meta',
+    tokens: [{"old":"/api/v1/meta","type":0,"val":"api","end":""},{"old":"/api/v1/meta","type":0,"val":"v1","end":""},{"old":"/api/v1/meta","type":0,"val":"meta","end":""}],
+    types: placeholder as Registry['metas.show']['types'],
+  },
 } as const satisfies Record<string, AdonisEndpoint>
 
 export { routes }

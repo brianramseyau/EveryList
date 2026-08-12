@@ -16,6 +16,10 @@ export interface ApiDefinition {
     }
     accessTokens: {
       destroy: typeof routes['profile.access_tokens.destroy']
+      refresh: typeof routes['profile.access_tokens.refresh']
     }
+  }
+  metas: {
+    show: typeof routes['metas.show']
   }
 }

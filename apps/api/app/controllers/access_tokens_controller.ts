@@ -26,4 +26,24 @@ export default class AccessTokensController {
       message: 'Logged out successfully',
     }
   }
+
+  /**
+   * Rotates the caller's access token: issues a fresh one and revokes the
+   * one used to authenticate this request, so a long-lived client session
+   * never has to ask the user to re-enter their password to stay signed in.
+   */
+  async refresh({ auth, serialize }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const previousToken = user.currentAccessToken
+
+    const token = await User.accessTokens.create(user)
+    if (previousToken) {
+      await User.accessTokens.delete(user, previousToken.identifier)
+    }
+
+    return serialize({
+      user: UserTransformer.transform(user),
+      token: token.value!.release(),
+    })
+  }
 }
