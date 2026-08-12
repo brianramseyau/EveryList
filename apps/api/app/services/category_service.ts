@@ -3,8 +3,10 @@ import Category from '#models/category'
 
 /**
  * Merges a list's own category overrides with the global default
- * categories (listId: null), letting a list-scoped category with the same
- * name shadow the global default it customizes — see PLAN.md §7.
+ * categories (listId: null), letting a list-scoped category shadow the
+ * exact global default it was forked from (see forkCategoryForList) —
+ * tracked by id via `forkedFromId`, not by name, so renaming an override
+ * doesn't un-shadow the default it replaced — see PLAN.md §7.
  */
 export async function getEffectiveCategories(list: List): Promise<Category[]> {
   const [customCategories, defaultCategories] = await Promise.all([
@@ -12,10 +14,14 @@ export async function getEffectiveCategories(list: List): Promise<Category[]> {
     Category.query().whereNull('listId').orderBy('sortOrder', 'asc'),
   ])
 
-  const customNames = new Set(customCategories.map((category) => category.name))
+  const shadowedIds = new Set(
+    customCategories
+      .map((category) => category.forkedFromId)
+      .filter((id): id is number => id !== null)
+  )
   const merged = [
     ...customCategories,
-    ...defaultCategories.filter((category) => !customNames.has(category.name)),
+    ...defaultCategories.filter((category) => !shadowedIds.has(category.id)),
   ]
   merged.sort((a, b) => a.sortOrder - b.sortOrder)
   return merged
@@ -37,5 +43,6 @@ export async function forkCategoryForList(list: List, category: Category): Promi
     icon: category.icon,
     sortOrder: category.sortOrder,
     isDefault: false,
+    forkedFromId: category.id,
   })
 }

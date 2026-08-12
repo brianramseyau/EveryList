@@ -46,6 +46,7 @@ export class AuthAccessTokenSchema extends BaseModel {
 export class CategorySchema extends BaseModel {
   static $columns = [
     'createdAt',
+    'forkedFromId',
     'icon',
     'id',
     'isDefault',
@@ -57,6 +58,8 @@ export class CategorySchema extends BaseModel {
   $columns = CategorySchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column()
+  declare forkedFromId: number | null
   @column()
   declare icon: string
   @column({ isPrimary: true })

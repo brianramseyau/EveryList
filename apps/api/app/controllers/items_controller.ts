@@ -33,7 +33,7 @@ async function nextSortOrder(listId: number): Promise<number> {
   const result = await Item.query()
     .where('listId', listId)
     .whereNull('deletedAt')
-    .max('sortOrder as maxSortOrder')
+    .max('sort_order as maxSortOrder')
     .first()
   return Number(result?.$extras.maxSortOrder ?? -1) + 1
 }

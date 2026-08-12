@@ -33,7 +33,7 @@ export default class CategoriesController {
 
     const maxSortOrder = await Category.query()
       .where('listId', list.id)
-      .max('sortOrder as maxSortOrder')
+      .max('sort_order as maxSortOrder')
       .first()
     const nextSortOrder = Number(maxSortOrder?.$extras.maxSortOrder ?? -1) + 1
 

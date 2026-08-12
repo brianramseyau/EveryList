@@ -73,7 +73,7 @@ export default class FavoriteItemsController {
     const maxSortOrder = await Item.query()
       .where('listId', list.id)
       .whereNull('deletedAt')
-      .max('sortOrder as maxSortOrder')
+      .max('sort_order as maxSortOrder')
       .first()
 
     const item = await Item.create({
