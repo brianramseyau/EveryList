@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!--
+  Unraid Community Applications template for EveryList.
+
+  Placeholders to update once the image is published:
+    - Repository / Registry: swap "brianramseyau" for the real GHCR namespace once
+      images are being published, and pin a tag if "latest" isn't desired.
+    - Icon: point at a real hosted icon (e.g. a raw.githubusercontent.com URL to
+      docker/icon.png) once one exists in the repo.
+
+  Note: no TZ variable is defined here on purpose — Unraid injects TZ into every
+  container itself, so declaring it in this template would just create a
+  redundant/conflicting entry in the Unraid UI.
+-->
+<Container version="2">
+  <Name>everylist</Name>
+  <Repository>ghcr.io/brianramseyau/everylist:latest</Repository>
+  <Registry>https://github.com/brianramseyau/EveryList/pkgs/container/everylist</Registry>
+  <Branch/>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/brianramseyau/EveryList/issues</Support>
+  <Project>https://github.com/brianramseyau/EveryList</Project>
+  <Overview>EveryList is a narrowed, mobile-first, offline-capable shopping/task list PWA - a leaner alternative to AnyList. Create lists, share them in real time with your household, auto-categorize items by store aisle, and keep working with zero connectivity - it syncs when you're back online. Data is stored locally in SQLite under the appdata path, so backups are just a folder copy.</Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:3000]/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/brianramseyau/EveryList/main/docker/icon.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="3000" Default="3000" Mode="tcp" Description="Port the EveryList web UI and API are served on" Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="Appdata Config Path" Target="/config" Default="/mnt/user/appdata/everylist" Mode="rw" Description="Persistent storage for the SQLite database and (Phase 5) uploaded item photos" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/everylist</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID the app runs as inside the container. Matches Unraid's 'nobody' user by default - set to match the owner of your appdata share" Type="Variable" Display="always" Required="true" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID the app runs as inside the container. Matches Unraid's 'users' group by default - set to match the owner of your appdata share" Type="Variable" Display="always" Required="true" Mask="false">100</Config>
+  <Config Name="APP_KEY" Target="APP_KEY" Default="" Mode="" Description="AdonisJS application encryption/signing key. Generate one with: docker run --rm ghcr.io/brianramseyau/everylist:latest node ace generate:key - then paste the value here" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="HOST" Target="HOST" Default="0.0.0.0" Mode="" Description="Interface the server binds to inside the container. Leave as default unless you know you need to change it" Type="Variable" Display="advanced" Required="false" Mask="false">0.0.0.0</Config>
+  <Config Name="PORT" Target="PORT" Default="3000" Mode="" Description="Internal port the app listens on. Must match the container port set in WebUI Port above" Type="Variable" Display="advanced" Required="false" Mask="false">3000</Config>
+  <Config Name="NODE_ENV" Target="NODE_ENV" Default="production" Mode="" Description="Node environment the app runs in" Type="Variable" Display="advanced" Required="false" Mask="false">production</Config>
+</Container>

@@ -63,15 +63,15 @@ Full feature parity with AnyList (including Watch app, Siri, Alexa, Instacart fu
 |---|---|---|
 | Runtime | **Node.js 24 (LTS)** | Enforced via `engines` + `.nvmrc` + CI matrix. |
 | Language | **TypeScript** (strict mode) everywhere | `strict: true`, `noUncheckedIndexedAccess: true`, shared `tsconfig.base.json`. |
-| Frontend framework | **SvelteKit** (Svelte 5) | File-based routing, SSR-capable but deployed as a PWA app-shell; `adapter-node` or `adapter-static` decision in §5. |
+| Frontend framework | **SvelteKit** (Svelte 5), built with `adapter-static` | File-based routing during development; production build is fully static (no SvelteKit SSR server) and is served directly by AdonisJS — keeps the deployed container to one process. |
 | UI kit | **Flowbite Svelte** (+ Tailwind CSS) | Accessible components, light/dark theming out of the box. |
 | PWA tooling | **vite-plugin-pwa** (Workbox) | Manifest, service worker, precache + runtime caching strategies. |
 | Offline store | **Dexie.js** (IndexedDB wrapper) | Local-first source of truth; sync queue built on top. |
 | Backend framework | **AdonisJS 6** | Native TypeScript, Lucid ORM, VineJS validation, built-in Auth, Transmit (SSE) for real-time. |
-| Database | **PostgreSQL 16** | JSONB for flexible metadata (e.g. import parsing artifacts), solid concurrency. |
-| Cache / pub-sub | **Redis** | Transmit broadcast backing store, rate limiting, session/token storage. |
-| Object storage | **S3-compatible (e.g. Cloudflare R2)** | Item photos, Phase 5. Abstracted behind a storage interface so provider is swappable. |
-| Real-time transport | **Adonis Transmit (SSE)** | Simpler than WebSockets for one-directional server→client push; sufficient for list sync events. |
+| Database | **SQLite 3 (WAL mode)** via `better-sqlite3` + Lucid | Single-file DB living under the container's `/config` volume; trivial Unraid appdata backups; sufficient for the household/small-shared-list concurrency this app targets — no separate DB service to run. |
+| Rate limiting store | **In-memory** (Adonis Limiter memory store) | No Redis or other external service — this app targets a single self-hosted instance (Unraid), not horizontal scaling, so an in-process store is the right level of complexity. |
+| File storage | **Local filesystem** (`/config/uploads`) | Item photos, Phase 5. Kept behind a storage-service interface so swapping in an S3-compatible backend later is a config change, not a rewrite. |
+| Real-time transport | **Adonis Transmit (SSE)**, local (in-process) transport | Simpler than WebSockets for one-directional server→client push; sufficient for list sync events; local transport matches the single-instance deployment. |
 | Validation | **VineJS** (backend), shared Zod-free — DTOs generated from VineJS schemas shared via `packages/shared` | Single source of truth for request/response shapes. |
 | Backend testing | **Japa** (Adonis's native runner) + **c8** for coverage | |
 | Frontend testing | **Vitest** + **@testing-library/svelte** (unit/integration), **Playwright** (E2E) | |
@@ -83,34 +83,33 @@ Full feature parity with AnyList (including Watch app, Siri, Alexa, Instacart fu
 ## 5. System Architecture
 
 ```
-                     ┌─────────────────────────┐
-                     │   Browser / Installed PWA │
-                     │  SvelteKit + Flowbite UI  │
-                     │  Service Worker (Workbox) │
-                     │  IndexedDB (Dexie) local  │
-                     │  store = source of truth  │
-                     └────────────┬──────────────┘
-                                  │ HTTPS (REST) + SSE (live updates)
-                                  ▼
-                     ┌─────────────────────────┐
-                     │        AdonisJS API       │
-                     │  Controllers / VineJS      │
-                     │  validation / Lucid ORM    │
-                     │  Transmit broadcast layer  │
-                     └───────┬─────────┬─────────┘
-                              │         │
-                    ┌─────────▼──┐   ┌──▼─────────┐
-                    │ PostgreSQL │   │   Redis    │
-                    │ (system of │   │ (pub/sub,  │
-                    │  record)   │   │ sessions,  │
-                    └────────────┘   │ rate-limit)│
-                                      └────────────┘
-                     ┌─────────────────────────┐
-                     │  S3-compatible storage    │  (Phase 5, item photos)
-                     └─────────────────────────┘
+                     ┌─────────────────────────────────────┐
+                     │   Browser / Installed PWA              │
+                     │  SvelteKit (static build) + Flowbite   │
+                     │  Service Worker (Workbox)               │
+                     │  IndexedDB (Dexie) local store           │
+                     │  = source of truth on-device              │
+                     └────────────────┬─────────────────────────┘
+                                       │ HTTPS (REST) + SSE (live updates)
+                                       ▼
+        ┌────────────────────────────────────────────────────────────┐
+        │  Docker container — Unraid, LinuxServer.io-style base image  │
+        │  s6-overlay init: reads PUID/PGID, usermod/groupmod the app   │
+        │  user, chowns /config, drops root, then execs one process:    │
+        │                                                                │
+        │   AdonisJS (Node 24) — serves /api/v1/* (Lucid + VineJS +     │
+        │   Transmit) AND serves the prebuilt SvelteKit static assets    │
+        │   for everything else, on a single exposed HTTP port.          │
+        └───────────────────────────────┬──────────────────────────────┘
+                                         │
+                              ┌──────────▼───────────┐
+                              │   /config (volume)     │
+                              │  everylist.sqlite3      │  ← WAL mode
+                              │  uploads/ (Phase 5)      │
+                              └──────────────────────────┘
 ```
 
-**Deployment shape:** two deployable units — `apps/web` (SvelteKit, `adapter-node`, containerized) and `apps/api` (AdonisJS, containerized). Both ship as Docker images so the hosting target (Fly.io, Railway, a VPS, etc.) stays a deployment-time decision, not an architectural one. This is flagged as an open question in §15.
+**Deployment shape:** a single Docker image, built on an s6-overlay base image (mirroring LinuxServer.io's own pattern), so `PUID`/`PGID` environment variables control filesystem ownership exactly the way LSIO images do — the init stage remaps the container's app user to the supplied IDs and `chown`s `/config` before dropping privileges and starting the app. Inside the container there is exactly **one Node process**: AdonisJS serves both the REST/SSE API and the static SvelteKit build, so the container exposes exactly one HTTP port and needs no internal reverse proxy. All persistent state — the SQLite database file and, from Phase 5, uploaded item photos — lives under a single `/config` volume, which also makes Unraid appdata-backup plugins trivial to use for backups. This is a single-instance deployment target by design; no clustering/multi-node concerns apply (see the in-memory rate-limit store and Transmit local transport in §4).
 
 **Why SSE over WebSockets:** all real-time traffic in this app is server→client (list/item changed elsewhere). Client→server mutations go over normal REST calls that also drive the offline sync queue. SSE is simpler to scale, reconnect, and load-balance than WebSockets, and Transmit ships with Adonis natively.
 
@@ -153,8 +152,13 @@ EveryList/
 │           └── functional/
 ├── packages/
 │   └── shared/                   # shared TS types, DTOs, validation contracts
+├── docker/
+│   ├── Dockerfile                 # LSIO-style single image (s6-overlay, PUID/PGID)
+│   ├── root/                      # s6-overlay service defs copied into the image
+│   │   └── etc/s6-overlay/s6-rc.d/...
+│   └── unraid-template.xml        # Community Applications template
 ├── .github/workflows/
-├── docker-compose.yml            # local Postgres + Redis + api + web
+├── docker-compose.yml            # local dev: api + web with hot reload (no external services needed)
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
 └── package.json
@@ -217,7 +221,7 @@ Core entities (fields abbreviated to the decision-relevant ones):
 
 **Backend (`apps/api`):**
 - Unit tests (Japa) for services, validators, sync/version-conflict logic.
-- Functional tests (Japa `ApiClient`) hit real HTTP routes against a disposable test Postgres DB, wrapped in a transaction per test and rolled back.
+- Functional tests (Japa `ApiClient`) hit real HTTP routes against a disposable in-memory/temp-file SQLite DB, migrated fresh and wrapped in a transaction per test and rolled back.
 - Coverage via `c8` wrapping `node ace test`; `.c8rc.json` sets `lines`, `branches`, `functions`, `statements` thresholds to 100 and `check-coverage: true`, run in CI as a hard gate.
 
 **Frontend (`apps/web`):**
@@ -231,10 +235,10 @@ Core entities (fields abbreviated to the decision-relevant ones):
 
 GitHub Actions pipeline (per PR):
 1. Install (pnpm, cached) → lint (ESLint + Prettier check) → typecheck (`tsc --noEmit` in every workspace).
-2. `apps/api` tests + coverage gate (against ephemeral Postgres/Redis service containers).
+2. `apps/api` tests + coverage gate (SQLite is file/in-memory, so no external service containers are needed).
 3. `apps/web` tests + coverage gate.
-4. Build both apps.
-5. Playwright E2E smoke against the built app + Dockerized API (docker-compose in CI).
+4. Build both apps and the production Docker image (`docker/Dockerfile`).
+5. Playwright E2E smoke against the built container.
 6. Merge blocked on any failing step, including coverage falling under 100%.
 
 ---
@@ -253,12 +257,12 @@ GitHub Actions pipeline (per PR):
 
 | Phase | Contents |
 |---|---|
-| **0 — Foundations** | This plan; repo scaffold (pnpm workspaces, Docker Compose, CI skeleton, lint/format/typecheck config, shared `tsconfig`); empty Adonis + SvelteKit apps wired together and deployable. |
+| **0 — Foundations** | This plan; repo scaffold (pnpm workspaces, local dev Docker Compose, CI skeleton, lint/format/typecheck config, shared `tsconfig`); empty Adonis + SvelteKit apps wired together; `docker/Dockerfile` (LSIO-style, PUID/PGID) and `docker/unraid-template.xml` producing a runnable single-container image from day one. |
 | **1 — Auth & domain core** | User auth (register/login/refresh), `List`/`Category`/`Item` migrations + models, default category seeding. |
 | **2 — List & item CRUD** | Full list/item management UI + API, quantities/notes, auto-categorization, category customization, favorites, recent-items recovery. |
 | **3 — Sharing & real-time** | `ListMember` roles, invite/join flow, Transmit channels, live update UI + modification toasts. |
 | **4 — Offline & PWA** | Dexie local store, sync queue + conflict resolution, service worker, manifest/installability, offline E2E coverage. This phase is the MVP-complete milestone. |
-| **5 — Stores, prices, folders, photos, export** | Store entity + filtering, price/budget tracking, list folders, item photos (object storage), badge counts/exclusion, email export. |
+| **5 — Stores, prices, folders, photos, export** | Store entity + filtering, price/budget tracking, list folders, item photos (local filesystem storage), badge counts/exclusion, email export. |
 | **6 — Polish** | Passcode lock, premium-equivalent themes, personalized autocomplete, performance/accessibility hardening pass. |
 
 No calendar dates are set here since team size/velocity aren't yet known — phases are ordered by dependency, not duration.
@@ -267,13 +271,14 @@ No calendar dates are set here since team size/velocity aren't yet known — pha
 
 ## 15. Assumptions & Open Questions
 
-These were decided with a reasonable default so the plan could be complete, but are worth confirming before Phase 0 work starts:
+**Resolved:** hosting target is Docker on Unraid, packaged in a LinuxServer.io-style single-container image with `PUID`/`PGID` support (see §5 and `docker/unraid-template.xml`); the frontend build question is resolved as SvelteKit with `adapter-static`, served by AdonisJS from the same process/container.
 
-1. **Hosting target** — plan assumes containerized deployment (Docker) to a not-yet-chosen host (Fly.io/Railway/VPS/etc.). No target is baked into the architecture; confirm before writing deploy manifests.
-2. **SvelteKit vs. plain Svelte+Vite SPA** — plan recommends SvelteKit for routing/SSR flexibility even though the app is deployed PWA-first; confirm this is acceptable versus a leaner SPA-only setup.
-3. **Auth method** — plan assumes email+password only for v1 (no OAuth/social login). Confirm whether Google/Apple sign-in should be pulled into MVP.
-4. **Monetization** — plan assumes **no** premium tier; everything is either shipped free or deferred/out-of-scope. Confirm this is the intent versus keeping a future paywall option open (which would affect the `List`/`User` schema now rather than later).
-5. **Email delivery provider** (for Phase 5 email export + invite emails) — not yet chosen (e.g. Resend, Postmark, SES); needed before Phase 3 invite-by-email ships.
+Still open, worth confirming before the relevant phase starts:
+
+1. **Auth method** — plan assumes email+password only for v1 (no OAuth/social login). Confirm whether Google/Apple sign-in should be pulled into MVP.
+2. **Monetization** — plan assumes **no** premium tier; everything is either shipped free or deferred/out-of-scope. Confirm this is the intent versus keeping a future paywall option open (which would affect the `List`/`User` schema now rather than later).
+3. **Email delivery provider** (for Phase 5 email export + invite emails) — not yet chosen (e.g. Resend, Postmark, SES); needed before Phase 3 invite-by-email ships.
+4. **Container registry** — plan assumes images are published to GHCR (`ghcr.io/<owner>/everylist`) for the Unraid template's `Repository` field; confirm this is the intended registry versus Docker Hub.
 
 ---
 
