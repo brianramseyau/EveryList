@@ -39,6 +39,7 @@
     "#config/*": "./config/*.js"
   },
   "devDependencies": {
+    "@everylist/shared": "workspace:*",
     "@adonisjs/assembler": "^8.4.0",
     "@adonisjs/eslint-config": "^3.1.0",
     "@adonisjs/prettier-config": "^1.5.0",
@@ -57,7 +58,6 @@
     "youch": "^4.1.1"
   },
   "dependencies": {
-    "@everylist/shared": "workspace:*",
     "@adonisjs/auth": "^10.1.0",
     "@adonisjs/core": "^7.4.0",
     "@adonisjs/cors": "^3.0.0",

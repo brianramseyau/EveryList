@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button } from 'flowbite-svelte';
+	import { resolve } from '$app/paths';
 </script>
 
 <svelte:head>
@@ -13,4 +14,8 @@
 		<code>foundational/PLAN.md</code> for the roadmap.
 	</p>
 	<Button>Coming soon</Button>
+	<a
+		href={resolve('/settings')}
+		class="text-primary-600 dark:text-primary-400 text-sm hover:underline">Settings</a
+	>
 </main>

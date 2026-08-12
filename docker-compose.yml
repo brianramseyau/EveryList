@@ -30,6 +30,8 @@ services:
       dockerfile: docker/dev.Dockerfile
     working_dir: /app
     command: sh -c "pnpm install --frozen-lockfile && pnpm --filter @everylist/web dev -- --host 0.0.0.0 --port 5173"
+    environment:
+      VITE_API_PROXY_TARGET: http://api:3333
     ports:
       - "5173:5173"
     depends_on:

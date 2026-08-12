@@ -42,6 +42,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # apps/api and apps/web both import types from @everylist/shared via
+      # its package.json "exports" (dist/), so it must be built before
+      # typecheck/test can resolve it — lint doesn't need this.
+      - run: pnpm --filter @everylist/shared build
+
       - run: pnpm -r lint
       - run: pnpm -r typecheck
 

@@ -16,6 +16,17 @@ export default defineConfig({
 			adapter: adapter()
 		})
 	],
+	server: {
+		// In production AdonisJS serves both the API and the static build from
+		// one origin (see docker/Dockerfile), so the app fetches relative
+		// "/api/..." paths. Dev runs SvelteKit and AdonisJS as separate
+		// processes on separate ports, so proxy the same relative path to the
+		// API dev server — VITE_API_PROXY_TARGET lets docker-compose point
+		// this at the "api" service instead of localhost.
+		proxy: {
+			'/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3333'
+		}
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

@@ -37,6 +37,7 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build-web
 COPY packages/shared packages/shared
 COPY apps/web apps/web
+RUN pnpm --filter @everylist/shared build
 RUN pnpm --filter @everylist/web build
 
 # ---------------------------------------------------------------------------
@@ -53,6 +54,7 @@ FROM deps AS build-api
 COPY packages/shared packages/shared
 COPY apps/api apps/api
 COPY --from=build-web /app/apps/web/build apps/api/public
+RUN pnpm --filter @everylist/shared build
 RUN pnpm --filter @everylist/api build
 
 # ---------------------------------------------------------------------------
