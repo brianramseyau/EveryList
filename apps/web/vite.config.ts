@@ -13,7 +13,13 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter()
+			// fallback: dynamic routes (e.g. /lists/[id]) have no known params at
+			// build time, so they can't be prerendered — the fallback shell lets
+			// SvelteKit's client-side router take over for those at runtime.
+			// Named 200.html (not the default index.html) so it doesn't collide
+			// with the prerendered "/" page — AdonisJS serves it explicitly as
+			// the catch-all for unmatched routes (see docker/Dockerfile).
+			adapter: adapter({ fallback: '200.html' })
 		})
 	],
 	server: {

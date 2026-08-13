@@ -31,8 +31,11 @@ COPY packages/shared/package.json packages/shared/package.json
 RUN pnpm install --frozen-lockfile
 
 # ---------------------------------------------------------------------------
-# build-web: static SvelteKit build (adapter-static, fully prerendered —
-# see apps/web/src/routes/+layout.ts).
+# build-web: static SvelteKit build (adapter-static). Most routes are
+# prerendered (see apps/web/src/routes/+layout.ts); routes with dynamic
+# params unknown at build time (e.g. /lists/[id]) fall back to a client-
+# rendered 200.html shell — see apps/web/vite.config.ts and the SPA
+# fallback route in apps/api/start/routes.ts.
 # ---------------------------------------------------------------------------
 FROM deps AS build-web
 COPY packages/shared packages/shared
