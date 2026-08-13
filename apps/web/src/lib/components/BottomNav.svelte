@@ -4,10 +4,10 @@
 
 	type NavKey = 'lists' | 'favorites' | 'settings';
 
-	const items: { key: NavKey; href: string; label: string; match: string }[] = [
-		{ key: 'lists', href: resolve('/lists'), label: 'Lists', match: '/lists' },
-		{ key: 'favorites', href: resolve('/favorites'), label: 'Favorites', match: '/favorites' },
-		{ key: 'settings', href: resolve('/settings'), label: 'Settings', match: '/settings' }
+	const items: { key: NavKey; label: string; match: string }[] = [
+		{ key: 'lists', label: 'Lists', match: '/lists' },
+		{ key: 'favorites', label: 'Favorites', match: '/favorites' },
+		{ key: 'settings', label: 'Settings', match: '/settings' }
 	];
 
 	function isActive(match: string): boolean {
@@ -22,7 +22,11 @@
 	{#each items as item (item.key)}
 		{@const active = isActive(item.match)}
 		<a
-			href={item.href}
+			href={item.key === 'lists'
+				? resolve('/lists')
+				: item.key === 'favorites'
+					? resolve('/favorites')
+					: resolve('/settings')}
 			aria-current={active ? 'page' : undefined}
 			class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium {active
 				? 'text-primary-600 dark:text-primary-400'
