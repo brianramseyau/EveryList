@@ -5,6 +5,15 @@ export function fetchItems(listId: number): Promise<ItemDto[]> {
 	return apiGet(`/api/v1/lists/${listId}/items`);
 }
 
+/** Soft-deleted items still within their recovery window, most recent first. */
+export function fetchRecentItems(listId: number): Promise<ItemDto[]> {
+	return apiGet(`/api/v1/lists/${listId}/items/recent`);
+}
+
+export function restoreItem(listId: number, itemId: number): Promise<ItemDto> {
+	return apiPost(`/api/v1/lists/${listId}/items/${itemId}/restore`);
+}
+
 export function createItem(
 	listId: number,
 	input: {

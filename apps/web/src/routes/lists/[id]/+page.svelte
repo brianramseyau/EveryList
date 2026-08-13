@@ -9,7 +9,15 @@
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
-	import { createItem, deleteItem, fetchItems, importItems, updateItem } from '$lib/api/items';
+	import {
+		createItem,
+		deleteItem,
+		fetchItems,
+		fetchRecentItems,
+		importItems,
+		restoreItem,
+		updateItem
+	} from '$lib/api/items';
 	import { ApiError } from '$lib/api/client';
 
 	const listId = $derived(Number(page.params.id));
@@ -27,6 +35,10 @@
 	let importText = $state('');
 	let importOpen = $state(false);
 	let importing = $state(false);
+
+	let recentItems = $state<ItemDto[]>([]);
+	let recentOpen = $state(false);
+	let loadingRecent = $state(false);
 
 	const groups = $derived.by(() => {
 		const byCategory = new SvelteMap<number | null, ItemDto[]>();
@@ -125,9 +137,37 @@
 		items = items.filter((current) => current.id !== item.id);
 		try {
 			await deleteItem(listId, item.id);
+			if (recentOpen) recentItems = [item, ...recentItems];
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to delete item.';
 			void loadAll();
+		}
+	}
+
+	async function loadRecent() {
+		loadingRecent = true;
+		try {
+			recentItems = await fetchRecentItems(listId);
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to load recently deleted items.';
+		} finally {
+			loadingRecent = false;
+		}
+	}
+
+	function toggleRecent() {
+		recentOpen = !recentOpen;
+		if (recentOpen) void loadRecent();
+	}
+
+	async function restoreRecentItem(item: ItemDto) {
+		recentItems = recentItems.filter((current) => current.id !== item.id);
+		try {
+			const restored = await restoreItem(listId, item.id);
+			items = [...items, restored];
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to restore item.';
+			void loadRecent();
 		}
 	}
 </script>
@@ -231,6 +271,39 @@
 				{/if}
 			</div>
 		{/if}
+
+		<div>
+			<button
+				type="button"
+				class="text-primary-600 dark:text-primary-400 text-sm hover:underline"
+				onclick={toggleRecent}
+			>
+				{recentOpen ? 'Hide recently deleted' : 'Show recently deleted'}
+			</button>
+
+			{#if recentOpen}
+				{#if loadingRecent}
+					<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+				{:else if recentItems.length === 0}
+					<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Nothing recently deleted.</p>
+				{:else}
+					<ul class="mt-2 flex flex-col gap-1">
+						{#each recentItems as item (item.id)}
+							<li class="flex items-center gap-2 text-sm">
+								<span class="text-gray-500 dark:text-gray-400">{item.name}</span>
+								<button
+									type="button"
+									class="text-primary-600 dark:text-primary-400 ml-auto hover:underline"
+									onclick={() => restoreRecentItem(item)}
+								>
+									Restore
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			{/if}
+		</div>
 	{:else if error}
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 	{/if}
