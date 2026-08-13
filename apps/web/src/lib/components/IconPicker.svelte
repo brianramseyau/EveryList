@@ -66,7 +66,7 @@
 					{#each matches as name (name)}
 						<button
 							type="button"
-							class="hover:bg-primary-100 dark:hover:bg-primary-900 flex items-center justify-center rounded p-2"
+							class="flex items-center justify-center rounded p-2 hover:bg-primary-100 dark:hover:bg-primary-900"
 							title={toDisplayLabel(name)}
 							onclick={() => pick(name)}
 						>
