@@ -4,6 +4,21 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+		<script>
+			// Blocking (non-module) script, runs before first paint, so the app
+			// never flashes the wrong theme. Keep this logic in sync with
+			// getThemePreference()/applyTheme() in src/lib/theme.ts.
+			(function () {
+				try {
+					var stored = localStorage.getItem('everylist:theme');
+					var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+					var isDark = stored === 'dark' || ((stored === 'automatic' || !stored) && systemDark);
+					if (isDark) document.documentElement.classList.add('dark');
+				} catch (e) {
+					/* localStorage/matchMedia unavailable (e.g. privacy mode) — fall back to light. */
+				}
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

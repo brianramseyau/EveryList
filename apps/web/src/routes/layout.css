@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 
+/* Class-based dark mode: toggled by adding/removing `.dark` on <html> (see
+   $lib/theme.ts), instead of Tailwind's default bare `prefers-color-scheme`
+   media query, which gave no way for a user to override their OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @source '../../node_modules/flowbite-svelte/dist';
 
 /* flowbite-svelte components (Button, Input focus rings, links, ...) are
@@ -18,4 +23,24 @@
 	--color-primary-800: #075985;
 	--color-primary-900: #0c4a6e;
 	--color-primary-950: #082f49;
+}
+
+/* Matches the tokens applied to the root layout wrapper (bg-white /
+   dark:bg-gray-900) so there's no white flash outside that wrapper (e.g.
+   mobile overscroll) and native form controls/scrollbars pick the right
+   theme. */
+:root {
+	color-scheme: light;
+}
+
+:root.dark {
+	color-scheme: dark;
+}
+
+html {
+	background-color: #fff;
+}
+
+html.dark {
+	background-color: #111827;
 }
