@@ -13,6 +13,10 @@ export default class User extends compose(UserSchema, withAuthFinder(hash)) {
     if (first && last) {
       return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase()
     }
+    // `first` is always defined here: `.split()` on a non-empty fullName or
+    // email always yields at least one element. The `?? ''` only satisfies
+    // noUncheckedIndexedAccess's type, so it's unreachable at runtime.
+    /* c8 ignore next */
     return `${(first ?? '').slice(0, 2)}`.toUpperCase()
   }
 }

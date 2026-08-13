@@ -6,10 +6,11 @@ name: Test
 # image) can't drift apart. See foundational/PLAN.md §12.
 #
 # Coverage thresholds (100%, per PLAN.md §11) are enforced per-workspace by
-# each package's own test config (packages/shared already does; apps/api
-# and apps/web pick this up as real application code lands on top of the
-# Phase 0 scaffold) — a plain `pnpm -r test` is already the gate once a
-# workspace opts in, no separate coverage step needed here.
+# each package's own test config: packages/shared (vitest --coverage) and
+# apps/api (c8, scoped to app/**, see apps/api/.c8rc.json) both do; apps/web
+# still needs its Vitest coverage config wired up (see PLAN.md's Phase 2
+# status note). A plain `pnpm -r test` is already the gate once a workspace
+# opts in, no separate coverage step needed here.
 
 on:
   workflow_call:

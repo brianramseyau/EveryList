@@ -29,6 +29,12 @@ test.group('Lists CRUD', (group) => {
     index.assertStatus(200)
     assert.lengthOf(bodyData<ListDto[]>(index), 1)
 
+    const show = await client
+      .get(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${token}`)
+    show.assertStatus(200)
+    assert.equal(bodyData<ListDto>(show).id, listId)
+
     const update = await client
       .patch(`/api/v1/lists/${listId}`)
       .header('Authorization', `Bearer ${token}`)
@@ -47,9 +53,15 @@ test.group('Lists CRUD', (group) => {
       .get(`/api/v1/lists/${listId}`)
       .header('Authorization', `Bearer ${token}`)
     showDeleted.assertStatus(404)
+
+    const updateDeleted = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Should not apply' })
+    updateDeleted.assertStatus(404)
   })
 
-  test("a user cannot see another user's list", async ({ client }) => {
+  test("a user cannot see or update another user's list", async ({ client }) => {
     const ownerToken = await signupAndGetToken(client)
     const create = await client
       .post('/api/v1/lists')
@@ -61,7 +73,12 @@ test.group('Lists CRUD', (group) => {
     const response = await client
       .get(`/api/v1/lists/${listId}`)
       .header('Authorization', `Bearer ${otherToken}`)
-
     response.assertStatus(404)
+
+    const update = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${otherToken}`)
+      .json({ name: 'Hijacked' })
+    update.assertStatus(404)
   })
 })

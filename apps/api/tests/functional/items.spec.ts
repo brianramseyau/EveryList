@@ -78,4 +78,78 @@ test.group('Items CRUD', (group) => {
     const names = response.body().data.map((item: { name: string }) => item.name)
     assert.deepEqual(names, ['Milk', 'Bread', 'Chicken breast'])
   })
+
+  test('accepts an explicit categoryId, leaves unmatched names uncategorized, filters checked items, and unchecks', async ({
+    client,
+    assert,
+  }) => {
+    await new DefaultCategorySeeder(db.connection()).run()
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))
+    const categoryId = categories.body().data[0].id
+
+    const explicit = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Something odd', categoryId })
+    )
+    explicit.assertStatus(200)
+    assert.equal(explicit.body().data.categoryId, categoryId)
+
+    const unmatched = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Xyzzy Nonsense' })
+    )
+    unmatched.assertStatus(200)
+    assert.isNull(unmatched.body().data.categoryId)
+
+    const check = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${unmatched.body().data.id}`)
+        .json({ checked: true })
+    )
+    check.assertStatus(200)
+
+    const onlyUnchecked = await auth(
+      client.get(`/api/v1/lists/${listId}/items`).qs({ includeChecked: 'false' })
+    )
+    onlyUnchecked.assertStatus(200)
+    const uncheckedNames = onlyUnchecked.body().data.map((item: { name: string }) => item.name)
+    assert.notInclude(uncheckedNames, 'Xyzzy Nonsense')
+
+    const uncheck = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${unmatched.body().data.id}`)
+        .json({ checked: false })
+    )
+    uncheck.assertStatus(200)
+    assert.isFalse(uncheck.body().data.checked)
+    assert.isNull(uncheck.body().data.checkedAt)
+  })
+
+  test('leaves an item uncategorized when its suggested category no longer exists', async ({
+    client,
+    assert,
+  }) => {
+    await new DefaultCategorySeeder(db.connection()).run()
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))
+    const produce = categories.body().data.find((c: { name: string }) => c.name === 'Produce')
+
+    // Renaming "Produce" removes that name from the list's effective
+    // categories, so "Bananas" (which suggests "Produce") should no longer
+    // resolve to a category.
+    await auth(
+      client.patch(`/api/v1/lists/${listId}/categories/${produce.id}`).json({ name: 'Fruit & Veg' })
+    )
+
+    const create = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bananas' })
+    )
+    create.assertStatus(200)
+    assert.isNull(create.body().data.categoryId)
+  })
 })

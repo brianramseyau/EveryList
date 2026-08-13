@@ -94,4 +94,63 @@ test.group('Stores', (group) => {
     attach.assertStatus(200)
     assert.equal(bodyData<StoreDto>(attach).id, storeId)
   })
+
+  test('fetches a store category order and rejects attach without storeId or name', async ({
+    client,
+    assert,
+  }) => {
+    await new DefaultCategorySeeder(db.connection()).run()
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/stores`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Aldi' })
+    const storeId = bodyData<StoreDto>(create).id
+
+    const categories = await client
+      .get(`/api/v1/stores/${storeId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+    categories.assertStatus(200)
+    assert.isArray(bodyData<StoreCategoryOrderDto[]>(categories))
+
+    const badAttach = await client
+      .post(`/api/v1/lists/${listId}/stores`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({})
+    badAttach.assertStatus(400)
+  })
+
+  test('reordering categories silently skips ids that do not exist', async ({ client, assert }) => {
+    await new DefaultCategorySeeder(db.connection()).run()
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/stores`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Kroger' })
+    const storeId = bodyData<StoreDto>(create).id
+
+    const categories = await client
+      .get(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+    const categoryId = bodyData<CategoryDto[]>(categories)[0]!.id
+    const bogusCategoryId = 999_999
+
+    const reorder = await client
+      .patch(`/api/v1/stores/${storeId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        categories: [
+          { categoryId, sortOrder: 3 },
+          { categoryId: bogusCategoryId, sortOrder: 7 },
+        ],
+      })
+    reorder.assertStatus(200)
+    const orders = bodyData<StoreCategoryOrderDto[]>(reorder)
+    assert.lengthOf(orders, 1)
+    assert.equal(orders[0]!.categoryId, categoryId)
+  })
 })
