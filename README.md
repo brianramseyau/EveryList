@@ -120,7 +120,7 @@ docker run -d \
   ghcr.io/brianramseyau/everylist
 ```
 
-`PUID`/`PGID` default to `99`/`100` (Unraid's `nobody`/`users`) and can be overridden; an `APP_KEY` is generated on first boot and persisted to `/config/app_key` if you don't supply one. An [Unraid Community Applications template](docker/unraid-template.xml) is included.
+`PUID`/`PGID` default to `99`/`100` (Unraid's `nobody`/`users`) and can be overridden; an `APP_KEY` is generated on first boot and persisted to `/config/app_key` if you don't supply one; database migrations run automatically against `/config/everylist.sqlite3` on every start, so a fresh volume and version upgrades both just work. An [Unraid Community Applications template](docker/unraid-template.xml) is included.
 
 Available image tags:
 
