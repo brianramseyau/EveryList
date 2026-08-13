@@ -63,11 +63,16 @@
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold">My Lists</h1>
-		<button
-			type="button"
-			onclick={handleLogout}
-			class="text-sm text-gray-500 hover:underline dark:text-gray-400">Log out</button
-		>
+		<div class="flex items-center gap-4 text-sm">
+			<a href={resolve('/favorites')} class="text-primary-600 dark:text-primary-400 hover:underline"
+				>Favorites</a
+			>
+			<button
+				type="button"
+				onclick={handleLogout}
+				class="text-gray-500 hover:underline dark:text-gray-400">Log out</button
+			>
+		</div>
 	</div>
 
 	<form class="flex gap-2" onsubmit={handleCreate}>
