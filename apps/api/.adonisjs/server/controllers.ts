@@ -5,7 +5,12 @@
 
 export const controllers = {
   AccessTokens: () => import('#controllers/access_tokens_controller'),
+  Categories: () => import('#controllers/categories_controller'),
+  FavoriteItems: () => import('#controllers/favorite_items_controller'),
+  Items: () => import('#controllers/items_controller'),
+  Lists: () => import('#controllers/lists_controller'),
   Metas: () => import('#controllers/metas_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
   Profile: () => import('#controllers/profile_controller'),
+  Stores: () => import('#controllers/stores_controller'),
 }
