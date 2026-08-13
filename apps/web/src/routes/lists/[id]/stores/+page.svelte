@@ -84,7 +84,7 @@
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
 	<a
 		href={resolve('/lists/[id]', { id: String(listId) })}
-		class="text-primary-600 dark:text-primary-400 text-sm hover:underline">← Back to list</a
+		class="text-sm text-primary-600 hover:underline dark:text-primary-400">← Back to list</a
 	>
 
 	{#if loading}
@@ -124,7 +124,7 @@
 								id: String(listId),
 								storeId: String(store.id)
 							})}
-							class="text-primary-600 dark:text-primary-400 ml-auto text-xs hover:underline"
+							class="ml-auto text-xs text-primary-600 hover:underline dark:text-primary-400"
 						>
 							Reorder categories
 						</a>

@@ -58,7 +58,7 @@
 	<p class="text-sm text-gray-600 dark:text-gray-300">
 		Don't have an account? <a
 			href={resolve('/signup')}
-			class="text-primary-600 dark:text-primary-400 hover:underline">Sign up</a
+			class="text-primary-600 hover:underline dark:text-primary-400">Sign up</a
 		>
 	</p>
 </main>

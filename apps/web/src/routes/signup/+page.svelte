@@ -81,7 +81,7 @@
 	<p class="text-sm text-gray-600 dark:text-gray-300">
 		Already have an account? <a
 			href={resolve('/login')}
-			class="text-primary-600 dark:text-primary-400 hover:underline">Log in</a
+			class="text-primary-600 hover:underline dark:text-primary-400">Log in</a
 		>
 	</p>
 </main>

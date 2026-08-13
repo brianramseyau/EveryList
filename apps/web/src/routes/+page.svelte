@@ -23,11 +23,11 @@
 	<Button href={resolve('/lists')}>{signedIn ? 'My Lists' : 'Get started'}</Button>
 	<div class="flex gap-4 text-sm">
 		{#if !signedIn}
-			<a href={resolve('/login')} class="text-primary-600 dark:text-primary-400 hover:underline"
+			<a href={resolve('/login')} class="text-primary-600 hover:underline dark:text-primary-400"
 				>Log in</a
 			>
 		{/if}
-		<a href={resolve('/settings')} class="text-primary-600 dark:text-primary-400 hover:underline"
+		<a href={resolve('/settings')} class="text-primary-600 hover:underline dark:text-primary-400"
 			>Settings</a
 		>
 	</div>
