@@ -64,7 +64,7 @@
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold">My Lists</h1>
 		<div class="flex items-center gap-4 text-sm">
-			<a href={resolve('/favorites')} class="text-primary-600 dark:text-primary-400 hover:underline"
+			<a href={resolve('/favorites')} class="text-primary-600 hover:underline dark:text-primary-400"
 				>Favorites</a
 			>
 			<button
@@ -94,7 +94,7 @@
 				<li>
 					<a
 						href={resolve('/lists/[id]', { id: String(list.id) })}
-						class="hover:border-primary-500 flex items-center justify-between rounded-lg border border-gray-200 p-4 dark:border-gray-700"
+						class="flex items-center justify-between rounded-lg border border-gray-200 p-4 hover:border-primary-500 dark:border-gray-700"
 					>
 						<span>{list.name}</span>
 						{#if list.archived}

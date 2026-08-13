@@ -92,7 +92,7 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<a href={resolve('/lists')} class="text-primary-600 dark:text-primary-400 text-sm hover:underline"
+	<a href={resolve('/lists')} class="text-sm text-primary-600 hover:underline dark:text-primary-400"
 		>← My Lists</a
 	>
 
@@ -142,7 +142,7 @@
 					<div class="ml-auto flex items-center gap-3">
 						<button
 							type="button"
-							class="text-primary-600 dark:text-primary-400 text-sm hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+							class="text-sm text-primary-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400"
 							disabled={!selectedListId || addingToList === favorite.id}
 							onclick={() => handleAddToList(favorite)}
 						>

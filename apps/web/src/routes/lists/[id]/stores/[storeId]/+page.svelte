@@ -84,7 +84,7 @@
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
 	<a
 		href={resolve('/lists/[id]/stores', { id: String(listId) })}
-		class="text-primary-600 dark:text-primary-400 text-sm hover:underline">← Stores</a
+		class="text-sm text-primary-600 hover:underline dark:text-primary-400">← Stores</a
 	>
 
 	{#if loading}

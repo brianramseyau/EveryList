@@ -197,7 +197,7 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<a href={resolve('/lists')} class="text-primary-600 dark:text-primary-400 text-sm hover:underline"
+	<a href={resolve('/lists')} class="text-sm text-primary-600 hover:underline dark:text-primary-400"
 		>← My Lists</a
 	>
 
@@ -209,11 +209,11 @@
 			<div class="flex gap-3 text-sm">
 				<a
 					href={resolve('/lists/[id]/stores', { id: String(listId) })}
-					class="text-primary-600 dark:text-primary-400 hover:underline">Stores</a
+					class="text-primary-600 hover:underline dark:text-primary-400">Stores</a
 				>
 				<a
 					href={resolve('/lists/[id]/categories', { id: String(listId) })}
-					class="text-primary-600 dark:text-primary-400 hover:underline">Categories</a
+					class="text-primary-600 hover:underline dark:text-primary-400">Categories</a
 				>
 			</div>
 		</div>
@@ -226,7 +226,7 @@
 
 		<button
 			type="button"
-			class="text-primary-600 dark:text-primary-400 self-start text-sm hover:underline"
+			class="self-start text-sm text-primary-600 hover:underline dark:text-primary-400"
 			onclick={() => (importOpen = !importOpen)}
 		>
 			{importOpen ? 'Cancel paste import' : 'Paste in a list…'}
@@ -307,7 +307,7 @@
 		<div>
 			<button
 				type="button"
-				class="text-primary-600 dark:text-primary-400 text-sm hover:underline"
+				class="text-sm text-primary-600 hover:underline dark:text-primary-400"
 				onclick={toggleRecent}
 			>
 				{recentOpen ? 'Hide recently deleted' : 'Show recently deleted'}
@@ -325,7 +325,7 @@
 								<span class="text-gray-500 dark:text-gray-400">{item.name}</span>
 								<button
 									type="button"
-									class="text-primary-600 dark:text-primary-400 ml-auto hover:underline"
+									class="ml-auto text-primary-600 hover:underline dark:text-primary-400"
 									onclick={() => restoreRecentItem(item)}
 								>
 									Restore
