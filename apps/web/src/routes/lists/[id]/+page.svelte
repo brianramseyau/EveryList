@@ -18,6 +18,8 @@
 		restoreItem,
 		updateItem
 	} from '$lib/api/items';
+	import { fetchStoreCategoryOrder } from '$lib/api/stores';
+	import { getSelectedStore } from '$lib/api/selected-store';
 	import { ApiError } from '$lib/api/client';
 
 	const listId = $derived(Number(page.params.id));
@@ -40,6 +42,10 @@
 	let recentOpen = $state(false);
 	let loadingRecent = $state(false);
 
+	// Store-specific aisle order, if the shopper has picked a store for this
+	// list on this device — purely local, see $lib/api/selected-store.ts.
+	let storeCategoryOverrides: Map<number, number> = new SvelteMap();
+
 	const groups = $derived.by(() => {
 		const byCategory = new SvelteMap<number | null, ItemDto[]>();
 		for (const item of items) {
@@ -49,8 +55,14 @@
 			byCategory.get(key)!.push(item);
 		}
 
+		const orderedCategories = [...categories].sort((a, b) => {
+			const aOrder = storeCategoryOverrides.get(a.id) ?? a.sortOrder;
+			const bOrder = storeCategoryOverrides.get(b.id) ?? b.sortOrder;
+			return aOrder - bOrder;
+		});
+
 		const ordered: { category: CategoryDto | null; items: ItemDto[] }[] = [];
-		for (const category of categories) {
+		for (const category of orderedCategories) {
 			const bucket = byCategory.get(category.id);
 			if (bucket?.length) ordered.push({ category, items: bucket });
 		}
@@ -69,6 +81,14 @@
 				fetchCategories(listId),
 				fetchItems(listId)
 			]);
+
+			const selectedStoreId = getSelectedStore(listId);
+			const overrideEntries = selectedStoreId ? await fetchStoreCategoryOrder(selectedStoreId) : [];
+			storeCategoryOverrides.clear();
+			for (const entry of overrideEntries) {
+				storeCategoryOverrides.set(entry.categoryId, entry.sortOrder);
+			}
+
 			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to load list.';
@@ -186,10 +206,16 @@
 	{:else if list}
 		<div class="flex items-center justify-between">
 			<h1 class="text-2xl font-bold">{list.name}</h1>
-			<a
-				href={resolve('/lists/[id]/categories', { id: String(listId) })}
-				class="text-primary-600 dark:text-primary-400 text-sm hover:underline">Categories</a
-			>
+			<div class="flex gap-3 text-sm">
+				<a
+					href={resolve('/lists/[id]/stores', { id: String(listId) })}
+					class="text-primary-600 dark:text-primary-400 hover:underline">Stores</a
+				>
+				<a
+					href={resolve('/lists/[id]/categories', { id: String(listId) })}
+					class="text-primary-600 dark:text-primary-400 hover:underline">Categories</a
+				>
+			</div>
 		</div>
 
 		<form class="flex gap-2" onsubmit={handleAddItem}>
