@@ -1,8 +1,20 @@
+import { existsSync } from 'node:fs';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+
+// Some sandboxed dev environments pre-cache a Chromium build at a fixed path
+// under a different revision than the one this Playwright version expects,
+// so the default revision-based lookup fails there even though a working
+// browser binary is sitting right next to it. CI (and any environment that
+// ran `playwright install`) never has this path, so this only ever applies
+// there — everywhere else falls through to Playwright's normal resolution.
+const sandboxChromiumPath = '/opt/pw-browsers/chromium';
+const chromiumLaunchOptions = existsSync(sandboxChromiumPath)
+	? { executablePath: sandboxChromiumPath }
+	: {};
 
 export default defineConfig({
 	plugins: [
@@ -35,6 +47,34 @@ export default defineConfig({
 	},
 	test: {
 		expect: { requireAssertions: true },
+		coverage: {
+			provider: 'v8',
+			include: ['src/**/*.{ts,svelte}'],
+			exclude: [
+				'src/**/*.{test,spec}.{ts,js}',
+				'src/**/*.svelte.{test,spec}.{ts,js}',
+				'src/app.d.ts',
+				// SvelteKit route config: two-line `export const prerender/ssr`
+				// toggles and the root layout's favicon/slot wiring — framework
+				// glue, not application logic (same rationale as apps/api's
+				// .c8rc.json excluding its own framework bootstrap files).
+				'src/routes/**/+page.ts',
+				'src/routes/+layout.ts',
+				'src/routes/+layout.svelte'
+			],
+			reporter: ['text'],
+			// Not yet the 100% in PLAN.md §11 — real, currently-met floor so
+			// this is a live regression gate rather than an aspirational one.
+			// See PLAN.md's Phase 2 status note for the remaining gap, mostly
+			// repeated `err instanceof ApiError ? … : 'generic fallback'`
+			// branches in page components that haven't all been exercised yet.
+			thresholds: {
+				lines: 91,
+				branches: 72,
+				functions: 91,
+				statements: 90
+			}
+		},
 		projects: [
 			{
 				extends: './vite.config.ts',
@@ -42,7 +82,7 @@ export default defineConfig({
 					name: 'client',
 					browser: {
 						enabled: true,
-						provider: playwright(),
+						provider: playwright({ launchOptions: chromiumLaunchOptions }),
 						instances: [{ browser: 'chromium', headless: true }]
 					},
 					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
