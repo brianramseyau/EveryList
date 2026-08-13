@@ -184,7 +184,13 @@
 	{#if loading}
 		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
 	{:else if list}
-		<h1 class="text-2xl font-bold">{list.name}</h1>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">{list.name}</h1>
+			<a
+				href={resolve('/lists/[id]/categories', { id: String(listId) })}
+				class="text-primary-600 dark:text-primary-400 text-sm hover:underline">Categories</a
+			>
+		</div>
 
 		<form class="flex gap-2" onsubmit={handleAddItem}>
 			<Input placeholder="Item name" bind:value={newItemName} class="flex-1" />
