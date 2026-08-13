@@ -53,4 +53,15 @@ test.group('Favorites', (group) => {
       .header('Authorization', `Bearer ${token}`)
     destroy.assertStatus(204)
   })
+
+  test('creates a favorite without a default quantity', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+
+    const create = await client
+      .post('/api/v1/favorites')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bread' })
+    create.assertStatus(200)
+    assert.isNull(bodyData<FavoriteItemDto>(create).defaultQuantity)
+  })
 })

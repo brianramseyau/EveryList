@@ -5,6 +5,7 @@
 	import { resolve } from '$app/paths';
 	import { Button, Input } from 'flowbite-svelte';
 	import type { CategoryDto, ListDto } from '@everylist/shared';
+	import IconPicker from '$lib/components/IconPicker.svelte';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
 	import {
@@ -26,7 +27,7 @@
 	let reordering = $state(false);
 
 	let newCategoryName = $state('');
-	let newCategoryIcon = $state('');
+	let newCategoryIcon = $state('tag');
 	let creating = $state(false);
 
 	async function loadAll() {
@@ -51,16 +52,16 @@
 
 	async function handleCreate(event: SubmitEvent) {
 		event.preventDefault();
-		if (!newCategoryName.trim() || !newCategoryIcon.trim()) return;
+		if (!newCategoryName.trim()) return;
 		creating = true;
 		try {
 			const category = await createCategory(listId, {
 				name: newCategoryName.trim(),
-				icon: newCategoryIcon.trim()
+				icon: newCategoryIcon
 			});
 			categories = [...categories, category];
 			newCategoryName = '';
-			newCategoryIcon = '';
+			newCategoryIcon = 'tag';
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to create category.';
 		} finally {
@@ -138,11 +139,8 @@
 
 		<form class="flex gap-2" onsubmit={handleCreate}>
 			<Input placeholder="New category name" bind:value={newCategoryName} class="flex-1" />
-			<Input placeholder="Icon name" bind:value={newCategoryIcon} class="w-32" />
-			<Button
-				type="submit"
-				disabled={creating || !newCategoryName.trim() || !newCategoryIcon.trim()}>Add</Button
-			>
+			<IconPicker value={newCategoryIcon} onselect={(name) => (newCategoryIcon = name)} />
+			<Button type="submit" disabled={creating || !newCategoryName.trim()}>Add</Button>
 		</form>
 
 		{#if error}
@@ -176,7 +174,7 @@
 					</div>
 
 					<Input bind:value={category.name} class="flex-1" />
-					<Input bind:value={category.icon} class="w-28" />
+					<IconPicker value={category.icon} onselect={(name) => (category.icon = name)} />
 
 					<Button
 						size="xs"

@@ -1,0 +1,38 @@
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('./client', () => ({
+	apiGet: vi.fn(),
+	apiPost: vi.fn(),
+	apiPatch: vi.fn(),
+	apiDelete: vi.fn()
+}));
+
+const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
+const { createList, deleteList, fetchList, fetchLists, updateList } = await import('./lists');
+
+describe('lists api', () => {
+	it('fetchLists GETs the collection', () => {
+		fetchLists();
+		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists');
+	});
+
+	it('fetchList GETs a single list by id', () => {
+		fetchList(1);
+		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists/1');
+	});
+
+	it('createList POSTs the input', () => {
+		createList({ name: 'Groceries' });
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists', { name: 'Groceries' });
+	});
+
+	it('updateList PATCHes the given id', () => {
+		updateList(1, { archived: true });
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1', { archived: true });
+	});
+
+	it('deleteList DELETEs the given id', () => {
+		deleteList(1);
+		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1');
+	});
+});

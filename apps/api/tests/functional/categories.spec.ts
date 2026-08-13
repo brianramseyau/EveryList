@@ -80,6 +80,15 @@ test.group('Categories', (group) => {
     const names = globalCheck.body().data.map((c: { name: string }) => c.name)
     assert.include(names, 'Fruit & Veg')
     assert.notInclude(names, 'Produce')
+
+    // Renaming an already-forked (list-scoped) category again should reuse
+    // the same row rather than forking a second time.
+    const rerename = await client
+      .patch(`/api/v1/lists/${listId}/categories/${rename.body().data.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Produce & Veg' })
+    rerename.assertStatus(200)
+    assert.equal(rerename.body().data.id, rename.body().data.id)
   })
 
   test('reordering categories persists the new sort order', async ({ client, assert }) => {
@@ -102,5 +111,47 @@ test.group('Categories', (group) => {
     const originalFirstName = index.body().data[0].name
     const newLastName = reorder.body().data.at(-1).name
     assert.equal(originalFirstName, newLastName)
+  })
+
+  test('reordering silently skips an id that is not in the list', async ({ client, assert }) => {
+    await new DefaultCategorySeeder(db.connection()).run()
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+    const ids = index.body().data.map((c: { id: number }) => c.id)
+    const bogusCategoryId = 999_999
+
+    const reorder = await client
+      .patch(`/api/v1/lists/${listId}/categories/reorder`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ order: [bogusCategoryId, ...ids] })
+    reorder.assertStatus(200)
+    assert.lengthOf(reorder.body().data, ids.length)
+  })
+
+  test('deleting a list-scoped category removes it', async ({ client, assert }) => {
+    await new DefaultCategorySeeder(db.connection()).run()
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Pet Supplies', icon: 'paw' })
+    const categoryId = create.body().data.id
+
+    const destroy = await client
+      .delete(`/api/v1/lists/${listId}/categories/${categoryId}`)
+      .header('Authorization', `Bearer ${token}`)
+    destroy.assertStatus(204)
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+    const names = index.body().data.map((c: { name: string }) => c.name)
+    assert.notInclude(names, 'Pet Supplies')
   })
 })
