@@ -1,6 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
-import { signupAndGetToken } from './helpers.js'
+import type { ListDto } from '@everylist/shared'
+import { bodyData, signupAndGetToken } from './helpers.js'
 
 test.group('Lists CRUD', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
@@ -19,21 +20,23 @@ test.group('Lists CRUD', (group) => {
       .header('Authorization', `Bearer ${token}`)
       .json({ name: 'Groceries' })
     create.assertStatus(200)
-    const listId = create.body().data.id
-    assert.equal(create.body().data.name, 'Groceries')
-    assert.equal(create.body().data.color, '#3b82f6')
+    const createdList = bodyData<ListDto>(create)
+    const listId = createdList.id
+    assert.equal(createdList.name, 'Groceries')
+    assert.equal(createdList.color, '#3b82f6')
 
     const index = await authed()
     index.assertStatus(200)
-    assert.lengthOf(index.body().data, 1)
+    assert.lengthOf(bodyData<ListDto[]>(index), 1)
 
     const update = await client
       .patch(`/api/v1/lists/${listId}`)
       .header('Authorization', `Bearer ${token}`)
       .json({ name: 'Weekly Groceries', archived: true })
     update.assertStatus(200)
-    assert.equal(update.body().data.name, 'Weekly Groceries')
-    assert.isTrue(update.body().data.archived)
+    const updatedList = bodyData<ListDto>(update)
+    assert.equal(updatedList.name, 'Weekly Groceries')
+    assert.isTrue(updatedList.archived)
 
     const destroy = await client
       .delete(`/api/v1/lists/${listId}`)
@@ -52,7 +55,7 @@ test.group('Lists CRUD', (group) => {
       .post('/api/v1/lists')
       .header('Authorization', `Bearer ${ownerToken}`)
       .json({ name: 'Private list' })
-    const listId = create.body().data.id
+    const listId = bodyData<ListDto>(create).id
 
     const otherToken = await signupAndGetToken(client)
     const response = await client

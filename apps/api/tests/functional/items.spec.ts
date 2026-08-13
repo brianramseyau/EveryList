@@ -2,15 +2,16 @@ import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
+import type { ListDto } from '@everylist/shared'
 import DefaultCategorySeeder from '#database/seeders/default_category_seeder'
-import { signupAndGetToken } from './helpers.js'
+import { bodyData, signupAndGetToken } from './helpers.js'
 
 async function createList(client: ApiClient, token: string) {
   const response = await client
     .post('/api/v1/lists')
     .header('Authorization', `Bearer ${token}`)
     .json({ name: 'Groceries' })
-  return response.body().data.id as number
+  return bodyData<ListDto>(response).id
 }
 
 test.group('Items CRUD', (group) => {

@@ -10,10 +10,7 @@
 import { middleware } from '#start/kernel'
 import router from '@adonisjs/core/services/router'
 import { controllers } from '#generated/controllers'
-
-router.get('/', () => {
-  return { hello: 'world' }
-})
+import app from '@adonisjs/core/services/app'
 
 router
   .group(() => {
@@ -90,3 +87,19 @@ router
       .use(middleware.auth())
   })
   .prefix('/api/v1')
+
+/**
+ * SPA fallback: apps/web is built with adapter-static's `fallback: '200.html'`
+ * (see apps/web/vite.config.ts) so routes with no known params at build time
+ * (e.g. /lists/:id) aren't prerendered. Static files under public/ (prerendered
+ * pages, /_app/* assets) are served by the static middleware — which runs
+ * before routing — so this only ever fires for a path that isn't a real file,
+ * letting SvelteKit's client-side router take over. A stray /api/v1/* miss
+ * still 404s as JSON instead of getting the HTML shell.
+ */
+router.get('*', ({ request, response }) => {
+  if (request.url().startsWith('/api/')) {
+    return response.notFound({ message: 'Not found' })
+  }
+  return response.download(app.publicPath('200.html'))
+})

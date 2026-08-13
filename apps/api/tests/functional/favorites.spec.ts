@@ -1,14 +1,15 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { ApiClient } from '@japa/api-client'
-import { signupAndGetToken } from './helpers.js'
+import type { FavoriteItemDto, ItemDto, ListDto } from '@everylist/shared'
+import { bodyData, signupAndGetToken } from './helpers.js'
 
 async function createList(client: ApiClient, token: string) {
   const response = await client
     .post('/api/v1/lists')
     .header('Authorization', `Bearer ${token}`)
     .json({ name: 'Groceries' })
-  return response.body().data.id as number
+  return bodyData<ListDto>(response).id
 }
 
 test.group('Favorites', (group) => {
@@ -26,25 +27,26 @@ test.group('Favorites', (group) => {
       .header('Authorization', `Bearer ${token}`)
       .json({ name: 'Bananas', defaultQuantity: '1 bunch' })
     create.assertStatus(200)
-    const favoriteId = create.body().data.id
+    const favoriteId = bodyData<FavoriteItemDto>(create).id
 
     const index = await client.get('/api/v1/favorites').header('Authorization', `Bearer ${token}`)
-    assert.lengthOf(index.body().data, 1)
+    assert.lengthOf(bodyData<FavoriteItemDto[]>(index), 1)
 
     const update = await client
       .patch(`/api/v1/favorites/${favoriteId}`)
       .header('Authorization', `Bearer ${token}`)
       .json({ defaultQuantity: '2 bunches' })
     update.assertStatus(200)
-    assert.equal(update.body().data.defaultQuantity, '2 bunches')
+    assert.equal(bodyData<FavoriteItemDto>(update).defaultQuantity, '2 bunches')
 
     const addToList = await client
       .post(`/api/v1/favorites/${favoriteId}/add-to-list/${listId}`)
       .header('Authorization', `Bearer ${token}`)
     addToList.assertStatus(200)
-    assert.equal(addToList.body().data.name, 'Bananas')
-    assert.equal(addToList.body().data.quantity, '2 bunches')
-    assert.equal(addToList.body().data.listId, listId)
+    const addedItem = bodyData<ItemDto>(addToList)
+    assert.equal(addedItem.name, 'Bananas')
+    assert.equal(addedItem.quantity, '2 bunches')
+    assert.equal(addedItem.listId, listId)
 
     const destroy = await client
       .delete(`/api/v1/favorites/${favoriteId}`)

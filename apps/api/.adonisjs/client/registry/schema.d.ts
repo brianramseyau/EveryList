@@ -79,4 +79,340 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/metas_controller').default['show']>>>
     }
   }
+  'lists.lists.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['index']>>>
+    }
+  }
+  'lists.lists.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/list').createListValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/list').createListValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.lists.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['show']>>>
+    }
+  }
+  'lists.lists.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/lists/:id'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/list').updateListValidator)>>
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/list').updateListValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.lists.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/lists/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['destroy']>>>
+    }
+  }
+  'lists.categories.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/categories'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['index']>>>
+    }
+  }
+  'lists.categories.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/categories'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/category').createCategoryValidator)>>
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/category').createCategoryValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.categories.reorder': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/lists/:listId/categories/reorder'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/category').reorderCategoriesValidator)>>
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/category').reorderCategoriesValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['reorder']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['reorder']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.categories.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/lists/:listId/categories/:categoryId'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/category').updateCategoryValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; categoryId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/category').updateCategoryValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.categories.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/lists/:listId/categories/:categoryId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; categoryId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['destroy']>>>
+    }
+  }
+  'lists.items.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/items'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['index']>>>
+    }
+  }
+  'lists.items.recent': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/items/recent'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['recent']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['recent']>>>
+    }
+  }
+  'lists.items.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/items'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/item').createItemValidator)>>
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/item').createItemValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.items.import': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/items/import'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/item').importItemsValidator)>>
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/item').importItemsValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['import']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['import']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.items.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/lists/:listId/items/:itemId'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/item').updateItemValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; itemId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/item').updateItemValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.items.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/lists/:listId/items/:itemId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; itemId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['destroy']>>>
+    }
+  }
+  'lists.items.restore': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/items/:itemId/restore'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; itemId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['restore']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['restore']>>>
+    }
+  }
+  'lists.stores.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/stores'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['index']>>>
+    }
+  }
+  'lists.stores.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/stores'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/store').attachStoreValidator)>>
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/store').attachStoreValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.stores.detach': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/lists/:listId/stores/:storeId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; storeId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['detach']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['detach']>>>
+    }
+  }
+  'stores.stores.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/stores/:id'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/store').updateStoreValidator)>>
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/store').updateStoreValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'stores.stores.categories': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/stores/:id/categories'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['categories']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['categories']>>>
+    }
+  }
+  'stores.stores.reorder_categories': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/stores/:id/categories'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/store').reorderStoreCategoriesValidator)>>
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/store').reorderStoreCategoriesValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['reorderCategories']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['reorderCategories']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'favorites.favorite_items.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/favorites'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['index']>>>
+    }
+  }
+  'favorites.favorite_items.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/favorites'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/favorite_item').createFavoriteItemValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/favorite_item').createFavoriteItemValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'favorites.favorite_items.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/favorites/:id'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/favorite_item').updateFavoriteItemValidator)>>
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/favorite_item').updateFavoriteItemValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'favorites.favorite_items.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/favorites/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['destroy']>>>
+    }
+  }
+  'favorites.favorite_items.add_to_list': {
+    methods: ["POST"]
+    pattern: '/api/v1/favorites/:id/add-to-list/:listId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { id: ParamValue; listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['addToList']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['addToList']>>>
+    }
+  }
 }
