@@ -94,9 +94,14 @@
 				<li>
 					<a
 						href={resolve('/lists/[id]', { id: String(list.id) })}
-						class="flex items-center justify-between rounded-lg border border-gray-200 p-4 hover:border-primary-500 dark:border-gray-700"
+						class="flex items-center gap-3 rounded-lg border border-gray-200 p-4 hover:border-primary-500 dark:border-gray-700"
 					>
-						<span>{list.name}</span>
+						<span
+							class="h-8 w-8 shrink-0 rounded-full"
+							style:background-color={list.color}
+							aria-hidden="true"
+						></span>
+						<span class="flex-1 font-medium">{list.name}</span>
 						{#if list.archived}
 							<span class="text-xs text-gray-400">Archived</span>
 						{/if}
