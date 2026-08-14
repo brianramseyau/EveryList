@@ -72,14 +72,19 @@
 </script>
 
 <div class="relative">
-	<Button type="button" color="alternative" onclick={togglePicker} class="flex items-center gap-2">
+	<Button
+		type="button"
+		color="alternative"
+		onclick={togglePicker}
+		class="flex items-center gap-2"
+		aria-label={toDisplayLabel(value)}
+	>
 		<Icon name={value} class="h-5 w-5" />
-		<span class="text-sm">{toDisplayLabel(value)}</span>
 	</Button>
 
 	{#if open}
 		<div
-			class="absolute z-10 mt-1 w-72 rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+			class="absolute z-10 mt-1 w-72 max-w-[calc(100vw-2rem)] overscroll-contain rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-800"
 		>
 			<Input placeholder="Search icons…" bind:value={search} autofocus />
 
@@ -95,7 +100,7 @@
 				<div
 					bind:this={scrollEl}
 					class="mt-2"
-					style="max-height: {VIEWPORT_HEIGHT}px; overflow-y: auto;"
+					style="max-height: {VIEWPORT_HEIGHT}px; overflow-y: auto; overscroll-behavior: contain;"
 					onscroll={handleScroll}
 					data-testid="icon-picker-results"
 				>

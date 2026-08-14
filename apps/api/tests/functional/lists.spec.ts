@@ -11,6 +11,22 @@ test.group('Lists CRUD', (group) => {
     response.assertStatus(401)
   })
 
+  test('signup seeds a starter Groceries list owned by the new user', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    const index = await client.get('/api/v1/lists').header('Authorization', `Bearer ${token}`)
+    index.assertStatus(200)
+    const indexed = bodyData<ListDto[]>(index)
+    assert.lengthOf(indexed, 1)
+    assert.equal(indexed[0]?.name, 'Groceries')
+    assert.equal(indexed[0]?.icon, 'basket')
+    assert.equal(indexed[0]?.color, '#f97316')
+    assert.equal(indexed[0]?.itemCount, 0)
+  })
+
   test('creates, lists, updates, and soft-deletes a list', async ({ client, assert }) => {
     const token = await signupAndGetToken(client)
     const authed = () => client.get('/api/v1/lists').header('Authorization', `Bearer ${token}`)
@@ -29,8 +45,11 @@ test.group('Lists CRUD', (group) => {
     const index = await authed()
     index.assertStatus(200)
     const indexed = bodyData<ListDto[]>(index)
-    assert.lengthOf(indexed, 1)
-    assert.equal(indexed[0]?.itemCount, 0)
+    // Signup seeds a starter "Groceries" list, so the index has that plus
+    // the one created above.
+    assert.lengthOf(indexed, 2)
+    const indexedCreated = indexed.find((list) => list.id === listId)
+    assert.equal(indexedCreated?.itemCount, 0)
 
     const item = await client
       .post(`/api/v1/lists/${listId}/items`)

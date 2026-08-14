@@ -7,7 +7,7 @@
 	import { Button, Checkbox, Input, Textarea } from 'flowbite-svelte';
 	import type { CategoryDto, ItemDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { fetchList } from '$lib/api/lists';
+	import { deleteList, fetchList, updateList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
 	import {
 		createItem,
@@ -23,6 +23,7 @@
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
 	import Icon from '$lib/components/Icon.svelte';
+	import ListMenu from '$lib/components/ListMenu.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import SyncToast from '$lib/components/SyncToast.svelte';
 
@@ -124,6 +125,25 @@
 		void loadAll();
 	}
 
+	async function handleListUpdate(
+		input: Partial<{ name: string; color: string; icon: string | null; archived: boolean }>
+	) {
+		try {
+			list = await updateList(listId, input);
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to update list.';
+		}
+	}
+
+	async function handleListDelete() {
+		try {
+			await deleteList(listId);
+			await goto(resolve('/lists'));
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to delete list.';
+		}
+	}
+
 	async function handleAddItem(event: SubmitEvent) {
 		event.preventDefault();
 		if (!newItemName.trim()) return;
@@ -220,20 +240,19 @@
 		{#snippet actions()}
 			<a
 				href={resolve('/lists/[id]/favorites', { id: String(listId) })}
-				class="text-primary-600 hover:underline dark:text-primary-400">Favorites</a
+				aria-label="Favorites"
+				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
 			>
+				<Icon name="heart" class="h-5 w-5" />
+			</a>
 			<a
 				href={resolve('/lists/[id]/stores', { id: String(listId) })}
-				class="text-primary-600 hover:underline dark:text-primary-400">Stores</a
+				aria-label="Stores"
+				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
 			>
-			<a
-				href={resolve('/lists/[id]/categories', { id: String(listId) })}
-				class="text-primary-600 hover:underline dark:text-primary-400">Categories</a
-			>
-			<a
-				href={resolve('/lists/[id]/members', { id: String(listId) })}
-				class="text-primary-600 hover:underline dark:text-primary-400">Members</a
-			>
+				<Icon name="store" class="h-5 w-5" />
+			</a>
+			<ListMenu {listId} {list} onupdate={handleListUpdate} ondelete={handleListDelete} />
 		{/snippet}
 	</PageHeader>
 

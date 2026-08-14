@@ -25,6 +25,11 @@ export default await Env.create(new URL('../', import.meta.url), {
   // Session
   SESSION_DRIVER: Env.schema.enum(['cookie', 'memory', 'database'] as const),
 
+  // Auth — when false, blocks new self-service signups while leaving
+  // list-invite signups (which carry a valid invite token) unaffected.
+  // Defaults to enabled.
+  PUBLIC_SIGNUP_ENABLED: Env.schema.boolean.optional(),
+
   // Build/image metadata (baked in by docker/Dockerfile at build time — see
   // GET /api/v1/meta and PLAN.md §8). Absent in local dev, hence optional.
   APP_VERSION: Env.schema.string.optional(),

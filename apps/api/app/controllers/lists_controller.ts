@@ -1,11 +1,11 @@
 import List from '#models/list'
-import ListMember from '#models/list_member'
 import ListPolicy from '#policies/list_policy'
 import { createListValidator, updateListValidator } from '#validators/list'
 import type { HttpContext } from '@adonisjs/core/http'
 import ListTransformer from '#transformers/list_transformer'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
+import { createOwnedList } from '#services/list_creation'
 
 export default class ListsController {
   async index({ auth, serialize }: HttpContext) {
@@ -23,24 +23,12 @@ export default class ListsController {
     const user = auth.getUserOrFail()
     const payload = await request.validateUsing(createListValidator)
 
-    const list = await List.create({
+    const list = await createOwnedList({
+      ownerId: user.id,
       name: payload.name,
       color: payload.color ?? '#3b82f6',
       icon: payload.icon ?? null,
-      ownerId: user.id,
-      archived: false,
     })
-
-    const now = DateTime.now()
-    await ListMember.create({
-      listId: list.id,
-      userId: user.id,
-      role: 'owner',
-      invitedAt: now,
-      acceptedAt: now,
-    })
-
-    await broadcastSync({ listId: list.id, entityType: 'list', entityId: list.id, op: 'create' })
 
     return serialize(ListTransformer.transform(list))
   }

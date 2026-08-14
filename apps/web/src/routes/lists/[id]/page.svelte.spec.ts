@@ -7,7 +7,7 @@ import { ApiError } from '$lib/api/client';
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn() }));
+vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn(), updateList: vi.fn(), deleteList: vi.fn() }));
 vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
 vi.mock('$lib/api/items', () => ({
 	fetchItems: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock('$lib/api/selected-store', () => ({
 }));
 vi.mock('$lib/realtime', () => ({ subscribeToList: vi.fn(() => vi.fn()) }));
 
-const { fetchList } = await import('$lib/api/lists');
+const { fetchList, updateList, deleteList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
 const {
 	fetchItems,
@@ -575,6 +575,100 @@ describe('List detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'Refresh' }).click();
 		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
 		expect(fetchList).toHaveBeenCalledTimes(2);
+	});
+
+	it('opens the list settings menu with links scoped to this list', async () => {
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List settings' }).click();
+
+		const categories = page.getByRole('link', { name: 'Categories' });
+		await expect.element(categories).toBeInTheDocument();
+		expect(categories.element().getAttribute('href')).toBe('/lists/1/categories');
+
+		const members = page.getByRole('link', { name: 'Members' });
+		expect(members.element().getAttribute('href')).toBe('/lists/1/members');
+	});
+
+	it('archives the list from the settings menu', async () => {
+		vi.mocked(updateList).mockResolvedValue({ ...list, archived: true });
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List settings' }).click();
+		await page.getByRole('button', { name: 'Archive list' }).click();
+
+		expect(updateList).toHaveBeenCalledWith(1, { archived: true });
+		await expect.element(page.getByRole('button', { name: 'Unarchive list' })).toBeInTheDocument();
+	});
+
+	it('shows an error when updating the list fails', async () => {
+		vi.mocked(updateList).mockRejectedValue(new ApiError(500, 'Could not update list'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List settings' }).click();
+		await page.getByRole('button', { name: 'Archive list' }).click();
+
+		await expect.element(page.getByText('Could not update list')).toBeInTheDocument();
+	});
+
+	it('shows a generic error message when updating the list fails without an ApiError', async () => {
+		vi.mocked(updateList).mockRejectedValue(new TypeError('network down'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List settings' }).click();
+		await page.getByRole('button', { name: 'Archive list' }).click();
+
+		await expect.element(page.getByText('Failed to update list.')).toBeInTheDocument();
+	});
+
+	it('deletes the list after confirming, then navigates back to the list index', async () => {
+		vi.mocked(deleteList).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List settings' }).click();
+		await page.getByRole('button', { name: 'Delete list' }).click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		expect(deleteList).toHaveBeenCalledWith(1);
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(goto).toHaveBeenCalledWith('/lists');
+	});
+
+	it('shows an error when deleting the list fails', async () => {
+		vi.mocked(deleteList).mockRejectedValue(new ApiError(500, 'Could not delete list'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List settings' }).click();
+		await page.getByRole('button', { name: 'Delete list' }).click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		await expect.element(page.getByText('Could not delete list')).toBeInTheDocument();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('shows a generic error message when deleting the list fails without an ApiError', async () => {
+		vi.mocked(deleteList).mockRejectedValue(new TypeError('network down'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List settings' }).click();
+		await page.getByRole('button', { name: 'Delete list' }).click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		await expect.element(page.getByText('Failed to delete list.')).toBeInTheDocument();
+		expect(goto).not.toHaveBeenCalled();
 	});
 
 	it('dismisses the sync toast without refreshing', async () => {
