@@ -72,10 +72,15 @@
 		{:else}
 			<p class="text-sm text-gray-600 dark:text-gray-300">Log in or sign up to accept.</p>
 			<div class="flex gap-3">
+				<!-- nextPath is always this app's own resolve('/join/[token]', …) output
+				     round-tripped through a query param — safe, but not statically
+				     verifiable by the lint rule below. -->
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 				<a
 					href={`${resolve('/login')}?next=${encodeURIComponent(nextPath)}`}
 					class="text-primary-600 hover:underline dark:text-primary-400">Log in</a
 				>
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 				<a
 					href={`${resolve('/signup')}?next=${encodeURIComponent(nextPath)}`}
 					class="text-primary-600 hover:underline dark:text-primary-400">Sign up</a

@@ -73,7 +73,12 @@
 	</form>
 
 	<p class="text-sm text-gray-600 dark:text-gray-300">
-		Don't have an account? <a
+		Don't have an account?
+		<!-- nextPath, when present, is always this app's own resolve('/join/[token]', …)
+		     output round-tripped through a query param — safe, but not statically
+		     verifiable by the lint rule below. -->
+		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+		<a
 			href={nextPath
 				? `${resolve('/signup')}?next=${encodeURIComponent(nextPath)}`
 				: resolve('/signup')}
