@@ -139,6 +139,7 @@ test.group('List/Category/Item domain models', (group) => {
     await storeCategoryOrder.load('category')
     await category.load('list')
     await category.load('items')
+    await list.load('favoriteItems')
 
     assert.equal(store.creator.id, owner.id)
     assert.lengthOf(store.lists, 1)
@@ -153,6 +154,8 @@ test.group('List/Category/Item domain models', (group) => {
     assert.equal(storeCategoryOrder.store.id, store.id)
     assert.equal(storeCategoryOrder.category.id, category.id)
     assert.equal(category.list!.id, list.id)
+    assert.lengthOf(list.favoriteItems, 1)
+    assert.equal(list.favoriteItems[0]!.id, favorite.id)
     assert.lengthOf(category.items, 0)
   })
 })
