@@ -212,6 +212,45 @@ test.group('Items CRUD', (group) => {
     assert.equal(retag.body().data.storeId, storeId)
   })
 
+  test('sets an item price in cents on create and via update, and clears it back to null', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const create = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk', price: 399 })
+    )
+    create.assertStatus(200)
+    assert.equal(create.body().data.price, 399)
+
+    const itemId = create.body().data.id
+    const update = await auth(
+      client.patch(`/api/v1/lists/${listId}/items/${itemId}`).json({ price: 425 })
+    )
+    update.assertStatus(200)
+    assert.equal(update.body().data.price, 425)
+
+    const clear = await auth(
+      client.patch(`/api/v1/lists/${listId}/items/${itemId}`).json({ price: null })
+    )
+    clear.assertStatus(200)
+    assert.isNull(clear.body().data.price)
+  })
+
+  test('rejects a negative item price', async ({ client }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const create = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk', price: -50 })
+    )
+    create.assertStatus(422)
+  })
+
   test('leaves an item uncategorized when its suggested category no longer exists', async ({
     client,
     assert,

@@ -85,7 +85,7 @@ export class FavoriteItemSchema extends BaseModel {
 }
 
 export class ItemSchema extends BaseModel {
-  static $columns = ['categoryId', 'checked', 'checkedAt', 'createdAt', 'createdBy', 'deletedAt', 'id', 'listId', 'name', 'notes', 'quantity', 'sortOrder', 'storeId', 'updatedAt', 'version'] as const
+  static $columns = ['categoryId', 'checked', 'checkedAt', 'createdAt', 'createdBy', 'deletedAt', 'id', 'listId', 'name', 'notes', 'price', 'quantity', 'sortOrder', 'storeId', 'updatedAt', 'version'] as const
   $columns = ItemSchema.$columns
   @column()
   declare categoryId: number | null
@@ -107,6 +107,8 @@ export class ItemSchema extends BaseModel {
   declare name: string
   @column()
   declare notes: string | null
+  @column()
+  declare price: number | null
   @column()
   declare quantity: string | null
   @column()

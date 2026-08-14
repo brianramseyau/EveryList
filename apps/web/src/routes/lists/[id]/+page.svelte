@@ -88,6 +88,19 @@
 
 	const checkedItems = $derived(visibleItems.filter((item) => item.checked));
 
+	const totalCents = $derived(
+		visibleItems.reduce((sum, item) => sum + (item.price ?? 0), 0)
+	);
+
+	function formatPrice(cents: number): string {
+		return (cents / 100).toLocaleString('en-US', {
+			style: 'currency',
+			currency: 'USD'
+		});
+	}
+
+	const totalText = $derived(`Total: ${formatPrice(totalCents)}`);
+
 	async function loadAll() {
 		loading = true;
 		try {
@@ -208,6 +221,20 @@
 		items = items.map((current) => (current.id === item.id ? { ...current, storeId } : current));
 		try {
 			await updateItem(listId, item.id, { storeId });
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to update item.';
+			void loadAll();
+		}
+	}
+
+	async function tagItemPrice(item: ItemDto, raw: string) {
+		const trimmed = raw.trim();
+		const price = trimmed === '' ? null : Math.round(Number(trimmed) * 100);
+		if (price !== null && !Number.isFinite(price)) return;
+
+		items = items.map((current) => (current.id === item.id ? { ...current, price } : current));
+		try {
+			await updateItem(listId, item.id, { price });
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to update item.';
 			void loadAll();
@@ -337,6 +364,10 @@
 			</div>
 		{/if}
 
+		{#if totalCents > 0}
+			<p class="text-sm font-semibold text-gray-700 dark:text-gray-300">{totalText}</p>
+		{/if}
+
 		{#if items.length === 0}
 			<p class="text-gray-500 dark:text-gray-400">No items yet — add one above.</p>
 		{:else}
@@ -365,8 +396,19 @@
 											>
 										{/if}
 									</Checkbox>
+									<div class="ml-auto w-16">
+										<Input
+											size="sm"
+											inputmode="decimal"
+											placeholder="Price"
+											value={item.price !== null ? (item.price / 100).toFixed(2) : ''}
+											onchange={(event) => {
+												void tagItemPrice(item, (event.target as HTMLInputElement).value);
+											}}
+										/>
+									</div>
 									{#if stores.length > 0}
-										<div class="ml-auto w-32">
+										<div class="w-32">
 											<Select
 												size="sm"
 												items={stores.map((store) => ({ value: store.id, name: store.name }))}
@@ -383,7 +425,6 @@
 									<button
 										type="button"
 										class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-										class:ml-auto={stores.length === 0}
 										onclick={() => removeItem(item)}
 									>
 										Remove

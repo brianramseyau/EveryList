@@ -89,6 +89,7 @@ function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): I
 		notes: null,
 		categoryId: null,
 		storeId: null,
+		price: null,
 		checked: false,
 		checkedAt: null,
 		sortOrder: 0,
@@ -527,6 +528,90 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
 		await page.getByRole('combobox').last().selectOptions('20');
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+	});
+
+	it('sets an item price via its per-item input, leaving a sibling item untouched, and shows the running total', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, price: 250 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Price').first().fill('3.99');
+		await page.getByText('Groceries').click();
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, { price: 399 });
+		await expect.element(page.getByText('Total: $6.49')).toBeInTheDocument();
+
+		// Toggling a checkbox reassigns `items` without touching any price, so
+		// the running total recomputes to the same value it already displayed.
+		await page.getByRole('checkbox', { name: 'Bread' }).click();
+		await expect.element(page.getByText('Total: $6.49')).toBeInTheDocument();
+	});
+
+	it('reloads the list when setting a price fails with an ApiError', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new ApiError(500, 'Could not set price'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Price').fill('3.99');
+		await page.getByText('Groceries').click();
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+	});
+
+	it('clears an item price back to null via its per-item input', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, price: 399 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Total: $3.99')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Price').clear();
+		await page.getByText('Groceries').click();
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, { price: null });
+	});
+
+	it('ignores a non-numeric price entry', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Price').fill('abc');
+		await page.getByText('Groceries').click();
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(0);
+	});
+
+	it('reloads the list when setting a price fails without an ApiError', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new TypeError('network down'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Price').fill('3.99');
+		await page.getByText('Groceries').click();
 
 		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
 	});

@@ -34,6 +34,8 @@ export interface ItemDto {
 	notes: string | null;
 	categoryId: number | null;
 	storeId: number | null;
+	/** Integer cents (like Stripe) to avoid floating-point drift when summing a list's total. */
+	price: number | null;
 	checked: boolean;
 	checkedAt: string | null;
 	sortOrder: number;
