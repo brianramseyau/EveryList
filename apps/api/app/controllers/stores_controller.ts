@@ -1,8 +1,8 @@
-import List from '#models/list'
 import Store from '#models/store'
 import ListStore from '#models/list_store'
 import StoreCategoryOrder from '#models/store_category_order'
 import Category from '#models/category'
+import ListPolicy from '#policies/list_policy'
 import {
   attachStoreValidator,
   updateStoreValidator,
@@ -11,31 +11,12 @@ import {
 import type { HttpContext } from '@adonisjs/core/http'
 import StoreTransformer from '#transformers/store_transformer'
 import StoreCategoryOrderTransformer from '#transformers/store_category_order_transformer'
-
-async function findOwnedList(userId: number, listId: string | number) {
-  return List.query()
-    .where('id', listId)
-    .where('ownerId', userId)
-    .whereNull('deletedAt')
-    .firstOrFail()
-}
-
-/**
- * A store is visible to a user if it's attached to at least one list they
- * own. Real membership-based sharing lands in Phase 3 (ListMember); this is
- * the owner-only stand-in until then — see PLAN.md §7.
- */
-async function findAccessibleStore(userId: number, storeId: string | number) {
-  return Store.query()
-    .where('id', storeId)
-    .whereHas('lists', (query) => query.where('ownerId', userId))
-    .firstOrFail()
-}
+import { broadcastSync, broadcastToStoreLists } from '#services/sync_broadcaster'
 
 export default class StoresController {
   async index({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
     await list.load('stores')
 
     return serialize(StoreTransformer.transform(list.stores))
@@ -47,12 +28,12 @@ export default class StoresController {
    */
   async store({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const payload = await request.validateUsing(attachStoreValidator)
 
     let store: Store
     if (payload.storeId) {
-      store = await findAccessibleStore(user.id, payload.storeId)
+      store = await ListPolicy.requireStoreRole(user.id, payload.storeId, 'viewer')
     } else if (payload.name) {
       store = await Store.create({
         name: payload.name,
@@ -64,31 +45,41 @@ export default class StoresController {
     }
 
     await ListStore.firstOrCreate({ listId: list.id, storeId: store.id })
+    await broadcastSync({ listId: list.id, entityType: 'store', entityId: store.id, op: 'create' })
 
     return serialize(StoreTransformer.transform(store))
   }
 
   async update({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const store = await findAccessibleStore(user.id, params.id)
+    const store = await ListPolicy.requireStoreRole(user.id, params.id, 'editor')
     const payload = await request.validateUsing(updateStoreValidator)
     store.merge(payload)
     await store.save()
+
+    await broadcastToStoreLists(store, { entityType: 'store', entityId: store.id, op: 'update' })
 
     return serialize(StoreTransformer.transform(store))
   }
 
   async detach({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     await ListStore.query().where('listId', list.id).where('storeId', params.storeId).delete()
+
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'store',
+      entityId: Number(params.storeId),
+      op: 'delete',
+    })
 
     return response.noContent()
   }
 
   async categories({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const store = await findAccessibleStore(user.id, params.id)
+    const store = await ListPolicy.requireStoreRole(user.id, params.id, 'viewer')
     const orders = await StoreCategoryOrder.query()
       .where('storeId', store.id)
       .orderBy('sortOrder', 'asc')
@@ -98,7 +89,7 @@ export default class StoresController {
 
   async reorderCategories({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const store = await findAccessibleStore(user.id, params.id)
+    const store = await ListPolicy.requireStoreRole(user.id, params.id, 'editor')
     const { categories } = await request.validateUsing(reorderStoreCategoriesValidator)
 
     const categoryIds = categories.map((entry) => entry.categoryId)
@@ -116,6 +107,13 @@ export default class StoresController {
     const orders = await StoreCategoryOrder.query()
       .where('storeId', store.id)
       .orderBy('sortOrder', 'asc')
+
+    await broadcastToStoreLists(store, {
+      entityType: 'store_category_order',
+      entityId: store.id,
+      op: 'update',
+      payload: { categoryIds: categories.map((entry) => entry.categoryId) },
+    })
 
     return serialize(StoreCategoryOrderTransformer.transform(orders))
   }

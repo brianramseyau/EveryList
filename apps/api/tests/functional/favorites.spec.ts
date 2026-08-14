@@ -2,7 +2,7 @@ import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { ApiClient } from '@japa/api-client'
 import type { FavoriteItemDto, ItemDto, ListDto } from '@everylist/shared'
-import { bodyData, signupAndGetToken } from './helpers.js'
+import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 async function createList(client: ApiClient, token: string) {
   const response = await client
@@ -109,5 +109,47 @@ test.group('Favorites', (group) => {
       .header('Authorization', `Bearer ${token}`)
     response.assertStatus(404)
     assert.isDefined(response.body())
+  })
+
+  test('a viewer can list favorites but cannot create, update, delete, or add-to-list', async ({
+    client,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const viewer = await signupAndGetUser(client)
+    await addMember(listId, viewer.id, 'viewer')
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Bananas' })
+    const favoriteId = bodyData<FavoriteItemDto>(create).id
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    index.assertStatus(200)
+
+    const viewerCreate = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ name: 'Bread' })
+    viewerCreate.assertStatus(403)
+
+    const update = await client
+      .patch(`/api/v1/lists/${listId}/favorites/${favoriteId}`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ defaultQuantity: '1' })
+    update.assertStatus(403)
+
+    const addToList = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    addToList.assertStatus(403)
+
+    const destroy = await client
+      .delete(`/api/v1/lists/${listId}/favorites/${favoriteId}`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    destroy.assertStatus(403)
   })
 })

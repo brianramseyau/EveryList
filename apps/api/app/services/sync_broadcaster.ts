@@ -1,0 +1,64 @@
+import { DateTime } from 'luxon'
+import SyncEvent from '#models/sync_event'
+import type { SyncEntityType, SyncOp } from '#models/sync_event'
+import type Store from '#models/store'
+import transmit from '@adonisjs/transmit/services/main'
+
+type BroadcastPayload = NonNullable<Parameters<typeof transmit.broadcast>[1]>
+
+export interface SyncBroadcastInput {
+  listId: number
+  entityType: SyncEntityType
+  entityId: number
+  op: SyncOp
+  payload?: Record<string, unknown>
+}
+
+export interface SyncBroadcaster {
+  broadcast(input: SyncBroadcastInput): Promise<void>
+}
+
+/** Persists a `SyncEvent` row and pushes it over the list's Transmit channel — see PLAN.md §8. */
+export class TransmitSyncBroadcaster implements SyncBroadcaster {
+  async broadcast(input: SyncBroadcastInput): Promise<void> {
+    await SyncEvent.create({
+      listId: input.listId,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      op: input.op,
+      occurredAt: DateTime.now(),
+      payload: input.payload ?? null,
+    })
+
+    transmit.broadcast(`list/${input.listId}`, {
+      entityType: input.entityType,
+      entityId: input.entityId,
+      op: input.op,
+      payload: input.payload ?? null,
+    } as BroadcastPayload)
+  }
+}
+
+let broadcaster: SyncBroadcaster = new TransmitSyncBroadcaster()
+
+/** Swaps the module-level broadcaster singleton — functional tests use this to assert calls without touching Transmit. */
+export function setSyncBroadcasterForTesting(fake: SyncBroadcaster): void {
+  broadcaster = fake
+}
+
+export function resetSyncBroadcaster(): void {
+  broadcaster = new TransmitSyncBroadcaster()
+}
+
+export async function broadcastSync(input: SyncBroadcastInput): Promise<void> {
+  await broadcaster.broadcast(input)
+}
+
+/** Fans a Store/StoreCategoryOrder edit out to every list that store is attached to — PLAN.md §7/§8. */
+export async function broadcastToStoreLists(
+  store: Store,
+  input: Omit<SyncBroadcastInput, 'listId'>
+): Promise<void> {
+  await store.load('lists')
+  await Promise.all(store.lists.map((list) => broadcastSync({ ...input, listId: list.id })))
+}

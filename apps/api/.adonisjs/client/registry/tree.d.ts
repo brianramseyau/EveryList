@@ -58,6 +58,20 @@ export interface ApiDefinition {
       destroy: typeof routes['lists.favorite_items.destroy']
       addToList: typeof routes['lists.favorite_items.add_to_list']
     }
+    listMembers: {
+      index: typeof routes['lists.list_members.index']
+      update: typeof routes['lists.list_members.update']
+      destroy: typeof routes['lists.list_members.destroy']
+    }
+    listInvites: {
+      index: typeof routes['lists.list_invites.index']
+      store: typeof routes['lists.list_invites.store']
+      destroy: typeof routes['lists.list_invites.destroy']
+    }
+  }
+  inviteAccept: {
+    preview: typeof routes['invite_accept.preview']
+    accept: typeof routes['invite_accept.accept']
   }
   stores: {
     stores: {

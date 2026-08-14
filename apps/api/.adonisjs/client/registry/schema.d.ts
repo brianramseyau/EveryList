@@ -379,6 +379,102 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['addToList']>>>
     }
   }
+  'lists.list_members.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/members'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['index']>>>
+    }
+  }
+  'lists.list_members.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/lists/:listId/members/:memberId'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/list_member').updateListMemberRoleValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; memberId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/list_member').updateListMemberRoleValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.list_members.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/lists/:listId/members/:memberId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; memberId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['destroy']>>>
+    }
+  }
+  'lists.list_invites.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/invites'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/list_invites_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_invites_controller').default['index']>>>
+    }
+  }
+  'lists.list_invites.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/invites'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/list_invite').createListInviteValidator)>>
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/list_invite').createListInviteValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/list_invites_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_invites_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.list_invites.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/lists/:listId/invites/:inviteId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; inviteId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/list_invites_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_invites_controller').default['destroy']>>>
+    }
+  }
+  'invite_accept.preview': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/invites/:token'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { token: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/invite_accept_controller').default['preview']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/invite_accept_controller').default['preview']>>>
+    }
+  }
+  'invite_accept.accept': {
+    methods: ["POST"]
+    pattern: '/api/v1/invites/:token/accept'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { token: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/invite_accept_controller').default['accept']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/invite_accept_controller').default['accept']>>>
+    }
+  }
   'stores.stores.update': {
     methods: ["PATCH"]
     pattern: '/api/v1/stores/:id'

@@ -4,7 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
 import type { ListDto } from '@everylist/shared'
 import DefaultCategorySeeder from '#database/seeders/default_category_seeder'
-import { bodyData, signupAndGetToken } from './helpers.js'
+import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 async function createList(client: ApiClient, token: string) {
   const response = await client
@@ -151,5 +151,59 @@ test.group('Items CRUD', (group) => {
     )
     create.assertStatus(200)
     assert.isNull(create.body().data.categoryId)
+  })
+
+  test('a viewer can list items but cannot create, update, or delete them', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const viewer = await signupAndGetUser(client)
+    await addMember(listId, viewer.id, 'viewer')
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Bananas' })
+    const itemId = create.body().data.id
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    index.assertStatus(200)
+
+    const viewerCreate = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ name: 'Bread' })
+    viewerCreate.assertStatus(403)
+
+    const update = await client
+      .patch(`/api/v1/lists/${listId}/items/${itemId}`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ checked: true })
+    update.assertStatus(403)
+
+    const destroy = await client
+      .delete(`/api/v1/lists/${listId}/items/${itemId}`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    destroy.assertStatus(403)
+  })
+
+  test('an editor can create, update, and delete items', async ({ client, assert }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const editor = await signupAndGetUser(client)
+    await addMember(listId, editor.id, 'editor')
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${editor.token}`)
+      .json({ name: 'Bananas' })
+    create.assertStatus(200)
+    assert.equal(create.body().data.name, 'Bananas')
+
+    const destroy = await client
+      .delete(`/api/v1/lists/${listId}/items/${create.body().data.id}`)
+      .header('Authorization', `Bearer ${editor.token}`)
+    destroy.assertStatus(204)
   })
 })

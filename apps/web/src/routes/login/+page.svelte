@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { Button, Label, Input, Helper } from 'flowbite-svelte';
 	import { login } from '$lib/api/auth';
@@ -10,13 +12,28 @@
 	let error = $state<string | null>(null);
 	let submitting = $state(false);
 
+	// After accepting a join link while logged out, `next` sends the user
+	// back to /join/[token] instead of the default /lists landing. This is a
+	// prerendered static route (adapter-static) — reading url.searchParams
+	// during the server-side prerender pass throws, so this only reads it in
+	// the browser after hydration.
+	// The `: null` branch only fires during the server-side prerender pass;
+	// this component is only ever tested in the browser project (real
+	// Chromium, `browser` always true there), so it's untestable here.
+	/* v8 ignore next */
+	const nextPath = $derived(browser ? page.url.searchParams.get('next') : null);
+
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		error = null;
 		submitting = true;
 		try {
 			await login({ email, password });
-			await goto(resolve('/lists'));
+			// nextPath, when present, is always this app's own resolve('/join/[token]', …)
+			// output round-tripped through a query param — safe, but not statically
+			// verifiable by the lint rule below.
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			await goto(nextPath ?? resolve('/lists'));
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
 		} finally {
@@ -57,7 +74,9 @@
 
 	<p class="text-sm text-gray-600 dark:text-gray-300">
 		Don't have an account? <a
-			href={resolve('/signup')}
+			href={nextPath
+				? `${resolve('/signup')}?next=${encodeURIComponent(nextPath)}`
+				: resolve('/signup')}
 			class="text-primary-600 hover:underline dark:text-primary-400">Sign up</a
 		>
 	</p>

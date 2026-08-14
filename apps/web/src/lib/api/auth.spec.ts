@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./client', () => ({ apiPost: vi.fn() }));
+vi.mock('./client', () => ({ apiPost: vi.fn(), apiGet: vi.fn() }));
 vi.mock('./token', () => ({ setToken: vi.fn(), clearToken: vi.fn() }));
 
-const { apiPost } = await import('./client');
+const { apiPost, apiGet } = await import('./client');
 const { setToken, clearToken } = await import('./token');
-const { login, logout, signup } = await import('./auth');
+const { fetchProfile, login, logout, signup } = await import('./auth');
 
 const authResponse = {
 	user: {
@@ -64,5 +64,10 @@ describe('auth', () => {
 		await logout();
 
 		expect(clearToken).toHaveBeenCalled();
+	});
+
+	it('fetchProfile GETs the current account', () => {
+		fetchProfile();
+		expect(apiGet).toHaveBeenCalledWith('/api/v1/account/profile');
 	});
 });

@@ -1,14 +1,17 @@
 import List from '#models/list'
+import ListMember from '#models/list_member'
+import ListPolicy from '#policies/list_policy'
 import { createListValidator, updateListValidator } from '#validators/list'
 import type { HttpContext } from '@adonisjs/core/http'
 import ListTransformer from '#transformers/list_transformer'
 import { DateTime } from 'luxon'
+import { broadcastSync } from '#services/sync_broadcaster'
 
 export default class ListsController {
   async index({ auth, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const lists = await List.query()
-      .where('ownerId', user.id)
+      .whereHas('members', (query) => query.where('userId', user.id).whereNotNull('acceptedAt'))
       .whereNull('deletedAt')
       .withCount('items', (query) => query.whereNull('deletedAt').where('checked', false))
       .orderBy('createdAt', 'asc')
@@ -28,14 +31,25 @@ export default class ListsController {
       archived: false,
     })
 
+    const now = DateTime.now()
+    await ListMember.create({
+      listId: list.id,
+      userId: user.id,
+      role: 'owner',
+      invitedAt: now,
+      acceptedAt: now,
+    })
+
+    await broadcastSync({ listId: list.id, entityType: 'list', entityId: list.id, op: 'create' })
+
     return serialize(ListTransformer.transform(list))
   }
 
   async show({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
+    await ListPolicy.requireList(user.id, params.id, 'viewer')
     const list = await List.query()
       .where('id', params.id)
-      .where('ownerId', user.id)
       .whereNull('deletedAt')
       .withCount('items', (query) => query.whereNull('deletedAt').where('checked', false))
       .firstOrFail()
@@ -45,9 +59,9 @@ export default class ListsController {
 
   async update({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
+    await ListPolicy.requireList(user.id, params.id, 'owner')
     const list = await List.query()
       .where('id', params.id)
-      .where('ownerId', user.id)
       .whereNull('deletedAt')
       .withCount('items', (query) => query.whereNull('deletedAt').where('checked', false))
       .firstOrFail()
@@ -56,19 +70,20 @@ export default class ListsController {
     list.merge(payload)
     await list.save()
 
+    await broadcastSync({ listId: list.id, entityType: 'list', entityId: list.id, op: 'update' })
+
     return serialize(ListTransformer.transform(list))
   }
 
   async destroy({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await List.query()
-      .where('id', params.id)
-      .where('ownerId', user.id)
-      .whereNull('deletedAt')
-      .firstOrFail()
+    await ListPolicy.requireList(user.id, params.id, 'owner')
+    const list = await List.query().where('id', params.id).whereNull('deletedAt').firstOrFail()
 
     list.deletedAt = DateTime.now()
     await list.save()
+
+    await broadcastSync({ listId: list.id, entityType: 'list', entityId: list.id, op: 'delete' })
 
     return response.noContent()
   }

@@ -1,5 +1,5 @@
-import List from '#models/list'
 import Category from '#models/category'
+import ListPolicy from '#policies/list_policy'
 import {
   createCategoryValidator,
   updateCategoryValidator,
@@ -8,19 +8,12 @@ import {
 import type { HttpContext } from '@adonisjs/core/http'
 import CategoryTransformer from '#transformers/category_transformer'
 import { getEffectiveCategories, forkCategoryForList } from '#services/category_service'
-
-async function findOwnedList(userId: number, listId: string | number) {
-  return List.query()
-    .where('id', listId)
-    .where('ownerId', userId)
-    .whereNull('deletedAt')
-    .firstOrFail()
-}
+import { broadcastSync } from '#services/sync_broadcaster'
 
 export default class CategoriesController {
   async index({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
     const categories = await getEffectiveCategories(list)
 
     return serialize(CategoryTransformer.transform(categories))
@@ -28,7 +21,7 @@ export default class CategoriesController {
 
   async store({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const payload = await request.validateUsing(createCategoryValidator)
 
     const maxSortOrder = await Category.query()
@@ -45,12 +38,19 @@ export default class CategoriesController {
       isDefault: false,
     })
 
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'category',
+      entityId: category.id,
+      op: 'create',
+    })
+
     return serialize(CategoryTransformer.transform(category))
   }
 
   async update({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const category = await Category.query()
       .where('id', params.categoryId)
       .where((query) => query.where('listId', list.id).orWhereNull('listId'))
@@ -61,24 +61,38 @@ export default class CategoriesController {
     listCategory.merge(payload)
     await listCategory.save()
 
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'category',
+      entityId: listCategory.id,
+      op: 'update',
+    })
+
     return serialize(CategoryTransformer.transform(listCategory))
   }
 
   async destroy({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const category = await Category.query()
       .where('id', params.categoryId)
       .where('listId', list.id)
       .firstOrFail()
 
     await category.delete()
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'category',
+      entityId: category.id,
+      op: 'delete',
+    })
+
     return response.noContent()
   }
 
   async reorder({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const { order } = await request.validateUsing(reorderCategoriesValidator)
 
     const categories = await Category.query()
@@ -95,6 +109,14 @@ export default class CategoriesController {
       listCategory.sortOrder = index
       await listCategory.save()
     }
+
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'category',
+      entityId: list.id,
+      op: 'update',
+      payload: { categoryIds: order },
+    })
 
     return serialize(CategoryTransformer.transform(await getEffectiveCategories(list)))
   }

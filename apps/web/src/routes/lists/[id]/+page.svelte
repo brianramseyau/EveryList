@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -21,8 +21,10 @@
 	import { fetchStoreCategoryOrder } from '$lib/api/stores';
 	import { getSelectedStore } from '$lib/api/selected-store';
 	import { ApiError } from '$lib/api/client';
+	import { subscribeToList } from '$lib/realtime';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import SyncToast from '$lib/components/SyncToast.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -43,6 +45,9 @@
 	let recentItems = $state<ItemDto[]>([]);
 	let recentOpen = $state(false);
 	let loadingRecent = $state(false);
+
+	let syncToastVisible = $state(false);
+	let unsubscribeRealtime: (() => void) | null = null;
 
 	// Store-specific aisle order, if the shopper has picked a store for this
 	// list on this device — purely local, see $lib/api/selected-store.ts.
@@ -105,7 +110,19 @@
 			return;
 		}
 		void loadAll();
+		unsubscribeRealtime = subscribeToList(listId, () => {
+			syncToastVisible = true;
+		});
 	});
+
+	onDestroy(() => {
+		unsubscribeRealtime?.();
+	});
+
+	function refreshFromSync() {
+		syncToastVisible = false;
+		void loadAll();
+	}
 
 	async function handleAddItem(event: SubmitEvent) {
 		event.preventDefault();
@@ -213,8 +230,18 @@
 				href={resolve('/lists/[id]/categories', { id: String(listId) })}
 				class="text-primary-600 hover:underline dark:text-primary-400">Categories</a
 			>
+			<a
+				href={resolve('/lists/[id]/members', { id: String(listId) })}
+				class="text-primary-600 hover:underline dark:text-primary-400">Members</a
+			>
 		{/snippet}
 	</PageHeader>
+
+	<SyncToast
+		visible={syncToastVisible}
+		onrefresh={refreshFromSync}
+		ondismiss={() => (syncToastVisible = false)}
+	/>
 
 	{#if loading}
 		<p class="text-gray-500 dark:text-gray-400">Loading…</p>

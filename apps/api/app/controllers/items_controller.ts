@@ -1,19 +1,13 @@
-import List from '#models/list'
+import type List from '#models/list'
 import Item from '#models/item'
+import ListPolicy from '#policies/list_policy'
 import { createItemValidator, updateItemValidator, importItemsValidator } from '#validators/item'
 import type { HttpContext } from '@adonisjs/core/http'
 import ItemTransformer from '#transformers/item_transformer'
 import { getEffectiveCategories } from '#services/category_service'
 import { suggestCategoryName } from '#services/auto_categorize_service'
 import { DateTime } from 'luxon'
-
-async function findOwnedList(userId: number, listId: string | number) {
-  return List.query()
-    .where('id', listId)
-    .where('ownerId', userId)
-    .whereNull('deletedAt')
-    .firstOrFail()
-}
+import { broadcastSync } from '#services/sync_broadcaster'
 
 async function resolveCategoryId(
   list: List,
@@ -41,7 +35,7 @@ async function nextSortOrder(listId: number): Promise<number> {
 export default class ItemsController {
   async index({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
 
     const includeChecked = request.input('includeChecked', 'true') !== 'false'
     const query = Item.query().where('listId', list.id).whereNull('deletedAt')
@@ -53,7 +47,7 @@ export default class ItemsController {
 
   async recent({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
 
     const items = await Item.query()
       .where('listId', list.id)
@@ -66,7 +60,7 @@ export default class ItemsController {
 
   async store({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const payload = await request.validateUsing(createItemValidator)
 
     const categoryId = await resolveCategoryId(list, payload.name, payload.categoryId)
@@ -82,12 +76,14 @@ export default class ItemsController {
       createdBy: user.id,
     })
 
+    await broadcastSync({ listId: list.id, entityType: 'item', entityId: item.id, op: 'create' })
+
     return serialize(ItemTransformer.transform(item))
   }
 
   async import({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const { text } = await request.validateUsing(importItemsValidator)
 
     const lines = text
@@ -113,12 +109,20 @@ export default class ItemsController {
       )
     }
 
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'item',
+      entityId: list.id,
+      op: 'create',
+      payload: { count: items.length },
+    })
+
     return serialize(ItemTransformer.transform(items))
   }
 
   async update({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const item = await Item.query()
       .where('id', params.itemId)
       .where('listId', list.id)
@@ -134,12 +138,14 @@ export default class ItemsController {
     }
     await item.save()
 
+    await broadcastSync({ listId: list.id, entityType: 'item', entityId: item.id, op: 'update' })
+
     return serialize(ItemTransformer.transform(item))
   }
 
   async destroy({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const item = await Item.query()
       .where('id', params.itemId)
       .where('listId', list.id)
@@ -149,12 +155,14 @@ export default class ItemsController {
     item.deletedAt = DateTime.now()
     await item.save()
 
+    await broadcastSync({ listId: list.id, entityType: 'item', entityId: item.id, op: 'delete' })
+
     return response.noContent()
   }
 
   async restore({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await findOwnedList(user.id, params.listId)
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const item = await Item.query()
       .where('id', params.itemId)
       .where('listId', list.id)
@@ -164,6 +172,8 @@ export default class ItemsController {
     item.deletedAt = null
     item.sortOrder = await nextSortOrder(list.id)
     await item.save()
+
+    await broadcastSync({ listId: list.id, entityType: 'item', entityId: item.id, op: 'create' })
 
     return serialize(ItemTransformer.transform(item))
   }

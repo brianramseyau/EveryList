@@ -1,0 +1,24 @@
+import transmit from '@adonisjs/transmit/services/main'
+import type { HttpContext } from '@adonisjs/core/http'
+import ListPolicy from '#policies/list_policy'
+
+/**
+ * A user may subscribe to a list's channel iff they have an accepted
+ * `ListMember` row on it — see PLAN.md §8. Extracted as a plain function so
+ * it's directly unit-testable outside Transmit's own subscribe route, which
+ * isn't reachable through Japa's `ApiClient`.
+ */
+export async function authorizeListChannel(
+  ctx: HttpContext,
+  params: { id: string }
+): Promise<boolean> {
+  try {
+    const user = await ctx.auth.use('api').authenticate()
+    const role = await ListPolicy.roleFor(user.id, params.id)
+    return role !== null
+  } catch {
+    return false
+  }
+}
+
+transmit.authorize<{ id: string }>('list/:id', authorizeListChannel)

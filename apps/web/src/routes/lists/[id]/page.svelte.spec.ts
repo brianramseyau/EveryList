@@ -1,7 +1,7 @@
 import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import type { ItemDto } from '@everylist/shared';
+import type { ItemDto, SyncEventDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 
@@ -23,6 +23,7 @@ vi.mock('$lib/api/selected-store', () => ({
 	getSelectedStore: vi.fn(),
 	setSelectedStore: vi.fn()
 }));
+vi.mock('$lib/realtime', () => ({ subscribeToList: vi.fn(() => vi.fn()) }));
 
 const { fetchList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
@@ -37,6 +38,7 @@ const {
 } = await import('$lib/api/items');
 const { fetchStoreCategoryOrder } = await import('$lib/api/stores');
 const { getSelectedStore } = await import('$lib/api/selected-store');
+const { subscribeToList } = await import('$lib/realtime');
 const { goto } = await import('$app/navigation');
 const ListDetailPage = (await import('./+page.svelte')).default;
 
@@ -553,5 +555,43 @@ describe('List detail +page.svelte', () => {
 
 		await page.getByRole('button', { name: 'Restore' }).click();
 		expect(restoreItem).toHaveBeenCalledWith(1, 300);
+	});
+
+	it('subscribes to the list channel and shows a toast on a sync event, refreshing on click', async () => {
+		let handler: (event: SyncEventDto) => void = () => {};
+		const unsubscribe = vi.fn();
+		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
+			handler = onEvent;
+			return unsubscribe;
+		});
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		expect(subscribeToList).toHaveBeenCalledWith(1, expect.any(Function));
+
+		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null });
+		await expect.element(page.getByText('This list was updated')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Refresh' }).click();
+		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
+		expect(fetchList).toHaveBeenCalledTimes(2);
+	});
+
+	it('dismisses the sync toast without refreshing', async () => {
+		let handler: (event: SyncEventDto) => void = () => {};
+		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
+			handler = onEvent;
+			return vi.fn();
+		});
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+
+		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null });
+		await expect.element(page.getByText('This list was updated')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Dismiss' }).click();
+		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
+		expect(fetchList).toHaveBeenCalledTimes(1);
 	});
 });

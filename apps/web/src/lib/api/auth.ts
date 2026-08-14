@@ -1,5 +1,5 @@
 import type { UserDto } from '@everylist/shared';
-import { apiPost } from './client';
+import { apiGet, apiPost } from './client';
 import { clearToken, setToken } from './token';
 
 interface AuthResponse {
@@ -22,6 +22,10 @@ export async function login(input: { email: string; password: string }): Promise
 	const response = await apiPost<AuthResponse>('/api/v1/auth/login', input);
 	setToken(response.token);
 	return response;
+}
+
+export function fetchProfile(): Promise<UserDto> {
+	return apiGet('/api/v1/account/profile');
 }
 
 export async function logout(): Promise<void> {
