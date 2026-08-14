@@ -16,7 +16,14 @@
     "test": "c8 node ace test",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node ace migration:run",
+    "db:migrate:rollback": "node ace migration:rollback",
+    "db:migrate:status": "node ace migration:status",
+    "db:migrate:fresh": "node ace migration:fresh",
+    "db:seed": "node ace db:seed",
+    "db:setup": "node ace migration:run && node ace db:seed",
+    "db:reset": "node ace migration:fresh --seed"
   },
   "imports": {
     "#controllers/*": "./app/controllers/*.js",

@@ -16,7 +16,14 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter @everylist/api db:migrate",
+    "db:migrate:rollback": "pnpm --filter @everylist/api db:migrate:rollback",
+    "db:migrate:status": "pnpm --filter @everylist/api db:migrate:status",
+    "db:migrate:fresh": "pnpm --filter @everylist/api db:migrate:fresh",
+    "db:seed": "pnpm --filter @everylist/api db:seed",
+    "db:setup": "pnpm --filter @everylist/api db:setup",
+    "db:reset": "pnpm --filter @everylist/api db:reset"
   },
   "devDependencies": {
     "@eslint/js": "^9.16.0",

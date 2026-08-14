@@ -81,9 +81,12 @@ git clone https://github.com/brianramseyau/EveryList.git
 cd EveryList
 pnpm install
 cp apps/api/.env.example apps/api/.env
+pnpm db:setup
 
 pnpm dev
 ```
+
+`pnpm db:setup` creates `apps/api/tmp/db.sqlite3`, runs all migrations, and seeds the default categories — required once per fresh clone (or whenever you wipe `apps/api/tmp/`) before the API has any tables to query.
 
 This runs both the API (`http://localhost:3333`) and the web app (`http://localhost:5173`) in parallel with hot reload.
 
@@ -95,6 +98,12 @@ pnpm lint          # ESLint across the monorepo
 pnpm typecheck     # tsc --noEmit in every workspace
 pnpm test          # Japa (api) + Vitest (web)
 pnpm format        # Prettier write
+
+pnpm db:migrate         # run pending migrations
+pnpm db:migrate:status  # show migration status
+pnpm db:migrate:rollback# roll back the last migration batch
+pnpm db:seed            # run seeders (default categories)
+pnpm db:reset           # drop all tables, re-migrate, and re-seed
 ```
 
 ### Local development via Docker Compose
