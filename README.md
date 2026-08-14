@@ -20,7 +20,7 @@ AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasi
 
 ## Status
 
-**MVP-complete.** Phases 0 through 5 are done — foundations, auth, full list/item CRUD, the UI/UX redesign and theming pass, real-time sharing, and offline/PWA support. Phases 6 (item-store tagging, prices, folders, photos, export) and 7 (polish) are stretch goals on top of a working, self-hostable app. See the [roadmap](#roadmap) and the status note at the end of the plan for details.
+**MVP-complete.** Phases 0 through 5 are done — foundations, auth, full list/item CRUD, the UI/UX redesign and theming pass, real-time sharing, and offline/PWA support. Phases 6 (item-store tagging, prices, folders, export) and 7 (polish) are stretch goals on top of a working, self-hostable app. See the [roadmap](#roadmap) and the status note at the end of the plan for details.
 
 ## Features
 
@@ -155,7 +155,7 @@ CI (GitHub Actions) runs lint → typecheck → tests/coverage → Docker build 
 | 3 — UI/UX Redesign & Theming Foundations | ✅ App shell, light/dark/automatic theme, card-style list rows, icon/color pickers, grouped Settings |
 | 4 — Sharing & real-time | ✅ Roles, invites, live updates via SSE |
 | 5 — Offline & PWA | ✅ Dexie sync queue, service worker, installability — MVP-complete milestone |
-| 6 — Item-store tagging, prices, folders, photos, export | Stretch |
+| 6 — Item-store tagging, prices, folders, export | Stretch |
 | 7 — Polish | Passcode lock, themes, personalized autocomplete |
 
 Full detail, including the AnyList feature-by-feature decision matrix, lives in [`foundational/PLAN.md`](foundational/PLAN.md).
