@@ -4,10 +4,13 @@ import { render } from 'vitest-browser-svelte';
 import IconPicker from './IconPicker.svelte';
 
 describe('IconPicker.svelte', () => {
-	it('shows the current icon and its display label on the trigger button', async () => {
+	it('exposes the display label as the trigger button\'s accessible name, without showing it as text', async () => {
 		render(IconPicker, { value: 'fruitCherries', onselect: vi.fn() });
 
-		await expect.element(page.getByText('Fruit Cherries')).toBeInTheDocument();
+		await expect
+			.element(page.getByRole('button', { name: 'Fruit Cherries' }))
+			.toBeInTheDocument();
+		await expect.element(page.getByText('Fruit Cherries')).not.toBeInTheDocument();
 	});
 
 	it('prompts to search before showing any results', async () => {

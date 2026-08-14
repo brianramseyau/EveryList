@@ -72,9 +72,14 @@
 </script>
 
 <div class="relative">
-	<Button type="button" color="alternative" onclick={togglePicker} class="flex items-center gap-2">
+	<Button
+		type="button"
+		color="alternative"
+		onclick={togglePicker}
+		class="flex items-center gap-2"
+		aria-label={toDisplayLabel(value)}
+	>
 		<Icon name={value} class="h-5 w-5" />
-		<span class="text-sm">{toDisplayLabel(value)}</span>
 	</Button>
 
 	{#if open}
