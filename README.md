@@ -20,7 +20,7 @@ AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasi
 
 ## Status
 
-**In progress.** Phase 0 (Foundations), Phase 1 (Auth & domain core), and Phase 3 (UI/UX Redesign & Theming Foundations) are complete. Phase 2 (List & item CRUD) is functionally complete end-to-end, with some testing/polish gaps remaining. Phase 4 (Sharing & real-time) hasn't started. See the [roadmap](#roadmap) and the status note at the end of the plan for details.
+**MVP-complete.** Phases 0 through 5 are done — foundations, auth, full list/item CRUD, the UI/UX redesign and theming pass, real-time sharing, and offline/PWA support. Phases 6 (item-store tagging, prices, folders, photos, export) and 7 (polish) are stretch goals on top of a working, self-hostable app. See the [roadmap](#roadmap) and the status note at the end of the plan for details.
 
 ## Features
 
@@ -29,8 +29,8 @@ AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasi
 - **Store-aware aisle order** — pick the store you're shopping at and categories reorder to match its real layout; store data and aisle order are shared with everyone the list is shared with.
 - **Favorites** — go-to items for one-tap re-adding to the list they belong to; scoped per list, since a grocery list and a packing list don't share go-to items.
 - **Paste import** — paste a block of text and each line gets parsed and auto-categorized.
-- **Real-time sharing** *(Phase 4)* — SSE-based live updates across everyone on a shared list, with granular `owner`/`editor`/`viewer` roles.
-- **Offline-first** *(Phase 5)* — every core interaction works with zero network via a local IndexedDB store and syncs when back online.
+- **Real-time sharing** — SSE-based live updates across everyone on a shared list, with granular `owner`/`editor`/`viewer` roles.
+- **Offline-first** — every core interaction works with zero network via a local IndexedDB store and syncs when back online.
 - **Installable PWA** — add to your home screen on any device, no app store required.
 - **Self-hosted, single container** — one Docker image, one process, one SQLite file under `/config`; trivial to back up.
 
@@ -151,10 +151,10 @@ CI (GitHub Actions) runs lint → typecheck → tests/coverage → Docker build 
 |---|---|
 | 0 — Foundations | ✅ Repo scaffold, CI, Docker image |
 | 1 — Auth & domain core | ✅ Auth, list/category/item models, default categories |
-| 2 — List & item CRUD | ✅ (mostly) Full CRUD, auto-categorization, favorites, stores & aisle order |
+| 2 — List & item CRUD | ✅ Full CRUD, auto-categorization, favorites, stores & aisle order |
 | 3 — UI/UX Redesign & Theming Foundations | ✅ App shell, light/dark/automatic theme, card-style list rows, icon/color pickers, grouped Settings |
-| 4 — Sharing & real-time | ⏳ Roles, invites, live updates via SSE |
-| 5 — Offline & PWA | Dexie sync queue, service worker, installability — MVP-complete milestone |
+| 4 — Sharing & real-time | ✅ Roles, invites, live updates via SSE |
+| 5 — Offline & PWA | ✅ Dexie sync queue, service worker, installability — MVP-complete milestone |
 | 6 — Item-store tagging, prices, folders, photos, export | Stretch |
 | 7 — Polish | Passcode lock, themes, personalized autocomplete |
 
