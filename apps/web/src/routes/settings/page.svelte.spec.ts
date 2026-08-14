@@ -1,11 +1,31 @@
 import { page } from 'vitest/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import SettingsPage from './+page.svelte';
+
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$lib/api/auth', () => ({ logout: vi.fn() }));
+
+const { goto } = await import('$app/navigation');
+const { logout } = await import('$lib/api/auth');
+const SettingsPage = (await import('./+page.svelte')).default;
 
 describe('Settings +page.svelte', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		vi.clearAllMocks();
+	});
+
+	it('logs out and navigates to /login', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(logout).mockResolvedValue(undefined);
+		vi.mocked(goto).mockResolvedValue(undefined);
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Log out' }).click();
+
+		expect(logout).toHaveBeenCalled();
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 	});
 
 	it('shows build metadata once /api/v1/meta resolves', async () => {

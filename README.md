@@ -16,13 +16,11 @@
 
 ---
 
-Ideally, a better way to create lists than a similarly named, bloated "cash grab" app I'm fed up with 😉
-
 AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasing feature parity — it's a **mobile-first, offline-first, one-tier** PWA that does the everyday list workflow well: create, share in real time, auto-categorize by aisle, check off, and keep working with zero signal. No premium tier, ever. See [`foundational/PLAN.md`](foundational/PLAN.md) for the full product plan, architecture, and decision rationale behind everything below.
 
 ## Status
 
-**In progress.** Phase 0 (Foundations) and Phase 1 (Auth & domain core) are complete. Phase 2 (List & item CRUD) is functionally complete end-to-end, with some testing/polish gaps remaining. Phase 3 (Sharing & real-time) hasn't started. See the [roadmap](#roadmap) and the status note at the end of the plan for details.
+**In progress.** Phase 0 (Foundations), Phase 1 (Auth & domain core), and Phase 3 (UI/UX Redesign & Theming Foundations) are complete. Phase 2 (List & item CRUD) is functionally complete end-to-end, with some testing/polish gaps remaining. Phase 4 (Sharing & real-time) hasn't started. See the [roadmap](#roadmap) and the status note at the end of the plan for details.
 
 ## Features
 
@@ -31,8 +29,8 @@ AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasi
 - **Store-aware aisle order** — pick the store you're shopping at and categories reorder to match its real layout; store data and aisle order are shared with everyone the list is shared with.
 - **Favorites** — a master list of go-to items for one-tap rebuilding of a new list.
 - **Paste import** — paste a block of text and each line gets parsed and auto-categorized.
-- **Real-time sharing** *(Phase 3)* — SSE-based live updates across everyone on a shared list, with granular `owner`/`editor`/`viewer` roles.
-- **Offline-first** *(Phase 4)* — every core interaction works with zero network via a local IndexedDB store and syncs when back online.
+- **Real-time sharing** *(Phase 4)* — SSE-based live updates across everyone on a shared list, with granular `owner`/`editor`/`viewer` roles.
+- **Offline-first** *(Phase 5)* — every core interaction works with zero network via a local IndexedDB store and syncs when back online.
 - **Installable PWA** — add to your home screen on any device, no app store required.
 - **Self-hosted, single container** — one Docker image, one process, one SQLite file under `/config`; trivial to back up.
 
@@ -145,10 +143,11 @@ CI (GitHub Actions) runs lint → typecheck → tests/coverage → Docker build 
 | 0 — Foundations | ✅ Repo scaffold, CI, Docker image |
 | 1 — Auth & domain core | ✅ Auth, list/category/item models, default categories |
 | 2 — List & item CRUD | ✅ (mostly) Full CRUD, auto-categorization, favorites, stores & aisle order |
-| 3 — Sharing & real-time | ⏳ Roles, invites, live updates via SSE |
-| 4 — Offline & PWA | Dexie sync queue, service worker, installability — MVP-complete milestone |
-| 5 — Item-store tagging, prices, folders, photos, export | Stretch |
-| 6 — Polish | Passcode lock, themes, personalized autocomplete |
+| 3 — UI/UX Redesign & Theming Foundations | ✅ App shell, light/dark/automatic theme, card-style list rows, icon/color pickers, grouped Settings |
+| 4 — Sharing & real-time | ⏳ Roles, invites, live updates via SSE |
+| 5 — Offline & PWA | Dexie sync queue, service worker, installability — MVP-complete milestone |
+| 6 — Item-store tagging, prices, folders, photos, export | Stretch |
+| 7 — Polish | Passcode lock, themes, personalized autocomplete |
 
 Full detail, including the AnyList feature-by-feature decision matrix, lives in [`foundational/PLAN.md`](foundational/PLAN.md).
 

@@ -21,6 +21,8 @@
 	import { fetchStoreCategoryOrder } from '$lib/api/stores';
 	import { getSelectedStore } from '$lib/api/selected-store';
 	import { ApiError } from '$lib/api/client';
+	import Icon from '$lib/components/Icon.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -197,27 +199,22 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<a href={resolve('/lists')} class="text-sm text-primary-600 hover:underline dark:text-primary-400"
-		>← My Lists</a
-	>
+	<PageHeader title={list?.name} backHref={resolve('/lists')} backLabel="My Lists">
+		{#snippet actions()}
+			<a
+				href={resolve('/lists/[id]/stores', { id: String(listId) })}
+				class="text-primary-600 hover:underline dark:text-primary-400">Stores</a
+			>
+			<a
+				href={resolve('/lists/[id]/categories', { id: String(listId) })}
+				class="text-primary-600 hover:underline dark:text-primary-400">Categories</a
+			>
+		{/snippet}
+	</PageHeader>
 
 	{#if loading}
 		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
 	{:else if list}
-		<div class="flex items-center justify-between">
-			<h1 class="text-2xl font-bold">{list.name}</h1>
-			<div class="flex gap-3 text-sm">
-				<a
-					href={resolve('/lists/[id]/stores', { id: String(listId) })}
-					class="text-primary-600 hover:underline dark:text-primary-400">Stores</a
-				>
-				<a
-					href={resolve('/lists/[id]/categories', { id: String(listId) })}
-					class="text-primary-600 hover:underline dark:text-primary-400">Categories</a
-				>
-			</div>
-		</div>
-
 		<form class="flex gap-2" onsubmit={handleAddItem}>
 			<Input placeholder="Item name" bind:value={newItemName} class="flex-1" />
 			<Input placeholder="Qty" bind:value={newItemQuantity} class="w-20" />
@@ -255,8 +252,16 @@
 			<div class="flex flex-col gap-6">
 				{#each groups as group (group.category?.id ?? 'uncategorized')}
 					<section>
-						<h2 class="mb-2 text-sm font-semibold text-gray-500 dark:text-gray-400">
-							{group.category?.name ?? 'Uncategorized'}
+						<h2
+							class="mb-2 flex items-center gap-2 text-sm font-semibold"
+							style:color={group.category ? list.color : undefined}
+						>
+							{#if group.category}
+								<Icon name={group.category.icon} class="h-4 w-4" />
+							{/if}
+							<span class={group.category ? '' : 'text-gray-500 dark:text-gray-400'}>
+								{group.category?.name ?? 'Uncategorized'}
+							</span>
 						</h2>
 						<ul class="flex flex-col gap-1">
 							{#each group.items as item (item.id)}

@@ -13,6 +13,7 @@
 	} from '$lib/api/favorites';
 	import { fetchLists } from '$lib/api/lists';
 	import { ApiError } from '$lib/api/client';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	let favorites = $state<FavoriteItemDto[]>([]);
 	let lists = $state<ListDto[]>([]);
@@ -92,11 +93,7 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<a href={resolve('/lists')} class="text-sm text-primary-600 hover:underline dark:text-primary-400"
-		>← My Lists</a
-	>
-
-	<h1 class="text-2xl font-bold">Favorites</h1>
+	<PageHeader title="Favorites" />
 	<p class="text-sm text-gray-600 dark:text-gray-300">
 		Your master list of items you buy often — add one to any list in a tap.
 	</p>

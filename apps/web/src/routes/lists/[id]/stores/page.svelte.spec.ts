@@ -29,6 +29,7 @@ const list = {
 	icon: null,
 	ownerId: 1,
 	archived: false,
+	itemCount: 0,
 	createdAt: '2026-08-01T00:00:00.000Z',
 	updatedAt: null
 };
@@ -93,7 +94,7 @@ describe('Stores +page.svelte', () => {
 		await page.getByPlaceholder('New store name').fill('Costco');
 		await page.getByRole('button', { name: 'Add store' }).click();
 
-		expect(attachStore).toHaveBeenCalledWith(1, { name: 'Costco' });
+		expect(attachStore).toHaveBeenCalledWith(1, { name: 'Costco', color: '#3b82f6' });
 		await expect.element(page.getByText('Costco')).toBeInTheDocument();
 	});
 

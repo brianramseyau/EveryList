@@ -8,11 +8,19 @@
 	import { createList, fetchLists } from '$lib/api/lists';
 	import { logout } from '$lib/api/auth';
 	import { ApiError } from '$lib/api/client';
+	import Icon from '$lib/components/Icon.svelte';
+	import IconPicker from '$lib/components/IconPicker.svelte';
+	import ColorPicker from '$lib/components/ColorPicker.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
+
+	const DEFAULT_COLOR = '#3b82f6';
 
 	let lists = $state<ListDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let newListName = $state('');
+	let newListColor = $state(DEFAULT_COLOR);
+	let newListIcon = $state('formatListChecks');
 	let creating = $state(false);
 
 	async function loadLists() {
@@ -40,9 +48,15 @@
 		if (!newListName.trim()) return;
 		creating = true;
 		try {
-			const list = await createList({ name: newListName.trim() });
+			const list = await createList({
+				name: newListName.trim(),
+				color: newListColor,
+				icon: newListIcon
+			});
 			lists = [...lists, list];
 			newListName = '';
+			newListColor = DEFAULT_COLOR;
+			newListIcon = 'formatListChecks';
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to create list.';
 		} finally {
@@ -61,22 +75,20 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-bold">My Lists</h1>
-		<div class="flex items-center gap-4 text-sm">
-			<a href={resolve('/favorites')} class="text-primary-600 hover:underline dark:text-primary-400"
-				>Favorites</a
-			>
+	<PageHeader title="My Lists">
+		{#snippet actions()}
 			<button
 				type="button"
 				onclick={handleLogout}
 				class="text-gray-500 hover:underline dark:text-gray-400">Log out</button
 			>
-		</div>
-	</div>
+		{/snippet}
+	</PageHeader>
 
-	<form class="flex gap-2" onsubmit={handleCreate}>
-		<Input placeholder="New list name" bind:value={newListName} />
+	<form class="flex flex-wrap gap-2" onsubmit={handleCreate}>
+		<Input placeholder="New list name" bind:value={newListName} class="min-w-40 flex-1" />
+		<IconPicker value={newListIcon} onselect={(name) => (newListIcon = name)} />
+		<ColorPicker value={newListColor} onselect={(color) => (newListColor = color)} />
 		<Button type="submit" disabled={creating || !newListName.trim()}>Add</Button>
 	</form>
 
@@ -97,11 +109,19 @@
 						class="flex items-center gap-3 rounded-lg border border-gray-200 p-4 hover:border-primary-500 dark:border-gray-700"
 					>
 						<span
-							class="h-8 w-8 shrink-0 rounded-full"
+							class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"
 							style:background-color={list.color}
 							aria-hidden="true"
-						></span>
-						<span class="flex-1 font-medium">{list.name}</span>
+						>
+							<Icon name={list.icon ?? 'formatListChecks'} class="h-5 w-5" />
+						</span>
+						<span class="flex flex-1 flex-col">
+							<span class="font-medium">{list.name}</span>
+							<span class="text-xs text-gray-500 dark:text-gray-400">
+								{list.itemCount}
+								{list.itemCount === 1 ? 'item' : 'items'}
+							</span>
+						</span>
 						{#if list.archived}
 							<span class="text-xs text-gray-400">Archived</span>
 						{/if}
