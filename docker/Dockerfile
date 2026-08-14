@@ -77,15 +77,20 @@ RUN corepack enable
 
 WORKDIR /srv/build
 COPY --from=build-api /app/apps/api/build .
-# `node ace build` copies apps/api/package.json's devDependencies into this
-# standalone package.json verbatim (including @everylist/shared, a
-# type-only devDependency never meant to leave the monorepo — see
-# apps/api/package.json). pnpm validates "workspace:*" specifiers before
-# `--prod` gets a chance to skip devDependencies, so it fails to resolve
-# outside a pnpm workspace regardless of dep type. Strip devDependencies
-# before installing — production has no business installing them anyway.
-RUN node -e "const fs=require('node:fs'); const p=JSON.parse(fs.readFileSync('package.json')); delete p.devDependencies; fs.writeFileSync('package.json', JSON.stringify(p, null, 2))"
+# `node ace build` copies apps/api/package.json's dependencies and
+# devDependencies into this standalone package.json verbatim. Strip
+# devDependencies before installing — production has no business installing
+# them anyway. @everylist/shared is a real runtime dependency (see the
+# import in app/controllers/items_controller.ts) but its "workspace:*"
+# specifier can't be resolved by pnpm once copied outside the pnpm
+# workspace (no pnpm-workspace.yaml ancestor here), and pnpm validates that
+# specifier before `--prod` gets a chance to skip anything. Strip it too and
+# vendor the already-built package straight into node_modules below instead
+# of asking pnpm to install it.
+RUN node -e "const fs=require('node:fs'); const p=JSON.parse(fs.readFileSync('package.json')); delete p.devDependencies; delete p.dependencies['@everylist/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2))"
 RUN pnpm install --prod
+COPY --from=build-api /app/packages/shared/package.json node_modules/@everylist/shared/package.json
+COPY --from=build-api /app/packages/shared/dist node_modules/@everylist/shared/dist
 
 # ---------------------------------------------------------------------------
 # release: minimal runtime image — no build toolchain, no pnpm workspace,
