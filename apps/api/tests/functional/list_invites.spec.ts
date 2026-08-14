@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { ApiClient } from '@japa/api-client'
-import type { ListDto } from '@everylist/shared'
+import type { ListDto, ListInvitePreviewDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
 import ListInvite from '#models/list_invite'
 import User from '#models/user'
@@ -85,9 +85,10 @@ test.group('List invites', (group) => {
 
     const preview = await client.get(`/api/v1/invites/${token}`)
     preview.assertStatus(200)
-    assert.equal(preview.body().data.listName, 'Groceries')
-    assert.equal(preview.body().data.role, 'editor')
-    assert.isDefined(preview.body().data.inviterName)
+    const previewData = bodyData<ListInvitePreviewDto>(preview)
+    assert.equal(previewData.listName, 'Groceries')
+    assert.equal(previewData.role, 'editor')
+    assert.isDefined(previewData.inviterName)
   })
 
   test('previewing an invite falls back to the inviter email when they have no full name', async ({
@@ -108,7 +109,7 @@ test.group('List invites', (group) => {
 
     const preview = await client.get(`/api/v1/invites/${invite.token}`)
     preview.assertStatus(200)
-    assert.equal(preview.body().data.inviterName, ownerModel.email)
+    assert.equal(bodyData<ListInvitePreviewDto>(preview).inviterName, ownerModel.email)
   })
 
   test('previewing a missing or revoked invite returns 404', async ({ client }) => {
