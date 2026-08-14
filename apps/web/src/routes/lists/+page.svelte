@@ -6,7 +6,6 @@
 	import type { ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { createList, fetchLists } from '$lib/api/lists';
-	import { logout } from '$lib/api/auth';
 	import { ApiError } from '$lib/api/client';
 	import Icon from '$lib/components/Icon.svelte';
 	import IconPicker from '$lib/components/IconPicker.svelte';
@@ -63,11 +62,6 @@
 			creating = false;
 		}
 	}
-
-	async function handleLogout() {
-		await logout();
-		await goto(resolve('/login'));
-	}
 </script>
 
 <svelte:head>
@@ -75,15 +69,7 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<PageHeader title="My Lists">
-		{#snippet actions()}
-			<button
-				type="button"
-				onclick={handleLogout}
-				class="text-gray-500 hover:underline dark:text-gray-400">Log out</button
-			>
-		{/snippet}
-	</PageHeader>
+	<PageHeader title="My Lists" />
 
 	<form class="flex flex-wrap gap-2" onsubmit={handleCreate}>
 		<div class="min-w-40 flex-1">
