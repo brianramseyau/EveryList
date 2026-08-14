@@ -118,7 +118,7 @@
 						<span class="flex flex-1 flex-col">
 							<span class="font-medium">{list.name}</span>
 							<span class="text-xs text-gray-500 dark:text-gray-400">
-								{list.itemCount}
+								<span>{list.itemCount}</span>
 								{list.itemCount === 1 ? 'item' : 'items'}
 							</span>
 						</span>

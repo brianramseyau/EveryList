@@ -2,6 +2,7 @@ import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { setToken, clearToken } from '$lib/api/token';
+import { ApiError } from '$lib/api/client';
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1', storeId: '20' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -95,12 +96,47 @@ describe('Store aisle order +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
+	it('shows the ApiError message when loading fails', async () => {
+		vi.mocked(fetchList).mockRejectedValue(new ApiError(500, 'List not found'));
+
+		render(StoreOrderPage);
+
+		await expect.element(page.getByText('List not found')).toBeInTheDocument();
+	});
+
 	it('renders categories in default order under the store name', async () => {
 		render(StoreOrderPage);
 
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 		await expect.element(page.getByText('Produce')).toBeInTheDocument();
 		await expect.element(page.getByText('Dairy')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Everyone who shops at "Walmart" sees this order.'))
+			.toBeInTheDocument();
+	});
+
+	it('falls back to "Store" when the store id has no matching store', async () => {
+		vi.mocked(fetchStores).mockResolvedValue([]);
+
+		render(StoreOrderPage);
+
+		await expect.element(page.getByText('Store — Aisle order')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Everyone who shops at "" sees this order.'))
+			.toBeInTheDocument();
+	});
+
+	it('applies stored sort-order overrides on load', async () => {
+		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0 },
+			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1 }
+		]);
+
+		render(StoreOrderPage);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+
+		const names = document.querySelectorAll('li span');
+		expect([...names].map((el) => el.textContent)).toEqual(['Dairy', 'Produce']);
 	});
 
 	it('moves a category down and persists the new order', async () => {
@@ -118,5 +154,93 @@ describe('Store aisle order +page.svelte', () => {
 			{ categoryId: 11, sortOrder: 0 },
 			{ categoryId: 10, sortOrder: 1 }
 		]);
+	});
+
+	it('moves a category up', async () => {
+		vi.mocked(reorderStoreCategories).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0 },
+			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1 }
+		]);
+
+		render(StoreOrderPage);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Move up' }).nth(1).click();
+
+		expect(reorderStoreCategories).toHaveBeenCalledWith(20, [
+			{ categoryId: 11, sortOrder: 0 },
+			{ categoryId: 10, sortOrder: 1 }
+		]);
+	});
+
+	it('does not reorder past the top or bottom of the list', async () => {
+		// Move up/down are already disabled at the boundary, but move() has
+		// its own bounds guard, reachable via a raw click that bypasses the
+		// disabled attribute.
+		render(StoreOrderPage);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+
+		page
+			.getByRole('button', { name: 'Move up' })
+			.first()
+			.element()
+			.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		page
+			.getByRole('button', { name: 'Move down' })
+			.nth(1)
+			.element()
+			.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+		await expect.poll(() => vi.mocked(reorderStoreCategories).mock.calls.length).toBe(0);
+	});
+
+	it('shows an error banner over the still-loaded list when a reload after a failure also fails', async () => {
+		// move()'s catch reloads via loadAll(); if that reload's own fetch
+		// also fails, `list` stays populated (the destructuring assignment
+		// that would clear it never runs) while `error` gets set — the one
+		// path where the error banner renders inside the loaded-list view
+		// rather than the page collapsing to "Loading…".
+		vi.mocked(reorderStoreCategories).mockRejectedValue(new TypeError('reorder failed'));
+		vi.mocked(fetchList)
+			.mockResolvedValueOnce(list)
+			.mockRejectedValueOnce(new TypeError('reload failed'));
+
+		render(StoreOrderPage);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Move down' }).first().click();
+
+		await expect
+			.element(page.getByText('Failed to load store category order.'))
+			.toBeInTheDocument();
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+	});
+
+	it('reloads the list when reordering fails without an ApiError', async () => {
+		// move's catch sets `error` and immediately triggers a reload via
+		// loadAll(), which flips `loading` back to true in the same tick —
+		// the page collapses to its "Loading…" state before the error
+		// message ever paints, so what's observable here is the reload.
+		vi.mocked(reorderStoreCategories).mockRejectedValue(new TypeError('network down'));
+
+		render(StoreOrderPage);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Move down' }).first().click();
+
+		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+	});
+
+	it('reloads the list when reordering fails with an ApiError', async () => {
+		vi.mocked(reorderStoreCategories).mockRejectedValue(new ApiError(500, 'Could not save'));
+
+		render(StoreOrderPage);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Move down' }).first().click();
+
+		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 	});
 });

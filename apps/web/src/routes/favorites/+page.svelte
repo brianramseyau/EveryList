@@ -79,6 +79,11 @@
 		try {
 			await addFavoriteToList(favorite.id, selectedListId);
 			const list = lists.find((current) => current.id === selectedListId);
+			// `list` is always found here: selectedListId can only ever hold an
+			// id that's present in `lists`, since the <Select>'s options are
+			// generated directly from `lists`. The `?? 'the list'` only
+			// satisfies Array.find's `T | undefined` return type.
+			/* v8 ignore next */
 			addedMessage = `Added "${favorite.name}" to ${list?.name ?? 'the list'}.`;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to add item to list.';
@@ -134,7 +139,9 @@
 				>
 					<span>{favorite.name}</span>
 					{#if favorite.defaultQuantity}
-						<span class="text-gray-500 dark:text-gray-400">({favorite.defaultQuantity})</span>
+						<span class="text-gray-500 dark:text-gray-400"
+							>(<span>{favorite.defaultQuantity}</span>)</span
+						>
 					{/if}
 					<div class="ml-auto flex items-center gap-3">
 						<button

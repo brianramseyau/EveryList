@@ -63,16 +63,11 @@ export default defineConfig({
 				'src/routes/+layout.svelte'
 			],
 			reporter: ['text'],
-			// Not yet the 100% in PLAN.md §11 — real, currently-met floor so
-			// this is a live regression gate rather than an aspirational one.
-			// See PLAN.md's Phase 2 status note for the remaining gap, mostly
-			// repeated `err instanceof ApiError ? … : 'generic fallback'`
-			// branches in page components that haven't all been exercised yet.
 			thresholds: {
-				lines: 91,
-				branches: 72,
-				functions: 91,
-				statements: 90
+				lines: 100,
+				branches: 100,
+				functions: 100,
+				statements: 100
 			}
 		},
 		projects: [

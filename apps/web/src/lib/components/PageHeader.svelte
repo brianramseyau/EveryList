@@ -21,7 +21,7 @@
 
 {#if backHref}
 	<a href={backHref} class="text-sm text-primary-600 hover:underline dark:text-primary-400"
-		>← {backLabel}</a
+		>← <span>{backLabel}</span></a
 	>
 {/if}
 

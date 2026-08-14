@@ -103,7 +103,8 @@
 		</h2>
 		<div class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
 			{#if meta}
-				EveryList {meta.version} ({meta.commit}) · built {formatBuildDate(meta.builtAt)}
+				EveryList <span>{meta.version}</span> (<span>{meta.commit}</span>) · built
+				<span>{formatBuildDate(meta.builtAt)}</span>
 			{:else if loadFailed}
 				EveryList — build info unavailable
 			{:else}

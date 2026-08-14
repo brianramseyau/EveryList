@@ -55,4 +55,19 @@ describe('Login +page.svelte', () => {
 		await expect.element(page.getByText('Invalid credentials')).toBeInTheDocument();
 		expect(goto).not.toHaveBeenCalled();
 	});
+
+	it('shows a generic error message on failure without an ApiError', async () => {
+		vi.mocked(login).mockRejectedValue(new TypeError('network down'));
+
+		render(LoginPage);
+
+		await page.getByLabelText('Email').fill('a@example.com');
+		await page.getByLabelText('Password').fill('wrong-password');
+		await page.getByRole('button', { name: 'Log in' }).click();
+
+		await expect
+			.element(page.getByText('Something went wrong. Please try again.'))
+			.toBeInTheDocument();
+		expect(goto).not.toHaveBeenCalled();
+	});
 });

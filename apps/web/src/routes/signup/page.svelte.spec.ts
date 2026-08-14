@@ -49,6 +49,36 @@ describe('Signup +page.svelte', () => {
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 	});
 
+	it('trims and forwards a filled-in name', async () => {
+		vi.mocked(signup).mockResolvedValue({
+			user: {
+				id: 1,
+				email: 'a@example.com',
+				fullName: 'Ada Lovelace',
+				initials: 'AL',
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null
+			},
+			token: 'tok'
+		});
+
+		render(SignupPage);
+
+		await page.getByLabelText('Name (optional)').fill('  Ada Lovelace  ');
+		await page.getByLabelText('Email').fill('a@example.com');
+		await page.getByLabelText('Password', { exact: true }).fill('password123');
+		await page.getByLabelText('Confirm password').fill('password123');
+		await page.getByRole('button', { name: 'Sign up' }).click();
+
+		await expect.poll(() => vi.mocked(signup).mock.calls.length).toBe(1);
+		expect(signup).toHaveBeenCalledWith({
+			fullName: 'Ada Lovelace',
+			email: 'a@example.com',
+			password: 'password123',
+			passwordConfirmation: 'password123'
+		});
+	});
+
 	it('shows the API error message on failure', async () => {
 		vi.mocked(signup).mockRejectedValue(new ApiError(422, 'Email already in use'));
 
@@ -60,6 +90,22 @@ describe('Signup +page.svelte', () => {
 		await page.getByRole('button', { name: 'Sign up' }).click();
 
 		await expect.element(page.getByText('Email already in use')).toBeInTheDocument();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('shows a generic error message on failure without an ApiError', async () => {
+		vi.mocked(signup).mockRejectedValue(new TypeError('network down'));
+
+		render(SignupPage);
+
+		await page.getByLabelText('Email').fill('a@example.com');
+		await page.getByLabelText('Password', { exact: true }).fill('password123');
+		await page.getByLabelText('Confirm password').fill('password123');
+		await page.getByRole('button', { name: 'Sign up' }).click();
+
+		await expect
+			.element(page.getByText('Something went wrong. Please try again.'))
+			.toBeInTheDocument();
 		expect(goto).not.toHaveBeenCalled();
 	});
 });
