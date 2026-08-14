@@ -7,7 +7,7 @@
 	import { Button, Checkbox, Input, Textarea } from 'flowbite-svelte';
 	import type { CategoryDto, ItemDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { fetchList } from '$lib/api/lists';
+	import { deleteList, fetchList, updateList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
 	import {
 		createItem,
@@ -125,6 +125,25 @@
 		void loadAll();
 	}
 
+	async function handleListUpdate(
+		input: Partial<{ name: string; color: string; icon: string | null; archived: boolean }>
+	) {
+		try {
+			list = await updateList(listId, input);
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to update list.';
+		}
+	}
+
+	async function handleListDelete() {
+		try {
+			await deleteList(listId);
+			await goto(resolve('/lists'));
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to delete list.';
+		}
+	}
+
 	async function handleAddItem(event: SubmitEvent) {
 		event.preventDefault();
 		if (!newItemName.trim()) return;
@@ -233,7 +252,7 @@
 			>
 				<Icon name="store" class="h-5 w-5" />
 			</a>
-			<ListMenu {listId} />
+			<ListMenu {listId} {list} onupdate={handleListUpdate} ondelete={handleListDelete} />
 		{/snippet}
 	</PageHeader>
 
