@@ -34,6 +34,9 @@
 			? `${resolve('/login')}?next=${encodeURIComponent(nextPath)}`
 			: resolve('/login')) as ResolvedPathname
 	);
+	// When `next` points back at a join link, extract its token so signup can
+	// go through even if public signup is disabled.
+	const inviteToken = $derived(nextPath?.match(/\/join\/([^/?]+)/)?.[1]);
 
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -44,7 +47,8 @@
 				fullName: fullName.trim() || null,
 				email,
 				password,
-				passwordConfirmation
+				passwordConfirmation,
+				inviteToken
 			});
 			// nextPath, when present, is always this app's own resolve('/join/[token]', …)
 			// output round-tripped through a query param — safe, but not statically

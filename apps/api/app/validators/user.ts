@@ -14,6 +14,9 @@ export const signupValidator = vine.create({
   email: email().unique({ table: 'users', column: 'email' }),
   password: password(),
   passwordConfirmation: password().sameAs('password'),
+  // Present when signing up via a list join link, so signup can proceed
+  // even while public signup is disabled.
+  inviteToken: vine.string().optional(),
 })
 
 /**

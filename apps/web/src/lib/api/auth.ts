@@ -12,6 +12,7 @@ export async function signup(input: {
 	email: string;
 	password: string;
 	passwordConfirmation: string;
+	inviteToken?: string;
 }): Promise<AuthResponse> {
 	const response = await apiPost<AuthResponse>('/api/v1/auth/signup', input);
 	setToken(response.token);

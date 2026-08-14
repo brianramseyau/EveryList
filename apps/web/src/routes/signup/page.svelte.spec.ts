@@ -78,6 +78,31 @@ describe('Signup +page.svelte', () => {
 		expect(goto).toHaveBeenCalledWith('/join/abc123');
 	});
 
+	it('passes the join link token from the next param as inviteToken', async () => {
+		mockPageState.url.searchParams = new URLSearchParams({ next: '/join/abc123' });
+		vi.mocked(signup).mockResolvedValue({
+			user: {
+				id: 1,
+				email: 'a@example.com',
+				fullName: null,
+				initials: 'A',
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null
+			},
+			token: 'tok'
+		});
+
+		render(SignupPage);
+
+		await page.getByLabelText('Email').fill('a@example.com');
+		await page.getByLabelText('Password', { exact: true }).fill('password123');
+		await page.getByLabelText('Confirm password').fill('password123');
+		await page.getByRole('button', { name: 'Sign up' }).click();
+
+		await expect.poll(() => vi.mocked(signup).mock.calls.length).toBe(1);
+		expect(signup).toHaveBeenCalledWith(expect.objectContaining({ inviteToken: 'abc123' }));
+	});
+
 	it('carries the next param forward to the log in link', async () => {
 		mockPageState.url.searchParams = new URLSearchParams({ next: '/join/abc123' });
 

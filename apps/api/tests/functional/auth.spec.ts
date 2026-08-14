@@ -1,5 +1,8 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
+import env from '#start/env'
+import type { ListDto, ListInviteDto } from '@everylist/shared'
+import { bodyData } from './helpers.js'
 
 // Every serialize()'d response is wrapped under a top-level "data" key by
 // the app's ApiSerializer (see providers/api_provider.ts).
@@ -134,5 +137,79 @@ test.group('Auth flow', (group) => {
       .get('/api/v1/account/profile')
       .header('Authorization', `Bearer ${token}`)
     afterLogout.assertStatus(401)
+  })
+})
+
+test.group('Public signup toggle', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+  group.each.teardown(() => {
+    env.set('PUBLIC_SIGNUP_ENABLED', true)
+  })
+
+  test('signup is rejected while public signup is disabled', async ({ client }) => {
+    env.set('PUBLIC_SIGNUP_ENABLED', false)
+
+    const response = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+
+    response.assertStatus(403)
+  })
+
+  test('signup with a valid invite token succeeds while public signup is disabled', async ({
+    client,
+    assert,
+  }) => {
+    const ownerSignup = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Owner',
+      email: 'owner@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+    const ownerToken = ownerSignup.body().data.token
+
+    const listResponse = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${ownerToken}`)
+      .json({ name: 'Groceries' })
+    const listId = bodyData<ListDto>(listResponse).id
+
+    const inviteResponse = await client
+      .post(`/api/v1/lists/${listId}/invites`)
+      .header('Authorization', `Bearer ${ownerToken}`)
+      .json({ role: 'editor' })
+    const inviteToken = bodyData<ListInviteDto>(inviteResponse).token
+
+    env.set('PUBLIC_SIGNUP_ENABLED', false)
+
+    const response = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+      inviteToken,
+    })
+
+    response.assertStatus(200)
+    assert.equal(response.body().data.user.email, 'ada@example.com')
+  })
+
+  test('signup with an invalid invite token is rejected while public signup is disabled', async ({
+    client,
+  }) => {
+    env.set('PUBLIC_SIGNUP_ENABLED', false)
+
+    const response = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+      inviteToken: 'does-not-exist',
+    })
+
+    response.assertStatus(403)
   })
 })

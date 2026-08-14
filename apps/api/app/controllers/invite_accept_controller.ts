@@ -1,4 +1,3 @@
-import ListInvite from '#models/list_invite'
 import ListMember from '#models/list_member'
 import { ROLE_RANK } from '#policies/list_policy'
 import type { ListRole } from '#models/list_member'
@@ -8,13 +7,7 @@ import ListTransformer from '#transformers/list_transformer'
 import List from '#models/list'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
-
-async function findActiveInvite(token: string) {
-  const invite = await ListInvite.query().where('token', token).whereNull('revokedAt').first()
-  if (!invite) return null
-  if (invite.expiresAt && invite.expiresAt < DateTime.now()) return null
-  return invite
-}
+import { findActiveInvite } from '#services/invite_lookup'
 
 export default class InviteAcceptController {
   /** Unauthenticated — lets the join page render a preview before login/signup. */
