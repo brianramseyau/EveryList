@@ -29,6 +29,7 @@ const list = {
 	icon: null,
 	ownerId: 1,
 	archived: false,
+	itemCount: 0,
 	createdAt: TS,
 	updatedAt: null
 };

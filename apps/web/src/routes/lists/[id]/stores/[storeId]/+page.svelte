@@ -9,6 +9,7 @@
 	import { fetchCategories } from '$lib/api/categories';
 	import { fetchStoreCategoryOrder, fetchStores, reorderStoreCategories } from '$lib/api/stores';
 	import { ApiError } from '$lib/api/client';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	const listId = $derived(Number(page.params.id));
 	const storeId = $derived(Number(page.params.storeId));
@@ -82,15 +83,15 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<a
-		href={resolve('/lists/[id]/stores', { id: String(listId) })}
-		class="text-sm text-primary-600 hover:underline dark:text-primary-400">← Stores</a
-	>
+	<PageHeader
+		title={list ? `${storeName ?? 'Store'} — Aisle order` : undefined}
+		backHref={resolve('/lists/[id]/stores', { id: String(listId) })}
+		backLabel="Stores"
+	/>
 
 	{#if loading}
 		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
 	{:else if list}
-		<h1 class="text-2xl font-bold">{storeName ?? 'Store'} — Aisle order</h1>
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			Reorder categories to match this store's real aisle layout. Everyone who shops at "{storeName}"
 			sees this order.

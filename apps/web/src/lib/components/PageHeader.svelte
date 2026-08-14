@@ -1,0 +1,35 @@
+<script lang="ts">
+	import type { Snippet } from 'svelte';
+	import type { ResolvedPathname } from '$app/types';
+
+	// backHref must be the return value of $app/paths' resolve() — typed as
+	// ResolvedPathname rather than a plain string so eslint-plugin-svelte's
+	// no-navigation-without-resolve rule can verify that at each call site
+	// instead of only inside this component.
+	let {
+		title,
+		backHref,
+		backLabel = 'Back',
+		actions
+	}: {
+		title?: string;
+		backHref?: ResolvedPathname;
+		backLabel?: string;
+		actions?: Snippet;
+	} = $props();
+</script>
+
+{#if backHref}
+	<a href={backHref} class="text-sm text-primary-600 hover:underline dark:text-primary-400"
+		>← {backLabel}</a
+	>
+{/if}
+
+{#if title}
+	<div class="flex items-center justify-between">
+		<h1 class="text-2xl font-bold">{title}</h1>
+		{#if actions}
+			<div class="flex items-center gap-3 text-sm">{@render actions()}</div>
+		{/if}
+	</div>
+{/if}

@@ -7,6 +7,7 @@ export interface ListDto {
 	icon: string | null;
 	ownerId: number;
 	archived: boolean;
+	itemCount: number;
 	createdAt: string;
 	updatedAt: string | null;
 }

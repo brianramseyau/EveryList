@@ -10,6 +10,7 @@ export default class ListsController {
     const lists = await List.query()
       .where('ownerId', user.id)
       .whereNull('deletedAt')
+      .withCount('items', (query) => query.whereNull('deletedAt').where('checked', false))
       .orderBy('createdAt', 'asc')
 
     return serialize(ListTransformer.transform(lists))
@@ -36,6 +37,7 @@ export default class ListsController {
       .where('id', params.id)
       .where('ownerId', user.id)
       .whereNull('deletedAt')
+      .withCount('items', (query) => query.whereNull('deletedAt').where('checked', false))
       .firstOrFail()
 
     return serialize(ListTransformer.transform(list))
@@ -47,6 +49,7 @@ export default class ListsController {
       .where('id', params.id)
       .where('ownerId', user.id)
       .whereNull('deletedAt')
+      .withCount('items', (query) => query.whereNull('deletedAt').where('checked', false))
       .firstOrFail()
 
     const payload = await request.validateUsing(updateListValidator)

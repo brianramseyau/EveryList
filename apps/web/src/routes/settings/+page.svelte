@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import type { MetaResponse } from '@everylist/shared';
 	import { fetchMeta } from '$lib/api/meta';
 	import { formatBuildDate } from '$lib/api/format-build-date';
 	import { getThemePreference, setThemePreference, type ThemePreference } from '$lib/theme';
+	import { logout } from '$lib/api/auth';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	let meta = $state<MetaResponse | null>(null);
 	let loadFailed = $state(false);
@@ -18,6 +22,11 @@
 	function chooseTheme(preference: ThemePreference) {
 		themePreference = preference;
 		setThemePreference(preference);
+	}
+
+	async function handleLogout() {
+		await logout();
+		await goto(resolve('/login'));
 	}
 
 	onMount(async () => {
@@ -35,7 +44,25 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-6 p-8">
-	<h1 class="text-2xl font-bold">Settings</h1>
+	<PageHeader title="Settings" />
+
+	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+		<h2
+			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:border-gray-700 dark:text-gray-400"
+		>
+			Account
+		</h2>
+		<div class="flex items-center justify-between px-4 py-3">
+			<span class="text-sm font-medium">Signed in</span>
+			<button
+				type="button"
+				onclick={handleLogout}
+				class="text-sm text-gray-500 hover:underline dark:text-gray-400"
+			>
+				Log out
+			</button>
+		</div>
+	</section>
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 		<h2
@@ -68,15 +95,20 @@
 		</div>
 	</section>
 
-	<p class="text-gray-600 dark:text-gray-300">More settings are coming soon.</p>
-
-	<footer class="mt-8 text-sm text-gray-500 dark:text-gray-400">
-		{#if meta}
-			EveryList {meta.version} ({meta.commit}) · built {formatBuildDate(meta.builtAt)}
-		{:else if loadFailed}
-			EveryList — build info unavailable
-		{:else}
-			Loading build info…
-		{/if}
-	</footer>
+	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+		<h2
+			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:border-gray-700 dark:text-gray-400"
+		>
+			About
+		</h2>
+		<div class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+			{#if meta}
+				EveryList {meta.version} ({meta.commit}) · built {formatBuildDate(meta.builtAt)}
+			{:else if loadFailed}
+				EveryList — build info unavailable
+			{:else}
+				Loading build info…
+			{/if}
+		</div>
+	</section>
 </main>

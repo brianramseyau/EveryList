@@ -40,6 +40,7 @@ const list = {
 	icon: null,
 	ownerId: 1,
 	archived: false,
+	itemCount: 0,
 	createdAt: TS,
 	updatedAt: null
 };
@@ -134,6 +135,10 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 		await expect.element(page.getByText('Checked')).toBeInTheDocument();
 		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+
+		const produceHeader = page.getByText('Produce').element().closest('h2');
+		expect(produceHeader).not.toBeNull();
+		expect(produceHeader?.style.color).toBe('rgb(59, 130, 246)');
 	});
 
 	it('adds a new item via the form', async () => {

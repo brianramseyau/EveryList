@@ -6,6 +6,7 @@
 	import { Button, Input } from 'flowbite-svelte';
 	import type { CategoryDto, ListDto } from '@everylist/shared';
 	import IconPicker from '$lib/components/IconPicker.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
 	import {
@@ -123,15 +124,15 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<a
-		href={resolve('/lists/[id]', { id: String(listId) })}
-		class="text-sm text-primary-600 hover:underline dark:text-primary-400">← Back to list</a
-	>
+	<PageHeader
+		title={list ? `${list.name} — Categories` : undefined}
+		backHref={resolve('/lists/[id]', { id: String(listId) })}
+		backLabel="Back to list"
+	/>
 
 	{#if loading}
 		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
 	{:else if list}
-		<h1 class="text-2xl font-bold">{list.name} — Categories</h1>
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			Rename, reorder, or add categories. Renaming a default category creates a copy that's
 			customized just for this list.

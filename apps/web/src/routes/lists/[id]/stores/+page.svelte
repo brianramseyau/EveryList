@@ -10,6 +10,10 @@
 	import { attachStore, detachStore, fetchStores } from '$lib/api/stores';
 	import { getSelectedStore, setSelectedStore } from '$lib/api/selected-store';
 	import { ApiError } from '$lib/api/client';
+	import ColorPicker from '$lib/components/ColorPicker.svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
+
+	const DEFAULT_COLOR = '#3b82f6';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -19,6 +23,7 @@
 	let error = $state<string | null>(null);
 
 	let newStoreName = $state('');
+	let newStoreColor = $state(DEFAULT_COLOR);
 	let creating = $state(false);
 
 	let selectedStoreId = $state<number | null>(null);
@@ -49,9 +54,13 @@
 		if (!newStoreName.trim()) return;
 		creating = true;
 		try {
-			const store = await attachStore(listId, { name: newStoreName.trim() });
+			const store = await attachStore(listId, {
+				name: newStoreName.trim(),
+				color: newStoreColor
+			});
 			stores = [...stores, store];
 			newStoreName = '';
+			newStoreColor = DEFAULT_COLOR;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to create store.';
 		} finally {
@@ -82,22 +91,23 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<a
-		href={resolve('/lists/[id]', { id: String(listId) })}
-		class="text-sm text-primary-600 hover:underline dark:text-primary-400">← Back to list</a
-	>
+	<PageHeader
+		title={list ? `${list.name} — Stores` : undefined}
+		backHref={resolve('/lists/[id]', { id: String(listId) })}
+		backLabel="Back to list"
+	/>
 
 	{#if loading}
 		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
 	{:else if list}
-		<h1 class="text-2xl font-bold">{list.name} — Stores</h1>
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			Pick the store you're shopping at so categories match its aisle layout. This choice is only
 			remembered on this device.
 		</p>
 
-		<form class="flex gap-2" onsubmit={handleCreate}>
-			<Input placeholder="New store name" bind:value={newStoreName} class="flex-1" />
+		<form class="flex flex-wrap gap-2" onsubmit={handleCreate}>
+			<Input placeholder="New store name" bind:value={newStoreName} class="min-w-40 flex-1" />
+			<ColorPicker value={newStoreColor} onselect={(color) => (newStoreColor = color)} />
 			<Button type="submit" disabled={creating || !newStoreName.trim()}>Add store</Button>
 		</form>
 
@@ -116,6 +126,11 @@
 					<li
 						class="flex items-center gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700"
 					>
+						<span
+							class="h-4 w-4 shrink-0 rounded-full"
+							style:background-color={store.color}
+							aria-hidden="true"
+						></span>
 						<Radio bind:group={selectedStoreId} value={store.id}>
 							{store.name}
 						</Radio>

@@ -36,8 +36,22 @@ describe('Lists +page.svelte', () => {
 				json: () =>
 					Promise.resolve({
 						data: [
-							{ id: 1, name: 'Groceries', archived: false },
-							{ id: 2, name: 'Hardware', archived: true }
+							{
+								id: 1,
+								name: 'Groceries',
+								archived: false,
+								color: '#3b82f6',
+								icon: null,
+								itemCount: 3
+							},
+							{
+								id: 2,
+								name: 'Hardware',
+								archived: true,
+								color: '#ef4444',
+								icon: null,
+								itemCount: 0
+							}
 						]
 					})
 			})
@@ -48,6 +62,8 @@ describe('Lists +page.svelte', () => {
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 		await expect.element(page.getByText('Hardware')).toBeInTheDocument();
 		await expect.element(page.getByText('Archived')).toBeInTheDocument();
+		await expect.element(page.getByText('3 items')).toBeInTheDocument();
+		await expect.element(page.getByText('0 items')).toBeInTheDocument();
 	});
 
 	it('shows an empty state when there are no lists', async () => {
@@ -78,7 +94,17 @@ describe('Lists +page.svelte', () => {
 			.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [] }) })
 			.mockResolvedValueOnce({
 				ok: true,
-				json: () => Promise.resolve({ data: { id: 9, name: 'Camping', archived: false } })
+				json: () =>
+					Promise.resolve({
+						data: {
+							id: 9,
+							name: 'Camping',
+							archived: false,
+							color: '#3b82f6',
+							icon: null,
+							itemCount: 0
+						}
+					})
 			});
 		vi.stubGlobal('fetch', fetchMock);
 
