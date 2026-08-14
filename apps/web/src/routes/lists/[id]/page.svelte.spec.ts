@@ -53,7 +53,8 @@ const list = {
 	archived: false,
 	itemCount: 0,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	version: 1
 };
 const produce = {
 	id: 10,
@@ -63,7 +64,9 @@ const produce = {
 	sortOrder: 0,
 	isDefault: true,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	deletedAt: null,
+	version: 1
 };
 const dairy = {
 	id: 11,
@@ -73,7 +76,9 @@ const dairy = {
 	sortOrder: 1,
 	isDefault: true,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	deletedAt: null,
+	version: 1
 };
 
 function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): ItemDto {
@@ -89,6 +94,7 @@ function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): I
 		createdAt: TS,
 		updatedAt: null,
 		deletedAt: null,
+		version: 1,
 		...overrides
 	};
 }
@@ -101,7 +107,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchItems).mockResolvedValue([]);
 		vi.mocked(fetchRecentItems).mockResolvedValue([]);
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([]);
-		vi.mocked(getSelectedStore).mockReturnValue(null);
+		vi.mocked(getSelectedStore).mockResolvedValue(null);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
@@ -135,7 +141,7 @@ describe('List detail +page.svelte', () => {
 	});
 
 	it('applies the store-specific category order when a store is selected', async () => {
-		vi.mocked(getSelectedStore).mockReturnValue(7);
+		vi.mocked(getSelectedStore).mockResolvedValue(7);
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([
 			{ id: 1, storeId: 7, categoryId: 10, sortOrder: 5 },
 			{ id: 2, storeId: 7, categoryId: 11, sortOrder: 0 }
@@ -569,7 +575,7 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
 		expect(subscribeToList).toHaveBeenCalledWith(1, expect.any(Function));
 
-		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null });
+		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null, version: 1 });
 		await expect.element(page.getByText('This list was updated')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Refresh' }).click();
@@ -681,7 +687,7 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
 
-		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null });
+		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null, version: 1 });
 		await expect.element(page.getByText('This list was updated')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Dismiss' }).click();

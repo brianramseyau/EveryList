@@ -28,7 +28,9 @@ const bananas = {
 	defaultCategoryId: null,
 	defaultQuantity: '1 bunch',
 	createdAt: '2026-08-01T00:00:00.000Z',
-	updatedAt: null
+	updatedAt: null,
+	deletedAt: null,
+	version: 1
 };
 const groceries = {
 	id: 5,
@@ -39,7 +41,8 @@ const groceries = {
 	archived: false,
 	itemCount: 0,
 	createdAt: '2026-08-01T00:00:00.000Z',
-	updatedAt: null
+	updatedAt: null,
+	version: 1
 };
 
 describe('Favorites +page.svelte', () => {
@@ -114,7 +117,9 @@ describe('Favorites +page.svelte', () => {
 			defaultCategoryId: null,
 			defaultQuantity: null,
 			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
 		});
 
 		render(FavoritesPage);
@@ -216,7 +221,8 @@ describe('Favorites +page.svelte', () => {
 			createdBy: 1,
 			createdAt: '2026-08-01T00:00:00.000Z',
 			updatedAt: null,
-			deletedAt: null
+			deletedAt: null,
+			version: 1
 		});
 
 		render(FavoritesPage);

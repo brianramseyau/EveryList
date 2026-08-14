@@ -32,7 +32,8 @@ const list = {
 	archived: false,
 	itemCount: 0,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	version: 1
 };
 const produce = {
 	id: 10,
@@ -42,7 +43,9 @@ const produce = {
 	sortOrder: 0,
 	isDefault: true,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	deletedAt: null,
+	version: 1
 };
 const custom = {
 	id: 11,
@@ -52,7 +55,9 @@ const custom = {
 	sortOrder: 1,
 	isDefault: false,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	deletedAt: null,
+	version: 1
 };
 
 describe('Categories +page.svelte', () => {
@@ -110,7 +115,9 @@ describe('Categories +page.svelte', () => {
 			sortOrder: 2,
 			isDefault: false,
 			createdAt: TS,
-			updatedAt: null
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
 		});
 
 		render(CategoriesPage);

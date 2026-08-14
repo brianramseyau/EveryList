@@ -1,37 +1,24 @@
+import { getDb } from '$lib/offline/db';
+
 /**
  * "Currently shopping at" is a local, per-device selection — never synced
  * to the server or other members (see PLAN.md §7/§9). Keyed per list so
- * different lists can remember different stores.
+ * different lists can remember different stores. Backed by Dexie's
+ * `selectedStore` table (moved off localStorage in Phase 5 so it lives
+ * alongside the rest of the offline cache — see PHASE5_PLAN.md §3) rather
+ * than the sync queue, since it's never sent to the server.
  */
-function storageKey(listId: number): string {
-	return `everylist:selected-store:${listId}`;
+export async function getSelectedStore(listId: number): Promise<number | null> {
+	const db = getDb();
+	if (!db) return null;
+
+	const row = await db.selectedStore.get(listId);
+	return row?.storeId ?? null;
 }
 
-function hasStorage(): boolean {
-	return typeof window !== 'undefined';
-}
+export async function setSelectedStore(listId: number, storeId: number | null): Promise<void> {
+	const db = getDb();
+	if (!db) return;
 
-// This function's post-guard path (both the "storage exists" branch and the
-// `raw ? Number(raw) : null` read) is genuinely exercised by
-// selected-store.svelte.spec.ts's "has no selection by default" and
-// "round-trips a selection" tests — run that file alone and this whole file
-// reports 100%. Two other spec files `vi.mock('$lib/api/selected-store', …)`,
-// and that module virtualization corrupts V8's line/branch attribution for
-// this file once merged into the full suite — a Vitest browser-mode +
-// vi.mock coverage-collection artifact, not missing coverage. Same rationale
-// as apps/api's justified `User.initials` c8-ignore exception (see §11).
-export function getSelectedStore(listId: number): number | null {
-	/* v8 ignore else */
-	if (!hasStorage()) return null;
-	const raw = window.localStorage.getItem(storageKey(listId));
-	return raw ? Number(raw) : null;
-}
-
-export function setSelectedStore(listId: number, storeId: number | null): void {
-	if (!hasStorage()) return;
-	if (storeId === null) {
-		window.localStorage.removeItem(storageKey(listId));
-	} else {
-		window.localStorage.setItem(storageKey(listId), String(storeId));
-	}
+	await db.selectedStore.put({ listId, storeId });
 }

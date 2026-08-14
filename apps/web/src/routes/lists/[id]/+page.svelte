@@ -90,7 +90,7 @@
 				fetchItems(listId)
 			]);
 
-			const selectedStoreId = getSelectedStore(listId);
+			const selectedStoreId = await getSelectedStore(listId);
 			const overrideEntries = selectedStoreId ? await fetchStoreCategoryOrder(selectedStoreId) : [];
 			storeCategoryOverrides.clear();
 			for (const entry of overrideEntries) {

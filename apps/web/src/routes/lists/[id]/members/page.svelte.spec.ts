@@ -37,7 +37,8 @@ const groceries = {
 	archived: false,
 	itemCount: 0,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	version: 1
 };
 
 const ownerUser = {
