@@ -22,7 +22,7 @@
 	});
 	afterNavigate(refreshAuth);
 
-	const navSections = ['/lists', '/favorites', '/settings'];
+	const navSections = ['/lists', '/settings'];
 	const showNav = $derived(
 		loggedIn && navSections.some((section) => page.url.pathname.startsWith(section))
 	);

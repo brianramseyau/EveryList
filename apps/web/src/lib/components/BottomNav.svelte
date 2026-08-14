@@ -2,11 +2,10 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 
-	type NavKey = 'lists' | 'favorites' | 'settings';
+	type NavKey = 'lists' | 'settings';
 
 	const items: { key: NavKey; label: string; match: string }[] = [
 		{ key: 'lists', label: 'Lists', match: '/lists' },
-		{ key: 'favorites', label: 'Favorites', match: '/favorites' },
 		{ key: 'settings', label: 'Settings', match: '/settings' }
 	];
 
@@ -22,11 +21,7 @@
 	{#each items as item (item.key)}
 		{@const active = isActive(item.match)}
 		<a
-			href={item.key === 'lists'
-				? resolve('/lists')
-				: item.key === 'favorites'
-					? resolve('/favorites')
-					: resolve('/settings')}
+			href={item.key === 'lists' ? resolve('/lists') : resolve('/settings')}
 			aria-current={active ? 'page' : undefined}
 			class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium {active
 				? 'text-primary-600 dark:text-primary-400'
@@ -47,21 +42,6 @@
 					<circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none" />
 					<circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none" />
 					<circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none" />
-				</svg>
-			{:else if item.key === 'favorites'}
-				<svg
-					class="h-6 w-6"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<path
-						d="M12 3.3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.3l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3.3z"
-					/>
 				</svg>
 			{:else}
 				<svg

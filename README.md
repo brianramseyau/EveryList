@@ -27,7 +27,7 @@ AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasi
 - **Lists & items** — unlimited lists, quantities, notes, soft-delete with recent-items recovery.
 - **Auto-categorization** — items sort into aisle-style categories (Produce, Dairy, Meat, ...) via keyword matching, fully customizable per list.
 - **Store-aware aisle order** — pick the store you're shopping at and categories reorder to match its real layout; store data and aisle order are shared with everyone the list is shared with.
-- **Favorites** — a master list of go-to items for one-tap rebuilding of a new list.
+- **Favorites** — go-to items for one-tap re-adding to the list they belong to; scoped per list, since a grocery list and a packing list don't share go-to items.
 - **Paste import** — paste a block of text and each line gets parsed and auto-categorized.
 - **Real-time sharing** *(Phase 4)* — SSE-based live updates across everyone on a shared list, with granular `owner`/`editor`/`viewer` roles.
 - **Offline-first** *(Phase 5)* — every core interaction works with zero network via a local IndexedDB store and syncs when back online.

@@ -116,6 +116,7 @@ test.group('List/Category/Item domain models', (group) => {
     const listStore = await ListStore.create({ listId: list.id, storeId: store.id })
     const favorite = await FavoriteItem.create({
       userId: owner.id,
+      listId: list.id,
       name: 'Milk',
       defaultCategoryId: category.id,
     })
@@ -132,6 +133,7 @@ test.group('List/Category/Item domain models', (group) => {
     await listStore.load('list')
     await listStore.load('store')
     await favorite.load('user')
+    await favorite.load('list')
     await favorite.load('defaultCategory')
     await storeCategoryOrder.load('store')
     await storeCategoryOrder.load('category')
@@ -146,6 +148,7 @@ test.group('List/Category/Item domain models', (group) => {
     assert.equal(listStore.list.id, list.id)
     assert.equal(listStore.store.id, store.id)
     assert.equal(favorite.user.id, owner.id)
+    assert.equal(favorite.list.id, list.id)
     assert.equal(favorite.defaultCategory!.id, category.id)
     assert.equal(storeCategoryOrder.store.id, store.id)
     assert.equal(storeCategoryOrder.category.id, category.id)
