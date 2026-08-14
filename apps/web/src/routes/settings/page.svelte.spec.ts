@@ -54,4 +54,21 @@ describe('Settings +page.svelte', () => {
 
 		await expect.element(page.getByText('EveryList — build info unavailable')).toBeInTheDocument();
 	});
+
+	it('switches the app theme preference and reflects the choice in the radio group', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+		render(SettingsPage);
+
+		const darkOption = page.getByRole('radio', { name: 'Dark' });
+		await expect.element(darkOption).toHaveAttribute('aria-checked', 'false');
+
+		await darkOption.click();
+
+		await expect.element(darkOption).toHaveAttribute('aria-checked', 'true');
+		expect(window.localStorage.getItem('everylist:theme')).toBe('dark');
+
+		window.localStorage.removeItem('everylist:theme');
+		document.documentElement.classList.remove('dark');
+	});
 });

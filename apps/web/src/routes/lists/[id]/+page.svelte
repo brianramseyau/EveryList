@@ -267,9 +267,11 @@
 							{#each group.items as item (item.id)}
 								<li class="flex items-center gap-2">
 									<Checkbox checked={item.checked} onchange={() => toggleChecked(item)}>
-										{item.name}
+										<span>{item.name}</span>
 										{#if item.quantity}
-											<span class="text-gray-500 dark:text-gray-400">({item.quantity})</span>
+											<span class="text-gray-500 dark:text-gray-400"
+												>(<span>{item.quantity}</span>)</span
+											>
 										{/if}
 									</Checkbox>
 									<button
@@ -341,7 +343,9 @@
 				{/if}
 			{/if}
 		</div>
-	{:else if error}
+	{:else}
+		<!-- Reachable only once loadAll's finally has run: loading is false, and
+		     its catch always sets `error` when it leaves `list` unset. -->
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 	{/if}
 </main>

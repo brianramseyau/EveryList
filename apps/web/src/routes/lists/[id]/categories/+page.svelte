@@ -197,7 +197,9 @@
 				</li>
 			{/each}
 		</ul>
-	{:else if error}
+	{:else}
+		<!-- Reachable only once loadAll's finally has run: loading is false, and
+		     its catch always sets `error` when it leaves `list` unset. -->
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 	{/if}
 </main>
