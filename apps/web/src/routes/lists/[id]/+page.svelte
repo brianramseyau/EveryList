@@ -23,6 +23,7 @@
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
 	import Icon from '$lib/components/Icon.svelte';
+	import ListMenu from '$lib/components/ListMenu.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import SyncToast from '$lib/components/SyncToast.svelte';
 
@@ -220,20 +221,19 @@
 		{#snippet actions()}
 			<a
 				href={resolve('/lists/[id]/favorites', { id: String(listId) })}
-				class="text-primary-600 hover:underline dark:text-primary-400">Favorites</a
+				aria-label="Favorites"
+				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
 			>
+				<Icon name="heart" class="h-5 w-5" />
+			</a>
 			<a
 				href={resolve('/lists/[id]/stores', { id: String(listId) })}
-				class="text-primary-600 hover:underline dark:text-primary-400">Stores</a
+				aria-label="Stores"
+				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
 			>
-			<a
-				href={resolve('/lists/[id]/categories', { id: String(listId) })}
-				class="text-primary-600 hover:underline dark:text-primary-400">Categories</a
-			>
-			<a
-				href={resolve('/lists/[id]/members', { id: String(listId) })}
-				class="text-primary-600 hover:underline dark:text-primary-400">Members</a
-			>
+				<Icon name="store" class="h-5 w-5" />
+			</a>
+			<ListMenu {listId} />
 		{/snippet}
 	</PageHeader>
 

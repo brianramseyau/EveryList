@@ -577,6 +577,20 @@ describe('List detail +page.svelte', () => {
 		expect(fetchList).toHaveBeenCalledTimes(2);
 	});
 
+	it('opens the list settings menu with links scoped to this list', async () => {
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List settings' }).click();
+
+		const categories = page.getByRole('link', { name: 'Categories' });
+		await expect.element(categories).toBeInTheDocument();
+		expect(categories.element().getAttribute('href')).toBe('/lists/1/categories');
+
+		const members = page.getByRole('link', { name: 'Members' });
+		expect(members.element().getAttribute('href')).toBe('/lists/1/members');
+	});
+
 	it('dismisses the sync toast without refreshing', async () => {
 		let handler: (event: SyncEventDto) => void = () => {};
 		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
