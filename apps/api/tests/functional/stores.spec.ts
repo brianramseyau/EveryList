@@ -4,7 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import type { ApiClient } from '@japa/api-client'
 import type { CategoryDto, ListDto, StoreDto } from '@everylist/shared'
 import DefaultCategorySeeder from '#database/seeders/default_category_seeder'
-import { bodyData, signupAndGetToken } from './helpers.js'
+import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 interface StoreCategoryOrderDto {
   id: number
@@ -152,5 +152,71 @@ test.group('Stores', (group) => {
     const orders = bodyData<StoreCategoryOrderDto[]>(reorder)
     assert.lengthOf(orders, 1)
     assert.equal(orders[0]!.categoryId, categoryId)
+  })
+
+  test('a viewer can see stores but cannot attach, rename, detach, or reorder categories', async ({
+    client,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const create = await client
+      .post(`/api/v1/lists/${listId}/stores`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Walmart' })
+    const storeId = bodyData<StoreDto>(create).id
+
+    const viewer = await signupAndGetUser(client)
+    await addMember(listId, viewer.id, 'viewer')
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/stores`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    index.assertStatus(200)
+
+    const attach = await client
+      .post(`/api/v1/lists/${listId}/stores`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ name: 'Target' })
+    attach.assertStatus(403)
+
+    const rename = await client
+      .patch(`/api/v1/stores/${storeId}`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ name: 'Hijacked' })
+    rename.assertStatus(403)
+
+    const reorder = await client
+      .patch(`/api/v1/stores/${storeId}/categories`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ categories: [] })
+    reorder.assertStatus(403)
+
+    const detach = await client
+      .delete(`/api/v1/lists/${listId}/stores/${storeId}`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    detach.assertStatus(403)
+  })
+
+  test('a stranger gets a 404 trying to read or write a store', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const create = await client
+      .post(`/api/v1/lists/${listId}/stores`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Walmart' })
+    const storeId = bodyData<StoreDto>(create).id
+
+    const stranger = await signupAndGetUser(client)
+
+    const categories = await client
+      .get(`/api/v1/stores/${storeId}/categories`)
+      .header('Authorization', `Bearer ${stranger.token}`)
+    categories.assertStatus(404)
+
+    const attachByStoreId = await client
+      .post(`/api/v1/lists/${listId}/stores`)
+      .header('Authorization', `Bearer ${stranger.token}`)
+      .json({ storeId })
+    attachByStoreId.assertStatus(404)
   })
 })

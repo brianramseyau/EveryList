@@ -151,6 +151,69 @@ export class ItemSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class ListInviteSchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'createdBy',
+    'expiresAt',
+    'id',
+    'listId',
+    'revokedAt',
+    'role',
+    'token',
+    'updatedAt',
+  ] as const
+  $columns = ListInviteSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare createdBy: number
+  @column.dateTime()
+  declare expiresAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare listId: number
+  @column.dateTime()
+  declare revokedAt: DateTime | null
+  @column()
+  declare role: string
+  @column()
+  declare token: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class ListMemberSchema extends BaseModel {
+  static $columns = [
+    'acceptedAt',
+    'createdAt',
+    'id',
+    'invitedAt',
+    'listId',
+    'role',
+    'updatedAt',
+    'userId',
+  ] as const
+  $columns = ListMemberSchema.$columns
+  @column.dateTime()
+  declare acceptedAt: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column.dateTime()
+  declare invitedAt: DateTime
+  @column()
+  declare listId: number
+  @column()
+  declare role: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: number
+}
+
 export class ListStoreSchema extends BaseModel {
   static $columns = ['createdAt', 'id', 'listId', 'storeId', 'updatedAt'] as const
   $columns = ListStoreSchema.$columns
@@ -231,6 +294,36 @@ export class StoreSchema extends BaseModel {
   declare name: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+}
+
+export class SyncEventSchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'entityId',
+    'entityType',
+    'id',
+    'listId',
+    'occurredAt',
+    'op',
+    'payload',
+  ] as const
+  $columns = SyncEventSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare entityId: number
+  @column()
+  declare entityType: string
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare listId: number
+  @column.dateTime()
+  declare occurredAt: DateTime
+  @column()
+  declare op: string
+  @column()
+  declare payload: any | null
 }
 
 export class UserSchema extends BaseModel {

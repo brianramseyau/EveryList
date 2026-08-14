@@ -67,3 +67,40 @@ export interface UserDto {
 	updatedAt: string | null;
 	initials: string;
 }
+
+export type ListRole = 'owner' | 'editor' | 'viewer';
+
+export interface ListMemberDto {
+	id: number;
+	listId: number;
+	userId: number;
+	role: ListRole;
+	invitedAt: string;
+	acceptedAt: string | null;
+	user: UserDto;
+}
+
+export interface ListInviteDto {
+	id: number;
+	listId: number;
+	token: string;
+	role: Exclude<ListRole, 'owner'>;
+	createdBy: number;
+	expiresAt: string | null;
+	revokedAt: string | null;
+	createdAt: string;
+}
+
+/** Pre-auth-safe preview shown on the join page — no token/ids. */
+export interface ListInvitePreviewDto {
+	listName: string;
+	inviterName: string;
+	role: Exclude<ListRole, 'owner'>;
+}
+
+export interface SyncEventDto {
+	entityType: 'list' | 'category' | 'item' | 'favorite_item' | 'store' | 'store_category_order';
+	entityId: number;
+	op: 'create' | 'update' | 'delete';
+	payload: Record<string, unknown> | null;
+}

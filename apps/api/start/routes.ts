@@ -65,9 +65,22 @@ router
         router.patch(':listId/favorites/:id', [controllers.FavoriteItems, 'update'])
         router.delete(':listId/favorites/:id', [controllers.FavoriteItems, 'destroy'])
         router.post(':listId/favorites/:id/add-to-list', [controllers.FavoriteItems, 'addToList'])
+
+        router.get(':listId/members', [controllers.ListMembers, 'index'])
+        router.patch(':listId/members/:memberId', [controllers.ListMembers, 'update'])
+        router.delete(':listId/members/:memberId', [controllers.ListMembers, 'destroy'])
+
+        router.get(':listId/invites', [controllers.ListInvites, 'index'])
+        router.post(':listId/invites', [controllers.ListInvites, 'store'])
+        router.delete(':listId/invites/:inviteId', [controllers.ListInvites, 'destroy'])
       })
       .prefix('lists')
       .as('lists')
+      .use(middleware.auth())
+
+    router.get('invites/:token', [controllers.InviteAccept, 'preview'])
+    router
+      .post('invites/:token/accept', [controllers.InviteAccept, 'accept'])
       .use(middleware.auth())
 
     router

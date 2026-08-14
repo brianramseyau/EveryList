@@ -8,6 +8,8 @@ import Store from '#models/store'
 import ListStore from '#models/list_store'
 import FavoriteItem from '#models/favorite_item'
 import StoreCategoryOrder from '#models/store_category_order'
+import ListMember from '#models/list_member'
+import { DateTime } from 'luxon'
 
 test.group('List/Category/Item domain models', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
@@ -157,5 +159,32 @@ test.group('List/Category/Item domain models', (group) => {
     assert.lengthOf(list.favoriteItems, 1)
     assert.equal(list.favoriteItems[0]!.id, favorite.id)
     assert.lengthOf(category.items, 0)
+  })
+
+  test('a list member belongs to its list and user, and a list has many members', async ({
+    assert,
+  }) => {
+    const owner = await User.create({
+      fullName: 'Ada Lovelace',
+      email: 'ada5@example.com',
+      password: 'password123',
+    })
+    const list = await List.create({ name: 'Groceries', ownerId: owner.id })
+    const member = await ListMember.create({
+      listId: list.id,
+      userId: owner.id,
+      role: 'owner',
+      invitedAt: DateTime.now(),
+      acceptedAt: DateTime.now(),
+    })
+
+    await member.load('list')
+    await member.load('user')
+    await list.load('members')
+
+    assert.equal(member.list.id, list.id)
+    assert.equal(member.user.id, owner.id)
+    assert.lengthOf(list.members, 1)
+    assert.equal(list.members[0]!.id, member.id)
   })
 })

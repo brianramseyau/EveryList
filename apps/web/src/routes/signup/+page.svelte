@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import type { ResolvedPathname } from '$app/types';
 	import { Button, Label, Input, Helper } from 'flowbite-svelte';
 	import { signup } from '$lib/api/auth';
 	import { ApiError } from '$lib/api/client';
@@ -11,6 +14,26 @@
 	let passwordConfirmation = $state('');
 	let error = $state<string | null>(null);
 	let submitting = $state(false);
+
+	// After accepting a join link while logged out, `next` sends the user
+	// back to /join/[token] instead of the default /lists landing. This is a
+	// prerendered static route (adapter-static) — reading url.searchParams
+	// during the server-side prerender pass throws, so this only reads it in
+	// the browser after hydration.
+	// The `: null` branch only fires during the server-side prerender pass;
+	// this component is only ever tested in the browser project (real
+	// Chromium, `browser` always true there), so it's untestable here.
+	/* v8 ignore next */
+	const nextPath = $derived(browser ? page.url.searchParams.get('next') : null);
+	// nextPath, when present, is always this app's own resolve('/join/[token]', …)
+	// output round-tripped through a query param — safe, but not statically
+	// verifiable by the lint rule, hence the ResolvedPathname cast (same
+	// technique PageHeader.svelte's backHref prop uses).
+	const loginHref = $derived(
+		(nextPath
+			? `${resolve('/login')}?next=${encodeURIComponent(nextPath)}`
+			: resolve('/login')) as ResolvedPathname
+	);
 
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -23,7 +46,11 @@
 				password,
 				passwordConfirmation
 			});
-			await goto(resolve('/lists'));
+			// nextPath, when present, is always this app's own resolve('/join/[token]', …)
+			// output round-tripped through a query param — safe, but not statically
+			// verifiable by the lint rule below.
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			await goto(nextPath ?? resolve('/lists'));
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
 		} finally {
@@ -79,9 +106,7 @@
 	</form>
 
 	<p class="text-sm text-gray-600 dark:text-gray-300">
-		Already have an account? <a
-			href={resolve('/login')}
-			class="text-primary-600 hover:underline dark:text-primary-400">Log in</a
-		>
+		Already have an account?
+		<a href={loginHref} class="text-primary-600 hover:underline dark:text-primary-400">Log in</a>
 	</p>
 </main>

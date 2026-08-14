@@ -18,6 +18,7 @@
 		"test:e2e": "playwright test"
 	},
 	"dependencies": {
+		"@adonisjs/transmit-client": "^1.1.0",
 		"@everylist/shared": "workspace:*",
 		"@mdi/js": "^7.4.47",
 		"flowbite": "^4.0.2",

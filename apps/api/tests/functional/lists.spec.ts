@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { ItemDto, ListDto } from '@everylist/shared'
-import { bodyData, signupAndGetToken } from './helpers.js'
+import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 test.group('Lists CRUD', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
@@ -101,5 +101,81 @@ test.group('Lists CRUD', (group) => {
       .header('Authorization', `Bearer ${otherToken}`)
       .json({ name: 'Hijacked' })
     update.assertStatus(404)
+  })
+
+  test('a viewer can see a list but cannot update or delete it', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Shared list' })
+    const listId = bodyData<ListDto>(create).id
+
+    const viewer = await signupAndGetUser(client)
+    await addMember(listId, viewer.id, 'viewer')
+
+    const show = await client
+      .get(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    show.assertStatus(200)
+
+    const update = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ name: 'Hijacked' })
+    update.assertStatus(403)
+
+    const destroy = await client
+      .delete(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    destroy.assertStatus(403)
+  })
+
+  test('an editor can see a list but cannot update or delete it (owner-only)', async ({
+    client,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Shared list' })
+    const listId = bodyData<ListDto>(create).id
+
+    const editor = await signupAndGetUser(client)
+    await addMember(listId, editor.id, 'editor')
+
+    const show = await client
+      .get(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${editor.token}`)
+    show.assertStatus(200)
+
+    const update = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${editor.token}`)
+      .json({ name: 'Hijacked' })
+    update.assertStatus(403)
+
+    const destroy = await client
+      .delete(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${editor.token}`)
+    destroy.assertStatus(403)
+  })
+
+  test('a shared list appears in the index for every member', async ({ client, assert }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Shared list' })
+    const listId = bodyData<ListDto>(create).id
+
+    const viewer = await signupAndGetUser(client)
+    await addMember(listId, viewer.id, 'viewer')
+
+    const index = await client
+      .get('/api/v1/lists')
+      .header('Authorization', `Bearer ${viewer.token}`)
+    const ids = bodyData<ListDto[]>(index).map((list) => list.id)
+    assert.include(ids, listId)
   })
 })

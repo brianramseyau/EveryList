@@ -4,7 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import type { ApiClient } from '@japa/api-client'
 import type { ListDto } from '@everylist/shared'
 import DefaultCategorySeeder from '#database/seeders/default_category_seeder'
-import { bodyData, signupAndGetToken } from './helpers.js'
+import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 async function createList(client: ApiClient, token: string) {
   const response = await client
@@ -153,5 +153,76 @@ test.group('Categories', (group) => {
       .header('Authorization', `Bearer ${token}`)
     const names = index.body().data.map((c: { name: string }) => c.name)
     assert.notInclude(names, 'Pet Supplies')
+  })
+
+  test('a viewer can list categories but cannot create, update, or delete them', async ({
+    client,
+  }) => {
+    await new DefaultCategorySeeder(db.connection()).run()
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const viewer = await signupAndGetUser(client)
+    await addMember(listId, viewer.id, 'viewer')
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    index.assertStatus(200)
+    const produce = index.body().data.find((c: { name: string }) => c.name === 'Produce')
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ name: 'Pet Supplies', icon: 'paw' })
+    create.assertStatus(403)
+
+    const update = await client
+      .patch(`/api/v1/lists/${listId}/categories/${produce.id}`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ name: 'Hijacked' })
+    update.assertStatus(403)
+
+    const destroy = await client
+      .delete(`/api/v1/lists/${listId}/categories/${produce.id}`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    destroy.assertStatus(403)
+  })
+
+  test('an editor can create, update, and delete categories', async ({ client, assert }) => {
+    await new DefaultCategorySeeder(db.connection()).run()
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const editor = await signupAndGetUser(client)
+    await addMember(listId, editor.id, 'editor')
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${editor.token}`)
+      .json({ name: 'Pet Supplies', icon: 'paw' })
+    create.assertStatus(200)
+    assert.equal(create.body().data.name, 'Pet Supplies')
+
+    const destroy = await client
+      .delete(`/api/v1/lists/${listId}/categories/${create.body().data.id}`)
+      .header('Authorization', `Bearer ${editor.token}`)
+    destroy.assertStatus(204)
+  })
+
+  test('a stranger gets a 404 trying to read or write categories', async ({ client }) => {
+    await new DefaultCategorySeeder(db.connection()).run()
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const stranger = await signupAndGetUser(client)
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${stranger.token}`)
+    index.assertStatus(404)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${stranger.token}`)
+      .json({ name: 'Pet Supplies', icon: 'paw' })
+    create.assertStatus(404)
   })
 })

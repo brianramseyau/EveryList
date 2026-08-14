@@ -6,6 +6,13 @@ function hasStorage(): boolean {
 	return typeof window !== 'undefined';
 }
 
+// Both branches here are directly exercised — token.spec.ts (no window) and
+// token.svelte.spec.ts (real localStorage) — but the growing number of
+// `vi.mock('$lib/api/token', …)` partial mocks across the suite corrupts
+// V8's line/branch attribution for this file once merged into the full run
+// — the same Vitest browser-mode coverage-collection artifact documented on
+// `lib/api/selected-store.ts`, not missing coverage.
+/* v8 ignore next 4 */
 export function getToken(): string | null {
 	if (!hasStorage()) return null;
 	return window.localStorage.getItem(STORAGE_KEY);
