@@ -1,0 +1,12 @@
+#!/command/with-contenv sh
+# Seeds global default categories (list_id null) into /config/everylist.sqlite3
+# so a fresh (or upgraded) /config volume always has the fallback aisle order
+# with zero manual steps — per foundational/PLAN.md §5's "zero-config startup"
+# rule. Runs after 30-migrate (schema must exist first) and before
+# services.d/svc-everylist starts. Only runs the default_category_seeder,
+# which is idempotent (Category.updateOrCreate), so it's safe on every boot.
+set -e
+
+echo "[31-seed] seeding default categories"
+s6-setuidgid appuser node /app/build/ace.js db:seed --files="database/seeders/default_category_seeder.js"
+echo "[31-seed] default categories up to date"
