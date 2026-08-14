@@ -143,8 +143,8 @@ describe('List detail +page.svelte', () => {
 	it('applies the store-specific category order when a store is selected', async () => {
 		vi.mocked(getSelectedStore).mockResolvedValue(7);
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([
-			{ id: 1, storeId: 7, categoryId: 10, sortOrder: 5 },
-			{ id: 2, storeId: 7, categoryId: 11, sortOrder: 0 }
+			{ id: 1, storeId: 7, categoryId: 10, sortOrder: 5, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 7, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 }
 		]);
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),

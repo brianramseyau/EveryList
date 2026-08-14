@@ -135,8 +135,8 @@ describe('Store aisle order +page.svelte', () => {
 
 	it('applies stored sort-order overrides on load', async () => {
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([
-			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0 },
-			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1 }
+			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1, deletedAt: null, version: 1 }
 		]);
 
 		render(StoreOrderPage);
@@ -148,8 +148,8 @@ describe('Store aisle order +page.svelte', () => {
 
 	it('moves a category down and persists the new order', async () => {
 		vi.mocked(reorderStoreCategories).mockResolvedValue([
-			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0 },
-			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1 }
+			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1, deletedAt: null, version: 1 }
 		]);
 
 		render(StoreOrderPage);
@@ -165,8 +165,8 @@ describe('Store aisle order +page.svelte', () => {
 
 	it('moves a category up', async () => {
 		vi.mocked(reorderStoreCategories).mockResolvedValue([
-			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0 },
-			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1 }
+			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1, deletedAt: null, version: 1 }
 		]);
 
 		render(StoreOrderPage);
