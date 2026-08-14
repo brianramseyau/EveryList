@@ -215,6 +215,7 @@ describe('Favorites +page.svelte', () => {
 			quantity: '1 bunch',
 			notes: null,
 			categoryId: null,
+			storeId: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,

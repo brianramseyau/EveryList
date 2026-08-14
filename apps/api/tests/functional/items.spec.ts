@@ -179,6 +179,39 @@ test.group('Items CRUD', (group) => {
     assert.isNull(uncheck.body().data.checkedAt)
   })
 
+  test('tags an item with a store on create and via update, and clears it back to null', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const store = await auth(
+      client.post(`/api/v1/lists/${listId}/stores`).json({ name: 'Corner Shop' })
+    )
+    const storeId = store.body().data.id
+
+    const create = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk', storeId })
+    )
+    create.assertStatus(200)
+    assert.equal(create.body().data.storeId, storeId)
+
+    const itemId = create.body().data.id
+    const clear = await auth(
+      client.patch(`/api/v1/lists/${listId}/items/${itemId}`).json({ storeId: null })
+    )
+    clear.assertStatus(200)
+    assert.isNull(clear.body().data.storeId)
+
+    const retag = await auth(
+      client.patch(`/api/v1/lists/${listId}/items/${itemId}`).json({ storeId })
+    )
+    retag.assertStatus(200)
+    assert.equal(retag.body().data.storeId, storeId)
+  })
+
   test('leaves an item uncategorized when its suggested category no longer exists', async ({
     client,
     assert,

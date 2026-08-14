@@ -27,10 +27,12 @@ test.group('List/Category/Item domain models', (group) => {
       icon: 'fruitCherries',
       listId: list.id,
     })
+    const store = await Store.create({ name: 'Walmart', color: '#3b82f6', createdBy: owner.id })
     const item = await Item.create({
       listId: list.id,
       name: 'Apples',
       categoryId: category.id,
+      storeId: store.id,
       createdBy: owner.id,
     })
 
@@ -39,6 +41,7 @@ test.group('List/Category/Item domain models', (group) => {
     await list.load('items')
     await item.load('list')
     await item.load('category')
+    await item.load('store')
     await item.load('creator')
     await item.refresh()
 
@@ -47,6 +50,7 @@ test.group('List/Category/Item domain models', (group) => {
     assert.lengthOf(list.items, 1)
     assert.equal(item.list.id, list.id)
     assert.equal(item.category!.id, category.id)
+    assert.equal(item.store!.id, store.id)
     assert.equal(item.creator.id, owner.id)
     assert.isFalse(item.checked)
     assert.equal(item.sortOrder, 0)

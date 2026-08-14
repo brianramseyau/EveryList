@@ -18,7 +18,7 @@ vi.mock('$lib/api/items', () => ({
 	restoreItem: vi.fn(),
 	updateItem: vi.fn()
 }));
-vi.mock('$lib/api/stores', () => ({ fetchStoreCategoryOrder: vi.fn() }));
+vi.mock('$lib/api/stores', () => ({ fetchStoreCategoryOrder: vi.fn(), fetchStores: vi.fn() }));
 vi.mock('$lib/api/selected-store', () => ({
 	getSelectedStore: vi.fn(),
 	setSelectedStore: vi.fn()
@@ -36,7 +36,7 @@ const {
 	importItems,
 	restoreItem
 } = await import('$lib/api/items');
-const { fetchStoreCategoryOrder } = await import('$lib/api/stores');
+const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores');
 const { getSelectedStore } = await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
@@ -88,6 +88,7 @@ function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): I
 		quantity: null,
 		notes: null,
 		categoryId: null,
+		storeId: null,
 		checked: false,
 		checkedAt: null,
 		sortOrder: 0,
@@ -108,6 +109,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchItems).mockResolvedValue([]);
 		vi.mocked(fetchRecentItems).mockResolvedValue([]);
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([]);
+		vi.mocked(fetchStores).mockResolvedValue([]);
 		vi.mocked(getSelectedStore).mockResolvedValue(null);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
@@ -215,6 +217,33 @@ describe('List detail +page.svelte', () => {
 
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread', quantity: '2' });
+	});
+
+	it('keeps an existing item’s store tag select stable when a new item is added', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 })
+		]);
+		vi.mocked(createItem).mockResolvedValue(makeItem({ id: 200, name: 'Bread', categoryId: 10 }));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Item name').fill('Bread');
+		await page.getByRole('button', { name: 'Add' }).click();
+
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 	});
 
 	it('does not submit when the new item name is only whitespace', async () => {
@@ -366,6 +395,140 @@ describe('List detail +page.svelte', () => {
 		expect(updateItem).toHaveBeenCalledWith(1, 100, { checked: false });
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 		await expect.element(page.getByText('Checked')).not.toBeInTheDocument();
+	});
+
+	it('filters items down to the selected store', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: null })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+		await page.getByRole('combobox').first().selectOptions('20');
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).not.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Close' }).first().click();
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+	});
+
+	it('tags an item with a store via its per-item select', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: null })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+		await page.getByRole('combobox').nth(1).selectOptions('20');
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, { storeId: 20 });
+	});
+
+	it('reloads the list when tagging a store fails without an ApiError', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new TypeError('network down'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('combobox').last().selectOptions('20');
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+	});
+
+	it('clears an item store tag back to null via its per-item select', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Close' }).last().click();
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, { storeId: null });
+	});
+
+	it('reloads the list when tagging a store fails', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new ApiError(500, 'Could not tag store'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('combobox').last().selectOptions('20');
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
 	});
 
 	it('reloads the list when toggling checked fails without an ApiError', async () => {

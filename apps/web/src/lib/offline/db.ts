@@ -79,6 +79,9 @@ export class EveryListDB extends Dexie {
 			selectedStore: 'listId',
 			syncQueue: '++id, status, createdAt'
 		});
+		this.version(2).stores({
+			items: 'id, [listId+deletedAt], categoryId, storeId'
+		});
 	}
 }
 

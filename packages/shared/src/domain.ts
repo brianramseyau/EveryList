@@ -33,6 +33,7 @@ export interface ItemDto {
 	quantity: string | null;
 	notes: string | null;
 	categoryId: number | null;
+	storeId: number | null;
 	checked: boolean;
 	checkedAt: string | null;
 	sortOrder: number;

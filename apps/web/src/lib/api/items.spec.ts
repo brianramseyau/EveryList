@@ -52,6 +52,11 @@ describe('items api', () => {
 		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/items/100', { checked: true });
 	});
 
+	it('updateItem PATCHes a storeId tag', () => {
+		updateItem(1, 100, { storeId: 5 });
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/items/100', { storeId: 5 });
+	});
+
 	it('deleteItem DELETEs the given item', () => {
 		deleteItem(1, 100);
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/100');

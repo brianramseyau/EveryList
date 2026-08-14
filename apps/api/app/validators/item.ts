@@ -5,6 +5,7 @@ export const createItemValidator = vine.create({
   quantity: vine.string().trim().maxLength(50).nullable().optional(),
   notes: vine.string().trim().maxLength(1000).nullable().optional(),
   categoryId: vine.number().positive().nullable().optional(),
+  storeId: vine.number().positive().nullable().optional(),
 })
 
 export const updateItemValidator = vine.create({
@@ -12,6 +13,7 @@ export const updateItemValidator = vine.create({
   quantity: vine.string().trim().maxLength(50).nullable().optional(),
   notes: vine.string().trim().maxLength(1000).nullable().optional(),
   categoryId: vine.number().positive().nullable().optional(),
+  storeId: vine.number().positive().nullable().optional(),
   checked: vine.boolean().optional(),
   sortOrder: vine.number().optional(),
   expectedVersion: vine.number().optional(),

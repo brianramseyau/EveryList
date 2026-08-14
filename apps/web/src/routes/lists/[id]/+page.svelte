@@ -4,8 +4,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Checkbox, Input, Textarea } from 'flowbite-svelte';
-	import type { CategoryDto, ItemDto, ListDto } from '@everylist/shared';
+	import { Button, Checkbox, Input, Select, Textarea } from 'flowbite-svelte';
+	import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { deleteList, fetchList, updateList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
@@ -18,7 +18,7 @@
 		restoreItem,
 		updateItem
 	} from '$lib/api/items';
-	import { fetchStoreCategoryOrder } from '$lib/api/stores';
+	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
 	import { getSelectedStore } from '$lib/api/selected-store';
 	import { isRowDirty } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
@@ -33,6 +33,8 @@
 	let list = $state<ListDto | null>(null);
 	let categories = $state<CategoryDto[]>([]);
 	let items = $state<ItemDto[]>([]);
+	let stores = $state<StoreDto[]>([]);
+	let filterStoreId = $state<number | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
@@ -55,9 +57,13 @@
 	// list on this device — purely local, see $lib/api/selected-store.ts.
 	let storeCategoryOverrides: Map<number, number> = new SvelteMap();
 
+	const visibleItems = $derived(
+		filterStoreId === null ? items : items.filter((item) => item.storeId === filterStoreId)
+	);
+
 	const groups = $derived.by(() => {
 		const byCategory = new SvelteMap<number | null, ItemDto[]>();
-		for (const item of items) {
+		for (const item of visibleItems) {
 			if (item.checked) continue;
 			const key = item.categoryId;
 			if (!byCategory.has(key)) byCategory.set(key, []);
@@ -80,15 +86,16 @@
 		return ordered;
 	});
 
-	const checkedItems = $derived(items.filter((item) => item.checked));
+	const checkedItems = $derived(visibleItems.filter((item) => item.checked));
 
 	async function loadAll() {
 		loading = true;
 		try {
-			[list, categories, items] = await Promise.all([
+			[list, categories, items, stores] = await Promise.all([
 				fetchList(listId),
 				fetchCategories(listId),
-				fetchItems(listId)
+				fetchItems(listId),
+				fetchStores(listId)
 			]);
 
 			const selectedStoreId = await getSelectedStore(listId);
@@ -191,6 +198,16 @@
 		);
 		try {
 			await updateItem(listId, item.id, { checked: nextChecked });
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to update item.';
+			void loadAll();
+		}
+	}
+
+	async function tagItemStore(item: ItemDto, storeId: number | null) {
+		items = items.map((current) => (current.id === item.id ? { ...current, storeId } : current));
+		try {
+			await updateItem(listId, item.id, { storeId });
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to update item.';
 			void loadAll();
@@ -305,6 +322,21 @@
 			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 		{/if}
 
+		{#if stores.length > 0}
+			<div class="w-48">
+				<Select
+					items={stores.map((store) => ({ value: store.id, name: store.name }))}
+					placeholder="All stores"
+					clearable
+					value={filterStoreId ?? ''}
+					onchange={(event) => {
+						const raw = (event.target as HTMLSelectElement).value;
+						filterStoreId = raw === '' ? null : Number(raw);
+					}}
+				/>
+			</div>
+		{/if}
+
 		{#if items.length === 0}
 			<p class="text-gray-500 dark:text-gray-400">No items yet — add one above.</p>
 		{:else}
@@ -333,9 +365,25 @@
 											>
 										{/if}
 									</Checkbox>
+									{#if stores.length > 0}
+										<div class="ml-auto w-32">
+											<Select
+												size="sm"
+												items={stores.map((store) => ({ value: store.id, name: store.name }))}
+												placeholder="No store"
+												clearable
+												value={item.storeId ?? ''}
+												onchange={(event) => {
+													const raw = (event.target as HTMLSelectElement).value;
+													void tagItemStore(item, raw === '' ? null : Number(raw));
+												}}
+											/>
+										</div>
+									{/if}
 									<button
 										type="button"
-										class="ml-auto text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+										class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+										class:ml-auto={stores.length === 0}
 										onclick={() => removeItem(item)}
 									>
 										Remove
