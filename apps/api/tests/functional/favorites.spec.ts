@@ -101,7 +101,6 @@ test.group('Favorites', (group) => {
     assert,
   }) => {
     const token = await signupAndGetToken(client)
-    const listId = await createList(client, token)
     const otherToken = await signupAndGetToken(client)
     const otherListId = await createList(client, otherToken)
 
