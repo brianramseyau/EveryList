@@ -139,7 +139,9 @@
 		</p>
 
 		<form class="flex gap-2" onsubmit={handleCreate}>
-			<Input placeholder="New category name" bind:value={newCategoryName} class="flex-1" />
+			<div class="flex-1">
+				<Input placeholder="New category name" bind:value={newCategoryName} />
+			</div>
 			<IconPicker value={newCategoryIcon} onselect={(name) => (newCategoryIcon = name)} />
 			<Button type="submit" disabled={creating || !newCategoryName.trim()}>Add</Button>
 		</form>
@@ -174,7 +176,9 @@
 						</button>
 					</div>
 
-					<Input bind:value={category.name} class="flex-1" />
+					<div class="flex-1">
+						<Input bind:value={category.name} />
+					</div>
 					<IconPicker value={category.icon} onselect={(name) => (category.icon = name)} />
 
 					<Button

@@ -106,7 +106,9 @@
 		</p>
 
 		<form class="flex flex-wrap gap-2" onsubmit={handleCreate}>
-			<Input placeholder="New store name" bind:value={newStoreName} class="min-w-40 flex-1" />
+			<div class="min-w-40 flex-1">
+				<Input placeholder="New store name" bind:value={newStoreName} />
+			</div>
 			<ColorPicker value={newStoreColor} onselect={(color) => (newStoreColor = color)} />
 			<Button type="submit" disabled={creating || !newStoreName.trim()}>Add store</Button>
 		</form>

@@ -86,7 +86,9 @@
 	</PageHeader>
 
 	<form class="flex flex-wrap gap-2" onsubmit={handleCreate}>
-		<Input placeholder="New list name" bind:value={newListName} class="min-w-40 flex-1" />
+		<div class="min-w-40 flex-1">
+			<Input placeholder="New list name" bind:value={newListName} />
+		</div>
 		<IconPicker value={newListIcon} onselect={(name) => (newListIcon = name)} />
 		<ColorPicker value={newListColor} onselect={(color) => (newListColor = color)} />
 		<Button type="submit" disabled={creating || !newListName.trim()}>Add</Button>
