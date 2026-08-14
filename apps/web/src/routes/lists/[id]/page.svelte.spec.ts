@@ -39,6 +39,7 @@ const {
 const { fetchStoreCategoryOrder } = await import('$lib/api/stores');
 const { getSelectedStore } = await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
+const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { goto } = await import('$app/navigation');
 const ListDetailPage = (await import('./+page.svelte')).default;
 
@@ -111,9 +112,10 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		vi.clearAllMocks();
 		clearToken();
+		await resetDbForTesting();
 	});
 
 	it('redirects to /login when there is no token', async () => {
@@ -581,6 +583,25 @@ describe('List detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'Refresh' }).click();
 		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
 		expect(fetchList).toHaveBeenCalledTimes(2);
+	});
+
+	it('suppresses the sync toast for a row with an unacked local edit', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			...makeItem({ id: 1, name: 'Milk' }),
+			_dirty: true
+		});
+		let handler: (event: SyncEventDto) => void = () => {};
+		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
+			handler = onEvent;
+			return vi.fn();
+		});
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+
+		handler({ entityType: 'item', entityId: 1, op: 'update', payload: null, version: 2 });
+		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
 	});
 
 	it('opens the list settings menu with links scoped to this list', async () => {

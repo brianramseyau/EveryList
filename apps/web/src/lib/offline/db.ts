@@ -99,6 +99,27 @@ export function getDb(): EveryListDB | null {
 	return instance;
 }
 
+/** Entity types with a cached table that tracks a `_dirty` flag — `list` and
+ * `store_category_order` are never written by the offline sync engine (see
+ * offline/flush.ts's `QueueableEntityType`), so they never have an unacked local edit. */
+export async function isRowDirty(entityType: SyncEntityType, entityId: number): Promise<boolean> {
+	const db = getDb();
+	if (!db) return false;
+	switch (entityType) {
+		case 'item':
+			return Boolean((await db.items.get(entityId))?._dirty);
+		case 'category':
+			return Boolean((await db.categories.get(entityId))?._dirty);
+		case 'favorite_item':
+			return Boolean((await db.favoriteItems.get(entityId))?._dirty);
+		case 'store':
+			return Boolean((await db.stores.get(entityId))?._dirty);
+		case 'list':
+		case 'store_category_order':
+			return false;
+	}
+}
+
 /** Test-only: deletes the underlying database and drops the singleton so each spec starts clean. */
 export async function resetDbForTesting(): Promise<void> {
 	if (instance) {

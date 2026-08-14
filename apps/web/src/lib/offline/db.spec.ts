@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getDb, hasIndexedDb, resetDbForTesting } from './db';
+import { getDb, hasIndexedDb, isRowDirty, resetDbForTesting } from './db';
 
 describe('hasIndexedDb', () => {
 	it('is true once the fake-indexeddb polyfill is installed', () => {
@@ -68,5 +68,36 @@ describe('getDb', () => {
 
 	it('resetDbForTesting is a no-op when nothing was constructed yet', async () => {
 		await expect(resetDbForTesting()).resolves.toBeUndefined();
+	});
+});
+
+describe('isRowDirty', () => {
+	afterEach(async () => {
+		await resetDbForTesting();
+	});
+
+	it('is false when the row was never cached', async () => {
+		await expect(isRowDirty('item', 1)).resolves.toBe(false);
+	});
+
+	it('is false when a store_category_order or list event fires — neither is ever queued client-side', async () => {
+		await expect(isRowDirty('store_category_order', 1)).resolves.toBe(false);
+		await expect(isRowDirty('list', 1)).resolves.toBe(false);
+	});
+
+	it.each([
+		['item', 'items'],
+		['category', 'categories'],
+		['favorite_item', 'favoriteItems'],
+		['store', 'stores']
+	] as const)("reads the %s table's _dirty flag", async (entityType, table) => {
+		const db = getDb()!;
+		await (db[table] as { put: (row: unknown) => Promise<unknown> }).put({
+			id: 1,
+			version: 1,
+			_dirty: true
+		});
+
+		await expect(isRowDirty(entityType, 1)).resolves.toBe(true);
 	});
 });

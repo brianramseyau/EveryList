@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getDb, hasIndexedDb } from './db';
+import { getDb, hasIndexedDb, isRowDirty } from './db';
 
 // Deliberately does NOT import 'fake-indexeddb/auto' — this file exercises
 // the SSR/prerender guard path (no `indexedDB` global at all), mirroring
@@ -12,5 +12,9 @@ describe('without an IndexedDB implementation', () => {
 
 	it('getDb returns null instead of constructing a database', () => {
 		expect(getDb()).toBeNull();
+	});
+
+	it('isRowDirty is false without a database to check', async () => {
+		await expect(isRowDirty('item', 1)).resolves.toBe(false);
 	});
 });

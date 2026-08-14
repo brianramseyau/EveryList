@@ -20,6 +20,7 @@
 	} from '$lib/api/items';
 	import { fetchStoreCategoryOrder } from '$lib/api/stores';
 	import { getSelectedStore } from '$lib/api/selected-store';
+	import { isRowDirty } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
 	import Icon from '$lib/components/Icon.svelte';
@@ -111,8 +112,12 @@
 			return;
 		}
 		void loadAll();
-		unsubscribeRealtime = subscribeToList(listId, () => {
-			syncToastVisible = true;
+		unsubscribeRealtime = subscribeToList(listId, (event) => {
+			// An unacked local edit on this exact row means the eventual flush response is
+			// authoritative, not this racing broadcast — suppress it (see PHASE5_PLAN.md §4).
+			void isRowDirty(event.entityType, event.entityId).then((dirty) => {
+				if (!dirty) syncToastVisible = true;
+			});
 		});
 	});
 
