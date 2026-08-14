@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import type { ResolvedPathname } from '$app/types';
 	import { Button, Label, Input, Helper } from 'flowbite-svelte';
 	import { login } from '$lib/api/auth';
 	import { ApiError } from '$lib/api/client';
@@ -22,6 +23,15 @@
 	// Chromium, `browser` always true there), so it's untestable here.
 	/* v8 ignore next */
 	const nextPath = $derived(browser ? page.url.searchParams.get('next') : null);
+	// nextPath, when present, is always this app's own resolve('/join/[token]', …)
+	// output round-tripped through a query param — safe, but not statically
+	// verifiable by the lint rule, hence the ResolvedPathname cast (same
+	// technique PageHeader.svelte's backHref prop uses).
+	const signupHref = $derived(
+		(nextPath
+			? `${resolve('/signup')}?next=${encodeURIComponent(nextPath)}`
+			: resolve('/signup')) as ResolvedPathname
+	);
 
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -74,15 +84,6 @@
 
 	<p class="text-sm text-gray-600 dark:text-gray-300">
 		Don't have an account?
-		<!-- nextPath, when present, is always this app's own resolve('/join/[token]', …)
-		     output round-tripped through a query param — safe, but not statically
-		     verifiable by the lint rule below. -->
-		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-		<a
-			href={nextPath
-				? `${resolve('/signup')}?next=${encodeURIComponent(nextPath)}`
-				: resolve('/signup')}
-			class="text-primary-600 hover:underline dark:text-primary-400">Sign up</a
-		>
+		<a href={signupHref} class="text-primary-600 hover:underline dark:text-primary-400">Sign up</a>
 	</p>
 </main>

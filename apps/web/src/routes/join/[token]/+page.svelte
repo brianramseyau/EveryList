@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import type { ResolvedPathname } from '$app/types';
 	import { Button } from 'flowbite-svelte';
 	import type { ListInvitePreviewDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
@@ -15,6 +16,16 @@
 	/* v8 ignore next */
 	const token = $derived(page.params.token ?? '');
 	const nextPath = $derived(resolve('/join/[token]', { token }));
+	// nextPath is always this app's own resolve('/join/[token]', …) output
+	// round-tripped through a query param — safe, but not statically
+	// verifiable by the lint rule, hence the ResolvedPathname cast (same
+	// technique PageHeader.svelte's backHref prop uses).
+	const loginHref = $derived(
+		`${resolve('/login')}?next=${encodeURIComponent(nextPath)}` as ResolvedPathname
+	);
+	const signupHref = $derived(
+		`${resolve('/signup')}?next=${encodeURIComponent(nextPath)}` as ResolvedPathname
+	);
 
 	let preview = $state<ListInvitePreviewDto | null>(null);
 	let loading = $state(true);
@@ -72,18 +83,10 @@
 		{:else}
 			<p class="text-sm text-gray-600 dark:text-gray-300">Log in or sign up to accept.</p>
 			<div class="flex gap-3">
-				<!-- nextPath is always this app's own resolve('/join/[token]', …) output
-				     round-tripped through a query param — safe, but not statically
-				     verifiable by the lint rule below. -->
-				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-				<a
-					href={`${resolve('/login')}?next=${encodeURIComponent(nextPath)}`}
-					class="text-primary-600 hover:underline dark:text-primary-400">Log in</a
+				<a href={loginHref} class="text-primary-600 hover:underline dark:text-primary-400">Log in</a
 				>
-				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-				<a
-					href={`${resolve('/signup')}?next=${encodeURIComponent(nextPath)}`}
-					class="text-primary-600 hover:underline dark:text-primary-400">Sign up</a
+				<a href={signupHref} class="text-primary-600 hover:underline dark:text-primary-400"
+					>Sign up</a
 				>
 			</div>
 		{/if}
