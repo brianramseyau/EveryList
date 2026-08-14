@@ -79,6 +79,10 @@
 		addedMessage = null;
 		try {
 			await addFavoriteToList(listId, favorite.id);
+			// `list` is always loaded by the time this button is interactable
+			// (loading gates the whole form); the `?? 'the list'` only satisfies
+			// the `ListDto | null` return type.
+			/* v8 ignore next */
 			addedMessage = `Added "${favorite.name}" to ${list?.name ?? 'the list'}.`;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to add item to list.';
