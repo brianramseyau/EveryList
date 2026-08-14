@@ -216,8 +216,12 @@
 		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
 	{:else if list}
 		<form class="flex gap-2" onsubmit={handleAddItem}>
-			<Input placeholder="Item name" bind:value={newItemName} class="flex-1" />
-			<Input placeholder="Qty" bind:value={newItemQuantity} class="w-20" />
+			<div class="flex-1">
+				<Input placeholder="Item name" bind:value={newItemName} />
+			</div>
+			<div class="w-24">
+				<Input placeholder="Qty" bind:value={newItemQuantity} />
+			</div>
 			<Button type="submit" disabled={adding || !newItemName.trim()}>Add</Button>
 		</form>
 

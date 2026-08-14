@@ -104,7 +104,9 @@
 	</p>
 
 	<form class="flex gap-2" onsubmit={handleCreate}>
-		<Input placeholder="New favorite name" bind:value={newFavoriteName} class="flex-1" />
+		<div class="flex-1">
+			<Input placeholder="New favorite name" bind:value={newFavoriteName} />
+		</div>
 		<Button type="submit" disabled={creating || !newFavoriteName.trim()}>Add</Button>
 	</form>
 
