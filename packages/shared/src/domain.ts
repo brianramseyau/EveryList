@@ -10,6 +10,7 @@ export interface ListDto {
 	itemCount: number;
 	createdAt: string;
 	updatedAt: string | null;
+	version: number;
 }
 
 export interface CategoryDto {
@@ -21,6 +22,8 @@ export interface CategoryDto {
 	isDefault: boolean;
 	createdAt: string;
 	updatedAt: string | null;
+	deletedAt: string | null;
+	version: number;
 }
 
 export interface ItemDto {
@@ -37,6 +40,7 @@ export interface ItemDto {
 	createdAt: string;
 	updatedAt: string | null;
 	deletedAt: string | null;
+	version: number;
 }
 
 export interface FavoriteItemDto {
@@ -48,6 +52,8 @@ export interface FavoriteItemDto {
 	defaultQuantity: string | null;
 	createdAt: string;
 	updatedAt: string | null;
+	deletedAt: string | null;
+	version: number;
 }
 
 export interface StoreDto {
@@ -57,6 +63,23 @@ export interface StoreDto {
 	createdBy: number;
 	createdAt: string;
 	updatedAt: string | null;
+	deletedAt: string | null;
+	version: number;
+}
+
+export interface StoreCategoryOrderDto {
+	id: number;
+	storeId: number;
+	categoryId: number;
+	sortOrder: number;
+	deletedAt: string | null;
+	version: number;
+}
+
+/** Returned with a 409 when a mutation's `expectedVersion` no longer matches the server's row — PLAN.md §7. */
+export interface ConflictResponse<T> {
+	data: T;
+	conflict: true;
 }
 
 export interface UserDto {
@@ -103,4 +126,5 @@ export interface SyncEventDto {
 	entityId: number;
 	op: 'create' | 'update' | 'delete';
 	payload: Record<string, unknown> | null;
+	version: number | null;
 }
