@@ -101,6 +101,54 @@ test.group('Lists CRUD', (group) => {
     updateDeleted.assertStatus(404)
   })
 
+  test('update/destroy honor expectedVersion — omitted always applies, matching applies and bumps, stale conflicts with 409', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Groceries' })
+    const list = bodyData<ListDto & { version: number }>(create)
+    assert.equal(list.version, 1)
+
+    const unversioned = await client
+      .patch(`/api/v1/lists/${list.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Weekly Groceries' })
+    unversioned.assertStatus(200)
+    assert.equal(bodyData<{ version: number }>(unversioned).version, 2)
+
+    const stale = await client
+      .patch(`/api/v1/lists/${list.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Stale Name', expectedVersion: 1 })
+    stale.assertStatus(409)
+    assert.isTrue(stale.body().conflict)
+    assert.equal(stale.body().data.version, 2)
+
+    const matching = await client
+      .patch(`/api/v1/lists/${list.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Monthly Groceries', expectedVersion: 2 })
+    matching.assertStatus(200)
+    assert.equal(bodyData<{ version: number }>(matching).version, 3)
+
+    const staleDestroy = await client
+      .delete(`/api/v1/lists/${list.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .qs({ expectedVersion: 2 })
+    staleDestroy.assertStatus(409)
+
+    const destroy = await client
+      .delete(`/api/v1/lists/${list.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .qs({ expectedVersion: 3 })
+    destroy.assertStatus(204)
+  })
+
   test("a user cannot see or update another user's list", async ({ client }) => {
     const ownerToken = await signupAndGetToken(client)
     const create = await client

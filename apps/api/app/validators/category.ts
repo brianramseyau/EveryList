@@ -8,6 +8,7 @@ export const createCategoryValidator = vine.create({
 export const updateCategoryValidator = vine.create({
   name: vine.string().trim().minLength(1).maxLength(80).optional(),
   icon: vine.string().trim().minLength(1).maxLength(80).optional(),
+  expectedVersion: vine.number().optional(),
 })
 
 export const reorderCategoriesValidator = vine.create({

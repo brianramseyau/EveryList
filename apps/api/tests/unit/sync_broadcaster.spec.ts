@@ -86,6 +86,36 @@ test.group('SyncBroadcaster', (group) => {
     assert.lengthOf(eventsAfterReset, 1, 'the real broadcaster should be active again')
   })
 
+  test('version is passed through to the broadcaster, defaulting to undefined for batch events', async ({
+    assert,
+  }) => {
+    const owner = await User.create({
+      fullName: 'Ada Lovelace',
+      email: 'sb5@example.com',
+      password: 'password123',
+    })
+    const list = await List.create({ name: 'Groceries', ownerId: owner.id })
+
+    const calls: SyncBroadcastInput[] = []
+    setSyncBroadcasterForTesting({
+      async broadcast(input) {
+        calls.push(input)
+      },
+    })
+
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'item',
+      entityId: 1,
+      op: 'update',
+      version: 3,
+    })
+    await broadcastSync({ listId: list.id, entityType: 'item', entityId: list.id, op: 'create' })
+
+    assert.equal(calls[0]!.version, 3)
+    assert.isUndefined(calls[1]!.version)
+  })
+
   test('broadcastToStoreLists fans a store edit out to every attached list', async ({ assert }) => {
     const owner = await User.create({
       fullName: 'Ada Lovelace',

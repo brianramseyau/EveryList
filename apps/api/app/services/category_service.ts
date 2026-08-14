@@ -10,8 +10,8 @@ import Category from '#models/category'
  */
 export async function getEffectiveCategories(list: List): Promise<Category[]> {
   const [customCategories, defaultCategories] = await Promise.all([
-    Category.query().where('listId', list.id).orderBy('sortOrder', 'asc'),
-    Category.query().whereNull('listId').orderBy('sortOrder', 'asc'),
+    Category.query().where('listId', list.id).whereNull('deletedAt').orderBy('sortOrder', 'asc'),
+    Category.query().whereNull('listId').whereNull('deletedAt').orderBy('sortOrder', 'asc'),
   ])
 
   const shadowedIds = new Set(
@@ -44,5 +44,6 @@ export async function forkCategoryForList(list: List, category: Category): Promi
     sortOrder: category.sortOrder,
     isDefault: false,
     forkedFromId: category.id,
+    version: 1,
   })
 }

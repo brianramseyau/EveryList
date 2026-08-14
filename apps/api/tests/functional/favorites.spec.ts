@@ -58,6 +58,55 @@ test.group('Favorites', (group) => {
     destroy.assertStatus(204)
   })
 
+  test('update/destroy honor expectedVersion — omitted always applies, matching applies and bumps, stale conflicts with 409', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bananas' })
+    const favorite = bodyData<FavoriteItemDto & { version: number }>(create)
+    assert.equal(favorite.version, 1)
+
+    const unversioned = await client
+      .patch(`/api/v1/lists/${listId}/favorites/${favorite.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ defaultQuantity: '1 bunch' })
+    unversioned.assertStatus(200)
+    assert.equal(bodyData<{ version: number }>(unversioned).version, 2)
+
+    const stale = await client
+      .patch(`/api/v1/lists/${listId}/favorites/${favorite.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ defaultQuantity: '2 bunches', expectedVersion: 1 })
+    stale.assertStatus(409)
+    assert.isTrue(stale.body().conflict)
+    assert.equal(stale.body().data.version, 2)
+
+    const matching = await client
+      .patch(`/api/v1/lists/${listId}/favorites/${favorite.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ defaultQuantity: '3 bunches', expectedVersion: 2 })
+    matching.assertStatus(200)
+    assert.equal(bodyData<{ version: number }>(matching).version, 3)
+
+    const staleDestroy = await client
+      .delete(`/api/v1/lists/${listId}/favorites/${favorite.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .qs({ expectedVersion: 2 })
+    staleDestroy.assertStatus(409)
+
+    const destroy = await client
+      .delete(`/api/v1/lists/${listId}/favorites/${favorite.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .qs({ expectedVersion: 3 })
+    destroy.assertStatus(204)
+  })
+
   test('creates a favorite without a default quantity', async ({ client, assert }) => {
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)

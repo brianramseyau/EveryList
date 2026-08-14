@@ -12,6 +12,8 @@ export default class FavoriteItemTransformer extends BaseTransformer<FavoriteIte
       'defaultQuantity',
       'createdAt',
       'updatedAt',
+      'deletedAt',
+      'version',
     ])
   }
 }
