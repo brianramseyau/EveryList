@@ -22,6 +22,7 @@ export async function attachStore(
 		entityType: 'store',
 		table: (db) => db.stores,
 		payload: { ...input, listId },
+		url: `/api/v1/lists/${listId}/stores`,
 		buildOptimisticRow: (tempId) => ({
 			id: tempId,
 			name: input.name,
@@ -51,6 +52,7 @@ export async function updateStore(
 		op: 'update',
 		targetId: storeId,
 		payload: input,
+		url: `/api/v1/stores/${storeId}`,
 		applyOptimistically: async (db) => {
 			const existing = await db.stores.get(storeId);
 			if (!existing) return 0;

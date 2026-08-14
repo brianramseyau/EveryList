@@ -2,10 +2,14 @@ import { clearToken, getToken } from './token';
 
 export class ApiError extends Error {
 	status: number;
+	/** The parsed JSON error body, when the response had one — a 409's `{ data, conflict: true }`
+	 * carries the server's authoritative row, which the offline flush loop needs to reconcile. */
+	body: unknown;
 
-	constructor(status: number, message: string) {
+	constructor(status: number, message: string, body?: unknown) {
 		super(message);
 		this.status = status;
+		this.body = body;
 	}
 }
 
@@ -17,15 +21,24 @@ function unwrap<T>(body: unknown): T {
 	return body as T;
 }
 
-async function extractErrorMessage(response: Response): Promise<string> {
+async function parseErrorBody(response: Response): Promise<unknown> {
 	try {
-		const body = await response.json();
-		if (typeof body?.message === 'string') return body.message;
-		if (Array.isArray(body?.errors) && body.errors[0]?.message) return body.errors[0].message;
+		return await response.json();
 	} catch {
-		// Response body wasn't JSON — fall through to the generic message.
+		// Response body wasn't JSON.
+		return undefined;
 	}
-	return `Request failed with status ${response.status}`;
+}
+
+function extractErrorMessage(body: unknown, status: number): string {
+	if (body && typeof body === 'object') {
+		const record = body as { message?: unknown; errors?: unknown };
+		if (typeof record.message === 'string') return record.message;
+		if (Array.isArray(record.errors) && typeof record.errors[0]?.message === 'string') {
+			return record.errors[0].message;
+		}
+	}
+	return `Request failed with status ${status}`;
 }
 
 /**
@@ -44,7 +57,8 @@ export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}
 
 	if (!response.ok) {
 		if (response.status === 401) clearToken();
-		throw new ApiError(response.status, await extractErrorMessage(response));
+		const body = await parseErrorBody(response);
+		throw new ApiError(response.status, extractErrorMessage(body, response.status), body);
 	}
 
 	if (response.status === 204) return undefined as T;

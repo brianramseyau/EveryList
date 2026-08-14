@@ -24,6 +24,9 @@ export interface QueuedMutation {
 	/** `null` for a queued create — there's nothing to conflict against yet. */
 	expectedVersion: number | null;
 	payload: Record<string, unknown>;
+	/** The exact request path to replay against — lets the flush loop (offline/flush.ts) issue
+	 * the request generically, without an entity-specific URL dispatch table. */
+	url: string;
 	status: 'pending' | 'sending' | 'conflict' | 'failed';
 	attempts: number;
 	createdAt: number;

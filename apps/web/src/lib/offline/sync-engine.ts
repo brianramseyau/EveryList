@@ -27,6 +27,8 @@ export interface OfflineCreateOptions<T> {
 	/** Builds the optimistic row under the given temp (negative) id. */
 	buildOptimisticRow: (tempId: number) => T;
 	payload: Record<string, unknown>;
+	/** The request path to replay from the flush loop if this create doesn't resolve immediately. */
+	url: string;
 	request: () => Promise<T>;
 }
 
@@ -52,7 +54,8 @@ export async function offlineCreate<T>(opts: OfflineCreateOptions<T>): Promise<T
 		op: 'create',
 		targetId: tempId,
 		expectedVersion: null,
-		payload: opts.payload
+		payload: opts.payload,
+		url: opts.url
 	});
 
 	if (!isOnline()) return optimisticRow;
@@ -90,6 +93,10 @@ export interface OfflineMutateOptions<T> {
 	 * `expectedVersion` isn't stale. */
 	onSuccess?: (db: EveryListDB, result: T | void) => Promise<void>;
 	payload: Record<string, unknown>;
+	/** The request path to replay from the flush loop if this mutation doesn't resolve
+	 * immediately — for a delete, `expectedVersion` is appended as a query param at replay time,
+	 * matching how the backend reads it off the DELETE request (see version_conflict.ts). */
+	url: string;
 	request: () => Promise<T | void>;
 }
 
@@ -110,7 +117,8 @@ export async function offlineMutate<T>(opts: OfflineMutateOptions<T>): Promise<T
 		op: opts.op,
 		targetId: opts.targetId,
 		expectedVersion,
-		payload: opts.payload
+		payload: opts.payload,
+		url: opts.url
 	});
 
 	if (!isOnline()) return undefined;

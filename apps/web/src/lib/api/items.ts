@@ -66,6 +66,7 @@ export async function createItem(
 		entityType: 'item',
 		table: (database) => database.items,
 		payload: { ...input, listId },
+		url: `/api/v1/lists/${listId}/items`,
 		buildOptimisticRow: (tempId) => ({
 			id: tempId,
 			listId,
@@ -110,6 +111,7 @@ export async function updateItem(
 		op: 'update',
 		targetId: itemId,
 		payload: input,
+		url: `/api/v1/lists/${listId}/items/${itemId}`,
 		applyOptimistically: async (db) => {
 			const existing = await db.items.get(itemId);
 			if (!existing) return 0;
@@ -139,6 +141,7 @@ export async function deleteItem(listId: number, itemId: number): Promise<void> 
 		op: 'delete',
 		targetId: itemId,
 		payload: {},
+		url: `/api/v1/lists/${listId}/items/${itemId}`,
 		applyOptimistically: async (db) => {
 			const existing = await db.items.get(itemId);
 			if (!existing) return 0;

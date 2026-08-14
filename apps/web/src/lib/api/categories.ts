@@ -14,6 +14,7 @@ export async function createCategory(
 		entityType: 'category',
 		table: (db) => db.categories,
 		payload: { ...input, listId },
+		url: `/api/v1/lists/${listId}/categories`,
 		buildOptimisticRow: (tempId) => ({
 			id: tempId,
 			listId,
@@ -46,6 +47,7 @@ export async function updateCategory(
 		op: 'update',
 		targetId: categoryId,
 		payload: input,
+		url: `/api/v1/lists/${listId}/categories/${categoryId}`,
 		applyOptimistically: async (db) => {
 			const existing = await db.categories.get(categoryId);
 			if (!existing) return 0;
@@ -65,6 +67,7 @@ export async function deleteCategory(listId: number, categoryId: number): Promis
 		op: 'delete',
 		targetId: categoryId,
 		payload: {},
+		url: `/api/v1/lists/${listId}/categories/${categoryId}`,
 		applyOptimistically: async (db) => {
 			const existing = await db.categories.get(categoryId);
 			if (!existing) return 0;

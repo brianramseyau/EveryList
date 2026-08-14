@@ -24,6 +24,7 @@ describe('offlineCreate', () => {
 			entityType: 'item',
 			table: (database) => database.lists as never,
 			payload: { name: 'Bananas' },
+			url: '/api/v1/x',
 			buildOptimisticRow: (tempId) => ({ id: tempId, name: 'Bananas' }) as never,
 			request: async () => ({ id: 42, name: 'Bananas' })
 		});
@@ -39,6 +40,7 @@ describe('offlineCreate', () => {
 			entityType: 'item',
 			table: (database) => database.lists as never,
 			payload: { name: 'Bananas' },
+			url: '/api/v1/x',
 			buildOptimisticRow: (tempId) => ({ id: tempId, name: 'Bananas' }) as never,
 			request: async () => ({ id: 42, name: 'Bananas' })
 		});
@@ -53,6 +55,7 @@ describe('offlineCreate', () => {
 			entityType: 'item',
 			table: (database) => database.lists as never,
 			payload: { name: 'Bananas' },
+			url: '/api/v1/x',
 			buildOptimisticRow: (tempId) => ({ id: tempId, name: 'Bananas' }) as never,
 			request: async () => {
 				throw new TypeError('network error');
@@ -71,6 +74,7 @@ describe('offlineCreate', () => {
 				entityType: 'item',
 				table: (database) => database.lists as never,
 				payload: { name: '' },
+				url: '/api/v1/x',
 				buildOptimisticRow: (tempId) => ({ id: tempId, name: '' }) as never,
 				request: async () => {
 					throw new ApiError(422, 'Name is required');
@@ -92,6 +96,7 @@ describe('offlineCreate', () => {
 				entityType: 'item',
 				table: (database) => database.lists as never,
 				payload: {},
+				url: '/api/v1/x',
 				buildOptimisticRow: (tempId) => ({ id: tempId }) as never,
 				request: async () => ({ id: 99 })
 			});
@@ -127,6 +132,7 @@ describe('offlineMutate', () => {
 			op: 'update',
 			targetId: 5,
 			payload: { checked: true },
+			url: '/api/v1/x',
 			applyOptimistically: async (database) => {
 				const existing = await database.items.get(5);
 				await database.items.put({ ...existing!, checked: true, _dirty: true });
@@ -145,6 +151,7 @@ describe('offlineMutate', () => {
 			op: 'update',
 			targetId: 5,
 			payload: { checked: true },
+			url: '/api/v1/x',
 			applyOptimistically: async () => 1,
 			request: async () => {
 				throw new ApiError(409, 'Conflict');
@@ -162,6 +169,7 @@ describe('offlineMutate', () => {
 				op: 'update',
 				targetId: 5,
 				payload: { checked: true },
+				url: '/api/v1/x',
 				applyOptimistically: async () => 1,
 				request: async () => {
 					throw new ApiError(403, 'Forbidden');
@@ -179,6 +187,7 @@ describe('offlineMutate', () => {
 			op: 'delete',
 			targetId: 5,
 			payload: {},
+			url: '/api/v1/x',
 			applyOptimistically: async () => 1,
 			request: async () => ({ version: 2 })
 		});
@@ -198,6 +207,7 @@ describe('offlineMutate', () => {
 				op: 'delete',
 				targetId: 5,
 				payload: {},
+				url: '/api/v1/x',
 				applyOptimistically: async () => 1,
 				request: async () => ({ ok: true })
 			});

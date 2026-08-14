@@ -18,7 +18,8 @@ describe('without an IndexedDB implementation', () => {
 				op: 'create',
 				targetId: -1,
 				expectedVersion: null,
-				payload: {}
+				payload: {},
+				url: '/api/v1/x'
 			})
 		).resolves.toBeUndefined();
 	});

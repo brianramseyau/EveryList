@@ -30,6 +30,7 @@ describe('offlineCreate with an unresolvable queue id', () => {
 			entityType: 'item',
 			table: (db) => db.lists as never,
 			payload: {},
+			url: '/api/v1/x',
 			buildOptimisticRow: (tempId) => ({ id: tempId }) as never,
 			request: async () => ({ id: 1 })
 		});
@@ -45,6 +46,7 @@ describe('offlineCreate with an unresolvable queue id', () => {
 				entityType: 'item',
 				table: (db) => db.lists as never,
 				payload: {},
+				url: '/api/v1/x',
 				buildOptimisticRow: (tempId) => ({ id: tempId }) as never,
 				request: async () => {
 					throw new ApiError(422, 'bad');
@@ -63,6 +65,7 @@ describe('offlineMutate with an unresolvable queue id', () => {
 			op: 'update',
 			targetId: 1,
 			payload: {},
+			url: '/api/v1/x',
 			applyOptimistically: async () => 1,
 			request: async () => ({ ok: true })
 		});
@@ -79,6 +82,7 @@ describe('offlineMutate with an unresolvable queue id', () => {
 				op: 'update',
 				targetId: 1,
 				payload: {},
+				url: '/api/v1/x',
 				applyOptimistically: async () => 1,
 				request: async () => {
 					throw new ApiError(403, 'forbidden');

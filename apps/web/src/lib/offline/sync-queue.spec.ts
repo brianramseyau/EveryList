@@ -20,7 +20,8 @@ describe('enqueueMutation', () => {
 			op: 'create',
 			targetId: -1,
 			expectedVersion: null,
-			payload: { name: 'Bananas' }
+			payload: { name: 'Bananas' },
+			url: '/api/v1/x'
 		});
 
 		expect(id).toBeTypeOf('number');
@@ -44,14 +45,16 @@ describe('pendingMutations', () => {
 			op: 'create',
 			targetId: -1,
 			expectedVersion: null,
-			payload: {}
+			payload: {},
+			url: '/api/v1/x'
 		});
 		await enqueueMutation({
 			entityType: 'item',
 			op: 'create',
 			targetId: -2,
 			expectedVersion: null,
-			payload: {}
+			payload: {},
+			url: '/api/v1/x'
 		});
 		await updateMutation(firstId!, { status: 'conflict' });
 
@@ -68,7 +71,8 @@ describe('updateMutation', () => {
 			op: 'update',
 			targetId: 5,
 			expectedVersion: 1,
-			payload: { quantity: '2' }
+			payload: { quantity: '2' },
+			url: '/api/v1/x'
 		});
 
 		await updateMutation(id!, { status: 'failed', attempts: 3, lastError: 'network error' });
@@ -85,7 +89,8 @@ describe('dequeueMutation', () => {
 			op: 'delete',
 			targetId: 5,
 			expectedVersion: 2,
-			payload: {}
+			payload: {},
+			url: '/api/v1/x'
 		});
 
 		await dequeueMutation(id!);
@@ -102,21 +107,24 @@ describe('queueCounts', () => {
 			op: 'create',
 			targetId: -1,
 			expectedVersion: null,
-			payload: {}
+			payload: {},
+			url: '/api/v1/x'
 		});
 		const b = await enqueueMutation({
 			entityType: 'item',
 			op: 'update',
 			targetId: 1,
 			expectedVersion: 1,
-			payload: {}
+			payload: {},
+			url: '/api/v1/x'
 		});
 		const c = await enqueueMutation({
 			entityType: 'item',
 			op: 'update',
 			targetId: 2,
 			expectedVersion: 1,
-			payload: {}
+			payload: {},
+			url: '/api/v1/x'
 		});
 		await updateMutation(b!, { status: 'failed' });
 		await updateMutation(c!, { status: 'conflict' });

@@ -6,7 +6,9 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import { getToken } from '$lib/api/token';
 	import { initTheme } from '$lib/theme';
+	import { startFlushLoop } from '$lib/offline/flush';
 	import BottomNav from '$lib/components/BottomNav.svelte';
+	import SyncStatusBanner from '$lib/components/SyncStatusBanner.svelte';
 
 	let { children } = $props();
 
@@ -19,6 +21,7 @@
 	onMount(() => {
 		initTheme();
 		refreshAuth();
+		startFlushLoop();
 	});
 	afterNavigate(refreshAuth);
 
@@ -36,5 +39,8 @@
 	</div>
 	{#if showNav}
 		<BottomNav />
+	{/if}
+	{#if loggedIn}
+		<SyncStatusBanner />
 	{/if}
 </div>

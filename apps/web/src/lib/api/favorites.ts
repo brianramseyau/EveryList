@@ -17,6 +17,7 @@ export async function createFavorite(
 		entityType: 'favorite_item',
 		table: (db) => db.favoriteItems,
 		payload: { ...input, listId },
+		url: `/api/v1/lists/${listId}/favorites`,
 		buildOptimisticRow: (tempId) => ({
 			id: tempId,
 			listId,
@@ -45,6 +46,7 @@ export async function updateFavorite(
 		op: 'update',
 		targetId: id,
 		payload: input,
+		url: `/api/v1/lists/${listId}/favorites/${id}`,
 		applyOptimistically: async (db) => {
 			const existing = await db.favoriteItems.get(id);
 			if (!existing) return 0;
@@ -64,6 +66,7 @@ export async function deleteFavorite(listId: number, id: number): Promise<void> 
 		op: 'delete',
 		targetId: id,
 		payload: {},
+		url: `/api/v1/lists/${listId}/favorites/${id}`,
 		applyOptimistically: async (db) => {
 			const existing = await db.favoriteItems.get(id);
 			if (!existing) return 0;

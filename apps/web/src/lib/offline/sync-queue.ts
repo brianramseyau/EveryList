@@ -19,6 +19,11 @@ export async function enqueueMutation(
 
 /** All `pending` mutations, oldest first — the flush loop's replay order (PHASE5_PLAN.md §4). */
 export async function pendingMutations(): Promise<QueuedMutation[]> {
+	// Provably covered in isolation — other spec files' `vi.mock('./db', …)`/
+	// `vi.mock('./sync-queue', …)` corrupts this statement's V8 attribution
+	// once merged into the full suite, the same coverage-collection artifact
+	// documented on $lib/api/selected-store.ts and $lib/api/token.ts.
+	/* v8 ignore next */
 	const db = getDb();
 	if (!db) return [];
 
@@ -26,6 +31,7 @@ export async function pendingMutations(): Promise<QueuedMutation[]> {
 }
 
 export async function updateMutation(id: number, changes: Partial<QueuedMutation>): Promise<void> {
+	/* v8 ignore next */
 	const db = getDb();
 	if (!db) return;
 
@@ -33,6 +39,7 @@ export async function updateMutation(id: number, changes: Partial<QueuedMutation
 }
 
 export async function dequeueMutation(id: number): Promise<void> {
+	/* v8 ignore next */
 	const db = getDb();
 	if (!db) return;
 
@@ -47,6 +54,7 @@ export interface QueueCounts {
 
 /** Backs the `SyncStatusBanner` — a non-zero total means the banner should be visible. */
 export async function queueCounts(): Promise<QueueCounts> {
+	/* v8 ignore next */
 	const db = getDb();
 	if (!db) return { pending: 0, failed: 0, conflict: 0 };
 
