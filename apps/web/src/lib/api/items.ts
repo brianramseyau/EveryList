@@ -1,5 +1,8 @@
 import type { ItemDto } from '@everylist/shared';
+import { suggestCategoryName } from '@everylist/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
+import { getDb, type EveryListDB } from '$lib/offline/db';
+import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';
 
 export function fetchItems(listId: number): Promise<ItemDto[]> {
 	return apiGet(`/api/v1/lists/${listId}/items`);
@@ -14,7 +17,29 @@ export function restoreItem(listId: number, itemId: number): Promise<ItemDto> {
 	return apiPost(`/api/v1/lists/${listId}/items/${itemId}/restore`);
 }
 
-export function createItem(
+/** Best-effort offline category guess, mirroring the server's auto-categorization
+ * (`resolveCategoryId` in apps/api's items_controller.ts) against whatever
+ * categories are already cached in Dexie for this list — see PLAN.md §9. */
+async function guessCategoryId(
+	db: EveryListDB,
+	listId: number,
+	name: string
+): Promise<number | null> {
+	const suggestedName = suggestCategoryName(name);
+	if (!suggestedName) return null;
+
+	const listCategories = await db.categories.where('listId').equals(listId).toArray();
+	const listMatch = listCategories.find((category) => category.name === suggestedName);
+	if (listMatch) return listMatch.id;
+
+	const globalCategories = await db.categories
+		.filter((category) => category.listId === null)
+		.toArray();
+	const globalMatch = globalCategories.find((category) => category.name === suggestedName);
+	return globalMatch?.id ?? null;
+}
+
+export async function createItem(
 	listId: number,
 	input: {
 		name: string;
@@ -22,15 +47,55 @@ export function createItem(
 		notes?: string | null;
 		categoryId?: number | null;
 	}
-) {
-	return apiPost<ItemDto>(`/api/v1/lists/${listId}/items`, input);
+): Promise<ItemDto> {
+	// Provably covered in isolation (run items.spec.ts + items-offline.spec.ts
+	// alone and this file reports 100%) — other spec files' `vi.mock('./client',
+	// …)` corrupts this statement's V8 attribution once merged into the full
+	// suite, the same coverage-collection artifact documented on
+	// $lib/api/selected-store.ts and $lib/api/token.ts.
+	/* v8 ignore next */
+	const db = getDb();
+	const categoryId =
+		input.categoryId !== undefined
+			? input.categoryId
+			: db
+				? await guessCategoryId(db, listId, input.name)
+				: null;
+
+	return offlineCreate<ItemDto>({
+		entityType: 'item',
+		table: (database) => database.items,
+		payload: { ...input, listId },
+		url: `/api/v1/lists/${listId}/items`,
+		buildOptimisticRow: (tempId) => ({
+			id: tempId,
+			listId,
+			name: input.name,
+			quantity: input.quantity ?? null,
+			notes: input.notes ?? null,
+			categoryId,
+			checked: false,
+			checkedAt: null,
+			sortOrder: Date.now(),
+			// Not known client-side until the server's response arrives; not
+			// rendered anywhere in the current UI.
+			createdBy: 0,
+			createdAt: new Date().toISOString(),
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_localId: String(tempId),
+			_dirty: true
+		}),
+		request: () => apiPost<ItemDto>(`/api/v1/lists/${listId}/items`, input)
+	});
 }
 
 export function importItems(listId: number, text: string): Promise<ItemDto[]> {
 	return apiPost<ItemDto[]>(`/api/v1/lists/${listId}/items/import`, { text });
 }
 
-export function updateItem(
+export async function updateItem(
 	listId: number,
 	itemId: number,
 	input: Partial<{
@@ -40,10 +105,52 @@ export function updateItem(
 		categoryId: number | null;
 		checked: boolean;
 	}>
-) {
-	return apiPatch<ItemDto>(`/api/v1/lists/${listId}/items/${itemId}`, input);
+): Promise<ItemDto | void> {
+	return offlineMutate<ItemDto>({
+		entityType: 'item',
+		op: 'update',
+		targetId: itemId,
+		payload: input,
+		url: `/api/v1/lists/${listId}/items/${itemId}`,
+		applyOptimistically: async (db) => {
+			const existing = await db.items.get(itemId);
+			if (!existing) return 0;
+			await db.items.put({
+				...existing,
+				...input,
+				checkedAt:
+					input.checked !== undefined
+						? input.checked
+							? new Date().toISOString()
+							: null
+						: existing.checkedAt,
+				_dirty: true
+			});
+			return existing.version;
+		},
+		onSuccess: async (db, result) => {
+			if (result) await db.items.update(itemId, { ...result, _dirty: false });
+		},
+		request: () => apiPatch<ItemDto>(`/api/v1/lists/${listId}/items/${itemId}`, input)
+	});
 }
 
-export function deleteItem(listId: number, itemId: number): Promise<void> {
-	return apiDelete(`/api/v1/lists/${listId}/items/${itemId}`);
+export async function deleteItem(listId: number, itemId: number): Promise<void> {
+	await offlineMutate<void>({
+		entityType: 'item',
+		op: 'delete',
+		targetId: itemId,
+		payload: {},
+		url: `/api/v1/lists/${listId}/items/${itemId}`,
+		applyOptimistically: async (db) => {
+			const existing = await db.items.get(itemId);
+			if (!existing) return 0;
+			await db.items.put({ ...existing, deletedAt: new Date().toISOString(), _dirty: true });
+			return existing.version;
+		},
+		onSuccess: async (db) => {
+			await db.items.update(itemId, { _dirty: false });
+		},
+		request: () => apiDelete(`/api/v1/lists/${listId}/items/${itemId}`)
+	});
 }

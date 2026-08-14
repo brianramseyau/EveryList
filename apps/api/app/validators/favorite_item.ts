@@ -10,4 +10,5 @@ export const updateFavoriteItemValidator = vine.create({
   name: vine.string().trim().minLength(1).maxLength(200).optional(),
   defaultCategoryId: vine.number().positive().nullable().optional(),
   defaultQuantity: vine.string().trim().maxLength(50).nullable().optional(),
+  expectedVersion: vine.number().optional(),
 })

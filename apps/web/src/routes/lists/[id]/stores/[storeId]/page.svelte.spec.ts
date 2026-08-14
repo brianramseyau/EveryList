@@ -32,7 +32,8 @@ const list = {
 	archived: false,
 	itemCount: 0,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	version: 1
 };
 const walmart = {
 	id: 20,
@@ -40,7 +41,9 @@ const walmart = {
 	color: '#3b82f6',
 	createdBy: 1,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	deletedAt: null,
+	version: 1
 };
 const produce = {
 	id: 10,
@@ -50,7 +53,9 @@ const produce = {
 	sortOrder: 0,
 	isDefault: true,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	deletedAt: null,
+	version: 1
 };
 const dairy = {
 	id: 11,
@@ -60,7 +65,9 @@ const dairy = {
 	sortOrder: 1,
 	isDefault: true,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	deletedAt: null,
+	version: 1
 };
 
 describe('Store aisle order +page.svelte', () => {
@@ -128,8 +135,8 @@ describe('Store aisle order +page.svelte', () => {
 
 	it('applies stored sort-order overrides on load', async () => {
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([
-			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0 },
-			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1 }
+			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1, deletedAt: null, version: 1 }
 		]);
 
 		render(StoreOrderPage);
@@ -141,8 +148,8 @@ describe('Store aisle order +page.svelte', () => {
 
 	it('moves a category down and persists the new order', async () => {
 		vi.mocked(reorderStoreCategories).mockResolvedValue([
-			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0 },
-			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1 }
+			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1, deletedAt: null, version: 1 }
 		]);
 
 		render(StoreOrderPage);
@@ -158,8 +165,8 @@ describe('Store aisle order +page.svelte', () => {
 
 	it('moves a category up', async () => {
 		vi.mocked(reorderStoreCategories).mockResolvedValue([
-			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0 },
-			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1 }
+			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1, deletedAt: null, version: 1 }
 		]);
 
 		render(StoreOrderPage);

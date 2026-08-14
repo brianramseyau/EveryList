@@ -9,6 +9,8 @@ import type { HttpContext } from '@adonisjs/core/http'
 import CategoryTransformer from '#transformers/category_transformer'
 import { getEffectiveCategories, forkCategoryForList } from '#services/category_service'
 import { broadcastSync } from '#services/sync_broadcaster'
+import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
+import { DateTime } from 'luxon'
 
 export default class CategoriesController {
   async index({ auth, params, serialize }: HttpContext) {
@@ -36,6 +38,7 @@ export default class CategoriesController {
       icon: payload.icon,
       sortOrder: nextSortOrder,
       isDefault: false,
+      version: 1,
     })
 
     await broadcastSync({
@@ -43,22 +46,36 @@ export default class CategoriesController {
       entityType: 'category',
       entityId: category.id,
       op: 'create',
+      version: category.version,
     })
 
     return serialize(CategoryTransformer.transform(category))
   }
 
-  async update({ auth, params, request, serialize }: HttpContext) {
+  async update({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const category = await Category.query()
       .where('id', params.categoryId)
       .where((query) => query.where('listId', list.id).orWhereNull('listId'))
+      .whereNull('deletedAt')
       .firstOrFail()
 
     const payload = await request.validateUsing(updateCategoryValidator)
+    const { expectedVersion, ...rest } = payload
+
+    // Checked against the pre-fork row: if not yet forked for this list,
+    // the client's cached view was of the global default, so its version
+    // is what expectedVersion should match.
+    if (hasVersionConflict(category, expectedVersion)) {
+      return response
+        .status(409)
+        .send({ ...(await serialize(CategoryTransformer.transform(category))), conflict: true })
+    }
+
     const listCategory = await forkCategoryForList(list, category)
-    listCategory.merge(payload)
+    listCategory.merge(rest)
+    listCategory.version += 1
     await listCategory.save()
 
     await broadcastSync({
@@ -66,25 +83,38 @@ export default class CategoriesController {
       entityType: 'category',
       entityId: listCategory.id,
       op: 'update',
+      version: listCategory.version,
     })
 
     return serialize(CategoryTransformer.transform(listCategory))
   }
 
-  async destroy({ auth, params, response }: HttpContext) {
+  async destroy({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const category = await Category.query()
       .where('id', params.categoryId)
       .where('listId', list.id)
+      .whereNull('deletedAt')
       .firstOrFail()
 
-    await category.delete()
+    const expectedVersion = parseExpectedVersion(request)
+    if (hasVersionConflict(category, expectedVersion)) {
+      return response
+        .status(409)
+        .send({ ...(await serialize(CategoryTransformer.transform(category))), conflict: true })
+    }
+
+    category.deletedAt = DateTime.now()
+    category.version += 1
+    await category.save()
+
     await broadcastSync({
       listId: list.id,
       entityType: 'category',
       entityId: category.id,
       op: 'delete',
+      version: category.version,
     })
 
     return response.noContent()
@@ -98,6 +128,7 @@ export default class CategoriesController {
     const categories = await Category.query()
       .whereIn('id', order)
       .where((query) => query.where('listId', list.id).orWhereNull('listId'))
+      .whereNull('deletedAt')
 
     const categoriesById = new Map(categories.map((category) => [category.id, category]))
 
@@ -107,6 +138,7 @@ export default class CategoriesController {
 
       const listCategory = await forkCategoryForList(list, category)
       listCategory.sortOrder = index
+      listCategory.version += 1
       await listCategory.save()
     }
 

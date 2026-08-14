@@ -13,6 +13,7 @@ export default class ListTransformer extends BaseTransformer<List> {
         'archived',
         'createdAt',
         'updatedAt',
+        'version',
       ]),
       itemCount: this.whenCounted('items') ?? 0,
     }

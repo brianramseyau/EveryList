@@ -121,6 +121,31 @@ describe('apiFetch', () => {
 		});
 	});
 
+	it('carries the parsed body on ApiError, for callers that need the conflicting row', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(jsonResponse(409, { data: { id: 1, version: 2 }, conflict: true }))
+		);
+
+		await expect(apiFetch('/x')).rejects.toMatchObject({
+			status: 409,
+			body: { data: { id: 1, version: 2 }, conflict: true }
+		});
+	});
+
+	it('leaves the body undefined when the error response was not JSON', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: false,
+				status: 500,
+				json: () => Promise.reject(new Error('not json'))
+			} as unknown as Response)
+		);
+
+		await expect(apiFetch('/x')).rejects.toMatchObject({ status: 500, body: undefined });
+	});
+
 	it('clears the stored token on a 401', async () => {
 		setToken('stale-token');
 		vi.stubGlobal(

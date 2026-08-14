@@ -46,6 +46,7 @@ export class AuthAccessTokenSchema extends BaseModel {
 export class CategorySchema extends BaseModel {
   static $columns = [
     'createdAt',
+    'deletedAt',
     'forkedFromId',
     'icon',
     'id',
@@ -54,10 +55,13 @@ export class CategorySchema extends BaseModel {
     'name',
     'sortOrder',
     'updatedAt',
+    'version',
   ] as const
   $columns = CategorySchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column.dateTime()
+  declare deletedAt: DateTime | null
   @column()
   declare forkedFromId: number | null
   @column()
@@ -74,6 +78,8 @@ export class CategorySchema extends BaseModel {
   declare sortOrder: number
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+  @column()
+  declare version: number
 }
 
 export class FavoriteItemSchema extends BaseModel {
@@ -81,11 +87,13 @@ export class FavoriteItemSchema extends BaseModel {
     'createdAt',
     'defaultCategoryId',
     'defaultQuantity',
+    'deletedAt',
     'id',
     'listId',
     'name',
     'updatedAt',
     'userId',
+    'version',
   ] as const
   $columns = FavoriteItemSchema.$columns
   @column.dateTime({ autoCreate: true })
@@ -94,6 +102,8 @@ export class FavoriteItemSchema extends BaseModel {
   declare defaultCategoryId: number | null
   @column()
   declare defaultQuantity: string | null
+  @column.dateTime()
+  declare deletedAt: DateTime | null
   @column({ isPrimary: true })
   declare id: number
   @column()
@@ -104,6 +114,8 @@ export class FavoriteItemSchema extends BaseModel {
   declare updatedAt: DateTime | null
   @column()
   declare userId: number
+  @column()
+  declare version: number
 }
 
 export class ItemSchema extends BaseModel {
@@ -121,6 +133,7 @@ export class ItemSchema extends BaseModel {
     'quantity',
     'sortOrder',
     'updatedAt',
+    'version',
   ] as const
   $columns = ItemSchema.$columns
   @column()
@@ -149,6 +162,8 @@ export class ItemSchema extends BaseModel {
   declare sortOrder: number
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+  @column()
+  declare version: number
 }
 
 export class ListInviteSchema extends BaseModel {
@@ -240,6 +255,7 @@ export class ListSchema extends BaseModel {
     'name',
     'ownerId',
     'updatedAt',
+    'version',
   ] as const
   $columns = ListSchema.$columns
   @column()
@@ -260,15 +276,28 @@ export class ListSchema extends BaseModel {
   declare ownerId: number
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+  @column()
+  declare version: number
 }
 
 export class StoreCategoryOrderSchema extends BaseModel {
-  static $columns = ['categoryId', 'createdAt', 'id', 'sortOrder', 'storeId', 'updatedAt'] as const
+  static $columns = [
+    'categoryId',
+    'createdAt',
+    'deletedAt',
+    'id',
+    'sortOrder',
+    'storeId',
+    'updatedAt',
+    'version',
+  ] as const
   $columns = StoreCategoryOrderSchema.$columns
   @column()
   declare categoryId: number
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column.dateTime()
+  declare deletedAt: DateTime | null
   @column({ isPrimary: true })
   declare id: number
   @column()
@@ -277,10 +306,21 @@ export class StoreCategoryOrderSchema extends BaseModel {
   declare storeId: number
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+  @column()
+  declare version: number
 }
 
 export class StoreSchema extends BaseModel {
-  static $columns = ['color', 'createdAt', 'createdBy', 'id', 'name', 'updatedAt'] as const
+  static $columns = [
+    'color',
+    'createdAt',
+    'createdBy',
+    'deletedAt',
+    'id',
+    'name',
+    'updatedAt',
+    'version',
+  ] as const
   $columns = StoreSchema.$columns
   @column()
   declare color: string
@@ -288,12 +328,16 @@ export class StoreSchema extends BaseModel {
   declare createdAt: DateTime
   @column()
   declare createdBy: number
+  @column.dateTime()
+  declare deletedAt: DateTime | null
   @column({ isPrimary: true })
   declare id: number
   @column()
   declare name: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+  @column()
+  declare version: number
 }
 
 export class SyncEventSchema extends BaseModel {

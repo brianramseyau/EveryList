@@ -1,30 +1,30 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { resetDbForTesting } from '$lib/offline/db';
 import { getSelectedStore, setSelectedStore } from './selected-store';
 
-// Runs in the "client" (real Chromium) project for real localStorage — see
-// selected-store.spec.ts for the SSR/no-window guard.
+// Runs in the "client" (real Chromium) project for a real IndexedDB round
+// trip — see selected-store.spec.ts for the SSR/no-IndexedDB guard.
 describe('selected-store (browser)', () => {
-	afterEach(() => {
-		setSelectedStore(1, null);
-		setSelectedStore(2, null);
+	afterEach(async () => {
+		await resetDbForTesting();
 	});
 
-	it('has no selection by default', () => {
-		expect(getSelectedStore(1)).toBeNull();
+	it('has no selection by default', async () => {
+		await expect(getSelectedStore(1)).resolves.toBeNull();
 	});
 
-	it('round-trips a selection through localStorage, keyed per list', () => {
-		setSelectedStore(1, 20);
-		setSelectedStore(2, 30);
+	it('round-trips a selection through Dexie, keyed per list', async () => {
+		await setSelectedStore(1, 20);
+		await setSelectedStore(2, 30);
 
-		expect(getSelectedStore(1)).toBe(20);
-		expect(getSelectedStore(2)).toBe(30);
+		await expect(getSelectedStore(1)).resolves.toBe(20);
+		await expect(getSelectedStore(2)).resolves.toBe(30);
 	});
 
-	it('clears the selection when set to null', () => {
-		setSelectedStore(1, 20);
-		setSelectedStore(1, null);
+	it('clears the selection when set to null', async () => {
+		await setSelectedStore(1, 20);
+		await setSelectedStore(1, null);
 
-		expect(getSelectedStore(1)).toBeNull();
+		await expect(getSelectedStore(1)).resolves.toBeNull();
 	});
 });

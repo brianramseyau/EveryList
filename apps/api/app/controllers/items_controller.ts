@@ -5,9 +5,10 @@ import { createItemValidator, updateItemValidator, importItemsValidator } from '
 import type { HttpContext } from '@adonisjs/core/http'
 import ItemTransformer from '#transformers/item_transformer'
 import { getEffectiveCategories } from '#services/category_service'
-import { suggestCategoryName } from '#services/auto_categorize_service'
+import { suggestCategoryName } from '@everylist/shared'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
+import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
 
 async function resolveCategoryId(
   list: List,
@@ -74,9 +75,16 @@ export default class ItemsController {
       checked: false,
       sortOrder: await nextSortOrder(list.id),
       createdBy: user.id,
+      version: 1,
     })
 
-    await broadcastSync({ listId: list.id, entityType: 'item', entityId: item.id, op: 'create' })
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'item',
+      entityId: item.id,
+      op: 'create',
+      version: item.version,
+    })
 
     return serialize(ItemTransformer.transform(item))
   }
@@ -105,6 +113,7 @@ export default class ItemsController {
           checked: false,
           sortOrder: sortOrder++,
           createdBy: user.id,
+          version: 1,
         })
       )
     }
@@ -120,7 +129,7 @@ export default class ItemsController {
     return serialize(ItemTransformer.transform(items))
   }
 
-  async update({ auth, params, request, serialize }: HttpContext) {
+  async update({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const item = await Item.query()
@@ -130,20 +139,34 @@ export default class ItemsController {
       .firstOrFail()
 
     const payload = await request.validateUsing(updateItemValidator)
-    const { checked, ...rest } = payload
+    const { checked, expectedVersion, ...rest } = payload
+
+    if (hasVersionConflict(item, expectedVersion)) {
+      return response
+        .status(409)
+        .send({ ...(await serialize(ItemTransformer.transform(item))), conflict: true })
+    }
+
     item.merge(rest)
     if (checked !== undefined) {
       item.checked = checked
       item.checkedAt = checked ? DateTime.now() : null
     }
+    item.version += 1
     await item.save()
 
-    await broadcastSync({ listId: list.id, entityType: 'item', entityId: item.id, op: 'update' })
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'item',
+      entityId: item.id,
+      op: 'update',
+      version: item.version,
+    })
 
     return serialize(ItemTransformer.transform(item))
   }
 
-  async destroy({ auth, params, response }: HttpContext) {
+  async destroy({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const item = await Item.query()
@@ -152,10 +175,24 @@ export default class ItemsController {
       .whereNull('deletedAt')
       .firstOrFail()
 
+    const expectedVersion = parseExpectedVersion(request)
+    if (hasVersionConflict(item, expectedVersion)) {
+      return response
+        .status(409)
+        .send({ ...(await serialize(ItemTransformer.transform(item))), conflict: true })
+    }
+
     item.deletedAt = DateTime.now()
+    item.version += 1
     await item.save()
 
-    await broadcastSync({ listId: list.id, entityType: 'item', entityId: item.id, op: 'delete' })
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'item',
+      entityId: item.id,
+      op: 'delete',
+      version: item.version,
+    })
 
     return response.noContent()
   }
@@ -171,9 +208,16 @@ export default class ItemsController {
 
     item.deletedAt = null
     item.sortOrder = await nextSortOrder(list.id)
+    item.version += 1
     await item.save()
 
-    await broadcastSync({ listId: list.id, entityType: 'item', entityId: item.id, op: 'create' })
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'item',
+      entityId: item.id,
+      op: 'create',
+      version: item.version,
+    })
 
     return serialize(ItemTransformer.transform(item))
   }

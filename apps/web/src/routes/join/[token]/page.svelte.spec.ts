@@ -76,7 +76,8 @@ describe('Join +page.svelte', () => {
 			archived: false,
 			itemCount: 0,
 			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null
+			updatedAt: null,
+			version: 1
 		});
 
 		render(JoinPage);

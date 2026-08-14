@@ -6,6 +6,7 @@ import ListTransformer from '#transformers/list_transformer'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { createOwnedList } from '#services/list_creation'
+import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
 
 export default class ListsController {
   async index({ auth, serialize }: HttpContext) {
@@ -45,7 +46,7 @@ export default class ListsController {
     return serialize(ListTransformer.transform(list))
   }
 
-  async update({ auth, params, request, serialize }: HttpContext) {
+  async update({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     await ListPolicy.requireList(user.id, params.id, 'owner')
     const list = await List.query()
@@ -55,23 +56,52 @@ export default class ListsController {
       .firstOrFail()
 
     const payload = await request.validateUsing(updateListValidator)
-    list.merge(payload)
+    const { expectedVersion, ...rest } = payload
+
+    if (hasVersionConflict(list, expectedVersion)) {
+      return response
+        .status(409)
+        .send({ ...(await serialize(ListTransformer.transform(list))), conflict: true })
+    }
+
+    list.merge(rest)
+    list.version += 1
     await list.save()
 
-    await broadcastSync({ listId: list.id, entityType: 'list', entityId: list.id, op: 'update' })
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'list',
+      entityId: list.id,
+      op: 'update',
+      version: list.version,
+    })
 
     return serialize(ListTransformer.transform(list))
   }
 
-  async destroy({ auth, params, response }: HttpContext) {
+  async destroy({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     await ListPolicy.requireList(user.id, params.id, 'owner')
     const list = await List.query().where('id', params.id).whereNull('deletedAt').firstOrFail()
 
+    const expectedVersion = parseExpectedVersion(request)
+    if (hasVersionConflict(list, expectedVersion)) {
+      return response
+        .status(409)
+        .send({ ...(await serialize(ListTransformer.transform(list))), conflict: true })
+    }
+
     list.deletedAt = DateTime.now()
+    list.version += 1
     await list.save()
 
-    await broadcastSync({ listId: list.id, entityType: 'list', entityId: list.id, op: 'delete' })
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'list',
+      entityId: list.id,
+      op: 'delete',
+      version: list.version,
+    })
 
     return response.noContent()
   }

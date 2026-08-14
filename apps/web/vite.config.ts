@@ -4,6 +4,7 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 // Some sandboxed dev environments pre-cache a Chromium build at a fixed path
 // under a different revision than the one this Playwright version expects,
@@ -32,6 +33,47 @@ export default defineConfig({
 			// with the prerendered "/" page — AdonisJS serves it explicitly as
 			// the catch-all for unmatched routes (see docker/Dockerfile).
 			adapter: adapter({ fallback: '200.html' })
+		}),
+		// `generateSW` (not `injectManifest`) — every caching rule this app needs
+		// (precache the app shell, stale-while-revalidate on API GETs, an offline
+		// navigation fallback) is fully declarative, so no custom SW source file is
+		// needed. Plain `vite-plugin-pwa` (not `@vite-pwa/sveltekit`) operates on the
+		// built output directly via Vite's build hooks, which sidesteps needing to
+		// verify a SvelteKit-specific integration against adapter-static's non-default
+		// `fallback: '200.html'` output — see PHASE5_PLAN.md §5.
+		VitePWA({
+			registerType: 'autoUpdate',
+			injectRegister: null,
+			manifest: {
+				name: 'EveryList',
+				short_name: 'EveryList',
+				description: 'Shared, offline-first shopping lists.',
+				start_url: '/lists',
+				scope: '/',
+				display: 'standalone',
+				background_color: '#ffffff',
+				theme_color: '#0284c7',
+				icons: [
+					{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+					{ src: '/icon-512.png', sizes: '512x512', type: 'image/png' }
+				]
+			},
+			workbox: {
+				navigateFallback: '/200.html',
+				globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+				// The icon-picker's lazily-loaded @mdi/js chunk is ~2.8MB — above Workbox's
+				// default 2MB precache limit. It's still lazy (only fetched when the icon
+				// picker opens), just also precached up front like everything else here.
+				maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+				runtimeCaching: [
+					{
+						urlPattern: ({ url, request }) =>
+							url.pathname.startsWith('/api/v1/') && request.method === 'GET',
+						handler: 'StaleWhileRevalidate',
+						options: { cacheName: 'api-get-cache' }
+					}
+				]
+			}
 		})
 	],
 	server: {

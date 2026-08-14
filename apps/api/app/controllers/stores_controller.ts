@@ -12,12 +12,13 @@ import type { HttpContext } from '@adonisjs/core/http'
 import StoreTransformer from '#transformers/store_transformer'
 import StoreCategoryOrderTransformer from '#transformers/store_category_order_transformer'
 import { broadcastSync, broadcastToStoreLists } from '#services/sync_broadcaster'
+import { hasVersionConflict } from '#services/version_conflict'
 
 export default class StoresController {
   async index({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
-    await list.load('stores')
+    await list.load('stores', (query) => query.whereNull('deletedAt'))
 
     return serialize(StoreTransformer.transform(list.stores))
   }
@@ -39,25 +40,46 @@ export default class StoresController {
         name: payload.name,
         color: payload.color ?? '#3b82f6',
         createdBy: user.id,
+        version: 1,
       })
     } else {
       return response.badRequest({ message: 'Either storeId or name is required' })
     }
 
     await ListStore.firstOrCreate({ listId: list.id, storeId: store.id })
-    await broadcastSync({ listId: list.id, entityType: 'store', entityId: store.id, op: 'create' })
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'store',
+      entityId: store.id,
+      op: 'create',
+      version: store.version,
+    })
 
     return serialize(StoreTransformer.transform(store))
   }
 
-  async update({ auth, params, request, serialize }: HttpContext) {
+  async update({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const store = await ListPolicy.requireStoreRole(user.id, params.id, 'editor')
     const payload = await request.validateUsing(updateStoreValidator)
-    store.merge(payload)
+    const { expectedVersion, ...rest } = payload
+
+    if (hasVersionConflict(store, expectedVersion)) {
+      return response
+        .status(409)
+        .send({ ...(await serialize(StoreTransformer.transform(store))), conflict: true })
+    }
+
+    store.merge(rest)
+    store.version += 1
     await store.save()
 
-    await broadcastToStoreLists(store, { entityType: 'store', entityId: store.id, op: 'update' })
+    await broadcastToStoreLists(store, {
+      entityType: 'store',
+      entityId: store.id,
+      op: 'update',
+      version: store.version,
+    })
 
     return serialize(StoreTransformer.transform(store))
   }
@@ -82,6 +104,7 @@ export default class StoresController {
     const store = await ListPolicy.requireStoreRole(user.id, params.id, 'viewer')
     const orders = await StoreCategoryOrder.query()
       .where('storeId', store.id)
+      .whereNull('deletedAt')
       .orderBy('sortOrder', 'asc')
 
     return serialize(StoreCategoryOrderTransformer.transform(orders))
@@ -98,14 +121,28 @@ export default class StoresController {
 
     for (const entry of categories) {
       if (!validCategoryIds.has(entry.categoryId)) continue
-      await StoreCategoryOrder.updateOrCreate(
-        { storeId: store.id, categoryId: entry.categoryId },
-        { sortOrder: entry.sortOrder }
-      )
+      const existing = await StoreCategoryOrder.query()
+        .where('storeId', store.id)
+        .where('categoryId', entry.categoryId)
+        .first()
+
+      if (existing) {
+        existing.sortOrder = entry.sortOrder
+        existing.version += 1
+        await existing.save()
+      } else {
+        await StoreCategoryOrder.create({
+          storeId: store.id,
+          categoryId: entry.categoryId,
+          sortOrder: entry.sortOrder,
+          version: 1,
+        })
+      }
     }
 
     const orders = await StoreCategoryOrder.query()
       .where('storeId', store.id)
+      .whereNull('deletedAt')
       .orderBy('sortOrder', 'asc')
 
     await broadcastToStoreLists(store, {

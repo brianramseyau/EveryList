@@ -32,7 +32,8 @@ const list = {
 	archived: false,
 	itemCount: 0,
 	createdAt: '2026-08-01T00:00:00.000Z',
-	updatedAt: null
+	updatedAt: null,
+	version: 1
 };
 const walmart = {
 	id: 20,
@@ -40,7 +41,9 @@ const walmart = {
 	color: '#3b82f6',
 	createdBy: 1,
 	createdAt: '2026-08-01T00:00:00.000Z',
-	updatedAt: null
+	updatedAt: null,
+	deletedAt: null,
+	version: 1
 };
 
 describe('Stores +page.svelte', () => {
@@ -48,7 +51,7 @@ describe('Stores +page.svelte', () => {
 		setToken('test-token');
 		vi.mocked(fetchList).mockResolvedValue(list);
 		vi.mocked(fetchStores).mockResolvedValue([walmart]);
-		vi.mocked(getSelectedStore).mockReturnValue(null);
+		vi.mocked(getSelectedStore).mockResolvedValue(null);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
@@ -88,7 +91,7 @@ describe('Stores +page.svelte', () => {
 	});
 
 	it('restores the previously selected store on load', async () => {
-		vi.mocked(getSelectedStore).mockReturnValue(20);
+		vi.mocked(getSelectedStore).mockResolvedValue(20);
 
 		render(StoresPage);
 
@@ -102,7 +105,9 @@ describe('Stores +page.svelte', () => {
 			color: '#3b82f6',
 			createdBy: 1,
 			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
 		});
 
 		render(StoresPage);
@@ -163,7 +168,9 @@ describe('Stores +page.svelte', () => {
 			color: '#22c55e',
 			createdBy: 1,
 			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
 		});
 
 		render(StoresPage);
@@ -232,7 +239,7 @@ describe('Stores +page.svelte', () => {
 	});
 
 	it('selects "no store" (default order)', async () => {
-		vi.mocked(getSelectedStore).mockReturnValue(20);
+		vi.mocked(getSelectedStore).mockResolvedValue(20);
 
 		render(StoresPage);
 		await expect.element(page.getByRole('radio', { name: 'Walmart' })).toBeChecked();

@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
-import type { ApiClient } from '@japa/api-client'
+import type { ApiClient, ApiRequest } from '@japa/api-client'
 import type { ListDto } from '@everylist/shared'
 import DefaultCategorySeeder from '#database/seeders/default_category_seeder'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
@@ -50,6 +50,55 @@ test.group('Categories', (group) => {
       .get(`/api/v1/lists/${listId}/categories`)
       .header('Authorization', `Bearer ${token}`)
     assert.lengthOf(index.body().data, 9)
+  })
+
+  test('update/destroy honor expectedVersion — omitted always applies, matching applies and bumps, stale conflicts with 409', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const create = await auth(
+      client.post(`/api/v1/lists/${listId}/categories`).json({ name: 'Pet Supplies', icon: 'paw' })
+    )
+    const category = create.body().data
+    assert.equal(category.version, 1)
+
+    const unversioned = await auth(
+      client.patch(`/api/v1/lists/${listId}/categories/${category.id}`).json({ icon: 'dog' })
+    )
+    unversioned.assertStatus(200)
+    assert.equal(unversioned.body().data.version, 2)
+
+    const stale = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/categories/${category.id}`)
+        .json({ icon: 'cat', expectedVersion: 1 })
+    )
+    stale.assertStatus(409)
+    assert.isTrue(stale.body().conflict)
+    assert.equal(stale.body().data.version, 2)
+
+    const matching = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/categories/${category.id}`)
+        .json({ icon: 'cat', expectedVersion: 2 })
+    )
+    matching.assertStatus(200)
+    assert.equal(matching.body().data.icon, 'cat')
+    assert.equal(matching.body().data.version, 3)
+
+    const staleDestroy = await auth(
+      client.delete(`/api/v1/lists/${listId}/categories/${category.id}`).qs({ expectedVersion: 2 })
+    )
+    staleDestroy.assertStatus(409)
+
+    const destroy = await auth(
+      client.delete(`/api/v1/lists/${listId}/categories/${category.id}`).qs({ expectedVersion: 3 })
+    )
+    destroy.assertStatus(204)
   })
 
   test('renaming a global default forks it into a list-scoped override', async ({

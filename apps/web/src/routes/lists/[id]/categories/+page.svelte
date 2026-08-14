@@ -73,11 +73,11 @@
 	async function saveCategory(category: CategoryDto) {
 		saving = category.id;
 		try {
-			const saved = await updateCategory(listId, category.id, {
-				name: category.name,
-				icon: category.icon
-			});
-			categories = categories.map((current) => (current.id === category.id ? saved : current));
+			const input = { name: category.name, icon: category.icon };
+			const saved = await updateCategory(listId, category.id, input);
+			categories = categories.map((current) =>
+				current.id === category.id ? (saved ?? { ...current, ...input }) : current
+			);
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to save category.';
 			void loadAll();

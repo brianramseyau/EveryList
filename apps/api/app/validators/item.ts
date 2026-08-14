@@ -14,6 +14,7 @@ export const updateItemValidator = vine.create({
   categoryId: vine.number().positive().nullable().optional(),
   checked: vine.boolean().optional(),
   sortOrder: vine.number().optional(),
+  expectedVersion: vine.number().optional(),
 })
 
 export const importItemsValidator = vine.create({

@@ -11,6 +11,7 @@ interface StoreCategoryOrderDto {
   storeId: number
   categoryId: number
   sortOrder: number
+  version: number
 }
 
 async function createList(client: ApiClient, token: string) {
@@ -57,6 +58,17 @@ test.group('Stores', (group) => {
       .json({ categories: [{ categoryId, sortOrder: 5 }] })
     reorder.assertStatus(200)
     assert.equal(bodyData<StoreCategoryOrderDto[]>(reorder)[0]!.sortOrder, 5)
+    assert.equal(bodyData<StoreCategoryOrderDto[]>(reorder)[0]!.version, 1)
+
+    // Reordering the same category again updates (rather than duplicates)
+    // its existing StoreCategoryOrder row, bumping its version.
+    const reorderAgain = await client
+      .patch(`/api/v1/stores/${storeId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ categories: [{ categoryId, sortOrder: 9 }] })
+    reorderAgain.assertStatus(200)
+    assert.equal(bodyData<StoreCategoryOrderDto[]>(reorderAgain)[0]!.sortOrder, 9)
+    assert.equal(bodyData<StoreCategoryOrderDto[]>(reorderAgain)[0]!.version, 2)
 
     const rename = await client
       .patch(`/api/v1/stores/${storeId}`)
@@ -74,6 +86,43 @@ test.group('Stores', (group) => {
       .get(`/api/v1/lists/${listId}/stores`)
       .header('Authorization', `Bearer ${token}`)
     assert.lengthOf(bodyData<StoreDto[]>(afterDetach), 0)
+  })
+
+  test('update honors expectedVersion — omitted always applies, matching applies and bumps, stale conflicts with 409', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/stores`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Walmart' })
+    const store = bodyData<StoreDto & { version: number }>(create)
+    assert.equal(store.version, 1)
+
+    const unversioned = await client
+      .patch(`/api/v1/stores/${store.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ color: '#ff0000' })
+    unversioned.assertStatus(200)
+    assert.equal(bodyData<{ version: number }>(unversioned).version, 2)
+
+    const stale = await client
+      .patch(`/api/v1/stores/${store.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ color: '#00ff00', expectedVersion: 1 })
+    stale.assertStatus(409)
+    assert.isTrue(stale.body().conflict)
+    assert.equal(stale.body().data.version, 2)
+
+    const matching = await client
+      .patch(`/api/v1/stores/${store.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ color: '#00ff00', expectedVersion: 2 })
+    matching.assertStatus(200)
+    assert.equal(bodyData<{ version: number }>(matching).version, 3)
   })
 
   test('attaching an existing store by id shares it across lists', async ({ client, assert }) => {

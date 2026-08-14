@@ -6,7 +6,10 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import { getToken } from '$lib/api/token';
 	import { initTheme } from '$lib/theme';
+	import { startFlushLoop } from '$lib/offline/flush';
+	import { initInstallPrompt } from '$lib/pwa/install-prompt';
 	import BottomNav from '$lib/components/BottomNav.svelte';
+	import SyncStatusBanner from '$lib/components/SyncStatusBanner.svelte';
 
 	let { children } = $props();
 
@@ -19,6 +22,11 @@
 	onMount(() => {
 		initTheme();
 		refreshAuth();
+		startFlushLoop();
+		initInstallPrompt();
+		// vite-plugin-pwa's virtual module only exists in a built/dev-served app, never under
+		// Vitest — dynamic-imported so test runs never need to resolve it.
+		void import('virtual:pwa-register').then(({ registerSW }) => registerSW({ immediate: true }));
 	});
 	afterNavigate(refreshAuth);
 
@@ -36,5 +44,8 @@
 	</div>
 	{#if showNav}
 		<BottomNav />
+	{/if}
+	{#if loggedIn}
+		<SyncStatusBanner />
 	{/if}
 </div>

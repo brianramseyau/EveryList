@@ -12,6 +12,8 @@ export default class CategoryTransformer extends BaseTransformer<Category> {
       'isDefault',
       'createdAt',
       'updatedAt',
+      'deletedAt',
+      'version',
     ])
   }
 }

@@ -18,6 +18,7 @@ export async function createOwnedList(input: CreateOwnedListInput) {
     icon: input.icon,
     ownerId: input.ownerId,
     archived: false,
+    version: 1,
   })
 
   const now = DateTime.now()
@@ -29,7 +30,13 @@ export async function createOwnedList(input: CreateOwnedListInput) {
     acceptedAt: now,
   })
 
-  await broadcastSync({ listId: list.id, entityType: 'list', entityId: list.id, op: 'create' })
+  await broadcastSync({
+    listId: list.id,
+    entityType: 'list',
+    entityId: list.id,
+    op: 'create',
+    version: list.version,
+  })
 
   return list
 }

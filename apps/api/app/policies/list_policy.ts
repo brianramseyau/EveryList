@@ -71,7 +71,7 @@ export default class ListPolicy {
     storeId: number | string,
     minRole: ListRole
   ): Promise<Store> {
-    const store = await Store.query().where('id', storeId).first()
+    const store = await Store.query().where('id', storeId).whereNull('deletedAt').first()
     if (!store) throw new ListNotFoundException()
 
     const role = await ListPolicy.storeRoleFor(userId, store.id)

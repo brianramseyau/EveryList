@@ -6,12 +6,17 @@ import type { HttpContext } from '@adonisjs/core/http'
 import FavoriteItemTransformer from '#transformers/favorite_item_transformer'
 import ItemTransformer from '#transformers/item_transformer'
 import { broadcastSync } from '#services/sync_broadcaster'
+import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
+import { DateTime } from 'luxon'
 
 export default class FavoriteItemsController {
   async index({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
-    const favorites = await FavoriteItem.query().where('listId', list.id).orderBy('name', 'asc')
+    const favorites = await FavoriteItem.query()
+      .where('listId', list.id)
+      .whereNull('deletedAt')
+      .orderBy('name', 'asc')
 
     return serialize(FavoriteItemTransformer.transform(favorites))
   }
@@ -27,6 +32,7 @@ export default class FavoriteItemsController {
       name: payload.name,
       defaultCategoryId: payload.defaultCategoryId ?? null,
       defaultQuantity: payload.defaultQuantity ?? null,
+      version: 1,
     })
 
     await broadcastSync({
@@ -34,21 +40,33 @@ export default class FavoriteItemsController {
       entityType: 'favorite_item',
       entityId: favorite.id,
       op: 'create',
+      version: favorite.version,
     })
 
     return serialize(FavoriteItemTransformer.transform(favorite))
   }
 
-  async update({ auth, params, request, serialize }: HttpContext) {
+  async update({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const favorite = await FavoriteItem.query()
       .where('id', params.id)
       .where('listId', list.id)
+      .whereNull('deletedAt')
       .firstOrFail()
 
     const payload = await request.validateUsing(updateFavoriteItemValidator)
-    favorite.merge(payload)
+    const { expectedVersion, ...rest } = payload
+
+    if (hasVersionConflict(favorite, expectedVersion)) {
+      return response.status(409).send({
+        ...(await serialize(FavoriteItemTransformer.transform(favorite))),
+        conflict: true,
+      })
+    }
+
+    favorite.merge(rest)
+    favorite.version += 1
     await favorite.save()
 
     await broadcastSync({
@@ -56,25 +74,39 @@ export default class FavoriteItemsController {
       entityType: 'favorite_item',
       entityId: favorite.id,
       op: 'update',
+      version: favorite.version,
     })
 
     return serialize(FavoriteItemTransformer.transform(favorite))
   }
 
-  async destroy({ auth, params, response }: HttpContext) {
+  async destroy({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const favorite = await FavoriteItem.query()
       .where('id', params.id)
       .where('listId', list.id)
+      .whereNull('deletedAt')
       .firstOrFail()
 
-    await favorite.delete()
+    const expectedVersion = parseExpectedVersion(request)
+    if (hasVersionConflict(favorite, expectedVersion)) {
+      return response.status(409).send({
+        ...(await serialize(FavoriteItemTransformer.transform(favorite))),
+        conflict: true,
+      })
+    }
+
+    favorite.deletedAt = DateTime.now()
+    favorite.version += 1
+    await favorite.save()
+
     await broadcastSync({
       listId: list.id,
       entityType: 'favorite_item',
       entityId: favorite.id,
       op: 'delete',
+      version: favorite.version,
     })
 
     return response.noContent()
@@ -91,6 +123,7 @@ export default class FavoriteItemsController {
     const favorite = await FavoriteItem.query()
       .where('id', params.id)
       .where('listId', list.id)
+      .whereNull('deletedAt')
       .firstOrFail()
 
     const maxSortOrder = await Item.query()
@@ -108,9 +141,16 @@ export default class FavoriteItemsController {
       checked: false,
       sortOrder: Number(maxSortOrder?.$extras.maxSortOrder ?? -1) + 1,
       createdBy: user.id,
+      version: 1,
     })
 
-    await broadcastSync({ listId: list.id, entityType: 'item', entityId: item.id, op: 'create' })
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'item',
+      entityId: item.id,
+      op: 'create',
+      version: item.version,
+    })
 
     return serialize(ItemTransformer.transform(item))
   }

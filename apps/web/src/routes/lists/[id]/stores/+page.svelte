@@ -32,7 +32,7 @@
 		loading = true;
 		try {
 			[list, stores] = await Promise.all([fetchList(listId), fetchStores(listId)]);
-			selectedStoreId = getSelectedStore(listId);
+			selectedStoreId = await getSelectedStore(listId);
 			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to load stores.';
@@ -82,7 +82,7 @@
 	// "Currently shopping at" is local-only (see $lib/api/selected-store.ts) — persist
 	// whenever the radio selection changes, including the initial load's restore.
 	$effect(() => {
-		if (!loading) setSelectedStore(listId, selectedStoreId);
+		if (!loading) void setSelectedStore(listId, selectedStoreId);
 	});
 </script>
 

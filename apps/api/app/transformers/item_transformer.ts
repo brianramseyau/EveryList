@@ -17,6 +17,7 @@ export default class ItemTransformer extends BaseTransformer<Item> {
       'createdAt',
       'updatedAt',
       'deletedAt',
+      'version',
     ])
   }
 }

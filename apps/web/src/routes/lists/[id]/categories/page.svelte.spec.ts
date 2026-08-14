@@ -32,7 +32,8 @@ const list = {
 	archived: false,
 	itemCount: 0,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	version: 1
 };
 const produce = {
 	id: 10,
@@ -42,7 +43,9 @@ const produce = {
 	sortOrder: 0,
 	isDefault: true,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	deletedAt: null,
+	version: 1
 };
 const custom = {
 	id: 11,
@@ -52,7 +55,9 @@ const custom = {
 	sortOrder: 1,
 	isDefault: false,
 	createdAt: TS,
-	updatedAt: null
+	updatedAt: null,
+	deletedAt: null,
+	version: 1
 };
 
 describe('Categories +page.svelte', () => {
@@ -110,7 +115,9 @@ describe('Categories +page.svelte', () => {
 			sortOrder: 2,
 			isDefault: false,
 			createdAt: TS,
-			updatedAt: null
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
 		});
 
 		render(CategoriesPage);
@@ -181,6 +188,19 @@ describe('Categories +page.svelte', () => {
 		await page.getByRole('button', { name: 'Save', exact: true }).first().click();
 
 		expect(updateCategory).toHaveBeenCalledWith(1, 10, { name: 'Fruits & Veg', icon: 'apple' });
+	});
+
+	it('keeps the locally edited fields when the save is queued offline (no server response yet)', async () => {
+		vi.mocked(updateCategory).mockResolvedValue(undefined);
+
+		render(CategoriesPage);
+		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+
+		await page.getByRole('textbox').nth(1).fill('Fruits & Veg');
+		await page.getByRole('button', { name: 'Save', exact: true }).first().click();
+
+		expect(updateCategory).toHaveBeenCalledWith(1, 10, { name: 'Fruits & Veg', icon: 'apple' });
+		await expect.element(page.getByRole('textbox').nth(1)).toHaveValue('Fruits & Veg');
 	});
 
 	it('picks a new icon for an existing category', async () => {

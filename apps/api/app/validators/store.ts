@@ -10,6 +10,7 @@ export const attachStoreValidator = vine.create({
 export const updateStoreValidator = vine.create({
   name: vine.string().trim().minLength(1).maxLength(120).optional(),
   color: vine.string().trim().optional(),
+  expectedVersion: vine.number().optional(),
 })
 
 export const reorderStoreCategoriesValidator = vine.create({

@@ -12,6 +12,8 @@ export interface SyncBroadcastInput {
   entityId: number
   op: SyncOp
   payload?: Record<string, unknown>
+  /** Omitted only for batch events (e.g. bulk import) that don't map to one row's version. */
+  version?: number
 }
 
 export interface SyncBroadcaster {
@@ -35,6 +37,7 @@ export class TransmitSyncBroadcaster implements SyncBroadcaster {
       entityId: input.entityId,
       op: input.op,
       payload: input.payload ?? null,
+      version: input.version ?? null,
     } as BroadcastPayload)
   }
 }
