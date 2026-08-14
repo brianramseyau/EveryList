@@ -22,10 +22,10 @@ describe('BottomNav.svelte', () => {
 		const { container } = render(BottomNav);
 
 		const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-		expect(hrefs).toEqual(['/lists', '/favorites', '/settings']);
+		expect(hrefs).toEqual(['/lists', '/settings']);
 
 		const labels = [...container.querySelectorAll('a span')].map((span) => span.textContent);
-		expect(labels).toEqual(['Lists', 'Favorites', 'Settings']);
+		expect(labels).toEqual(['Lists', 'Settings']);
 	});
 
 	it('marks the Lists link active on the list index', () => {
@@ -35,7 +35,6 @@ describe('BottomNav.svelte', () => {
 		const links = [...container.querySelectorAll('a')];
 		expect(links[0]?.getAttribute('aria-current')).toBe('page');
 		expect(links[1]?.getAttribute('aria-current')).toBeNull();
-		expect(links[2]?.getAttribute('aria-current')).toBeNull();
 	});
 
 	it('marks the Lists link active on a nested list-detail route', () => {
@@ -51,7 +50,7 @@ describe('BottomNav.svelte', () => {
 		const { container } = render(BottomNav);
 
 		const links = [...container.querySelectorAll('a')];
-		expect(links[2]?.getAttribute('aria-current')).toBe('page');
+		expect(links[1]?.getAttribute('aria-current')).toBe('page');
 		expect(links[0]?.getAttribute('aria-current')).toBeNull();
 	});
 });

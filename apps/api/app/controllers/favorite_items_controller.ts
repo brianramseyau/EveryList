@@ -6,20 +6,31 @@ import type { HttpContext } from '@adonisjs/core/http'
 import FavoriteItemTransformer from '#transformers/favorite_item_transformer'
 import ItemTransformer from '#transformers/item_transformer'
 
+async function findOwnedList(userId: number, listId: string | number) {
+  return List.query()
+    .where('id', listId)
+    .where('ownerId', userId)
+    .whereNull('deletedAt')
+    .firstOrFail()
+}
+
 export default class FavoriteItemsController {
-  async index({ auth, serialize }: HttpContext) {
+  async index({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const favorites = await FavoriteItem.query().where('userId', user.id).orderBy('name', 'asc')
+    const list = await findOwnedList(user.id, params.listId)
+    const favorites = await FavoriteItem.query().where('listId', list.id).orderBy('name', 'asc')
 
     return serialize(FavoriteItemTransformer.transform(favorites))
   }
 
-  async store({ auth, request, serialize }: HttpContext) {
+  async store({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
+    const list = await findOwnedList(user.id, params.listId)
     const payload = await request.validateUsing(createFavoriteItemValidator)
 
     const favorite = await FavoriteItem.create({
       userId: user.id,
+      listId: list.id,
       name: payload.name,
       defaultCategoryId: payload.defaultCategoryId ?? null,
       defaultQuantity: payload.defaultQuantity ?? null,
@@ -30,9 +41,10 @@ export default class FavoriteItemsController {
 
   async update({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
+    const list = await findOwnedList(user.id, params.listId)
     const favorite = await FavoriteItem.query()
       .where('id', params.id)
-      .where('userId', user.id)
+      .where('listId', list.id)
       .firstOrFail()
 
     const payload = await request.validateUsing(updateFavoriteItemValidator)
@@ -44,9 +56,10 @@ export default class FavoriteItemsController {
 
   async destroy({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
+    const list = await findOwnedList(user.id, params.listId)
     const favorite = await FavoriteItem.query()
       .where('id', params.id)
-      .where('userId', user.id)
+      .where('listId', list.id)
       .firstOrFail()
 
     await favorite.delete()
@@ -54,20 +67,16 @@ export default class FavoriteItemsController {
   }
 
   /**
-   * One-tap rebuild: adds this favorite to a list as a new item, seeded
-   * with its default category/quantity — the "master list" loop from
-   * PLAN.md §3.
+   * One-tap rebuild: adds this favorite back to its list as a new item,
+   * seeded with its default category/quantity — the "master list" loop
+   * from PLAN.md §3, now scoped to a single list.
    */
   async addToList({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
+    const list = await findOwnedList(user.id, params.listId)
     const favorite = await FavoriteItem.query()
       .where('id', params.id)
-      .where('userId', user.id)
-      .firstOrFail()
-    const list = await List.query()
-      .where('id', params.listId)
-      .where('ownerId', user.id)
-      .whereNull('deletedAt')
+      .where('listId', list.id)
       .firstOrFail()
 
     const maxSortOrder = await Item.query()

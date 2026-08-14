@@ -162,6 +162,36 @@ const routes = {
     tokens: [{"old":"/api/v1/lists/:listId/stores/:storeId","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/stores/:storeId","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/stores/:storeId","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/stores/:storeId","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/stores/:storeId","type":0,"val":"stores","end":""},{"old":"/api/v1/lists/:listId/stores/:storeId","type":1,"val":"storeId","end":""}],
     types: placeholder as Registry['lists.stores.detach']['types'],
   },
+  'lists.favorite_items.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/lists/:listId/favorites',
+    tokens: [{"old":"/api/v1/lists/:listId/favorites","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/favorites","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/favorites","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/favorites","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/favorites","type":0,"val":"favorites","end":""}],
+    types: placeholder as Registry['lists.favorite_items.index']['types'],
+  },
+  'lists.favorite_items.store': {
+    methods: ["POST"],
+    pattern: '/api/v1/lists/:listId/favorites',
+    tokens: [{"old":"/api/v1/lists/:listId/favorites","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/favorites","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/favorites","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/favorites","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/favorites","type":0,"val":"favorites","end":""}],
+    types: placeholder as Registry['lists.favorite_items.store']['types'],
+  },
+  'lists.favorite_items.update': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/lists/:listId/favorites/:id',
+    tokens: [{"old":"/api/v1/lists/:listId/favorites/:id","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/favorites/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/favorites/:id","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/favorites/:id","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/favorites/:id","type":0,"val":"favorites","end":""},{"old":"/api/v1/lists/:listId/favorites/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['lists.favorite_items.update']['types'],
+  },
+  'lists.favorite_items.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/lists/:listId/favorites/:id',
+    tokens: [{"old":"/api/v1/lists/:listId/favorites/:id","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/favorites/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/favorites/:id","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/favorites/:id","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/favorites/:id","type":0,"val":"favorites","end":""},{"old":"/api/v1/lists/:listId/favorites/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['lists.favorite_items.destroy']['types'],
+  },
+  'lists.favorite_items.add_to_list': {
+    methods: ["POST"],
+    pattern: '/api/v1/lists/:listId/favorites/:id/add-to-list',
+    tokens: [{"old":"/api/v1/lists/:listId/favorites/:id/add-to-list","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/favorites/:id/add-to-list","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/favorites/:id/add-to-list","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/favorites/:id/add-to-list","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/favorites/:id/add-to-list","type":0,"val":"favorites","end":""},{"old":"/api/v1/lists/:listId/favorites/:id/add-to-list","type":1,"val":"id","end":""},{"old":"/api/v1/lists/:listId/favorites/:id/add-to-list","type":0,"val":"add-to-list","end":""}],
+    types: placeholder as Registry['lists.favorite_items.add_to_list']['types'],
+  },
   'stores.stores.update': {
     methods: ["PATCH"],
     pattern: '/api/v1/stores/:id',
@@ -179,36 +209,6 @@ const routes = {
     pattern: '/api/v1/stores/:id/categories',
     tokens: [{"old":"/api/v1/stores/:id/categories","type":0,"val":"api","end":""},{"old":"/api/v1/stores/:id/categories","type":0,"val":"v1","end":""},{"old":"/api/v1/stores/:id/categories","type":0,"val":"stores","end":""},{"old":"/api/v1/stores/:id/categories","type":1,"val":"id","end":""},{"old":"/api/v1/stores/:id/categories","type":0,"val":"categories","end":""}],
     types: placeholder as Registry['stores.stores.reorder_categories']['types'],
-  },
-  'favorites.favorite_items.index': {
-    methods: ["GET","HEAD"],
-    pattern: '/api/v1/favorites',
-    tokens: [{"old":"/api/v1/favorites","type":0,"val":"api","end":""},{"old":"/api/v1/favorites","type":0,"val":"v1","end":""},{"old":"/api/v1/favorites","type":0,"val":"favorites","end":""}],
-    types: placeholder as Registry['favorites.favorite_items.index']['types'],
-  },
-  'favorites.favorite_items.store': {
-    methods: ["POST"],
-    pattern: '/api/v1/favorites',
-    tokens: [{"old":"/api/v1/favorites","type":0,"val":"api","end":""},{"old":"/api/v1/favorites","type":0,"val":"v1","end":""},{"old":"/api/v1/favorites","type":0,"val":"favorites","end":""}],
-    types: placeholder as Registry['favorites.favorite_items.store']['types'],
-  },
-  'favorites.favorite_items.update': {
-    methods: ["PATCH"],
-    pattern: '/api/v1/favorites/:id',
-    tokens: [{"old":"/api/v1/favorites/:id","type":0,"val":"api","end":""},{"old":"/api/v1/favorites/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/favorites/:id","type":0,"val":"favorites","end":""},{"old":"/api/v1/favorites/:id","type":1,"val":"id","end":""}],
-    types: placeholder as Registry['favorites.favorite_items.update']['types'],
-  },
-  'favorites.favorite_items.destroy': {
-    methods: ["DELETE"],
-    pattern: '/api/v1/favorites/:id',
-    tokens: [{"old":"/api/v1/favorites/:id","type":0,"val":"api","end":""},{"old":"/api/v1/favorites/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/favorites/:id","type":0,"val":"favorites","end":""},{"old":"/api/v1/favorites/:id","type":1,"val":"id","end":""}],
-    types: placeholder as Registry['favorites.favorite_items.destroy']['types'],
-  },
-  'favorites.favorite_items.add_to_list': {
-    methods: ["POST"],
-    pattern: '/api/v1/favorites/:id/add-to-list/:listId',
-    tokens: [{"old":"/api/v1/favorites/:id/add-to-list/:listId","type":0,"val":"api","end":""},{"old":"/api/v1/favorites/:id/add-to-list/:listId","type":0,"val":"v1","end":""},{"old":"/api/v1/favorites/:id/add-to-list/:listId","type":0,"val":"favorites","end":""},{"old":"/api/v1/favorites/:id/add-to-list/:listId","type":1,"val":"id","end":""},{"old":"/api/v1/favorites/:id/add-to-list/:listId","type":0,"val":"add-to-list","end":""},{"old":"/api/v1/favorites/:id/add-to-list/:listId","type":1,"val":"listId","end":""}],
-    types: placeholder as Registry['favorites.favorite_items.add_to_list']['types'],
   },
 } as const satisfies Record<string, AdonisEndpoint>
 

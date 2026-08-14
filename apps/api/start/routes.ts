@@ -59,6 +59,12 @@ router
         router.get(':listId/stores', [controllers.Stores, 'index'])
         router.post(':listId/stores', [controllers.Stores, 'store'])
         router.delete(':listId/stores/:storeId', [controllers.Stores, 'detach'])
+
+        router.get(':listId/favorites', [controllers.FavoriteItems, 'index'])
+        router.post(':listId/favorites', [controllers.FavoriteItems, 'store'])
+        router.patch(':listId/favorites/:id', [controllers.FavoriteItems, 'update'])
+        router.delete(':listId/favorites/:id', [controllers.FavoriteItems, 'destroy'])
+        router.post(':listId/favorites/:id/add-to-list', [controllers.FavoriteItems, 'addToList'])
       })
       .prefix('lists')
       .as('lists')
@@ -72,18 +78,6 @@ router
       })
       .prefix('stores')
       .as('stores')
-      .use(middleware.auth())
-
-    router
-      .group(() => {
-        router.get('/', [controllers.FavoriteItems, 'index'])
-        router.post('/', [controllers.FavoriteItems, 'store'])
-        router.patch(':id', [controllers.FavoriteItems, 'update'])
-        router.delete(':id', [controllers.FavoriteItems, 'destroy'])
-        router.post(':id/add-to-list/:listId', [controllers.FavoriteItems, 'addToList'])
-      })
-      .prefix('favorites')
-      .as('favorites')
       .use(middleware.auth())
   })
   .prefix('/api/v1')

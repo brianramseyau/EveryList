@@ -202,6 +202,10 @@
 	<PageHeader title={list?.name} backHref={resolve('/lists')} backLabel="My Lists">
 		{#snippet actions()}
 			<a
+				href={resolve('/lists/[id]/favorites', { id: String(listId) })}
+				class="text-primary-600 hover:underline dark:text-primary-400">Favorites</a
+			>
+			<a
 				href={resolve('/lists/[id]/stores', { id: String(listId) })}
 				class="text-primary-600 hover:underline dark:text-primary-400">Stores</a
 			>

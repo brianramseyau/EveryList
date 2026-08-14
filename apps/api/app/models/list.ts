@@ -5,6 +5,7 @@ import User from '#models/user'
 import Category from '#models/category'
 import Item from '#models/item'
 import Store from '#models/store'
+import FavoriteItem from '#models/favorite_item'
 
 export default class List extends ListSchema {
   // SQLite has no native boolean type — better-sqlite3 round-trips this
@@ -20,6 +21,9 @@ export default class List extends ListSchema {
 
   @hasMany(() => Item, { foreignKey: 'listId' })
   declare items: HasMany<typeof Item>
+
+  @hasMany(() => FavoriteItem, { foreignKey: 'listId' })
+  declare favoriteItems: HasMany<typeof FavoriteItem>
 
   @manyToMany(() => Store, {
     pivotTable: 'list_stores',

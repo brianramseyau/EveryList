@@ -13,6 +13,13 @@ export default class extends BaseSchema {
         .references('id')
         .inTable('users')
         .onDelete('CASCADE')
+      table
+        .integer('list_id')
+        .unsigned()
+        .notNullable()
+        .references('id')
+        .inTable('lists')
+        .onDelete('CASCADE')
       table.string('name').notNullable()
       table
         .integer('default_category_id')
@@ -26,7 +33,7 @@ export default class extends BaseSchema {
       table.timestamp('created_at').notNullable()
       table.timestamp('updated_at').nullable()
 
-      table.unique(['user_id', 'name'])
+      table.unique(['list_id', 'name'])
     })
   }
 

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Input, Select } from 'flowbite-svelte';
+	import { Button, Input } from 'flowbite-svelte';
 	import type { FavoriteItemDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import {
@@ -11,26 +12,27 @@
 		deleteFavorite,
 		fetchFavorites
 	} from '$lib/api/favorites';
-	import { fetchLists } from '$lib/api/lists';
+	import { fetchList } from '$lib/api/lists';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
+	const listId = $derived(Number(page.params.id));
+
+	let list = $state<ListDto | null>(null);
 	let favorites = $state<FavoriteItemDto[]>([]);
-	let lists = $state<ListDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
 	let newFavoriteName = $state('');
 	let creating = $state(false);
 
-	let selectedListId = $state<number | undefined>(undefined);
 	let addingToList = $state<number | null>(null);
 	let addedMessage = $state<string | null>(null);
 
 	async function loadAll() {
 		loading = true;
 		try {
-			[favorites, lists] = await Promise.all([fetchFavorites(), fetchLists()]);
+			[list, favorites] = await Promise.all([fetchList(listId), fetchFavorites(listId)]);
 			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to load favorites.';
@@ -52,7 +54,7 @@
 		if (!newFavoriteName.trim()) return;
 		creating = true;
 		try {
-			const favorite = await createFavorite({ name: newFavoriteName.trim() });
+			const favorite = await createFavorite(listId, { name: newFavoriteName.trim() });
 			favorites = [...favorites, favorite];
 			newFavoriteName = '';
 		} catch (err) {
@@ -65,7 +67,7 @@
 	async function removeFavorite(favorite: FavoriteItemDto) {
 		favorites = favorites.filter((current) => current.id !== favorite.id);
 		try {
-			await deleteFavorite(favorite.id);
+			await deleteFavorite(listId, favorite.id);
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to delete favorite.';
 			void loadAll();
@@ -73,16 +75,13 @@
 	}
 
 	async function handleAddToList(favorite: FavoriteItemDto) {
-		if (!selectedListId) return;
 		addingToList = favorite.id;
 		addedMessage = null;
 		try {
-			await addFavoriteToList(favorite.id, selectedListId);
-			const list = lists.find((current) => current.id === selectedListId);
-			// `list` is always found here: selectedListId can only ever hold an
-			// id that's present in `lists`, since the <Select>'s options are
-			// generated directly from `lists`. The `?? 'the list'` only
-			// satisfies Array.find's `T | undefined` return type.
+			await addFavoriteToList(listId, favorite.id);
+			// `list` is always loaded by the time this button is interactable
+			// (loading gates the whole form); the `?? 'the list'` only satisfies
+			// the `ListDto | null` return type.
 			/* v8 ignore next */
 			addedMessage = `Added "${favorite.name}" to ${list?.name ?? 'the list'}.`;
 		} catch (err) {
@@ -94,13 +93,17 @@
 </script>
 
 <svelte:head>
-	<title>Favorites — EveryList</title>
+	<title>{list ? `${list.name} favorites — EveryList` : 'Favorites — EveryList'}</title>
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<PageHeader title="Favorites" />
+	<PageHeader
+		title={list ? `${list.name} — Favorites` : undefined}
+		backHref={resolve('/lists/[id]', { id: String(listId) })}
+		backLabel="Back to list"
+	/>
 	<p class="text-sm text-gray-600 dark:text-gray-300">
-		Your master list of items you buy often — add one to any list in a tap.
+		Items you buy often on this list — add one back in a tap.
 	</p>
 
 	<form class="flex gap-2" onsubmit={handleCreate}>
@@ -109,18 +112,6 @@
 		</div>
 		<Button type="submit" disabled={creating || !newFavoriteName.trim()}>Add</Button>
 	</form>
-
-	{#if lists.length > 0}
-		<div class="flex items-center gap-2 text-sm">
-			<span class="text-gray-500 dark:text-gray-400">Add to:</span>
-			<Select
-				items={lists.map((list) => ({ name: list.name, value: list.id }))}
-				bind:value={selectedListId}
-				placeholder="Choose a list…"
-				class="flex-1"
-			/>
-		</div>
-	{/if}
 
 	{#if error}
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -149,7 +140,7 @@
 						<button
 							type="button"
 							class="text-sm text-primary-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400"
-							disabled={!selectedListId || addingToList === favorite.id}
+							disabled={addingToList === favorite.id}
 							onclick={() => handleAddToList(favorite)}
 						>
 							{addingToList === favorite.id ? 'Adding…' : 'Add to list'}

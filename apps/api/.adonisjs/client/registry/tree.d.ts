@@ -51,21 +51,19 @@ export interface ApiDefinition {
       store: typeof routes['lists.stores.store']
       detach: typeof routes['lists.stores.detach']
     }
+    favoriteItems: {
+      index: typeof routes['lists.favorite_items.index']
+      store: typeof routes['lists.favorite_items.store']
+      update: typeof routes['lists.favorite_items.update']
+      destroy: typeof routes['lists.favorite_items.destroy']
+      addToList: typeof routes['lists.favorite_items.add_to_list']
+    }
   }
   stores: {
     stores: {
       update: typeof routes['stores.stores.update']
       categories: typeof routes['stores.stores.categories']
       reorderCategories: typeof routes['stores.stores.reorder_categories']
-    }
-  }
-  favorites: {
-    favoriteItems: {
-      index: typeof routes['favorites.favorite_items.index']
-      store: typeof routes['favorites.favorite_items.store']
-      update: typeof routes['favorites.favorite_items.update']
-      destroy: typeof routes['favorites.favorite_items.destroy']
-      addToList: typeof routes['favorites.favorite_items.add_to_list']
     }
   }
 }

@@ -42,6 +42,7 @@ export interface ItemDto {
 export interface FavoriteItemDto {
 	id: number;
 	userId: number;
+	listId: number;
 	name: string;
 	defaultCategoryId: number | null;
 	defaultQuantity: string | null;

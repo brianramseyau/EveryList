@@ -4,23 +4,26 @@ import { render } from 'vitest-browser-svelte';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 
+vi.mock('$app/state', () => ({ page: { params: { id: '5' } } }));
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/favorites', () => ({
 	fetchFavorites: vi.fn(),
 	createFavorite: vi.fn(),
 	deleteFavorite: vi.fn(),
 	addFavoriteToList: vi.fn()
 }));
-vi.mock('$lib/api/lists', () => ({ fetchLists: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn() }));
 
-const { fetchFavorites, createFavorite, deleteFavorite } = await import('$lib/api/favorites');
-const { fetchLists } = await import('$lib/api/lists');
+const { fetchFavorites, createFavorite, deleteFavorite, addFavoriteToList } =
+	await import('$lib/api/favorites');
+const { fetchList } = await import('$lib/api/lists');
 const { goto } = await import('$app/navigation');
 const FavoritesPage = (await import('./+page.svelte')).default;
 
 const bananas = {
 	id: 1,
 	userId: 1,
+	listId: 5,
 	name: 'Bananas',
 	defaultCategoryId: null,
 	defaultQuantity: '1 bunch',
@@ -43,7 +46,7 @@ describe('Favorites +page.svelte', () => {
 	beforeEach(() => {
 		setToken('test-token');
 		vi.mocked(fetchFavorites).mockResolvedValue([bananas]);
-		vi.mocked(fetchLists).mockResolvedValue([groceries]);
+		vi.mocked(fetchList).mockResolvedValue(groceries);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
@@ -98,7 +101,7 @@ describe('Favorites +page.svelte', () => {
 
 		await page.getByRole('button', { name: 'Remove' }).click();
 
-		expect(deleteFavorite).toHaveBeenCalledWith(1);
+		expect(deleteFavorite).toHaveBeenCalledWith(5, 1);
 		await expect.element(page.getByText('No favorites yet — add one above.')).toBeInTheDocument();
 	});
 
@@ -106,6 +109,7 @@ describe('Favorites +page.svelte', () => {
 		vi.mocked(createFavorite).mockResolvedValue({
 			id: 2,
 			userId: 1,
+			listId: 5,
 			name: 'Bread',
 			defaultCategoryId: null,
 			defaultQuantity: null,
@@ -119,7 +123,7 @@ describe('Favorites +page.svelte', () => {
 		await page.getByPlaceholder('New favorite name').fill('Bread');
 		await page.getByRole('button', { name: 'Add', exact: true }).click();
 
-		expect(createFavorite).toHaveBeenCalledWith({ name: 'Bread' });
+		expect(createFavorite).toHaveBeenCalledWith(5, { name: 'Bread' });
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 	});
 
@@ -198,8 +202,7 @@ describe('Favorites +page.svelte', () => {
 		resolveReload!([bananas]);
 	});
 
-	it('adds a favorite to the selected list', async () => {
-		const { addFavoriteToList } = await import('$lib/api/favorites');
+	it('adds a favorite back to its list', async () => {
 		vi.mocked(addFavoriteToList).mockResolvedValue({
 			id: 50,
 			listId: 5,
@@ -219,53 +222,31 @@ describe('Favorites +page.svelte', () => {
 		render(FavoritesPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByRole('combobox').selectOptions('Groceries');
 		await page.getByRole('button', { name: 'Add to list' }).click();
 
-		expect(addFavoriteToList).toHaveBeenCalledWith(1, 5);
+		expect(addFavoriteToList).toHaveBeenCalledWith(5, 1);
 		await expect.element(page.getByText('Added "Bananas" to Groceries.')).toBeInTheDocument();
 	});
 
 	it('shows a generic error message when adding to a list fails without an ApiError', async () => {
-		const { addFavoriteToList } = await import('$lib/api/favorites');
 		vi.mocked(addFavoriteToList).mockRejectedValue(new TypeError('network down'));
 
 		render(FavoritesPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByRole('combobox').selectOptions('Groceries');
 		await page.getByRole('button', { name: 'Add to list' }).click();
 
 		await expect.element(page.getByText('Failed to add item to list.')).toBeInTheDocument();
 	});
 
 	it('shows the ApiError message when adding to a list fails', async () => {
-		const { addFavoriteToList } = await import('$lib/api/favorites');
 		vi.mocked(addFavoriteToList).mockRejectedValue(new ApiError(409, 'Already on that list'));
 
 		render(FavoritesPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByRole('combobox').selectOptions('Groceries');
 		await page.getByRole('button', { name: 'Add to list' }).click();
 
 		await expect.element(page.getByText('Already on that list')).toBeInTheDocument();
-	});
-
-	it('does not add to a list when none is selected', async () => {
-		// The button is already disabled while no list is selected, but
-		// handleAddToList carries its own guard reachable independent of the
-		// button's disabled state (e.g. a raw click dispatched on the element).
-		const { addFavoriteToList } = await import('$lib/api/favorites');
-
-		render(FavoritesPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		page
-			.getByRole('button', { name: 'Add to list' })
-			.element()
-			.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-
-		await expect.poll(() => vi.mocked(addFavoriteToList).mock.calls.length).toBe(0);
 	});
 });

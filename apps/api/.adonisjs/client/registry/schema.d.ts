@@ -319,6 +319,66 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['detach']>>>
     }
   }
+  'lists.favorite_items.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/favorites'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['index']>>>
+    }
+  }
+  'lists.favorite_items.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/favorites'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/favorite_item').createFavoriteItemValidator)>>
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/favorite_item').createFavoriteItemValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.favorite_items.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/lists/:listId/favorites/:id'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/favorite_item').updateFavoriteItemValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; id: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/favorite_item').updateFavoriteItemValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.favorite_items.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/lists/:listId/favorites/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['destroy']>>>
+    }
+  }
+  'lists.favorite_items.add_to_list': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/favorites/:id/add-to-list'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['addToList']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['addToList']>>>
+    }
+  }
   'stores.stores.update': {
     methods: ["PATCH"]
     pattern: '/api/v1/stores/:id'
@@ -353,66 +413,6 @@ export interface Registry {
       query: ExtractQuery<InferInput<(typeof import('#validators/store').reorderStoreCategoriesValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['reorderCategories']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['reorderCategories']>>> | { status: 422; response: { errors: SimpleError[] } }
-    }
-  }
-  'favorites.favorite_items.index': {
-    methods: ["GET","HEAD"]
-    pattern: '/api/v1/favorites'
-    types: {
-      body: {}
-      paramsTuple: []
-      params: {}
-      query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['index']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['index']>>>
-    }
-  }
-  'favorites.favorite_items.store': {
-    methods: ["POST"]
-    pattern: '/api/v1/favorites'
-    types: {
-      body: ExtractBody<InferInput<(typeof import('#validators/favorite_item').createFavoriteItemValidator)>>
-      paramsTuple: []
-      params: {}
-      query: ExtractQuery<InferInput<(typeof import('#validators/favorite_item').createFavoriteItemValidator)>>
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['store']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
-    }
-  }
-  'favorites.favorite_items.update': {
-    methods: ["PATCH"]
-    pattern: '/api/v1/favorites/:id'
-    types: {
-      body: ExtractBody<InferInput<(typeof import('#validators/favorite_item').updateFavoriteItemValidator)>>
-      paramsTuple: [ParamValue]
-      params: { id: ParamValue }
-      query: ExtractQuery<InferInput<(typeof import('#validators/favorite_item').updateFavoriteItemValidator)>>
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['update']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
-    }
-  }
-  'favorites.favorite_items.destroy': {
-    methods: ["DELETE"]
-    pattern: '/api/v1/favorites/:id'
-    types: {
-      body: {}
-      paramsTuple: [ParamValue]
-      params: { id: ParamValue }
-      query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['destroy']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['destroy']>>>
-    }
-  }
-  'favorites.favorite_items.add_to_list': {
-    methods: ["POST"]
-    pattern: '/api/v1/favorites/:id/add-to-list/:listId'
-    types: {
-      body: {}
-      paramsTuple: [ParamValue, ParamValue]
-      params: { id: ParamValue; listId: ParamValue }
-      query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['addToList']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/favorite_items_controller').default['addToList']>>>
     }
   }
 }

@@ -6,6 +6,7 @@ export default class FavoriteItemTransformer extends BaseTransformer<FavoriteIte
     return this.pick(this.resource, [
       'id',
       'userId',
+      'listId',
       'name',
       'defaultCategoryId',
       'defaultQuantity',

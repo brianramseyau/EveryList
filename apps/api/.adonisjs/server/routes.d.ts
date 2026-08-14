@@ -30,14 +30,14 @@ export type ScannedRoutes = {
     'lists.stores.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.detach': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'storeId': ParamValue} }
+    'lists.favorite_items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.favorite_items.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.favorite_items.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'id': ParamValue} }
+    'lists.favorite_items.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'id': ParamValue} }
+    'lists.favorite_items.add_to_list': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'id': ParamValue} }
     'stores.stores.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'stores.stores.reorder_categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'favorites.favorite_items.index': { paramsTuple?: []; params?: {} }
-    'favorites.favorite_items.store': { paramsTuple?: []; params?: {} }
-    'favorites.favorite_items.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'favorites.favorite_items.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'favorites.favorite_items.add_to_list': { paramsTuple: [ParamValue,ParamValue]; params: {'id': ParamValue,'listId': ParamValue} }
   }
   POST: {
     'auth.new_account.store': { paramsTuple?: []; params?: {} }
@@ -50,8 +50,8 @@ export type ScannedRoutes = {
     'lists.items.import': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.restore': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.stores.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
-    'favorites.favorite_items.store': { paramsTuple?: []; params?: {} }
-    'favorites.favorite_items.add_to_list': { paramsTuple: [ParamValue,ParamValue]; params: {'id': ParamValue,'listId': ParamValue} }
+    'lists.favorite_items.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.favorite_items.add_to_list': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'id': ParamValue} }
   }
   GET: {
     'profile.profile.show': { paramsTuple?: []; params?: {} }
@@ -62,8 +62,8 @@ export type ScannedRoutes = {
     'lists.items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.recent': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.favorite_items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'favorites.favorite_items.index': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
     'profile.profile.show': { paramsTuple?: []; params?: {} }
@@ -74,24 +74,24 @@ export type ScannedRoutes = {
     'lists.items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.recent': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.favorite_items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'favorites.favorite_items.index': { paramsTuple?: []; params?: {} }
   }
   PATCH: {
     'lists.lists.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.categories.reorder': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.categories.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'categoryId': ParamValue} }
     'lists.items.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
+    'lists.favorite_items.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'id': ParamValue} }
     'stores.stores.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'stores.stores.reorder_categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
-    'favorites.favorite_items.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   DELETE: {
     'lists.lists.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.categories.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'categoryId': ParamValue} }
     'lists.items.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.stores.detach': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'storeId': ParamValue} }
-    'favorites.favorite_items.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'lists.favorite_items.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'id': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {

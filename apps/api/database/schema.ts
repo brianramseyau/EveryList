@@ -82,6 +82,7 @@ export class FavoriteItemSchema extends BaseModel {
     'defaultCategoryId',
     'defaultQuantity',
     'id',
+    'listId',
     'name',
     'updatedAt',
     'userId',
@@ -95,6 +96,8 @@ export class FavoriteItemSchema extends BaseModel {
   declare defaultQuantity: string | null
   @column({ isPrimary: true })
   declare id: number
+  @column()
+  declare listId: number
   @column()
   declare name: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
