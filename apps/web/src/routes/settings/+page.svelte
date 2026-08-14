@@ -8,6 +8,7 @@
 	import { getThemePreference, setThemePreference, type ThemePreference } from '$lib/theme';
 	import { logout } from '$lib/api/auth';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
 
 	let meta = $state<MetaResponse | null>(null);
 	let loadFailed = $state(false);
@@ -111,5 +112,6 @@
 				Loading build info…
 			{/if}
 		</div>
+		<InstallPrompt />
 	</section>
 </main>
