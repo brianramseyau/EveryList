@@ -177,8 +177,8 @@
 					</div>
 
 					<div class="flex-1">
-					<Input bind:value={category.name} />
-				</div>
+						<Input bind:value={category.name} />
+					</div>
 					<IconPicker value={category.icon} onselect={(name) => (category.icon = name)} />
 
 					<Button
