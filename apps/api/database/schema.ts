@@ -8,7 +8,18 @@ import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
 
 export class AuthAccessTokenSchema extends BaseModel {
-  static $columns = ['abilities', 'createdAt', 'expiresAt', 'hash', 'id', 'lastUsedAt', 'name', 'tokenableId', 'type', 'updatedAt'] as const
+  static $columns = [
+    'abilities',
+    'createdAt',
+    'expiresAt',
+    'hash',
+    'id',
+    'lastUsedAt',
+    'name',
+    'tokenableId',
+    'type',
+    'updatedAt',
+  ] as const
   $columns = AuthAccessTokenSchema.$columns
   @column()
   declare abilities: string
@@ -33,7 +44,17 @@ export class AuthAccessTokenSchema extends BaseModel {
 }
 
 export class CategorySchema extends BaseModel {
-  static $columns = ['createdAt', 'forkedFromId', 'icon', 'id', 'isDefault', 'listId', 'name', 'sortOrder', 'updatedAt'] as const
+  static $columns = [
+    'createdAt',
+    'forkedFromId',
+    'icon',
+    'id',
+    'isDefault',
+    'listId',
+    'name',
+    'sortOrder',
+    'updatedAt',
+  ] as const
   $columns = CategorySchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -56,7 +77,16 @@ export class CategorySchema extends BaseModel {
 }
 
 export class FavoriteItemSchema extends BaseModel {
-  static $columns = ['createdAt', 'defaultCategoryId', 'defaultQuantity', 'id', 'listId', 'name', 'updatedAt', 'userId'] as const
+  static $columns = [
+    'createdAt',
+    'defaultCategoryId',
+    'defaultQuantity',
+    'id',
+    'listId',
+    'name',
+    'updatedAt',
+    'userId',
+  ] as const
   $columns = FavoriteItemSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -77,7 +107,21 @@ export class FavoriteItemSchema extends BaseModel {
 }
 
 export class ItemSchema extends BaseModel {
-  static $columns = ['categoryId', 'checked', 'checkedAt', 'createdAt', 'createdBy', 'deletedAt', 'id', 'listId', 'name', 'notes', 'quantity', 'sortOrder', 'updatedAt'] as const
+  static $columns = [
+    'categoryId',
+    'checked',
+    'checkedAt',
+    'createdAt',
+    'createdBy',
+    'deletedAt',
+    'id',
+    'listId',
+    'name',
+    'notes',
+    'quantity',
+    'sortOrder',
+    'updatedAt',
+  ] as const
   $columns = ItemSchema.$columns
   @column()
   declare categoryId: number | null
@@ -123,7 +167,17 @@ export class ListStoreSchema extends BaseModel {
 }
 
 export class ListSchema extends BaseModel {
-  static $columns = ['archived', 'color', 'createdAt', 'deletedAt', 'icon', 'id', 'name', 'ownerId', 'updatedAt'] as const
+  static $columns = [
+    'archived',
+    'color',
+    'createdAt',
+    'deletedAt',
+    'icon',
+    'id',
+    'name',
+    'ownerId',
+    'updatedAt',
+  ] as const
   $columns = ListSchema.$columns
   @column()
   declare archived: boolean
