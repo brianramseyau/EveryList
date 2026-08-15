@@ -83,6 +83,14 @@ test.group('Lists CRUD', (group) => {
     const updatedList = bodyData<ListDto>(update)
     assert.equal(updatedList.name, 'Weekly Groceries')
     assert.isTrue(updatedList.archived)
+    assert.isFalse(updatedList.badgeExcluded)
+
+    const excludeFromBadge = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ badgeExcluded: true })
+    excludeFromBadge.assertStatus(200)
+    assert.isTrue(bodyData<ListDto>(excludeFromBadge).badgeExcluded)
 
     const destroy = await client
       .delete(`/api/v1/lists/${listId}`)

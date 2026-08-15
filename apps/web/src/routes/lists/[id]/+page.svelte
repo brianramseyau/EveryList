@@ -23,6 +23,7 @@
 	import { isRowDirty } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
+	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import Icon from '$lib/components/Icon.svelte';
 	import ListMenu from '$lib/components/ListMenu.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -151,10 +152,17 @@
 	}
 
 	async function handleListUpdate(
-		input: Partial<{ name: string; color: string; icon: string | null; archived: boolean }>
+		input: Partial<{
+			name: string;
+			color: string;
+			icon: string | null;
+			archived: boolean;
+			badgeExcluded: boolean;
+		}>
 	) {
 		try {
 			list = await updateList(listId, input);
+			void refreshBadgeCount();
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to update list.';
 		}
@@ -211,6 +219,7 @@
 		);
 		try {
 			await updateItem(listId, item.id, { checked: nextChecked });
+			void refreshBadgeCount();
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to update item.';
 			void loadAll();

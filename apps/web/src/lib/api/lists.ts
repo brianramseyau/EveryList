@@ -20,6 +20,7 @@ export function updateList(
 		color: string;
 		icon: string | null;
 		archived: boolean;
+		badgeExcluded: boolean;
 		folderId: number | null;
 	}>
 ) {

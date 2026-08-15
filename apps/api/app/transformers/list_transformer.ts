@@ -12,6 +12,7 @@ export default class ListTransformer extends BaseTransformer<List> {
         'ownerId',
         'folderId',
         'archived',
+        'badgeExcluded',
         'createdAt',
         'updatedAt',
         'version',

@@ -202,10 +202,12 @@ export class ListStoreSchema extends BaseModel {
 }
 
 export class ListSchema extends BaseModel {
-  static $columns = ['archived', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'name', 'ownerId', 'updatedAt', 'version'] as const
+  static $columns = ['archived', 'badgeExcluded', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'name', 'ownerId', 'updatedAt', 'version'] as const
   $columns = ListSchema.$columns
   @column()
   declare archived: boolean
+  @column()
+  declare badgeExcluded: boolean
   @column()
   declare color: string
   @column.dateTime({ autoCreate: true })

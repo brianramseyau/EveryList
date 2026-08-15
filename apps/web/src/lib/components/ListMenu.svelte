@@ -15,7 +15,13 @@
 		listId: number;
 		list: ListDto | null;
 		onupdate: (
-			input: Partial<{ name: string; color: string; icon: string | null; archived: boolean }>
+			input: Partial<{
+				name: string;
+				color: string;
+				icon: string | null;
+				archived: boolean;
+				badgeExcluded: boolean;
+			}>
 		) => Promise<void>;
 		ondelete: () => Promise<void>;
 	} = $props();
@@ -48,6 +54,10 @@
 
 	async function toggleArchived(current: ListDto) {
 		await onupdate({ archived: !current.archived });
+	}
+
+	async function toggleBadgeExcluded(current: ListDto) {
+		await onupdate({ badgeExcluded: !current.badgeExcluded });
 	}
 
 	const deleteConfirmMessage = $derived(list ? `Delete "${list.name}"? This can't be undone.` : '');
@@ -118,6 +128,14 @@
 					onclick={() => toggleArchived(list)}
 				>
 					{list.archived ? 'Unarchive list' : 'Archive list'}
+				</button>
+
+				<button
+					type="button"
+					class="block w-full rounded px-2 py-1.5 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+					onclick={() => toggleBadgeExcluded(list)}
+				>
+					{list.badgeExcluded ? 'Include in badge count' : 'Exclude from badge count'}
 				</button>
 
 				{#if confirmingDelete}

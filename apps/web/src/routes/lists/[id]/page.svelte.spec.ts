@@ -24,6 +24,7 @@ vi.mock('$lib/api/selected-store', () => ({
 	setSelectedStore: vi.fn()
 }));
 vi.mock('$lib/realtime', () => ({ subscribeToList: vi.fn(() => vi.fn()) }));
+vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 
 const { fetchList, updateList, deleteList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
@@ -39,6 +40,7 @@ const {
 const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores');
 const { getSelectedStore } = await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
+const { refreshBadgeCount } = await import('$lib/pwa/badge');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { goto } = await import('$app/navigation');
 const ListDetailPage = (await import('./+page.svelte')).default;
@@ -52,6 +54,7 @@ const list = {
 	icon: null,
 	ownerId: 1,
 	folderId: null,
+	badgeExcluded: false,
 	archived: false,
 	itemCount: 0,
 	createdAt: TS,
@@ -382,6 +385,7 @@ describe('List detail +page.svelte', () => {
 		// Bread stays unchecked (and thus still in the main list) — proves the
 		// map only updates the toggled item, not every item.
 		await expect.element(page.getByRole('checkbox', { name: 'Bread' })).not.toBeChecked();
+		expect(refreshBadgeCount).toHaveBeenCalled();
 	});
 
 	it('unchecks a checked item from the "Checked" section', async () => {
@@ -878,6 +882,23 @@ describe('List detail +page.svelte', () => {
 
 		expect(updateList).toHaveBeenCalledWith(1, { archived: true });
 		await expect.element(page.getByRole('button', { name: 'Unarchive list' })).toBeInTheDocument();
+		expect(refreshBadgeCount).toHaveBeenCalled();
+	});
+
+	it('excludes the list from the badge count via the settings menu', async () => {
+		vi.mocked(updateList).mockResolvedValue({ ...list, badgeExcluded: true });
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List settings' }).click();
+		await page.getByRole('button', { name: 'Exclude from badge count' }).click();
+
+		expect(updateList).toHaveBeenCalledWith(1, { badgeExcluded: true });
+		await expect
+			.element(page.getByRole('button', { name: 'Include in badge count' }))
+			.toBeInTheDocument();
+		expect(refreshBadgeCount).toHaveBeenCalled();
 	});
 
 	it('shows an error when updating the list fails', async () => {

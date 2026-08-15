@@ -11,6 +11,7 @@ export const updateListValidator = vine.create({
   color: vine.string().trim().optional(),
   icon: vine.string().trim().nullable().optional(),
   archived: vine.boolean().optional(),
+  badgeExcluded: vine.boolean().optional(),
   folderId: vine.number().positive().nullable().optional(),
   expectedVersion: vine.number().optional(),
 })

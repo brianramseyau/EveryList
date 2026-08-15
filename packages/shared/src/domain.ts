@@ -8,6 +8,7 @@ export interface ListDto {
 	ownerId: number;
 	folderId: number | null;
 	archived: boolean;
+	badgeExcluded: boolean;
 	itemCount: number;
 	createdAt: string;
 	updatedAt: string | null;

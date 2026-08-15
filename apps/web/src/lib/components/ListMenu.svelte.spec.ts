@@ -11,6 +11,7 @@ const list: ListDto = {
 	icon: 'basket',
 	ownerId: 1,
 	folderId: null,
+	badgeExcluded: false,
 	archived: false,
 	itemCount: 0,
 	createdAt: '2026-08-01T00:00:00.000Z',
@@ -154,6 +155,31 @@ describe('ListMenu.svelte', () => {
 		await open();
 
 		await expect.element(page.getByRole('button', { name: 'Unarchive list' })).toBeInTheDocument();
+	});
+
+	it('toggles badge exclusion immediately, flipping the button label', async () => {
+		const onupdate = vi.fn().mockResolvedValue(undefined);
+		render(ListMenu, { listId: 42, list, onupdate, ondelete: vi.fn() });
+
+		await open();
+
+		await page.getByRole('button', { name: 'Exclude from badge count' }).click();
+		expect(onupdate).toHaveBeenCalledWith({ badgeExcluded: true });
+	});
+
+	it('shows "Include in badge count" for a badge-excluded list', async () => {
+		render(ListMenu, {
+			listId: 42,
+			list: { ...list, badgeExcluded: true },
+			onupdate: vi.fn(),
+			ondelete: vi.fn()
+		});
+
+		await open();
+
+		await expect
+			.element(page.getByRole('button', { name: 'Include in badge count' }))
+			.toBeInTheDocument();
 	});
 
 	it('requires a confirmation click before deleting the list', async () => {

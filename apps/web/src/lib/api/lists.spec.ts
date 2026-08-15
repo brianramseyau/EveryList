@@ -36,6 +36,11 @@ describe('lists api', () => {
 		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1', { folderId: 5 });
 	});
 
+	it('updateList PATCHes a badgeExcluded toggle', () => {
+		updateList(1, { badgeExcluded: true });
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1', { badgeExcluded: true });
+	});
+
 	it('deleteList DELETEs the given id', () => {
 		deleteList(1);
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1');
