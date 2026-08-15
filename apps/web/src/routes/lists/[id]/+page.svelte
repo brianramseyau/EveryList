@@ -24,14 +24,17 @@
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
+	import { isListUnlocked } from '$lib/passcode';
 	import Icon from '$lib/components/Icon.svelte';
 	import ListMenu from '$lib/components/ListMenu.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import PasscodeGate from '$lib/components/PasscodeGate.svelte';
 	import SyncToast from '$lib/components/SyncToast.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
 	let list = $state<ListDto | null>(null);
+	let unlocked = $state(false);
 	let categories = $state<CategoryDto[]>([]);
 	let items = $state<ItemDto[]>([]);
 	let stores = $state<StoreDto[]>([]);
@@ -109,6 +112,7 @@
 				fetchItems(listId),
 				fetchStores(listId)
 			]);
+			unlocked = isListUnlocked(listId);
 
 			const selectedStoreId = await getSelectedStore(listId);
 			const overrideEntries = selectedStoreId ? await fetchStoreCategoryOrder(selectedStoreId) : [];
@@ -156,6 +160,7 @@
 			icon: string | null;
 			archived: boolean;
 			badgeExcluded: boolean;
+			passcodeHash: string | null;
 		}>
 	) {
 		try {
@@ -323,183 +328,187 @@
 	{#if loading}
 		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
 	{:else if list}
-		<form class="flex gap-2 print:hidden" onsubmit={handleAddItem}>
-			<div class="flex-1">
-				<Input placeholder="Item name" bind:value={newItemName} />
-			</div>
-			<div class="w-24">
-				<Input placeholder="Qty" bind:value={newItemQuantity} />
-			</div>
-			<Button type="submit" disabled={adding || !newItemName.trim()}>Add</Button>
-		</form>
-
-		<button
-			type="button"
-			class="self-start text-sm text-primary-600 hover:underline dark:text-primary-400 print:hidden"
-			onclick={() => (importOpen = !importOpen)}
-		>
-			{importOpen ? 'Cancel paste import' : 'Paste in a list…'}
-		</button>
-
-		{#if importOpen}
-			<form class="flex flex-col gap-2 print:hidden" onsubmit={handleImport}>
-				<Textarea
-					bind:value={importText}
-					rows={4}
-					placeholder="One item per line, e.g. Milk, Bread, Eggs"
-				/>
-				<Button type="submit" disabled={importing || !importText.trim()} class="self-start"
-					>{importing ? 'Importing…' : 'Import items'}</Button
-				>
-			</form>
-		{/if}
-
-		{#if error}
-			<p class="text-sm text-red-600 dark:text-red-400 print:hidden">{error}</p>
-		{/if}
-
-		{#if stores.length > 0}
-			<div class="w-48 print:hidden">
-				<Select
-					items={stores.map((store) => ({ value: store.id, name: store.name }))}
-					placeholder="All stores"
-					clearable
-					value={filterStoreId ?? ''}
-					onchange={(event) => {
-						const raw = (event.target as HTMLSelectElement).value;
-						filterStoreId = raw === '' ? null : Number(raw);
-					}}
-				/>
-			</div>
-		{/if}
-
-		{#if totalCents > 0}
-			<p class="text-sm font-semibold text-gray-700 dark:text-gray-300">{totalText}</p>
-		{/if}
-
-		{#if items.length === 0}
-			<p class="text-gray-500 dark:text-gray-400">No items yet — add one above.</p>
+		{#if list.passcodeHash && !unlocked}
+			<PasscodeGate {list} onunlock={() => (unlocked = true)} />
 		{:else}
-			<div class="flex flex-col gap-6">
-				{#each groups as group (group.category?.id ?? 'uncategorized')}
-					<section>
-						<h2
-							class="mb-2 flex items-center gap-2 text-sm font-semibold"
-							style:color={group.category ? list.color : undefined}
-						>
-							{#if group.category}
-								<Icon name={group.category.icon} class="h-4 w-4" />
-							{/if}
-							<span class={group.category ? '' : 'text-gray-500 dark:text-gray-400'}>
-								{group.category?.name ?? 'Uncategorized'}
-							</span>
-						</h2>
-						<ul class="flex flex-col gap-1">
-							{#each group.items as item (item.id)}
-								<li class="flex items-center gap-2">
-									<Checkbox checked={item.checked} onchange={() => toggleChecked(item)}>
-										<span>{item.name}</span>
-										{#if item.quantity}
-											<span class="text-gray-500 dark:text-gray-400"
-												>(<span>{item.quantity}</span>)</span
-											>
-										{/if}
-									</Checkbox>
-									<div class="ml-auto w-16 print:hidden">
-										<Input
-											size="sm"
-											inputmode="decimal"
-											placeholder="Price"
-											value={item.price !== null ? (item.price / 100).toFixed(2) : ''}
-											onchange={(event) => {
-												void tagItemPrice(item, (event.target as HTMLInputElement).value);
-											}}
-										/>
-									</div>
-									{#if stores.length > 0}
-										<div class="w-32 print:hidden">
-											<Select
+			<form class="flex gap-2 print:hidden" onsubmit={handleAddItem}>
+				<div class="flex-1">
+					<Input placeholder="Item name" bind:value={newItemName} />
+				</div>
+				<div class="w-24">
+					<Input placeholder="Qty" bind:value={newItemQuantity} />
+				</div>
+				<Button type="submit" disabled={adding || !newItemName.trim()}>Add</Button>
+			</form>
+
+			<button
+				type="button"
+				class="self-start text-sm text-primary-700 underline dark:text-primary-400 print:hidden"
+				onclick={() => (importOpen = !importOpen)}
+			>
+				{importOpen ? 'Cancel paste import' : 'Paste in a list…'}
+			</button>
+
+			{#if importOpen}
+				<form class="flex flex-col gap-2 print:hidden" onsubmit={handleImport}>
+					<Textarea
+						bind:value={importText}
+						rows={4}
+						placeholder="One item per line, e.g. Milk, Bread, Eggs"
+					/>
+					<Button type="submit" disabled={importing || !importText.trim()} class="self-start"
+						>{importing ? 'Importing…' : 'Import items'}</Button
+					>
+				</form>
+			{/if}
+
+			{#if error}
+				<p class="text-sm text-red-600 dark:text-red-400 print:hidden">{error}</p>
+			{/if}
+
+			{#if stores.length > 0}
+				<div class="w-48 print:hidden">
+					<Select
+						items={stores.map((store) => ({ value: store.id, name: store.name }))}
+						placeholder="All stores"
+						clearable
+						value={filterStoreId ?? ''}
+						onchange={(event) => {
+							const raw = (event.target as HTMLSelectElement).value;
+							filterStoreId = raw === '' ? null : Number(raw);
+						}}
+					/>
+				</div>
+			{/if}
+
+			{#if totalCents > 0}
+				<p class="text-sm font-semibold text-gray-700 dark:text-gray-300">{totalText}</p>
+			{/if}
+
+			{#if items.length === 0}
+				<p class="text-gray-500 dark:text-gray-400">No items yet — add one above.</p>
+			{:else}
+				<div class="flex flex-col gap-6">
+					{#each groups as group (group.category?.id ?? 'uncategorized')}
+						<section>
+							<h2
+								class="mb-2 flex items-center gap-2 text-sm font-semibold"
+								style:color={group.category ? list.color : undefined}
+							>
+								{#if group.category}
+									<Icon name={group.category.icon} class="h-4 w-4" />
+								{/if}
+								<span class={group.category ? '' : 'text-gray-500 dark:text-gray-400'}>
+									{group.category?.name ?? 'Uncategorized'}
+								</span>
+							</h2>
+							<ul class="flex flex-col gap-1">
+								{#each group.items as item (item.id)}
+									<li class="flex items-center gap-2">
+										<Checkbox checked={item.checked} onchange={() => toggleChecked(item)}>
+											<span>{item.name}</span>
+											{#if item.quantity}
+												<span class="text-gray-500 dark:text-gray-400"
+													>(<span>{item.quantity}</span>)</span
+												>
+											{/if}
+										</Checkbox>
+										<div class="ml-auto w-16 print:hidden">
+											<Input
 												size="sm"
-												items={stores.map((store) => ({ value: store.id, name: store.name }))}
-												placeholder="No store"
-												clearable
-												value={item.storeId ?? ''}
+												inputmode="decimal"
+												placeholder="Price"
+												value={item.price !== null ? (item.price / 100).toFixed(2) : ''}
 												onchange={(event) => {
-													const raw = (event.target as HTMLSelectElement).value;
-													void tagItemStore(item, raw === '' ? null : Number(raw));
+													void tagItemPrice(item, (event.target as HTMLInputElement).value);
 												}}
 											/>
 										</div>
-									{/if}
-									<button
-										type="button"
-										class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400 print:hidden"
-										onclick={() => removeItem(item)}
-									>
-										Remove
-									</button>
-								</li>
-							{/each}
-						</ul>
-					</section>
-				{/each}
+										{#if stores.length > 0}
+											<div class="w-32 print:hidden">
+												<Select
+													size="sm"
+													items={stores.map((store) => ({ value: store.id, name: store.name }))}
+													placeholder="No store"
+													clearable
+													value={item.storeId ?? ''}
+													onchange={(event) => {
+														const raw = (event.target as HTMLSelectElement).value;
+														void tagItemStore(item, raw === '' ? null : Number(raw));
+													}}
+												/>
+											</div>
+										{/if}
+										<button
+											type="button"
+											class="text-xs text-gray-500 hover:text-red-600 dark:hover:text-red-400 print:hidden"
+											onclick={() => removeItem(item)}
+										>
+											Remove
+										</button>
+									</li>
+								{/each}
+							</ul>
+						</section>
+					{/each}
 
-				{#if checkedItems.length > 0}
-					<section>
-						<h2 class="mb-2 text-sm font-semibold text-gray-500 dark:text-gray-400">Checked</h2>
-						<ul class="flex flex-col gap-1">
-							{#each checkedItems as item (item.id)}
-								<li class="flex items-center gap-2">
-									<Checkbox checked={item.checked} onchange={() => toggleChecked(item)}>
-										<span class="text-gray-400 line-through">{item.name}</span>
-									</Checkbox>
+					{#if checkedItems.length > 0}
+						<section>
+							<h2 class="mb-2 text-sm font-semibold text-gray-500 dark:text-gray-400">Checked</h2>
+							<ul class="flex flex-col gap-1">
+								{#each checkedItems as item (item.id)}
+									<li class="flex items-center gap-2">
+										<Checkbox checked={item.checked} onchange={() => toggleChecked(item)}>
+											<span class="text-gray-400 line-through">{item.name}</span>
+										</Checkbox>
+										<button
+											type="button"
+											class="ml-auto text-xs text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+											onclick={() => removeItem(item)}
+										>
+											Remove
+										</button>
+									</li>
+								{/each}
+							</ul>
+						</section>
+					{/if}
+				</div>
+			{/if}
+
+			<div class="print:hidden">
+				<button
+					type="button"
+					class="text-sm text-primary-700 underline dark:text-primary-400"
+					onclick={toggleRecent}
+				>
+					{recentOpen ? 'Hide recently deleted' : 'Show recently deleted'}
+				</button>
+
+				{#if recentOpen}
+					{#if loadingRecent}
+						<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+					{:else if recentItems.length === 0}
+						<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Nothing recently deleted.</p>
+					{:else}
+						<ul class="mt-2 flex flex-col gap-1">
+							{#each recentItems as item (item.id)}
+								<li class="flex items-center gap-2 text-sm">
+									<span class="text-gray-500 dark:text-gray-400">{item.name}</span>
 									<button
 										type="button"
-										class="ml-auto text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-										onclick={() => removeItem(item)}
+										class="ml-auto text-primary-700 underline dark:text-primary-400"
+										onclick={() => restoreRecentItem(item)}
 									>
-										Remove
+										Restore
 									</button>
 								</li>
 							{/each}
 						</ul>
-					</section>
+					{/if}
 				{/if}
 			</div>
 		{/if}
-
-		<div class="print:hidden">
-			<button
-				type="button"
-				class="text-sm text-primary-600 hover:underline dark:text-primary-400"
-				onclick={toggleRecent}
-			>
-				{recentOpen ? 'Hide recently deleted' : 'Show recently deleted'}
-			</button>
-
-			{#if recentOpen}
-				{#if loadingRecent}
-					<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading…</p>
-				{:else if recentItems.length === 0}
-					<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Nothing recently deleted.</p>
-				{:else}
-					<ul class="mt-2 flex flex-col gap-1">
-						{#each recentItems as item (item.id)}
-							<li class="flex items-center gap-2 text-sm">
-								<span class="text-gray-500 dark:text-gray-400">{item.name}</span>
-								<button
-									type="button"
-									class="ml-auto text-primary-600 hover:underline dark:text-primary-400"
-									onclick={() => restoreRecentItem(item)}
-								>
-									Restore
-								</button>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			{/if}
-		</div>
 	{:else}
 		<!-- Reachable only once loadAll's finally has run: loading is false, and
 		     its catch always sets `error` when it leaves `list` unset. -->

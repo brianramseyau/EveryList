@@ -5,12 +5,26 @@
    media query, which gave no way for a user to override their OS setting. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-@source '../../node_modules/flowbite-svelte/dist';
+/* Scoped to only the flowbite-svelte components this app actually imports
+   (Button, Checkbox, Helper, Input, Label, Radio, Select, Textarea — all
+   under forms/ and buttons/) rather than the library's entire dist/, which
+   pulled in every other component's utility classes too (~40 components
+   never used here) and bloated the compiled CSS to ~254KB, a real
+   contributor to a sub-90 Lighthouse Performance score found during the
+   PHASE7_PLAN.md §5 hardening pass. */
+@source '../../node_modules/flowbite-svelte/dist/forms';
+@source '../../node_modules/flowbite-svelte/dist/buttons';
 
 /* flowbite-svelte components (Button, Input focus rings, links, ...) are
    styled entirely with `primary-*` classes and expect the consuming app to
    define that palette — Tailwind v4 ships no color named "primary" out of
-   the box. Mapped to the app icon's cyan/sky gradient. */
+   the box. The values declared here (Ocean, the app icon's original
+   cyan/sky gradient) are both the @theme default *and* the values Tailwind's
+   generated `bg-primary-*` etc. utilities read at runtime through
+   var(--color-primary-*) — so the [data-accent='...'] blocks below, which
+   plain-CSS-override the same custom properties for a non-default accent,
+   re-theme every component with zero component-level changes. See
+   $lib/accent.ts and PHASE7_PLAN.md §4. */
 @theme {
 	--color-primary-50: #f0f9ff;
 	--color-primary-100: #e0f2fe;
@@ -23,6 +37,48 @@
 	--color-primary-800: #075985;
 	--color-primary-900: #0c4a6e;
 	--color-primary-950: #082f49;
+}
+
+[data-accent='forest'] {
+	--color-primary-50: #f0fdf4;
+	--color-primary-100: #dcfce7;
+	--color-primary-200: #bbf7d0;
+	--color-primary-300: #86efac;
+	--color-primary-400: #4ade80;
+	--color-primary-500: #22c55e;
+	--color-primary-600: #16a34a;
+	--color-primary-700: #15803d;
+	--color-primary-800: #166534;
+	--color-primary-900: #14532d;
+	--color-primary-950: #052e16;
+}
+
+[data-accent='berry'] {
+	--color-primary-50: #fdf4ff;
+	--color-primary-100: #fae8ff;
+	--color-primary-200: #f5d0fe;
+	--color-primary-300: #f0abfc;
+	--color-primary-400: #e879f9;
+	--color-primary-500: #d946ef;
+	--color-primary-600: #c026d3;
+	--color-primary-700: #a21caf;
+	--color-primary-800: #86198f;
+	--color-primary-900: #701a75;
+	--color-primary-950: #4a044e;
+}
+
+[data-accent='sunset'] {
+	--color-primary-50: #fffbeb;
+	--color-primary-100: #fef3c7;
+	--color-primary-200: #fde68a;
+	--color-primary-300: #fcd34d;
+	--color-primary-400: #fbbf24;
+	--color-primary-500: #f59e0b;
+	--color-primary-600: #d97706;
+	--color-primary-700: #b45309;
+	--color-primary-800: #92400e;
+	--color-primary-900: #78350f;
+	--color-primary-950: #451a03;
 }
 
 /* Matches the tokens applied to the root layout wrapper (bg-white /

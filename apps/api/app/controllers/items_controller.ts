@@ -4,8 +4,8 @@ import ListPolicy from '#policies/list_policy'
 import { createItemValidator, updateItemValidator, importItemsValidator } from '#validators/item'
 import type { HttpContext } from '@adonisjs/core/http'
 import ItemTransformer from '#transformers/item_transformer'
-import { getEffectiveCategories } from '#services/category_service'
-import { suggestCategoryName } from '@everylist/shared'
+import { suggestCategoryId } from '#services/category_suggestion_service'
+import type { CategorizeSuggestionDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
@@ -17,11 +17,7 @@ async function resolveCategoryId(
 ): Promise<number | null> {
   if (explicitCategoryId !== undefined) return explicitCategoryId
 
-  const suggestedName = suggestCategoryName(itemName)
-  if (!suggestedName) return null
-
-  const categories = await getEffectiveCategories(list)
-  return categories.find((category) => category.name === suggestedName)?.id ?? null
+  return suggestCategoryId(list, itemName)
 }
 
 async function nextSortOrder(listId: number): Promise<number> {
@@ -44,6 +40,16 @@ export default class ItemsController {
 
     const items = await query.orderBy('sortOrder', 'asc')
     return serialize(ItemTransformer.transform(items))
+  }
+
+  /** Backs the client's optimistic-row category guess — see PHASE7_PLAN.md §3. */
+  async categorize({ auth, params, request, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
+    const name = request.input('name', '')
+    const body: CategorizeSuggestionDto = { categoryId: await suggestCategoryId(list, name) }
+
+    return response.ok(body)
   }
 
   async recent({ auth, params, serialize }: HttpContext) {

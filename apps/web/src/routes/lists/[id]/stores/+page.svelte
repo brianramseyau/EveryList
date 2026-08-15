@@ -141,7 +141,7 @@
 								id: String(listId),
 								storeId: String(store.id)
 							})}
-							class="ml-auto text-xs text-primary-600 hover:underline dark:text-primary-400"
+							class="ml-auto text-xs text-primary-700 underline dark:text-primary-400"
 						>
 							Reorder categories
 						</a>

@@ -110,6 +110,40 @@ describe('Lists +page.svelte', () => {
 		await expect.element(page.getByText('0 items')).toBeInTheDocument();
 	});
 
+	it('shows a lock badge only on passcode-protected lists', async () => {
+		setToken('test-token');
+		stubFetchByUrl({
+			lists: [
+				{
+					id: 1,
+					name: 'Groceries',
+					archived: false,
+					color: '#3b82f6',
+					icon: null,
+					folderId: null,
+					passcodeHash: 'salt:hash',
+					itemCount: 0
+				},
+				{
+					id: 2,
+					name: 'Hardware',
+					archived: false,
+					color: '#ef4444',
+					icon: null,
+					folderId: null,
+					passcodeHash: null,
+					itemCount: 0
+				}
+			]
+		});
+
+		render(ListsPage);
+
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+		await expect.element(page.getByText('Passcode protected')).toBeInTheDocument();
+		expect(document.querySelectorAll('.sr-only')).toHaveLength(1);
+	});
+
 	it('shows an empty state when there are no lists', async () => {
 		setToken('test-token');
 		stubFetchByUrl({});

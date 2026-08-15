@@ -6,6 +6,7 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import { getToken } from '$lib/api/token';
 	import { initTheme } from '$lib/theme';
+	import { initAccent } from '$lib/accent';
 	import { startFlushLoop } from '$lib/offline/flush';
 	import { initInstallPrompt } from '$lib/pwa/install-prompt';
 	import { clearBadge, refreshBadgeCount } from '$lib/pwa/badge';
@@ -27,6 +28,7 @@
 
 	onMount(() => {
 		initTheme();
+		initAccent();
 		refreshAuth();
 		syncBadge();
 		startFlushLoop();

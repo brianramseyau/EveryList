@@ -66,6 +66,7 @@ describe('New List +page.svelte', () => {
 			ownerId: 1,
 			folderId: null,
 			badgeExcluded: false,
+			passcodeHash: null,
 			createdAt: TS,
 			updatedAt: null,
 			version: 1
@@ -96,6 +97,7 @@ describe('New List +page.svelte', () => {
 			ownerId: 1,
 			folderId: null,
 			badgeExcluded: false,
+			passcodeHash: null,
 			createdAt: TS,
 			updatedAt: null,
 			version: 1
@@ -128,6 +130,7 @@ describe('New List +page.svelte', () => {
 			ownerId: 1,
 			folderId: null,
 			badgeExcluded: false,
+			passcodeHash: null,
 			createdAt: TS,
 			updatedAt: null,
 			version: 1

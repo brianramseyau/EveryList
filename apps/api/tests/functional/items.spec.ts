@@ -331,3 +331,102 @@ test.group('Items CRUD', (group) => {
     destroy.assertStatus(204)
   })
 })
+
+test.group('Category suggestion (personalized + keyword fallback)', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('GET categorize falls back to the static keyword table with no history', async ({
+    client,
+    assert,
+  }) => {
+    await new DefaultCategorySeeder(db.connection()).run()
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const suggestion = await auth(
+      client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Banana' })
+    )
+    suggestion.assertStatus(200)
+    assert.isNotNull(suggestion.body().categoryId)
+
+    const unknown = await auth(
+      client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Xyzzy Widget' })
+    )
+    suggestion.assertStatus(200)
+    assert.isNull(unknown.body().categoryId)
+  })
+
+  test('personalized history for this exact item name wins over the static keyword table', async ({
+    client,
+    assert,
+  }) => {
+    await new DefaultCategorySeeder(db.connection()).run()
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))
+    const household = categories
+      .body()
+      .data.find((category: { name: string }) => category.name === 'Household')
+
+    // "Banana" would normally auto-categorize under Produce (static table) —
+    // teach this list that its own "Banana" means something else 3 times so
+    // the frequency-based personalization has a clear majority.
+    for (let i = 0; i < 3; i++) {
+      await auth(
+        client
+          .post(`/api/v1/lists/${listId}/items`)
+          .json({ name: 'Banana', categoryId: household.id })
+      )
+    }
+
+    const suggestion = await auth(
+      client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'banana' })
+    )
+    suggestion.assertStatus(200)
+    assert.equal(suggestion.body().categoryId, household.id)
+
+    // Item creation itself picks up the personalization too, not just the endpoint.
+    const created = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Banana' })
+    )
+    assert.equal(created.body().data.categoryId, household.id)
+  })
+
+  test('categorize returns null for a blank/whitespace name without querying history', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const response = await client
+      .get(`/api/v1/lists/${listId}/items/categorize`)
+      .header('Authorization', `Bearer ${token}`)
+      .qs({ name: '   ' })
+    response.assertStatus(200)
+    assert.isNull(response.body().categoryId)
+  })
+
+  test('categorize is viewer-accessible but requires list membership', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+
+    const viewer = await signupAndGetUser(client)
+    await addMember(listId, viewer.id, 'viewer')
+    const viewerResponse = await client
+      .get(`/api/v1/lists/${listId}/items/categorize`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .qs({ name: 'Milk' })
+    viewerResponse.assertStatus(200)
+
+    const stranger = await signupAndGetUser(client)
+    const strangerResponse = await client
+      .get(`/api/v1/lists/${listId}/items/categorize`)
+      .header('Authorization', `Bearer ${stranger.token}`)
+      .qs({ name: 'Milk' })
+    strangerResponse.assertStatus(404)
+  })
+})

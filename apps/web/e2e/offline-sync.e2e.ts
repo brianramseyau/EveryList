@@ -21,9 +21,12 @@ test('adds an item while offline and syncs it once back online', async ({ page }
 
 	await expect(page).toHaveURL(/\/lists$/);
 
-	await page.getByPlaceholder('New list name').fill('Groceries');
-	await page.getByRole('button', { name: 'Add' }).click();
-	await page.getByRole('link', { name: /Groceries/ }).click();
+	// Signup already seeds a starter "Groceries" list (see PLAN.md's Phase 2
+	// status note) — a distinct name avoids ambiguous locator matches.
+	await page.getByRole('link', { name: 'New list' }).click();
+	await page.getByPlaceholder('List name').fill('Camping Trip');
+	await page.getByRole('button', { name: 'Save' }).click();
+	await page.getByRole('link', { name: /Camping Trip/ }).click();
 	await expect(page.getByText('No items yet — add one above.')).toBeVisible();
 
 	await page.context().setOffline(true);

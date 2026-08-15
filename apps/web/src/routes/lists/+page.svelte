@@ -111,6 +111,12 @@
 					{list.itemCount === 1 ? 'item' : 'items'}
 				</span>
 			</span>
+			{#if list.passcodeHash}
+				<span class="shrink-0 text-gray-400" title="Passcode protected">
+					<Icon name="lock" class="h-4 w-4" />
+					<span class="sr-only">Passcode protected</span>
+				</span>
+			{/if}
 			{#if list.archived}
 				<span class="text-xs text-gray-400">Archived</span>
 			{/if}

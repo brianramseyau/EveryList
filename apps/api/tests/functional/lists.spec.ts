@@ -236,6 +236,51 @@ test.group('Lists CRUD', (group) => {
     destroy.assertStatus(403)
   })
 
+  test('passcodeHash round-trips through update and is null by default; only an owner can set it', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Shared list' })
+    const listId = bodyData<ListDto>(create).id
+
+    const initialShow = await client
+      .get(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    assert.isNull(bodyData<ListDto>(initialShow).passcodeHash)
+
+    const editor = await signupAndGetUser(client)
+    await addMember(listId, editor.id, 'editor')
+
+    const editorAttempt = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${editor.token}`)
+      .json({ passcodeHash: 'salt:hash' })
+    editorAttempt.assertStatus(403)
+
+    const setPasscode = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ passcodeHash: 'abc123:def456' })
+    setPasscode.assertStatus(200)
+    assert.equal(bodyData<ListDto>(setPasscode).passcodeHash, 'abc123:def456')
+
+    const show = await client
+      .get(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${editor.token}`)
+    assert.equal(bodyData<ListDto>(show).passcodeHash, 'abc123:def456')
+
+    const clearPasscode = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ passcodeHash: null })
+    clearPasscode.assertStatus(200)
+    assert.isNull(bodyData<ListDto>(clearPasscode).passcodeHash)
+  })
+
   test('a shared list appears in the index for every member', async ({ client, assert }) => {
     const owner = await signupAndGetUser(client)
     const create = await client

@@ -6,6 +6,7 @@
 	import { fetchMeta } from '$lib/api/meta';
 	import { formatBuildDate } from '$lib/api/format-build-date';
 	import { getThemePreference, setThemePreference, type ThemePreference } from '$lib/theme';
+	import { getAccentPreference, setAccentPreference, type AccentPreference } from '$lib/accent';
 	import { logout } from '$lib/api/auth';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
@@ -13,6 +14,7 @@
 	let meta = $state<MetaResponse | null>(null);
 	let loadFailed = $state(false);
 	let themePreference = $state<ThemePreference>('automatic');
+	let accentPreference = $state<AccentPreference>('ocean');
 
 	const themeOptions: { value: ThemePreference; label: string }[] = [
 		{ value: 'automatic', label: 'Automatic' },
@@ -20,9 +22,21 @@
 		{ value: 'dark', label: 'Dark' }
 	];
 
+	const accentOptions: { value: AccentPreference; label: string; swatch: string }[] = [
+		{ value: 'ocean', label: 'Ocean', swatch: '#0ea5e9' },
+		{ value: 'forest', label: 'Forest', swatch: '#22c55e' },
+		{ value: 'berry', label: 'Berry', swatch: '#d946ef' },
+		{ value: 'sunset', label: 'Sunset', swatch: '#f59e0b' }
+	];
+
 	function chooseTheme(preference: ThemePreference) {
 		themePreference = preference;
 		setThemePreference(preference);
+	}
+
+	function chooseAccent(preference: AccentPreference) {
+		accentPreference = preference;
+		setAccentPreference(preference);
 	}
 
 	async function handleLogout() {
@@ -32,6 +46,7 @@
 
 	onMount(async () => {
 		themePreference = getThemePreference();
+		accentPreference = getAccentPreference();
 		try {
 			meta = await fetchMeta();
 		} catch {
@@ -91,6 +106,25 @@
 					>
 						{option.label}
 					</button>
+				{/each}
+			</div>
+		</div>
+		<div class="flex items-center justify-between px-4 py-3">
+			<span class="text-sm font-medium">Accent color</span>
+			<div role="radiogroup" aria-label="Accent color" class="flex gap-2">
+				{#each accentOptions as option (option.value)}
+					<button
+						type="button"
+						role="radio"
+						aria-checked={accentPreference === option.value}
+						aria-label={option.label}
+						title={option.label}
+						onclick={() => chooseAccent(option.value)}
+						style:background-color={option.swatch}
+						class="h-6 w-6 rounded-full border-2 {accentPreference === option.value
+							? 'border-gray-900 dark:border-white'
+							: 'border-transparent'}"
+					></button>
 				{/each}
 			</div>
 		</div>

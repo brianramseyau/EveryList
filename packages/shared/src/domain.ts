@@ -9,6 +9,8 @@ export interface ListDto {
 	folderId: number | null;
 	archived: boolean;
 	badgeExcluded: boolean;
+	/** Client-computed `"<saltHex>:<sha256Hex>"` — the server never sees the raw PIN. See PHASE7_PLAN.md §2. */
+	passcodeHash: string | null;
 	itemCount: number;
 	createdAt: string;
 	updatedAt: string | null;
@@ -46,6 +48,11 @@ export interface ItemDto {
 	updatedAt: string | null;
 	deletedAt: string | null;
 	version: number;
+}
+
+/** Response for `GET /lists/:listId/items/categorize` — see PHASE7_PLAN.md §3. */
+export interface CategorizeSuggestionDto {
+	categoryId: number | null;
 }
 
 export interface FavoriteItemDto {

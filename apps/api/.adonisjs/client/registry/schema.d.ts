@@ -79,6 +79,54 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/metas_controller').default['show']>>>
     }
   }
+  'folders.folders.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/folders'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/folders_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/folders_controller').default['index']>>>
+    }
+  }
+  'folders.folders.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/folders'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/folder').createFolderValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/folder').createFolderValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/folders_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/folders_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'folders.folders.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/folders/:id'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/folder').updateFolderValidator)>>
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/folder').updateFolderValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/folders_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/folders_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'folders.folders.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/folders/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/folders_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/folders_controller').default['destroy']>>>
+    }
+  }
   'lists.lists.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/lists'
@@ -221,6 +269,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['recent']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['recent']>>>
+    }
+  }
+  'lists.items.categorize': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/items/categorize'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['categorize']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['categorize']>>>
     }
   }
   'lists.items.store': {
@@ -413,6 +473,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['destroy']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['destroy']>>>
+    }
+  }
+  'lists.list_export.email': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/export/email'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/list_export').emailExportValidator)>>
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/list_export').emailExportValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/list_export_controller').default['email']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_export_controller').default['email']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
   'lists.list_invites.index': {

@@ -71,4 +71,22 @@ describe('Settings +page.svelte', () => {
 		window.localStorage.removeItem('everylist:theme');
 		document.documentElement.classList.remove('dark');
 	});
+
+	it('switches the accent color preference and reflects the choice in the radio group', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+		render(SettingsPage);
+
+		const forestOption = page.getByRole('radio', { name: 'Forest' });
+		await expect.element(forestOption).toHaveAttribute('aria-checked', 'false');
+
+		await forestOption.click();
+
+		await expect.element(forestOption).toHaveAttribute('aria-checked', 'true');
+		expect(window.localStorage.getItem('everylist:accent')).toBe('forest');
+		expect(document.documentElement.getAttribute('data-accent')).toBe('forest');
+
+		window.localStorage.removeItem('everylist:accent');
+		document.documentElement.removeAttribute('data-accent');
+	});
 });

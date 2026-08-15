@@ -1,4 +1,4 @@
-import type { ItemDto } from '@everylist/shared';
+import type { CategorizeSuggestionDto, ItemDto } from '@everylist/shared';
 import { suggestCategoryName } from '@everylist/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 import { getDb, type EveryListDB } from '$lib/offline/db';
@@ -17,10 +17,11 @@ export function restoreItem(listId: number, itemId: number): Promise<ItemDto> {
 	return apiPost(`/api/v1/lists/${listId}/items/${itemId}/restore`);
 }
 
-/** Best-effort offline category guess, mirroring the server's auto-categorization
- * (`resolveCategoryId` in apps/api's items_controller.ts) against whatever
- * categories are already cached in Dexie for this list — see PLAN.md §9. */
-async function guessCategoryId(
+/** Purely local category guess against the static keyword table and whatever
+ * categories are already cached in Dexie for this list — the offline fallback
+ * for `fetchCategorySuggestion` below (PHASE7_PLAN.md §3), and mirrors the
+ * server's own static-table fallback in `category_suggestion_service.ts`. */
+async function staticGuessCategoryId(
 	db: EveryListDB,
 	listId: number,
 	name: string
@@ -37,6 +38,25 @@ async function guessCategoryId(
 		.toArray();
 	const globalMatch = globalCategories.find((category) => category.name === suggestedName);
 	return globalMatch?.id ?? null;
+}
+
+/** Personalized (frequency-based) suggestion from the real backend service —
+ * see PHASE7_PLAN.md §3. Falls back to the local static-table guess when the
+ * request fails (offline and this exact list+name was never cached by the
+ * service worker's `StaleWhileRevalidate` rule for `/api/v1/*`). */
+async function guessCategoryId(
+	db: EveryListDB,
+	listId: number,
+	name: string
+): Promise<number | null> {
+	try {
+		const suggestion = await apiGet<CategorizeSuggestionDto>(
+			`/api/v1/lists/${listId}/items/categorize?name=${encodeURIComponent(name)}`
+		);
+		return suggestion.categoryId;
+	} catch {
+		return staticGuessCategoryId(db, listId, name);
+	}
 }
 
 export async function createItem(

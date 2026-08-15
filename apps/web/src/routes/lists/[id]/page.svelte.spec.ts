@@ -60,6 +60,7 @@ const list = {
 	ownerId: 1,
 	folderId: null,
 	badgeExcluded: false,
+	passcodeHash: null,
 	archived: false,
 	itemCount: 0,
 	createdAt: TS,
@@ -127,6 +128,7 @@ describe('List detail +page.svelte', () => {
 	afterEach(async () => {
 		vi.clearAllMocks();
 		clearToken();
+		window.sessionStorage.clear();
 		await resetDbForTesting();
 	});
 
@@ -989,5 +991,41 @@ describe('List detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'Dismiss' }).click();
 		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
 		expect(fetchList).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows the passcode gate instead of the list body for a locked, unopened list', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, passcodeHash: 'abc:def' });
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('This list is locked')).toBeInTheDocument();
+		await expect.element(page.getByText('No items yet — add one above.')).not.toBeInTheDocument();
+		// The header/menu stay reachable even while locked (recovery path).
+		await expect.element(page.getByRole('button', { name: 'List settings' })).toBeInTheDocument();
+	});
+
+	it('reveals the list body once the correct passcode is entered', async () => {
+		const { buildPasscodeHash } = await import('$lib/passcode');
+		const passcodeHash = await buildPasscodeHash('1234');
+		vi.mocked(fetchList).mockResolvedValue({ ...list, passcodeHash });
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('This list is locked')).toBeInTheDocument();
+
+		await page.getByLabelText('Passcode').fill('1234');
+		await page.getByRole('button', { name: 'Unlock' }).click();
+
+		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+	});
+
+	it('skips the passcode gate on a later visit within the same session', async () => {
+		const { unlockList } = await import('$lib/passcode');
+		unlockList(1);
+		vi.mocked(fetchList).mockResolvedValue({ ...list, passcodeHash: 'abc:def' });
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect.element(page.getByText('This list is locked')).not.toBeInTheDocument();
 	});
 });

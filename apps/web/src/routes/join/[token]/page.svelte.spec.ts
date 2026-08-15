@@ -75,6 +75,7 @@ describe('Join +page.svelte', () => {
 			ownerId: 1,
 			folderId: null,
 			badgeExcluded: false,
+			passcodeHash: null,
 			archived: false,
 			itemCount: 0,
 			createdAt: '2026-08-01T00:00:00.000Z',
