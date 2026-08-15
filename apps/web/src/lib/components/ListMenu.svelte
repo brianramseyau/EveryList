@@ -4,6 +4,7 @@
 	import type { ListDto } from '@everylist/shared';
 	import { emailExportList } from '$lib/api/lists';
 	import { ApiError } from '$lib/api/client';
+	import { buildPasscodeHash } from '$lib/passcode';
 	import Icon from './Icon.svelte';
 	import IconPicker from './IconPicker.svelte';
 	import ColorPicker from './ColorPicker.svelte';
@@ -23,6 +24,7 @@
 				icon: string | null;
 				archived: boolean;
 				badgeExcluded: boolean;
+				passcodeHash: string | null;
 			}>
 		) => Promise<void>;
 		ondelete: () => Promise<void>;
@@ -37,6 +39,9 @@
 	let exportEmail = $state('');
 	let exportStatus = $state<'idle' | 'sent' | 'error'>('idle');
 	let exportErrorMessage = $state('');
+	let settingPasscode = $state(false);
+	let draftPin = $state('');
+	let savingPasscode = $state(false);
 
 	function toggle() {
 		open = !open;
@@ -45,6 +50,8 @@
 			confirmingDelete = false;
 			exportingEmail = false;
 			exportStatus = 'idle';
+			settingPasscode = false;
+			draftPin = '';
 		}
 	}
 
@@ -87,6 +94,24 @@
 		await onupdate({ badgeExcluded: !current.badgeExcluded });
 	}
 
+	async function savePasscode(event: SubmitEvent) {
+		event.preventDefault();
+		const trimmed = draftPin.trim();
+		if (!trimmed) return;
+		savingPasscode = true;
+		try {
+			await onupdate({ passcodeHash: await buildPasscodeHash(trimmed) });
+			settingPasscode = false;
+			draftPin = '';
+		} finally {
+			savingPasscode = false;
+		}
+	}
+
+	async function removePasscode() {
+		await onupdate({ passcodeHash: null });
+	}
+
 	const deleteConfirmMessage = $derived(list ? `Delete "${list.name}"? This can't be undone.` : '');
 
 	async function confirmDelete() {
@@ -116,13 +141,13 @@
 		>
 			<a
 				href={resolve('/lists/[id]/categories', { id: String(listId) })}
-				class="block rounded px-2 py-1.5 text-sm text-primary-600 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+				class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
 			>
 				Categories
 			</a>
 			<a
 				href={resolve('/lists/[id]/members', { id: String(listId) })}
-				class="block rounded px-2 py-1.5 text-sm text-primary-600 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+				class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
 			>
 				Members
 			</a>
@@ -164,6 +189,51 @@
 				>
 					{list.badgeExcluded ? 'Include in badge count' : 'Exclude from badge count'}
 				</button>
+
+				{#if settingPasscode}
+					<form class="flex flex-col gap-2 px-2 py-1.5" onsubmit={savePasscode}>
+						<span class="text-xs font-semibold text-gray-500 dark:text-gray-400">
+							{list.passcodeHash ? 'Change passcode' : 'Set passcode'}
+						</span>
+						<Input
+							type="password"
+							inputmode="numeric"
+							autocomplete="off"
+							placeholder="New passcode"
+							bind:value={draftPin}
+						/>
+						<div class="flex items-center gap-2">
+							<Button type="submit" size="xs" disabled={savingPasscode || !draftPin.trim()}>
+								{savingPasscode ? 'Saving…' : 'Save passcode'}
+							</Button>
+							<Button
+								type="button"
+								size="xs"
+								color="alternative"
+								onclick={() => (settingPasscode = false)}
+							>
+								Cancel
+							</Button>
+						</div>
+					</form>
+				{:else}
+					<button
+						type="button"
+						class="block w-full rounded px-2 py-1.5 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+						onclick={() => (settingPasscode = true)}
+					>
+						{list.passcodeHash ? 'Change passcode…' : 'Set passcode…'}
+					</button>
+					{#if list.passcodeHash}
+						<button
+							type="button"
+							class="block w-full rounded px-2 py-1.5 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+							onclick={removePasscode}
+						>
+							Remove passcode
+						</button>
+					{/if}
+				{/if}
 
 				<hr class="my-2 border-gray-200 dark:border-gray-700" />
 

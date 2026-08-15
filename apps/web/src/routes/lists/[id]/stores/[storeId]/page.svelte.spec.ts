@@ -31,6 +31,7 @@ const list = {
 	ownerId: 1,
 	folderId: null,
 	badgeExcluded: false,
+	passcodeHash: null,
 	archived: false,
 	itemCount: 0,
 	createdAt: TS,

@@ -17,6 +17,7 @@ const list: ListDto = {
 	ownerId: 1,
 	folderId: null,
 	badgeExcluded: false,
+	passcodeHash: null,
 	archived: false,
 	itemCount: 0,
 	createdAt: '2026-08-01T00:00:00.000Z',
@@ -319,5 +320,85 @@ describe('ListMenu.svelte', () => {
 		await open(); // reopen
 
 		await expect.element(page.getByRole('button', { name: 'Email export…' })).toBeInTheDocument();
+	});
+
+	it('sets a passcode with a client-computed hash, hiding the raw PIN from onupdate', async () => {
+		const onupdate = vi.fn().mockResolvedValue(undefined);
+		render(ListMenu, { listId: 42, list, onupdate, ondelete: vi.fn() });
+
+		await open();
+		await expect
+			.element(page.getByRole('button', { name: 'Remove passcode' }))
+			.not.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Set passcode…' }).click();
+		await page.getByPlaceholder('New passcode').fill('1234');
+		await page.getByRole('button', { name: 'Save passcode' }).click();
+
+		expect(onupdate).toHaveBeenCalledTimes(1);
+		const call = onupdate.mock.calls[0]![0] as { passcodeHash: string };
+		expect(call.passcodeHash).toMatch(/^[0-9a-f]{32}:[0-9a-f]{64}$/);
+		await expect.element(page.getByRole('button', { name: 'Set passcode…' })).toBeInTheDocument();
+	});
+
+	it('offers "Change passcode…" and "Remove passcode" once a passcode is set', async () => {
+		const onupdate = vi.fn().mockResolvedValue(undefined);
+		render(ListMenu, {
+			listId: 42,
+			list: { ...list, passcodeHash: 'salt:hash' },
+			onupdate,
+			ondelete: vi.fn()
+		});
+
+		await open();
+		await expect
+			.element(page.getByRole('button', { name: 'Change passcode…' }))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Change passcode…' }).click();
+		await expect.element(page.getByText('Change passcode')).toBeInTheDocument();
+		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+		await page.getByRole('button', { name: 'Remove passcode' }).click();
+		expect(onupdate).toHaveBeenCalledWith({ passcodeHash: null });
+	});
+
+	it('cancels the passcode form without saving', async () => {
+		render(ListMenu, { listId: 42, list, onupdate: vi.fn(), ondelete: vi.fn() });
+
+		await open();
+		await page.getByRole('button', { name: 'Set passcode…' }).click();
+		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+		await expect.element(page.getByRole('button', { name: 'Set passcode…' })).toBeInTheDocument();
+	});
+
+	it('does not save the passcode form with only whitespace', async () => {
+		const onupdate = vi.fn().mockResolvedValue(undefined);
+		render(ListMenu, { listId: 42, list, onupdate, ondelete: vi.fn() });
+
+		await open();
+		await page.getByRole('button', { name: 'Set passcode…' }).click();
+
+		const saveButton = page.getByRole('button', { name: 'Save passcode' });
+		await expect.element(saveButton).toBeDisabled();
+
+		const input = page.getByPlaceholder('New passcode');
+		const form = input.element().closest('form');
+		await input.fill('   ');
+		form?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+		expect(onupdate).not.toHaveBeenCalled();
+	});
+
+	it('resets the passcode form when reopened', async () => {
+		render(ListMenu, { listId: 42, list, onupdate: vi.fn(), ondelete: vi.fn() });
+
+		await open();
+		await page.getByRole('button', { name: 'Set passcode…' }).click();
+		await open(); // close
+		await open(); // reopen
+
+		await expect.element(page.getByRole('button', { name: 'Set passcode…' })).toBeInTheDocument();
 	});
 });

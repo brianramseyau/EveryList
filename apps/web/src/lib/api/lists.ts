@@ -22,6 +22,7 @@ export function updateList(
 		archived: boolean;
 		badgeExcluded: boolean;
 		folderId: number | null;
+		passcodeHash: string | null;
 	}>
 ) {
 	return apiPatch<ListDto>(`/api/v1/lists/${id}`, input);
