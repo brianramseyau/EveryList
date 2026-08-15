@@ -46,10 +46,10 @@
 		color="alternative"
 		onclick={() => pickerCoordinator.toggle(id)}
 		class="flex items-center gap-2"
+		aria-label="Color"
 	>
 		<span class="h-5 w-5 shrink-0 rounded-full" style:background-color={value} aria-hidden="true"
 		></span>
-		<span class="text-sm">Color</span>
 	</Button>
 
 	{#if open && containerEl}
