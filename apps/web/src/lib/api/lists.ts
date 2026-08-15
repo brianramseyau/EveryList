@@ -15,7 +15,13 @@ export function createList(input: { name: string; color?: string; icon?: string 
 
 export function updateList(
 	id: number,
-	input: Partial<{ name: string; color: string; icon: string | null; archived: boolean }>
+	input: Partial<{
+		name: string;
+		color: string;
+		icon: string | null;
+		archived: boolean;
+		folderId: number | null;
+	}>
 ) {
 	return apiPatch<ListDto>(`/api/v1/lists/${id}`, input);
 }

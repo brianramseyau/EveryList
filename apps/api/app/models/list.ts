@@ -7,6 +7,7 @@ import Item from '#models/item'
 import Store from '#models/store'
 import FavoriteItem from '#models/favorite_item'
 import ListMember from '#models/list_member'
+import Folder from '#models/folder'
 
 export default class List extends ListSchema {
   // SQLite has no native boolean type — better-sqlite3 round-trips this
@@ -16,6 +17,9 @@ export default class List extends ListSchema {
 
   @belongsTo(() => User, { foreignKey: 'ownerId' })
   declare owner: BelongsTo<typeof User>
+
+  @belongsTo(() => Folder, { foreignKey: 'folderId' })
+  declare folder: BelongsTo<typeof Folder>
 
   @hasMany(() => Category, { foreignKey: 'listId' })
   declare categories: HasMany<typeof Category>

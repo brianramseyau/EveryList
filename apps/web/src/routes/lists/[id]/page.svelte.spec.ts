@@ -51,6 +51,7 @@ const list = {
 	color: '#3b82f6',
 	icon: null,
 	ownerId: 1,
+	folderId: null,
 	archived: false,
 	itemCount: 0,
 	createdAt: TS,

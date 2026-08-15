@@ -6,6 +6,7 @@ export interface ListDto {
 	color: string;
 	icon: string | null;
 	ownerId: number;
+	folderId: number | null;
 	archived: boolean;
 	itemCount: number;
 	createdAt: string;
@@ -56,6 +57,17 @@ export interface FavoriteItemDto {
 	createdAt: string;
 	updatedAt: string | null;
 	deletedAt: string | null;
+	version: number;
+}
+
+export interface FolderDto {
+	id: number;
+	userId: number;
+	name: string;
+	color: string;
+	sortOrder: number;
+	createdAt: string;
+	updatedAt: string | null;
 	version: number;
 }
 

@@ -31,6 +31,11 @@ describe('lists api', () => {
 		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1', { archived: true });
 	});
 
+	it('updateList PATCHes a folderId assignment', () => {
+		updateList(1, { folderId: 5 });
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1', { folderId: 5 });
+	});
+
 	it('deleteList DELETEs the given id', () => {
 		deleteList(1);
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1');

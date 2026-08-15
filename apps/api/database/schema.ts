@@ -84,6 +84,27 @@ export class FavoriteItemSchema extends BaseModel {
   declare version: number
 }
 
+export class FolderSchema extends BaseModel {
+  static $columns = ['color', 'createdAt', 'id', 'name', 'sortOrder', 'updatedAt', 'userId', 'version'] as const
+  $columns = FolderSchema.$columns
+  @column()
+  declare color: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare name: string
+  @column()
+  declare sortOrder: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: number
+  @column()
+  declare version: number
+}
+
 export class ItemSchema extends BaseModel {
   static $columns = ['categoryId', 'checked', 'checkedAt', 'createdAt', 'createdBy', 'deletedAt', 'id', 'listId', 'name', 'notes', 'price', 'quantity', 'sortOrder', 'storeId', 'updatedAt', 'version'] as const
   $columns = ItemSchema.$columns
@@ -181,7 +202,7 @@ export class ListStoreSchema extends BaseModel {
 }
 
 export class ListSchema extends BaseModel {
-  static $columns = ['archived', 'color', 'createdAt', 'deletedAt', 'icon', 'id', 'name', 'ownerId', 'updatedAt', 'version'] as const
+  static $columns = ['archived', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'name', 'ownerId', 'updatedAt', 'version'] as const
   $columns = ListSchema.$columns
   @column()
   declare archived: boolean
@@ -191,6 +212,8 @@ export class ListSchema extends BaseModel {
   declare createdAt: DateTime
   @column.dateTime()
   declare deletedAt: DateTime | null
+  @column()
+  declare folderId: number | null
   @column()
   declare icon: string | null
   @column({ isPrimary: true })

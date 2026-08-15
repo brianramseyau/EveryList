@@ -7,6 +7,7 @@
 import type { InferData, InferVariants } from '@adonisjs/core/types/transformers'
 import type CategoryTransformer from '#transformers/category_transformer'
 import type FavoriteItemTransformer from '#transformers/favorite_item_transformer'
+import type FolderTransformer from '#transformers/folder_transformer'
 import type ItemTransformer from '#transformers/item_transformer'
 import type ListInvitePreviewTransformer from '#transformers/list_invite_preview_transformer'
 import type ListInviteTransformer from '#transformers/list_invite_transformer'
@@ -24,6 +25,10 @@ export namespace Data {
   export type FavoriteItem = InferData<FavoriteItemTransformer>
   export namespace FavoriteItem {
     export type Variants = InferVariants<FavoriteItemTransformer>
+  }
+  export type Folder = InferData<FolderTransformer>
+  export namespace Folder {
+    export type Variants = InferVariants<FolderTransformer>
   }
   export type Item = InferData<ItemTransformer>
   export namespace Item {

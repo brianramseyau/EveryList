@@ -10,6 +10,7 @@ const list: ListDto = {
 	color: '#3b82f6',
 	icon: 'basket',
 	ownerId: 1,
+	folderId: null,
 	archived: false,
 	itemCount: 0,
 	createdAt: '2026-08-01T00:00:00.000Z',

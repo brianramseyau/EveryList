@@ -1,4 +1,5 @@
 import List from '#models/list'
+import Folder from '#models/folder'
 import ListPolicy from '#policies/list_policy'
 import { createListValidator, updateListValidator } from '#validators/list'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -62,6 +63,10 @@ export default class ListsController {
       return response
         .status(409)
         .send({ ...(await serialize(ListTransformer.transform(list))), conflict: true })
+    }
+
+    if (rest.folderId != null) {
+      await Folder.query().where('id', rest.folderId).where('userId', user.id).firstOrFail()
     }
 
     list.merge(rest)

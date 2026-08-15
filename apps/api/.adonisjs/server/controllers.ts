@@ -7,6 +7,7 @@ export const controllers = {
   AccessTokens: () => import('#controllers/access_tokens_controller'),
   Categories: () => import('#controllers/categories_controller'),
   FavoriteItems: () => import('#controllers/favorite_items_controller'),
+  Folders: () => import('#controllers/folders_controller'),
   InviteAccept: () => import('#controllers/invite_accept_controller'),
   Items: () => import('#controllers/items_controller'),
   ListInvites: () => import('#controllers/list_invites_controller'),
