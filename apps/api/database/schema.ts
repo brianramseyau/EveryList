@@ -118,6 +118,36 @@ export class FavoriteItemSchema extends BaseModel {
   declare version: number
 }
 
+export class FolderSchema extends BaseModel {
+  static $columns = [
+    'color',
+    'createdAt',
+    'id',
+    'name',
+    'sortOrder',
+    'updatedAt',
+    'userId',
+    'version',
+  ] as const
+  $columns = FolderSchema.$columns
+  @column()
+  declare color: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare name: string
+  @column()
+  declare sortOrder: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: number
+  @column()
+  declare version: number
+}
+
 export class ItemSchema extends BaseModel {
   static $columns = [
     'categoryId',
@@ -130,8 +160,10 @@ export class ItemSchema extends BaseModel {
     'listId',
     'name',
     'notes',
+    'price',
     'quantity',
     'sortOrder',
+    'storeId',
     'updatedAt',
     'version',
   ] as const
@@ -157,9 +189,13 @@ export class ItemSchema extends BaseModel {
   @column()
   declare notes: string | null
   @column()
+  declare price: number | null
+  @column()
   declare quantity: string | null
   @column()
   declare sortOrder: number
+  @column()
+  declare storeId: number | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()
@@ -247,9 +283,11 @@ export class ListStoreSchema extends BaseModel {
 export class ListSchema extends BaseModel {
   static $columns = [
     'archived',
+    'badgeExcluded',
     'color',
     'createdAt',
     'deletedAt',
+    'folderId',
     'icon',
     'id',
     'name',
@@ -261,11 +299,15 @@ export class ListSchema extends BaseModel {
   @column()
   declare archived: boolean
   @column()
+  declare badgeExcluded: boolean
+  @column()
   declare color: string
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column.dateTime()
   declare deletedAt: DateTime | null
+  @column()
+  declare folderId: number | null
   @column()
   declare icon: string | null
   @column({ isPrimary: true })

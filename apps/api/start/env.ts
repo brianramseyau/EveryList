@@ -30,6 +30,16 @@ export default await Env.create(new URL('../', import.meta.url), {
   // Defaults to enabled.
   PUBLIC_SIGNUP_ENABLED: Env.schema.boolean.optional(),
 
+  // Outbound email (SMTP2GO) — optional: unset in local dev, so the app
+  // boots with no config and email export simply reports "not configured"
+  // rather than failing to start (see PLAN.md's zero-config startup rule).
+  SMTP2GO_HOST: Env.schema.string.optional(),
+  SMTP2GO_PORT: Env.schema.number.optional(),
+  SMTP2GO_USERNAME: Env.schema.string.optional(),
+  SMTP2GO_PASSWORD: Env.schema.string.optional(),
+  SMTP2GO_FROM_ADDRESS: Env.schema.string.optional(),
+  SMTP2GO_FROM_NAME: Env.schema.string.optional(),
+
   // Build/image metadata (baked in by docker/Dockerfile at build time — see
   // GET /api/v1/meta and PLAN.md §8). Absent in local dev, hence optional.
   APP_VERSION: Env.schema.string.optional(),

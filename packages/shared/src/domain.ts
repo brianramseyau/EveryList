@@ -6,7 +6,9 @@ export interface ListDto {
 	color: string;
 	icon: string | null;
 	ownerId: number;
+	folderId: number | null;
 	archived: boolean;
+	badgeExcluded: boolean;
 	itemCount: number;
 	createdAt: string;
 	updatedAt: string | null;
@@ -33,6 +35,9 @@ export interface ItemDto {
 	quantity: string | null;
 	notes: string | null;
 	categoryId: number | null;
+	storeId: number | null;
+	/** Integer cents (like Stripe) to avoid floating-point drift when summing a list's total. */
+	price: number | null;
 	checked: boolean;
 	checkedAt: string | null;
 	sortOrder: number;
@@ -53,6 +58,17 @@ export interface FavoriteItemDto {
 	createdAt: string;
 	updatedAt: string | null;
 	deletedAt: string | null;
+	version: number;
+}
+
+export interface FolderDto {
+	id: number;
+	userId: number;
+	name: string;
+	color: string;
+	sortOrder: number;
+	createdAt: string;
+	updatedAt: string | null;
 	version: number;
 }
 

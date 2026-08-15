@@ -20,7 +20,9 @@
 </script>
 
 {#if backHref}
-	<a href={backHref} class="text-sm text-primary-600 hover:underline dark:text-primary-400"
+	<a
+		href={backHref}
+		class="text-sm text-primary-600 hover:underline dark:text-primary-400 print:hidden"
 		>← <span>{backLabel}</span></a
 	>
 {/if}
@@ -29,7 +31,7 @@
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold">{title}</h1>
 		{#if actions}
-			<div class="flex items-center gap-3 text-sm">{@render actions()}</div>
+			<div class="flex items-center gap-3 text-sm print:hidden">{@render actions()}</div>
 		{/if}
 	</div>
 {/if}

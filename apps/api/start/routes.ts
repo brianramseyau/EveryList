@@ -36,6 +36,17 @@ router
 
     router
       .group(() => {
+        router.get('/', [controllers.Folders, 'index'])
+        router.post('/', [controllers.Folders, 'store'])
+        router.patch(':id', [controllers.Folders, 'update'])
+        router.delete(':id', [controllers.Folders, 'destroy'])
+      })
+      .prefix('folders')
+      .as('folders')
+      .use(middleware.auth())
+
+    router
+      .group(() => {
         router.get('/', [controllers.Lists, 'index'])
         router.post('/', [controllers.Lists, 'store'])
         router.get(':id', [controllers.Lists, 'show'])
@@ -69,6 +80,8 @@ router
         router.get(':listId/members', [controllers.ListMembers, 'index'])
         router.patch(':listId/members/:memberId', [controllers.ListMembers, 'update'])
         router.delete(':listId/members/:memberId', [controllers.ListMembers, 'destroy'])
+
+        router.post(':listId/export/email', [controllers.ListExport, 'email'])
 
         router.get(':listId/invites', [controllers.ListInvites, 'index'])
         router.post(':listId/invites', [controllers.ListInvites, 'store'])

@@ -3,6 +3,7 @@ import { belongsTo, column } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import List from '#models/list'
 import Category from '#models/category'
+import Store from '#models/store'
 import User from '#models/user'
 
 export default class Item extends ItemSchema {
@@ -16,6 +17,9 @@ export default class Item extends ItemSchema {
 
   @belongsTo(() => Category, { foreignKey: 'categoryId' })
   declare category: BelongsTo<typeof Category>
+
+  @belongsTo(() => Store, { foreignKey: 'storeId' })
+  declare store: BelongsTo<typeof Store>
 
   @belongsTo(() => User, { foreignKey: 'createdBy' })
   declare creator: BelongsTo<typeof User>

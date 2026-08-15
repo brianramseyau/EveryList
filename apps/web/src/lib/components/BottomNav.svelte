@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { onDestroy, onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { getBadgeCount, isBadgingSupported, onBadgeCountChange } from '$lib/pwa/badge';
 
 	type NavKey = 'lists' | 'settings';
 
@@ -12,6 +14,18 @@
 	function isActive(match: string): boolean {
 		return page.url.pathname === match || page.url.pathname.startsWith(`${match}/`);
 	}
+
+	// The OS-level app icon badge (Web Badging API) already shows this count where
+	// supported — this pill is the in-app fallback for browsers that don't (iOS Safari,
+	// Firefox), see PLAN.md §16.
+	let badgeCount = $state(getBadgeCount());
+
+	onMount(() => {
+		onBadgeCountChange((count) => (badgeCount = count));
+	});
+	onDestroy(() => {
+		onBadgeCountChange(null);
+	});
 </script>
 
 <nav
@@ -28,21 +42,30 @@
 				: 'text-gray-500 dark:text-gray-400'}"
 		>
 			{#if item.key === 'lists'}
-				<svg
-					class="h-6 w-6"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<path d="M9 6h11M9 12h11M9 18h11" />
-					<circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none" />
-					<circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none" />
-					<circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none" />
-				</svg>
+				<div class="relative">
+					<svg
+						class="h-6 w-6"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="M9 6h11M9 12h11M9 18h11" />
+						<circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none" />
+						<circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none" />
+						<circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none" />
+					</svg>
+					{#if !isBadgingSupported() && badgeCount > 0}
+						<span
+							class="absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white"
+						>
+							{badgeCount > 99 ? '99+' : badgeCount}
+						</span>
+					{/if}
+				</div>
 			{:else}
 				<svg
 					class="h-6 w-6"

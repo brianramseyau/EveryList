@@ -72,6 +72,8 @@ export default class ItemsController {
       quantity: payload.quantity ?? null,
       notes: payload.notes ?? null,
       categoryId,
+      storeId: payload.storeId ?? null,
+      price: payload.price ?? null,
       checked: false,
       sortOrder: await nextSortOrder(list.id),
       createdBy: user.id,

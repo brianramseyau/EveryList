@@ -29,6 +29,8 @@ const list = {
 	color: '#3b82f6',
 	icon: null,
 	ownerId: 1,
+	folderId: null,
+	badgeExcluded: false,
 	archived: false,
 	itemCount: 0,
 	createdAt: '2026-08-01T00:00:00.000Z',

@@ -2,6 +2,8 @@
 	import { resolve } from '$app/paths';
 	import { Button, Input } from 'flowbite-svelte';
 	import type { ListDto } from '@everylist/shared';
+	import { emailExportList } from '$lib/api/lists';
+	import { ApiError } from '$lib/api/client';
 	import Icon from './Icon.svelte';
 	import IconPicker from './IconPicker.svelte';
 	import ColorPicker from './ColorPicker.svelte';
@@ -15,7 +17,13 @@
 		listId: number;
 		list: ListDto | null;
 		onupdate: (
-			input: Partial<{ name: string; color: string; icon: string | null; archived: boolean }>
+			input: Partial<{
+				name: string;
+				color: string;
+				icon: string | null;
+				archived: boolean;
+				badgeExcluded: boolean;
+			}>
 		) => Promise<void>;
 		ondelete: () => Promise<void>;
 	} = $props();
@@ -25,12 +33,37 @@
 	let savingName = $state(false);
 	let confirmingDelete = $state(false);
 	let deleting = $state(false);
+	let exportingEmail = $state(false);
+	let exportEmail = $state('');
+	let exportStatus = $state<'idle' | 'sent' | 'error'>('idle');
+	let exportErrorMessage = $state('');
 
 	function toggle() {
 		open = !open;
 		if (open) {
 			draftName = list?.name ?? '';
 			confirmingDelete = false;
+			exportingEmail = false;
+			exportStatus = 'idle';
+		}
+	}
+
+	function printList() {
+		window.print();
+	}
+
+	async function sendEmailExport(event: SubmitEvent) {
+		event.preventDefault();
+		const trimmed = exportEmail.trim();
+		if (!trimmed) return;
+		exportStatus = 'idle';
+		try {
+			await emailExportList(listId, trimmed);
+			exportStatus = 'sent';
+			exportEmail = '';
+		} catch (err) {
+			exportStatus = 'error';
+			exportErrorMessage = err instanceof ApiError ? err.message : 'Failed to send export.';
 		}
 	}
 
@@ -48,6 +81,10 @@
 
 	async function toggleArchived(current: ListDto) {
 		await onupdate({ archived: !current.archived });
+	}
+
+	async function toggleBadgeExcluded(current: ListDto) {
+		await onupdate({ badgeExcluded: !current.badgeExcluded });
 	}
 
 	const deleteConfirmMessage = $derived(list ? `Delete "${list.name}"? This can't be undone.` : '');
@@ -119,6 +156,57 @@
 				>
 					{list.archived ? 'Unarchive list' : 'Archive list'}
 				</button>
+
+				<button
+					type="button"
+					class="block w-full rounded px-2 py-1.5 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+					onclick={() => toggleBadgeExcluded(list)}
+				>
+					{list.badgeExcluded ? 'Include in badge count' : 'Exclude from badge count'}
+				</button>
+
+				<hr class="my-2 border-gray-200 dark:border-gray-700" />
+
+				<button
+					type="button"
+					class="block w-full rounded px-2 py-1.5 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+					onclick={printList}
+				>
+					Print list
+				</button>
+
+				{#if exportingEmail}
+					<form class="flex flex-col gap-2 px-2 py-1.5" onsubmit={sendEmailExport}>
+						<span class="text-xs font-semibold text-gray-500 dark:text-gray-400">
+							Email export
+						</span>
+						<Input type="email" placeholder="you@example.com" bind:value={exportEmail} required />
+						<div class="flex items-center gap-2">
+							<Button type="submit" size="xs" disabled={!exportEmail.trim()}>Send</Button>
+							<Button
+								type="button"
+								size="xs"
+								color="alternative"
+								onclick={() => (exportingEmail = false)}
+							>
+								Cancel
+							</Button>
+						</div>
+						{#if exportStatus === 'sent'}
+							<p class="text-xs text-green-600 dark:text-green-400">Export sent.</p>
+						{:else if exportStatus === 'error'}
+							<p class="text-xs text-red-600 dark:text-red-400">{exportErrorMessage}</p>
+						{/if}
+					</form>
+				{:else}
+					<button
+						type="button"
+						class="block w-full rounded px-2 py-1.5 text-left text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+						onclick={() => (exportingEmail = true)}
+					>
+						Email export…
+					</button>
+				{/if}
 
 				{#if confirmingDelete}
 					<div

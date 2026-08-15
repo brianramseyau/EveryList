@@ -7,7 +7,12 @@ import { ApiError } from '$lib/api/client';
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn(), updateList: vi.fn(), deleteList: vi.fn() }));
+vi.mock('$lib/api/lists', () => ({
+	fetchList: vi.fn(),
+	updateList: vi.fn(),
+	deleteList: vi.fn(),
+	emailExportList: vi.fn()
+}));
 vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
 vi.mock('$lib/api/items', () => ({
 	fetchItems: vi.fn(),
@@ -18,12 +23,13 @@ vi.mock('$lib/api/items', () => ({
 	restoreItem: vi.fn(),
 	updateItem: vi.fn()
 }));
-vi.mock('$lib/api/stores', () => ({ fetchStoreCategoryOrder: vi.fn() }));
+vi.mock('$lib/api/stores', () => ({ fetchStoreCategoryOrder: vi.fn(), fetchStores: vi.fn() }));
 vi.mock('$lib/api/selected-store', () => ({
 	getSelectedStore: vi.fn(),
 	setSelectedStore: vi.fn()
 }));
 vi.mock('$lib/realtime', () => ({ subscribeToList: vi.fn(() => vi.fn()) }));
+vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 
 const { fetchList, updateList, deleteList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
@@ -36,9 +42,10 @@ const {
 	importItems,
 	restoreItem
 } = await import('$lib/api/items');
-const { fetchStoreCategoryOrder } = await import('$lib/api/stores');
+const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores');
 const { getSelectedStore } = await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
+const { refreshBadgeCount } = await import('$lib/pwa/badge');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { goto } = await import('$app/navigation');
 const ListDetailPage = (await import('./+page.svelte')).default;
@@ -51,6 +58,8 @@ const list = {
 	color: '#3b82f6',
 	icon: null,
 	ownerId: 1,
+	folderId: null,
+	badgeExcluded: false,
 	archived: false,
 	itemCount: 0,
 	createdAt: TS,
@@ -88,6 +97,8 @@ function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): I
 		quantity: null,
 		notes: null,
 		categoryId: null,
+		storeId: null,
+		price: null,
 		checked: false,
 		checkedAt: null,
 		sortOrder: 0,
@@ -108,6 +119,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchItems).mockResolvedValue([]);
 		vi.mocked(fetchRecentItems).mockResolvedValue([]);
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([]);
+		vi.mocked(fetchStores).mockResolvedValue([]);
 		vi.mocked(getSelectedStore).mockResolvedValue(null);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
@@ -215,6 +227,33 @@ describe('List detail +page.svelte', () => {
 
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread', quantity: '2' });
+	});
+
+	it('keeps an existing item’s store tag select stable when a new item is added', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 })
+		]);
+		vi.mocked(createItem).mockResolvedValue(makeItem({ id: 200, name: 'Bread', categoryId: 10 }));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Item name').fill('Bread');
+		await page.getByRole('button', { name: 'Add' }).click();
+
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 	});
 
 	it('does not submit when the new item name is only whitespace', async () => {
@@ -351,6 +390,7 @@ describe('List detail +page.svelte', () => {
 		// Bread stays unchecked (and thus still in the main list) — proves the
 		// map only updates the toggled item, not every item.
 		await expect.element(page.getByRole('checkbox', { name: 'Bread' })).not.toBeChecked();
+		expect(refreshBadgeCount).toHaveBeenCalled();
 	});
 
 	it('unchecks a checked item from the "Checked" section', async () => {
@@ -366,6 +406,224 @@ describe('List detail +page.svelte', () => {
 		expect(updateItem).toHaveBeenCalledWith(1, 100, { checked: false });
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 		await expect.element(page.getByText('Checked')).not.toBeInTheDocument();
+	});
+
+	it('filters items down to the selected store', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: null })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+		await page.getByRole('combobox').first().selectOptions('20');
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).not.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Close' }).first().click();
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+	});
+
+	it('tags an item with a store via its per-item select', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: null })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+		await page.getByRole('combobox').nth(1).selectOptions('20');
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, { storeId: 20 });
+	});
+
+	it('reloads the list when tagging a store fails without an ApiError', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new TypeError('network down'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('combobox').last().selectOptions('20');
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+	});
+
+	it('clears an item store tag back to null via its per-item select', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Close' }).last().click();
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, { storeId: null });
+	});
+
+	it('reloads the list when tagging a store fails', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new ApiError(500, 'Could not tag store'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('combobox').last().selectOptions('20');
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+	});
+
+	it('sets an item price via its per-item input, leaving a sibling item untouched, and shows the running total', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, price: 250 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Price').first().fill('3.99');
+		await page.getByText('Groceries').click();
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, { price: 399 });
+		await expect.element(page.getByText('Total: $6.49')).toBeInTheDocument();
+
+		// Toggling a checkbox reassigns `items` without touching any price, so
+		// the running total recomputes to the same value it already displayed.
+		await page.getByRole('checkbox', { name: 'Bread' }).click();
+		await expect.element(page.getByText('Total: $6.49')).toBeInTheDocument();
+	});
+
+	it('reloads the list when setting a price fails with an ApiError', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new ApiError(500, 'Could not set price'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Price').fill('3.99');
+		await page.getByText('Groceries').click();
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+	});
+
+	it('clears an item price back to null via its per-item input', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, price: 399 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Total: $3.99')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Price').clear();
+		await page.getByText('Groceries').click();
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, { price: null });
+	});
+
+	it('ignores a non-numeric price entry', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Price').fill('abc');
+		await page.getByText('Groceries').click();
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(0);
+	});
+
+	it('reloads the list when setting a price fails without an ApiError', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new TypeError('network down'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Price').fill('3.99');
+		await page.getByText('Groceries').click();
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
 	});
 
 	it('reloads the list when toggling checked fails without an ApiError', async () => {
@@ -629,6 +887,23 @@ describe('List detail +page.svelte', () => {
 
 		expect(updateList).toHaveBeenCalledWith(1, { archived: true });
 		await expect.element(page.getByRole('button', { name: 'Unarchive list' })).toBeInTheDocument();
+		expect(refreshBadgeCount).toHaveBeenCalled();
+	});
+
+	it('excludes the list from the badge count via the settings menu', async () => {
+		vi.mocked(updateList).mockResolvedValue({ ...list, badgeExcluded: true });
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List settings' }).click();
+		await page.getByRole('button', { name: 'Exclude from badge count' }).click();
+
+		expect(updateList).toHaveBeenCalledWith(1, { badgeExcluded: true });
+		await expect
+			.element(page.getByRole('button', { name: 'Include in badge count' }))
+			.toBeInTheDocument();
+		expect(refreshBadgeCount).toHaveBeenCalled();
 	});
 
 	it('shows an error when updating the list fails', async () => {

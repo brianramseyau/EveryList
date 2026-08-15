@@ -4,8 +4,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Checkbox, Input, Textarea } from 'flowbite-svelte';
-	import type { CategoryDto, ItemDto, ListDto } from '@everylist/shared';
+	import { Button, Checkbox, Input, Select, Textarea } from 'flowbite-svelte';
+	import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { deleteList, fetchList, updateList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
@@ -18,11 +18,12 @@
 		restoreItem,
 		updateItem
 	} from '$lib/api/items';
-	import { fetchStoreCategoryOrder } from '$lib/api/stores';
+	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
 	import { getSelectedStore } from '$lib/api/selected-store';
 	import { isRowDirty } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
+	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import Icon from '$lib/components/Icon.svelte';
 	import ListMenu from '$lib/components/ListMenu.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -33,6 +34,8 @@
 	let list = $state<ListDto | null>(null);
 	let categories = $state<CategoryDto[]>([]);
 	let items = $state<ItemDto[]>([]);
+	let stores = $state<StoreDto[]>([]);
+	let filterStoreId = $state<number | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
@@ -55,9 +58,13 @@
 	// list on this device — purely local, see $lib/api/selected-store.ts.
 	let storeCategoryOverrides: Map<number, number> = new SvelteMap();
 
+	const visibleItems = $derived(
+		filterStoreId === null ? items : items.filter((item) => item.storeId === filterStoreId)
+	);
+
 	const groups = $derived.by(() => {
 		const byCategory = new SvelteMap<number | null, ItemDto[]>();
-		for (const item of items) {
+		for (const item of visibleItems) {
 			if (item.checked) continue;
 			const key = item.categoryId;
 			if (!byCategory.has(key)) byCategory.set(key, []);
@@ -80,15 +87,27 @@
 		return ordered;
 	});
 
-	const checkedItems = $derived(items.filter((item) => item.checked));
+	const checkedItems = $derived(visibleItems.filter((item) => item.checked));
+
+	const totalCents = $derived(visibleItems.reduce((sum, item) => sum + (item.price ?? 0), 0));
+
+	function formatPrice(cents: number): string {
+		return (cents / 100).toLocaleString('en-US', {
+			style: 'currency',
+			currency: 'USD'
+		});
+	}
+
+	const totalText = $derived(`Total: ${formatPrice(totalCents)}`);
 
 	async function loadAll() {
 		loading = true;
 		try {
-			[list, categories, items] = await Promise.all([
+			[list, categories, items, stores] = await Promise.all([
 				fetchList(listId),
 				fetchCategories(listId),
-				fetchItems(listId)
+				fetchItems(listId),
+				fetchStores(listId)
 			]);
 
 			const selectedStoreId = await getSelectedStore(listId);
@@ -131,10 +150,17 @@
 	}
 
 	async function handleListUpdate(
-		input: Partial<{ name: string; color: string; icon: string | null; archived: boolean }>
+		input: Partial<{
+			name: string;
+			color: string;
+			icon: string | null;
+			archived: boolean;
+			badgeExcluded: boolean;
+		}>
 	) {
 		try {
 			list = await updateList(listId, input);
+			void refreshBadgeCount();
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to update list.';
 		}
@@ -191,6 +217,31 @@
 		);
 		try {
 			await updateItem(listId, item.id, { checked: nextChecked });
+			void refreshBadgeCount();
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to update item.';
+			void loadAll();
+		}
+	}
+
+	async function tagItemStore(item: ItemDto, storeId: number | null) {
+		items = items.map((current) => (current.id === item.id ? { ...current, storeId } : current));
+		try {
+			await updateItem(listId, item.id, { storeId });
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to update item.';
+			void loadAll();
+		}
+	}
+
+	async function tagItemPrice(item: ItemDto, raw: string) {
+		const trimmed = raw.trim();
+		const price = trimmed === '' ? null : Math.round(Number(trimmed) * 100);
+		if (price !== null && !Number.isFinite(price)) return;
+
+		items = items.map((current) => (current.id === item.id ? { ...current, price } : current));
+		try {
+			await updateItem(listId, item.id, { price });
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to update item.';
 			void loadAll();
@@ -261,16 +312,18 @@
 		{/snippet}
 	</PageHeader>
 
-	<SyncToast
-		visible={syncToastVisible}
-		onrefresh={refreshFromSync}
-		ondismiss={() => (syncToastVisible = false)}
-	/>
+	<div class="print:hidden">
+		<SyncToast
+			visible={syncToastVisible}
+			onrefresh={refreshFromSync}
+			ondismiss={() => (syncToastVisible = false)}
+		/>
+	</div>
 
 	{#if loading}
 		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
 	{:else if list}
-		<form class="flex gap-2" onsubmit={handleAddItem}>
+		<form class="flex gap-2 print:hidden" onsubmit={handleAddItem}>
 			<div class="flex-1">
 				<Input placeholder="Item name" bind:value={newItemName} />
 			</div>
@@ -282,14 +335,14 @@
 
 		<button
 			type="button"
-			class="self-start text-sm text-primary-600 hover:underline dark:text-primary-400"
+			class="self-start text-sm text-primary-600 hover:underline dark:text-primary-400 print:hidden"
 			onclick={() => (importOpen = !importOpen)}
 		>
 			{importOpen ? 'Cancel paste import' : 'Paste in a list…'}
 		</button>
 
 		{#if importOpen}
-			<form class="flex flex-col gap-2" onsubmit={handleImport}>
+			<form class="flex flex-col gap-2 print:hidden" onsubmit={handleImport}>
 				<Textarea
 					bind:value={importText}
 					rows={4}
@@ -302,7 +355,26 @@
 		{/if}
 
 		{#if error}
-			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
+			<p class="text-sm text-red-600 dark:text-red-400 print:hidden">{error}</p>
+		{/if}
+
+		{#if stores.length > 0}
+			<div class="w-48 print:hidden">
+				<Select
+					items={stores.map((store) => ({ value: store.id, name: store.name }))}
+					placeholder="All stores"
+					clearable
+					value={filterStoreId ?? ''}
+					onchange={(event) => {
+						const raw = (event.target as HTMLSelectElement).value;
+						filterStoreId = raw === '' ? null : Number(raw);
+					}}
+				/>
+			</div>
+		{/if}
+
+		{#if totalCents > 0}
+			<p class="text-sm font-semibold text-gray-700 dark:text-gray-300">{totalText}</p>
 		{/if}
 
 		{#if items.length === 0}
@@ -333,9 +405,35 @@
 											>
 										{/if}
 									</Checkbox>
+									<div class="ml-auto w-16 print:hidden">
+										<Input
+											size="sm"
+											inputmode="decimal"
+											placeholder="Price"
+											value={item.price !== null ? (item.price / 100).toFixed(2) : ''}
+											onchange={(event) => {
+												void tagItemPrice(item, (event.target as HTMLInputElement).value);
+											}}
+										/>
+									</div>
+									{#if stores.length > 0}
+										<div class="w-32 print:hidden">
+											<Select
+												size="sm"
+												items={stores.map((store) => ({ value: store.id, name: store.name }))}
+												placeholder="No store"
+												clearable
+												value={item.storeId ?? ''}
+												onchange={(event) => {
+													const raw = (event.target as HTMLSelectElement).value;
+													void tagItemStore(item, raw === '' ? null : Number(raw));
+												}}
+											/>
+										</div>
+									{/if}
 									<button
 										type="button"
-										class="ml-auto text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+										class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400 print:hidden"
 										onclick={() => removeItem(item)}
 									>
 										Remove
@@ -370,7 +468,7 @@
 			</div>
 		{/if}
 
-		<div>
+		<div class="print:hidden">
 			<button
 				type="button"
 				class="text-sm text-primary-600 hover:underline dark:text-primary-400"

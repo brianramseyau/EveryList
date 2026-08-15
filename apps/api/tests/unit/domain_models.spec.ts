@@ -9,6 +9,7 @@ import ListStore from '#models/list_store'
 import FavoriteItem from '#models/favorite_item'
 import StoreCategoryOrder from '#models/store_category_order'
 import ListMember from '#models/list_member'
+import Folder from '#models/folder'
 import { DateTime } from 'luxon'
 
 test.group('List/Category/Item domain models', (group) => {
@@ -27,10 +28,12 @@ test.group('List/Category/Item domain models', (group) => {
       icon: 'fruitCherries',
       listId: list.id,
     })
+    const store = await Store.create({ name: 'Walmart', color: '#3b82f6', createdBy: owner.id })
     const item = await Item.create({
       listId: list.id,
       name: 'Apples',
       categoryId: category.id,
+      storeId: store.id,
       createdBy: owner.id,
     })
 
@@ -39,6 +42,7 @@ test.group('List/Category/Item domain models', (group) => {
     await list.load('items')
     await item.load('list')
     await item.load('category')
+    await item.load('store')
     await item.load('creator')
     await item.refresh()
 
@@ -47,6 +51,7 @@ test.group('List/Category/Item domain models', (group) => {
     assert.lengthOf(list.items, 1)
     assert.equal(item.list.id, list.id)
     assert.equal(item.category!.id, category.id)
+    assert.equal(item.store!.id, store.id)
     assert.equal(item.creator.id, owner.id)
     assert.isFalse(item.checked)
     assert.equal(item.sortOrder, 0)
@@ -186,5 +191,26 @@ test.group('List/Category/Item domain models', (group) => {
     assert.equal(member.user.id, owner.id)
     assert.lengthOf(list.members, 1)
     assert.equal(list.members[0]!.id, member.id)
+  })
+
+  test('a folder belongs to its owner and has many lists; a list belongs to its folder', async ({
+    assert,
+  }) => {
+    const owner = await User.create({
+      fullName: 'Ada Lovelace',
+      email: 'ada6@example.com',
+      password: 'password123',
+    })
+    const folder = await Folder.create({ userId: owner.id, name: 'Groceries', sortOrder: 0 })
+    const list = await List.create({ name: 'Costco run', ownerId: owner.id, folderId: folder.id })
+
+    await folder.load('owner')
+    await folder.load('lists')
+    await list.load('folder')
+
+    assert.equal(folder.owner.id, owner.id)
+    assert.lengthOf(folder.lists, 1)
+    assert.equal(folder.lists[0]!.id, list.id)
+    assert.equal(list.folder!.id, folder.id)
   })
 })

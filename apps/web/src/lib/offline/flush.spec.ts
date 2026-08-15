@@ -173,6 +173,8 @@ describe('flushQueue', () => {
 			quantity: null,
 			notes: null,
 			categoryId: null,
+			storeId: null,
+			price: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,
