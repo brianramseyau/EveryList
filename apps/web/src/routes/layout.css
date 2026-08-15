@@ -138,3 +138,49 @@ html {
 html.dark {
 	background-color: #1b1d1f;
 }
+
+/* Page-transition slide (PHASE9_PLAN.md #11) — direction is set on <html>
+   by +layout.svelte's onNavigate hook just before startViewTransition()
+   runs. Kept short ("snappy, not drawn out") and, like the checkmark
+   settle animation, off entirely for reduced-motion users. */
+@media (prefers-reduced-motion: no-preference) {
+	::view-transition-old(root),
+	::view-transition-new(root) {
+		animation-duration: 180ms;
+		animation-timing-function: ease-out;
+	}
+
+	:root[data-nav-direction='forward']::view-transition-old(root) {
+		animation-name: slide-out-left;
+	}
+	:root[data-nav-direction='forward']::view-transition-new(root) {
+		animation-name: slide-in-right;
+	}
+	:root[data-nav-direction='back']::view-transition-old(root) {
+		animation-name: slide-out-right;
+	}
+	:root[data-nav-direction='back']::view-transition-new(root) {
+		animation-name: slide-in-left;
+	}
+
+	@keyframes slide-in-right {
+		from {
+			transform: translateX(100%);
+		}
+	}
+	@keyframes slide-out-left {
+		to {
+			transform: translateX(-100%);
+		}
+	}
+	@keyframes slide-in-left {
+		from {
+			transform: translateX(-100%);
+		}
+	}
+	@keyframes slide-out-right {
+		to {
+			transform: translateX(100%);
+		}
+	}
+}

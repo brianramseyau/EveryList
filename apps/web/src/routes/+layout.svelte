@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { afterNavigate } from '$app/navigation';
+	import { afterNavigate, onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
@@ -42,6 +42,24 @@
 	afterNavigate(() => {
 		refreshAuth();
 		syncBadge();
+	});
+
+	// Native page-transition slide, gated on browser support (PHASE9_PLAN.md
+	// #11) — a no-op on Safari/iOS, which never defines startViewTransition.
+	// Direction comes from `navigation.delta`, only present on browser
+	// back/forward (popstate) — everything else (link clicks, goto()) reads
+	// as "forward".
+	onNavigate((navigation) => {
+		if (!document.startViewTransition) return;
+		const isBack = navigation.type === 'popstate' && (navigation.delta ?? 0) < 0;
+		document.documentElement.dataset.navDirection = isBack ? 'back' : 'forward';
+
+		return new Promise((resolve) => {
+			document.startViewTransition(async () => {
+				resolve();
+				await navigation.complete;
+			});
+		});
 	});
 
 	const navSections = ['/lists', '/settings'];
