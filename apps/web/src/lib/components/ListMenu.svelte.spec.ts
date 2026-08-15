@@ -115,6 +115,23 @@ describe('ListMenu.svelte', () => {
 		expect(onupdate).toHaveBeenCalledWith({ color: '#ef4444' });
 	});
 
+	it('closes the icon picker when the color picker is opened, and vice versa', async () => {
+		render(ListMenu, { listId: 42, list, onupdate: vi.fn(), ondelete: vi.fn() });
+
+		await open();
+
+		await page.getByRole('button', { name: 'Basket' }).click();
+		await expect.element(page.getByPlaceholder('Search icons…')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Color' }).click();
+		await expect.element(page.getByPlaceholder('Search icons…')).not.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: '#ef4444' })).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Basket' }).click();
+		await expect.element(page.getByRole('button', { name: '#ef4444' })).not.toBeInTheDocument();
+		await expect.element(page.getByPlaceholder('Search icons…')).toBeInTheDocument();
+	});
+
 	it('toggles archived immediately, flipping the button label', async () => {
 		const onupdate = vi.fn().mockResolvedValue(undefined);
 		render(ListMenu, { listId: 42, list, onupdate, ondelete: vi.fn() });
