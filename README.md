@@ -18,19 +18,21 @@
 
 AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasing feature parity — it's a **mobile-first, offline-first, one-tier** PWA that does the everyday list workflow well: create, share in real time, auto-categorize by aisle, check off, and keep working with zero signal. No premium tier, ever. See [`foundational/PLAN.md`](foundational/PLAN.md) for the full product plan, architecture, and decision rationale behind everything below.
 
-## Status
-
-**MVP-complete.** Phases 0 through 5 are done — foundations, auth, full list/item CRUD, the UI/UX redesign and theming pass, real-time sharing, and offline/PWA support. Phases 6 (item-store tagging, prices, folders, export) and 7 (polish) are stretch goals on top of a working, self-hostable app. See the [roadmap](#roadmap) and the status note at the end of the plan for details.
+EveryList is feature-complete and self-hostable today.
 
 ## Features
 
-- **Lists & items** — unlimited lists, quantities, notes, soft-delete with recent-items recovery.
-- **Auto-categorization** — items sort into aisle-style categories (Produce, Dairy, Meat, ...) via keyword matching, fully customizable per list.
-- **Store-aware aisle order** — pick the store you're shopping at and categories reorder to match its real layout; store data and aisle order are shared with everyone the list is shared with.
+- **Lists & items** — unlimited lists, quantities, notes, prices with a running budget total, soft-delete with recent-items recovery.
+- **Auto-categorization** — items sort into aisle-style categories (Produce, Dairy, Meat, ...) via keyword matching, personalized over time from each list's own item history, fully customizable per list.
+- **Store-aware aisle order** — pick the store you're shopping at and categories reorder to match its real layout; tag items to a store and filter the list down to just that store's items. Store data and aisle order are shared with everyone the list is shared with.
 - **Favorites** — go-to items for one-tap re-adding to the list they belong to; scoped per list, since a grocery list and a packing list don't share go-to items.
 - **Paste import** — paste a block of text and each line gets parsed and auto-categorized.
-- **Real-time sharing** — SSE-based live updates across everyone on a shared list, with granular `owner`/`editor`/`viewer` roles.
-- **Offline-first** — every core interaction works with zero network via a local IndexedDB store and syncs when back online.
+- **Folders & badges** — group lists into folders; an uncompleted-item count badges the installed PWA icon (Web Badging API), with per-list exclusion.
+- **Real-time sharing** — SSE-based live updates across everyone on a shared list, with granular `owner`/`editor`/`viewer` roles and join-link invites.
+- **Offline-first** — every core interaction works with zero network via a local IndexedDB store and syncs when back online, with last-write-wins conflict resolution.
+- **Passcode lock** — a client-side PIN gate on sensitive lists; the server never sees the raw PIN.
+- **Print & email export** — a print-friendly stylesheet plus one-click email export of any list.
+- **Light/dark/automatic theme + accent palettes** — four accent themes on top of a real, flash-free light/dark/automatic mode.
 - **Installable PWA** — add to your home screen on any device, no app store required.
 - **Self-hosted, single container** — one Docker image, one process, one SQLite file under `/config`; trivial to back up.
 
@@ -145,20 +147,7 @@ Available image tags:
 
 CI (GitHub Actions) runs lint → typecheck → tests/coverage → Docker build → E2E smoke on every PR; see [`.github/workflows`](.github/workflows).
 
-## Roadmap
-
-| Phase | Contents |
-|---|---|
-| 0 — Foundations | ✅ Repo scaffold, CI, Docker image |
-| 1 — Auth & domain core | ✅ Auth, list/category/item models, default categories |
-| 2 — List & item CRUD | ✅ Full CRUD, auto-categorization, favorites, stores & aisle order |
-| 3 — UI/UX Redesign & Theming Foundations | ✅ App shell, light/dark/automatic theme, card-style list rows, icon/color pickers, grouped Settings |
-| 4 — Sharing & real-time | ✅ Roles, invites, live updates via SSE |
-| 5 — Offline & PWA | ✅ Dexie sync queue, service worker, installability — MVP-complete milestone |
-| 6 — Item-store tagging, prices, folders, export | Stretch |
-| 7 — Polish | Passcode lock, themes, personalized autocomplete |
-
-Full detail, including the AnyList feature-by-feature decision matrix, lives in [`foundational/PLAN.md`](foundational/PLAN.md).
+Full architecture, scope decisions, and the AnyList feature-by-feature decision matrix live in [`foundational/PLAN.md`](foundational/PLAN.md).
 
 ## Contributing
 

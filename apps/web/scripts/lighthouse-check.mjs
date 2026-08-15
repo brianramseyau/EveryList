@@ -28,14 +28,25 @@ const DEBUG_PORT = 9223;
 // arbitrary number. Root-caused to flowbite-svelte: the CSS half was fixed
 // by scoping layout.css's @source to only the 8 components this app
 // actually imports (was scanning the whole library, ~254KB → ~123KB
-// compiled CSS); the remaining gap is flowbite-svelte's *JS* bundle
-// (~230KB, containing every component's logic via tailwind-variants,
-// visible under the `chunks/` dir as the only >100KB eagerly-loaded chunk)
-// not tree-shaking down to the 8 imported components. Fixing that means
-// either replacing those components with lighter hand-rolled ones or a
-// deeper look at flowbite-svelte's package exports — real scope, not a
-// quick follow-up, so the honest threshold below is set to guard against
-// *regression* from today's measured 72, not to claim §13 is met.
+// compiled CSS). The remaining gap is a ~230KB JS chunk (visible under the
+// `chunks/` dir as the only >100KB eagerly-loaded chunk, present on every
+// route because the root layout's always-mounted SyncStatusBanner pulls in
+// Button). Re-investigated 2026-08-15 after a first attempted fix (switching
+// every `import { X } from 'flowbite-svelte'` to per-component deep imports
+// like `flowbite-svelte/Button.svelte`, to bypass the package's barrel
+// `dist/index.js`) produced a *zero-byte* change — direct inspection of the
+// chunk already showed no code from unused components (no Accordion/Modal/
+// Datepicker/etc. strings), so Rollup was tree-shaking the barrel correctly
+// all along. The weight is instead `tailwind-merge`'s fixed class-conflict
+// config data (pulled in by `tailwind-variants`, which every flowbite-svelte
+// component's styling goes through) plus each component's own theme-
+// resolution/deprecation-warning machinery — cost that doesn't scale down
+// with fewer components and can't be import-path'd away. The only real fix
+// is replacing these 8 components with lighter hand-rolled ones that skip
+// tailwind-variants/tailwind-merge entirely — real scope (touches every
+// form in the app), deliberately not undertaken here, so the threshold
+// below guards against *regression* from today's measured 72, not a claim
+// that §13 is met.
 const THRESHOLDS = { performance: 65, accessibility: 90, 'best-practices': 90 };
 const LOCAL_IMAGE_TAG = 'everylist:lighthouse-local';
 const LOCAL_CONTAINER_NAME = 'everylist-lighthouse-local';
