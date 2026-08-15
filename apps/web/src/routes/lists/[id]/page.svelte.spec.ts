@@ -4,23 +4,22 @@ import { render } from 'vitest-browser-svelte';
 import type { ItemDto, SyncEventDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
+import { HOLD_MS } from '$lib/actions/press-hold-reorder';
+
+function delay(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/lists', () => ({
-	fetchList: vi.fn(),
-	updateList: vi.fn(),
-	deleteList: vi.fn(),
-	emailExportList: vi.fn()
+	fetchList: vi.fn()
 }));
 vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
 vi.mock('$lib/api/items', () => ({
 	fetchItems: vi.fn(),
-	fetchRecentItems: vi.fn(),
 	createItem: vi.fn(),
 	deleteItem: vi.fn(),
-	importItems: vi.fn(),
-	restoreItem: vi.fn(),
 	updateItem: vi.fn()
 }));
 vi.mock('$lib/api/stores', () => ({ fetchStoreCategoryOrder: vi.fn(), fetchStores: vi.fn() }));
@@ -31,17 +30,9 @@ vi.mock('$lib/api/selected-store', () => ({
 vi.mock('$lib/realtime', () => ({ subscribeToList: vi.fn(() => vi.fn()) }));
 vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 
-const { fetchList, updateList, deleteList } = await import('$lib/api/lists');
+const { fetchList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
-const {
-	fetchItems,
-	fetchRecentItems,
-	createItem,
-	deleteItem,
-	updateItem,
-	importItems,
-	restoreItem
-} = await import('$lib/api/items');
+const { fetchItems, createItem, deleteItem, updateItem } = await import('$lib/api/items');
 const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores');
 const { getSelectedStore } = await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
@@ -118,7 +109,6 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchList).mockResolvedValue(list);
 		vi.mocked(fetchCategories).mockResolvedValue([produce, dairy]);
 		vi.mocked(fetchItems).mockResolvedValue([]);
-		vi.mocked(fetchRecentItems).mockResolvedValue([]);
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([]);
 		vi.mocked(fetchStores).mockResolvedValue([]);
 		vi.mocked(getSelectedStore).mockResolvedValue(null);
@@ -191,13 +181,13 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Uncategorized')).toBeInTheDocument();
 	});
 
-	it('groups items by category and lists checked items separately', async () => {
+	it('groups items by category, keeping checked items under the same header, sunk below unchecked ones', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', quantity: '2', categoryId: 10 }),
 			makeItem({
 				id: 101,
 				name: 'Milk',
-				categoryId: 11,
+				categoryId: 10,
 				checked: true,
 				checkedAt: '2026-08-13T00:00:00.000Z',
 				sortOrder: 1
@@ -209,20 +199,82 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 		await expect.element(page.getByText('Produce')).toBeInTheDocument();
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-		await expect.element(page.getByText('Checked')).toBeInTheDocument();
 		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+		// No separate "Checked" section heading exists anymore.
+		await expect.element(page.getByText('Checked', { exact: true })).not.toBeInTheDocument();
 
 		const produceHeader = page.getByText('Produce').element().closest('h2');
 		expect(produceHeader).not.toBeNull();
 		expect(produceHeader?.style.color).toBe('rgb(59, 130, 246)');
+
+		// Both items render under the same "Produce" section, checked one last.
+		const names = [...produceHeader!.parentElement!.querySelectorAll('li span')]
+			.map((el) => el.textContent?.trim())
+			.filter((t) => t === 'Bananas' || t === 'Milk');
+		expect(names).toEqual(['Bananas', 'Milk']);
 
 		// Neither item has a price set, so the progress strip's total is hidden.
 		await expect.element(page.getByText('1 of 2 done')).toBeInTheDocument();
 		await expect.element(page.getByText(/^Total:/)).not.toBeInTheDocument();
 	});
 
-	it('adds a new item with a quantity via the form', async () => {
-		vi.mocked(createItem).mockResolvedValue(makeItem({ id: 200, name: 'Bread', quantity: '2' }));
+	it('hides checked items when the eye toggle is switched off, and shows them again on toggle', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 10, checked: true })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Hide checked items' }).click();
+		await expect.element(page.getByText('Milk')).not.toBeInTheDocument();
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Show checked items' }).click();
+		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+	});
+
+	it('drops a category section entirely once its only item is checked and hidden', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Milk', categoryId: 11, checked: true })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Dairy')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Hide checked items' }).click();
+
+		await expect.element(page.getByText('Dairy')).not.toBeInTheDocument();
+	});
+
+	it('links to Favorites, Recently Deleted, Stores, and List settings from the header', async () => {
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		const favoritesLink = page.getByRole('link', { name: 'Favorites' });
+		expect(favoritesLink.element().getAttribute('href')).toBe('/lists/1/favorites');
+
+		const recentLink = page.getByRole('link', { name: 'Recently deleted' });
+		expect(recentLink.element().getAttribute('href')).toBe('/lists/1/recently-deleted');
+
+		const storesLink = page.getByRole('link', { name: 'Stores' });
+		expect(storesLink.element().getAttribute('href')).toBe('/lists/1/stores');
+
+		const settingsLink = page.getByRole('link', { name: 'List settings' });
+		expect(settingsLink.element().getAttribute('href')).toBe('/lists/1/settings');
+	});
+
+	it('links the clipboard icon to the full-screen paste-import screen', async () => {
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		const pasteLink = page.getByRole('link', { name: 'Paste in a list' });
+		expect(pasteLink.element().getAttribute('href')).toBe('/lists/1/import');
+	});
+
+	it('adds a new item via the form', async () => {
+		vi.mocked(createItem).mockResolvedValue(makeItem({ id: 200, name: 'Bread' }));
 
 		render(ListDetailPage);
 		await expect
@@ -230,11 +282,10 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 
 		await page.getByPlaceholder('Item name').fill('Bread');
-		await page.getByPlaceholder('Qty').fill('2');
-		await page.getByRole('button', { name: 'Add' }).click();
+		await page.getByRole('button', { name: 'Add item' }).click();
 
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
-		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread', quantity: '2' });
+		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread' });
 	});
 
 	it('keeps an existing item’s store tag select stable when a new item is added', async () => {
@@ -258,7 +309,7 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
 		await page.getByPlaceholder('Item name').fill('Bread');
-		await page.getByRole('button', { name: 'Add' }).click();
+		await page.getByRole('button', { name: 'Add item' }).click();
 
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
@@ -292,7 +343,7 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 
 		await page.getByPlaceholder('Item name').fill('Bread');
-		await page.getByRole('button', { name: 'Add' }).click();
+		await page.getByRole('button', { name: 'Add item' }).click();
 
 		await expect.element(page.getByText('Failed to add item.')).toBeInTheDocument();
 	});
@@ -306,95 +357,21 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 
 		await page.getByPlaceholder('Item name').fill('Bread');
-		await page.getByRole('button', { name: 'Add' }).click();
+		await page.getByRole('button', { name: 'Add item' }).click();
 
 		await expect.element(page.getByText('Duplicate item')).toBeInTheDocument();
 	});
 
-	it('opens and closes the paste-import form', async () => {
-		render(ListDetailPage);
-		await expect
-			.element(page.getByText('Nothing here yet. Add your first item above.'))
-			.toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Paste in a list…' }).click();
-		await expect
-			.element(page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs'))
-			.toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Cancel paste import' }).click();
-		await expect
-			.element(page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs'))
-			.not.toBeInTheDocument();
-	});
-
-	it('imports items pasted into the textarea', async () => {
-		vi.mocked(importItems).mockResolvedValue([
-			makeItem({ id: 400, name: 'Milk' }),
-			makeItem({ id: 401, name: 'Bread' })
+	it("links an item's name to its detail screen", async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
 		]);
 
 		render(ListDetailPage);
-		await expect
-			.element(page.getByText('Nothing here yet. Add your first item above.'))
-			.toBeInTheDocument();
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Paste in a list…' }).click();
-		await page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs').fill('Milk\nBread');
-		await page.getByRole('button', { name: 'Import items' }).click();
-
-		expect(importItems).toHaveBeenCalledWith(1, 'Milk\nBread');
-		await expect.element(page.getByText('Bread')).toBeInTheDocument();
-		await expect
-			.element(page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs'))
-			.not.toBeInTheDocument();
-	});
-
-	it('does not import when the pasted text is only whitespace', async () => {
-		render(ListDetailPage);
-		await expect
-			.element(page.getByText('Nothing here yet. Add your first item above.'))
-			.toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Paste in a list…' }).click();
-		const textarea = page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs');
-		await textarea.fill('   ');
-		textarea
-			.element()
-			.closest('form')
-			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-
-		await expect.poll(() => vi.mocked(importItems).mock.calls.length).toBe(0);
-	});
-
-	it('shows a generic error message when importing fails without an ApiError', async () => {
-		vi.mocked(importItems).mockRejectedValue(new TypeError('network down'));
-
-		render(ListDetailPage);
-		await expect
-			.element(page.getByText('Nothing here yet. Add your first item above.'))
-			.toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Paste in a list…' }).click();
-		await page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs').fill('Milk');
-		await page.getByRole('button', { name: 'Import items' }).click();
-
-		await expect.element(page.getByText('Failed to import items.')).toBeInTheDocument();
-	});
-
-	it('shows the ApiError message when importing fails', async () => {
-		vi.mocked(importItems).mockRejectedValue(new ApiError(422, 'Could not parse items'));
-
-		render(ListDetailPage);
-		await expect
-			.element(page.getByText('Nothing here yet. Add your first item above.'))
-			.toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Paste in a list…' }).click();
-		await page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs').fill('Milk');
-		await page.getByRole('button', { name: 'Import items' }).click();
-
-		await expect.element(page.getByText('Could not parse items')).toBeInTheDocument();
+		const itemLink = page.getByRole('link', { name: 'Bananas' });
+		expect(itemLink.element().getAttribute('href')).toBe('/lists/1/items/100');
 	});
 
 	it('toggles one item checked without affecting a sibling item', async () => {
@@ -411,27 +388,24 @@ describe('List detail +page.svelte', () => {
 		await page.getByRole('checkbox', { name: 'Bananas' }).click();
 
 		expect(updateItem).toHaveBeenCalledWith(1, 100, { checked: true });
-		await expect.element(page.getByText('Checked')).toBeInTheDocument();
 		await expect.element(page.getByText('1 of 2 done')).toBeInTheDocument();
-		// Bread stays unchecked (and thus still in the main list) — proves the
-		// map only updates the toggled item, not every item.
+		// Bread stays unchecked, proving the map only updates the toggled item.
 		await expect.element(page.getByRole('checkbox', { name: 'Bread' })).not.toBeChecked();
 		expect(refreshBadgeCount).toHaveBeenCalled();
 	});
 
-	it('unchecks a checked item from the "Checked" section', async () => {
+	it('unchecks a checked item in place', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true })
 		]);
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('Checked')).toBeInTheDocument();
+		await expect.element(page.getByRole('checkbox', { name: 'Bananas' })).toBeChecked();
 
 		await page.getByRole('checkbox', { name: 'Bananas' }).click();
 
 		expect(updateItem).toHaveBeenCalledWith(1, 100, { checked: false });
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-		await expect.element(page.getByText('Checked')).not.toBeInTheDocument();
+		await expect.element(page.getByRole('checkbox', { name: 'Bananas' })).not.toBeChecked();
 	});
 
 	it('filters items down to the selected store', async () => {
@@ -686,15 +660,15 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 	});
 
-	it('removes a checked item from the "Checked" section', async () => {
+	it('removes a checked item', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true })
 		]);
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('Checked')).toBeInTheDocument();
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Remove' }).click();
+		await page.getByRole('button', { name: 'Delete Bananas' }).click();
 
 		expect(deleteItem).toHaveBeenCalledWith(1, 100);
 		await expect
@@ -710,7 +684,7 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Remove' }).click();
+		await page.getByRole('button', { name: 'Delete Bananas' }).click();
 
 		expect(deleteItem).toHaveBeenCalledWith(1, 100);
 		await expect
@@ -718,7 +692,110 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
-	it('prepends a removed item to the recently-deleted list when it is open', async () => {
+	function dragHandleFor(name: string) {
+		return page.getByRole('button', { name: `Drag to reorder ${name}` });
+	}
+
+	async function drag(fromName: string, belowElementSelector: () => Element) {
+		const handle = dragHandleFor(fromName).element();
+		const targetRect = belowElementSelector().getBoundingClientRect();
+
+		handle.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		handle.dispatchEvent(
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: targetRect.top + targetRect.height + 1
+			})
+		);
+		handle.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: targetRect.top + targetRect.height + 1
+			})
+		);
+	}
+
+	it('reorders two items within the same category by dragging', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+		await drag('Bananas', () => page.getByText('Bread').element());
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ categoryId: 10 }));
+	});
+
+	it('recategorizes an item by dragging it into a different category section', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 11 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+
+		await drag('Bananas', () => page.getByText('Milk').element());
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ categoryId: 11 }));
+	});
+
+	it('reorders an item to a middle position, ahead of an existing neighbor', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10 }),
+			makeItem({ id: 102, name: 'Carrots', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Carrots')).toBeInTheDocument();
+
+		// Drop just above Bread (not below the last item) — Bread is the
+		// target neighbor, so the insertion point is computed from its index
+		// rather than falling back to the end of the list.
+		const handle = dragHandleFor('Carrots').element();
+		const breadRect = page.getByText('Bread').element().closest('li')!.getBoundingClientRect();
+		handle.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		handle.dispatchEvent(
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: breadRect.top
+			})
+		);
+		handle.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: breadRect.top
+			})
+		);
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 102, expect.objectContaining({ categoryId: 10 }));
+	});
+
+	it('does not call updateItem when a drag never crosses into a new position', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
 		]);
@@ -726,12 +803,71 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Show recently deleted' }).click();
-		await expect.element(page.getByText('Nothing recently deleted.')).toBeInTheDocument();
+		const handle = dragHandleFor('Bananas').element();
+		handle.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		// Pointer stays over the same slot — onmove still fires, but with
+		// toIndex === fromIndex.
+		handle.dispatchEvent(
+			new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		handle.dispatchEvent(
+			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
 
-		await page.getByRole('button', { name: 'Remove' }).click();
+		expect(updateItem).not.toHaveBeenCalled();
+	});
 
-		await expect.element(page.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
+	it('falls back to the uncategorized bucket when dragged past the last item of an all-uncategorized list', async () => {
+		vi.mocked(fetchCategories).mockResolvedValue([]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: null }),
+			makeItem({ id: 101, name: 'Bread', categoryId: null })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+		await drag('Bananas', () => page.getByText('Bread').element());
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ categoryId: null }));
+	});
+
+	it('reloads the list when reordering an item fails without an ApiError', async () => {
+		// reordering's catch, like toggleChecked's, sets `error` and then
+		// reloads — the reload's `loading = true` collapses the page before
+		// the message paints, so the observable effect is the reload itself.
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new TypeError('network down'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+		await drag('Bananas', () => page.getByText('Bread').element());
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+	});
+
+	it('reloads the list when reordering an item fails with an ApiError', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new ApiError(500, 'Could not reorder'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+		await drag('Bananas', () => page.getByText('Bread').element());
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
 	});
 
 	it('reloads the list when removing an item fails without an ApiError', async () => {
@@ -746,7 +882,7 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Remove' }).click();
+		await page.getByRole('button', { name: 'Delete Bananas' }).click();
 
 		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
@@ -761,102 +897,64 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Remove' }).click();
+		await page.getByRole('button', { name: 'Delete Bananas' }).click();
 
 		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 	});
 
-	it('shows a generic error message when loading recently deleted items fails without an ApiError', async () => {
-		vi.mocked(fetchRecentItems).mockRejectedValue(new TypeError('network down'));
+	function mockCoarsePointer() {
+		return vi.spyOn(window, 'matchMedia').mockReturnValue({
+			matches: true,
+			media: '(pointer: coarse)',
+			onchange: null,
+			addListener: vi.fn(),
+			removeListener: vi.fn(),
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			dispatchEvent: vi.fn()
+		} as unknown as MediaQueryList);
+	}
 
-		render(ListDetailPage);
-		await expect
-			.element(page.getByText('Nothing here yet. Add your first item above.'))
-			.toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Show recently deleted' }).click();
-
-		await expect
-			.element(page.getByText('Failed to load recently deleted items.'))
-			.toBeInTheDocument();
-	});
-
-	it('shows the ApiError message when loading recently deleted items fails', async () => {
-		vi.mocked(fetchRecentItems).mockRejectedValue(new ApiError(500, 'Could not load recent'));
-
-		render(ListDetailPage);
-		await expect
-			.element(page.getByText('Nothing here yet. Add your first item above.'))
-			.toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Show recently deleted' }).click();
-
-		await expect.element(page.getByText('Could not load recent')).toBeInTheDocument();
-	});
-
-	it('hides the recently-deleted panel again on a second click', async () => {
-		render(ListDetailPage);
-		await expect
-			.element(page.getByText('Nothing here yet. Add your first item above.'))
-			.toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Show recently deleted' }).click();
-		await expect.element(page.getByText('Nothing recently deleted.')).toBeInTheDocument();
-		expect(fetchRecentItems).toHaveBeenCalledTimes(1);
-
-		await page.getByRole('button', { name: 'Hide recently deleted' }).click();
-		await expect.element(page.getByText('Nothing recently deleted.')).not.toBeInTheDocument();
-		// Closing again shouldn't re-trigger a load.
-		expect(fetchRecentItems).toHaveBeenCalledTimes(1);
-	});
-
-	it('shows a generic error message when restoring an item fails without an ApiError', async () => {
-		vi.mocked(fetchRecentItems).mockResolvedValue([
-			makeItem({ id: 300, name: 'Eggs', deletedAt: '2026-08-12T00:00:00.000Z' })
+	it('hides the desktop delete button and swipes to delete on a coarse-pointer device', async () => {
+		const matchMediaSpy = mockCoarsePointer();
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
 		]);
-		vi.mocked(restoreItem).mockRejectedValue(new TypeError('network down'));
 
 		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect
+			.element(page.getByRole('button', { name: 'Delete Bananas' }))
+			.not.toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Show recently deleted' }).click();
-		await expect.element(page.getByText('Eggs')).toBeInTheDocument();
+		const row = page.getByText('Bananas').element().closest('li')!.querySelector('div')!
+			.nextElementSibling as HTMLElement;
+		row.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		row.dispatchEvent(
+			new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: -60, clientY: 0 })
+		);
+		row.dispatchEvent(
+			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: -60, clientY: 0 })
+		);
 
-		await page.getByRole('button', { name: 'Restore' }).click();
+		await expect.poll(() => vi.mocked(deleteItem).mock.calls.length).toBe(1);
+		expect(deleteItem).toHaveBeenCalledWith(1, 100);
 
-		await expect.element(page.getByText('Failed to restore item.')).toBeInTheDocument();
-		await expect.poll(() => vi.mocked(fetchRecentItems).mock.calls.length).toBe(2);
+		matchMediaSpy.mockRestore();
 	});
 
-	it('shows the ApiError message when restoring an item fails', async () => {
-		vi.mocked(fetchRecentItems).mockResolvedValue([
-			makeItem({ id: 300, name: 'Eggs', deletedAt: '2026-08-12T00:00:00.000Z' })
+	it('shows the desktop delete button and disables swipe on a fine-pointer device', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
 		]);
-		vi.mocked(restoreItem).mockRejectedValue(new ApiError(500, 'Could not restore'));
 
 		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Show recently deleted' }).click();
-		await expect.element(page.getByText('Eggs')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Restore' }).click();
-
-		await expect.element(page.getByText('Could not restore')).toBeInTheDocument();
-	});
-
-	it('shows recently deleted items and restores one', async () => {
-		vi.mocked(fetchRecentItems).mockResolvedValue([
-			makeItem({ id: 300, name: 'Eggs', deletedAt: '2026-08-12T00:00:00.000Z' })
-		]);
-		vi.mocked(restoreItem).mockResolvedValue(makeItem({ id: 300, name: 'Eggs', sortOrder: 2 }));
-
-		render(ListDetailPage);
-
-		await page.getByRole('button', { name: 'Show recently deleted' }).click();
-		await expect.element(page.getByText('Eggs')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Restore' }).click();
-		expect(restoreItem).toHaveBeenCalledWith(1, 300);
+		await expect.element(page.getByRole('button', { name: 'Delete Bananas' })).toBeInTheDocument();
 	});
 
 	it('subscribes to the list channel and shows a toast on a sync event, refreshing on click', async () => {
@@ -902,117 +1000,6 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
 	});
 
-	it('opens the list settings menu with links scoped to this list', async () => {
-		render(ListDetailPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'List settings' }).click();
-
-		const categories = page.getByRole('link', { name: 'Categories' });
-		await expect.element(categories).toBeInTheDocument();
-		expect(categories.element().getAttribute('href')).toBe('/lists/1/categories');
-
-		const members = page.getByRole('link', { name: 'Members' });
-		expect(members.element().getAttribute('href')).toBe('/lists/1/members');
-	});
-
-	it('archives the list from the settings menu', async () => {
-		vi.mocked(updateList).mockResolvedValue({ ...list, archived: true });
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'List settings' }).click();
-		await page.getByRole('button', { name: 'Archive list' }).click();
-
-		expect(updateList).toHaveBeenCalledWith(1, { archived: true });
-		await expect.element(page.getByRole('button', { name: 'Unarchive list' })).toBeInTheDocument();
-		expect(refreshBadgeCount).toHaveBeenCalled();
-	});
-
-	it('excludes the list from the badge count via the settings menu', async () => {
-		vi.mocked(updateList).mockResolvedValue({ ...list, badgeExcluded: true });
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'List settings' }).click();
-		await page.getByRole('button', { name: 'Exclude from badge count' }).click();
-
-		expect(updateList).toHaveBeenCalledWith(1, { badgeExcluded: true });
-		await expect
-			.element(page.getByRole('button', { name: 'Include in badge count' }))
-			.toBeInTheDocument();
-		expect(refreshBadgeCount).toHaveBeenCalled();
-	});
-
-	it('shows an error when updating the list fails', async () => {
-		vi.mocked(updateList).mockRejectedValue(new ApiError(500, 'Could not update list'));
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'List settings' }).click();
-		await page.getByRole('button', { name: 'Archive list' }).click();
-
-		await expect.element(page.getByText('Could not update list')).toBeInTheDocument();
-	});
-
-	it('shows a generic error message when updating the list fails without an ApiError', async () => {
-		vi.mocked(updateList).mockRejectedValue(new TypeError('network down'));
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'List settings' }).click();
-		await page.getByRole('button', { name: 'Archive list' }).click();
-
-		await expect.element(page.getByText('Failed to update list.')).toBeInTheDocument();
-	});
-
-	it('deletes the list after confirming, then navigates back to the list index', async () => {
-		vi.mocked(deleteList).mockResolvedValue(undefined);
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'List settings' }).click();
-		await page.getByRole('button', { name: 'Delete list' }).click();
-		await page.getByRole('button', { name: 'Confirm delete' }).click();
-
-		expect(deleteList).toHaveBeenCalledWith(1);
-		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
-		expect(goto).toHaveBeenCalledWith('/lists');
-	});
-
-	it('shows an error when deleting the list fails', async () => {
-		vi.mocked(deleteList).mockRejectedValue(new ApiError(500, 'Could not delete list'));
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'List settings' }).click();
-		await page.getByRole('button', { name: 'Delete list' }).click();
-		await page.getByRole('button', { name: 'Confirm delete' }).click();
-
-		await expect.element(page.getByText('Could not delete list')).toBeInTheDocument();
-		expect(goto).not.toHaveBeenCalled();
-	});
-
-	it('shows a generic error message when deleting the list fails without an ApiError', async () => {
-		vi.mocked(deleteList).mockRejectedValue(new TypeError('network down'));
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'List settings' }).click();
-		await page.getByRole('button', { name: 'Delete list' }).click();
-		await page.getByRole('button', { name: 'Confirm delete' }).click();
-
-		await expect.element(page.getByText('Failed to delete list.')).toBeInTheDocument();
-		expect(goto).not.toHaveBeenCalled();
-	});
-
 	it('dismisses the sync toast without refreshing', async () => {
 		let handler: (event: SyncEventDto) => void = () => {};
 		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
@@ -1043,7 +1030,7 @@ describe('List detail +page.svelte', () => {
 			.element(page.getByText('Nothing here yet. Add your first item above.'))
 			.not.toBeInTheDocument();
 		// The header/menu stay reachable even while locked (recovery path).
-		await expect.element(page.getByRole('button', { name: 'List settings' })).toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'List settings' })).toBeInTheDocument();
 	});
 
 	it('reveals the list body once the correct passcode is entered', async () => {

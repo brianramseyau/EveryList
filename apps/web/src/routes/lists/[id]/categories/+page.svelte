@@ -5,8 +5,10 @@
 	import { resolve } from '$app/paths';
 	import { Button, Input } from 'flowbite-svelte';
 	import type { CategoryDto, ListDto } from '@everylist/shared';
+	import Icon from '$lib/components/Icon.svelte';
 	import IconPicker from '$lib/components/IconPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import { pressHoldReorder } from '$lib/actions/press-hold-reorder';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
 	import {
@@ -96,19 +98,41 @@
 		}
 	}
 
-	async function move(index: number, direction: -1 | 1) {
-		const target = index + direction;
-		if (target < 0 || target >= categories.length) return;
+	let listEl: HTMLUListElement | undefined = $state();
+	let dragFromIndex: number | null = $state(null);
 
+	function getItemRects(): DOMRect[] {
+		// Only reachable before the list has ever rendered — the drag handle
+		// this feeds doesn't exist yet either, so it can't be exercised.
+		/* v8 ignore next */
+		if (!listEl) return [];
+		return [...listEl.children].map((child) => child.getBoundingClientRect());
+	}
+
+	function handleDragStart(fromIndex: number) {
+		dragFromIndex = fromIndex;
+	}
+
+	function handleDragMove(toIndex: number) {
+		// onmove only ever fires after onstart already set this — see
+		// press-hold-reorder.ts's `startDragging`/`handlePointerMove`.
+		/* v8 ignore next */
+		if (dragFromIndex === null) return;
+		if (toIndex === dragFromIndex) return;
 		const reordered = [...categories];
-		[reordered[index], reordered[target]] = [reordered[target]!, reordered[index]!];
+		const [moved] = reordered.splice(dragFromIndex, 1);
+		reordered.splice(toIndex > dragFromIndex ? toIndex - 1 : toIndex, 0, moved!);
 		categories = reordered;
+		dragFromIndex = toIndex > dragFromIndex ? toIndex - 1 : toIndex;
+	}
 
+	async function handleDrop() {
+		dragFromIndex = null;
 		reordering = true;
 		try {
 			categories = await reorderCategories(
 				listId,
-				reordered.map((category) => category.id)
+				categories.map((category) => category.id)
 			);
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to reorder categories.';
@@ -150,31 +174,29 @@
 			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 		{/if}
 
-		<ul class="flex flex-col gap-2">
+		<p class="text-xs text-gray-400">Press and hold a category's handle to drag it into place.</p>
+
+		<ul class="flex flex-col gap-2" bind:this={listEl}>
 			{#each categories as category, index (category.id)}
 				<li
 					class="flex items-center gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700"
 				>
-					<div class="flex flex-col">
-						<button
-							type="button"
-							class="text-gray-400 hover:text-gray-700 disabled:opacity-30 dark:hover:text-gray-200"
-							disabled={index === 0 || reordering}
-							onclick={() => move(index, -1)}
-							aria-label="Move up"
-						>
-							▲
-						</button>
-						<button
-							type="button"
-							class="text-gray-400 hover:text-gray-700 disabled:opacity-30 dark:hover:text-gray-200"
-							disabled={index === categories.length - 1 || reordering}
-							onclick={() => move(index, 1)}
-							aria-label="Move down"
-						>
-							▼
-						</button>
-					</div>
+					<button
+						type="button"
+						aria-label={`Drag to reorder ${category.name}`}
+						disabled={reordering}
+						class="flex h-11 w-11 shrink-0 touch-none items-center justify-center text-gray-400 disabled:opacity-30"
+						use:pressHoldReorder={{
+							index,
+							disabled: reordering,
+							getItemRects,
+							onstart: handleDragStart,
+							onmove: handleDragMove,
+							ondrop: handleDrop
+						}}
+					>
+						<Icon name="dragVertical" class="h-5 w-5" />
+					</button>
 
 					<div class="flex-1">
 						<Input bind:value={category.name} />
