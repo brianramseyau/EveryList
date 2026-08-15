@@ -133,7 +133,7 @@
 					<span>{favorite.name}</span>
 					{#if favorite.defaultQuantity}
 						<span class="text-gray-600 dark:text-gray-400"
-							>(<span>{favorite.defaultQuantity}</span>)</span
+							>(<span class="font-mono tabular-nums">{favorite.defaultQuantity}</span>)</span
 						>
 					{/if}
 					<div class="ml-auto flex items-center gap-3">
