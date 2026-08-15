@@ -5,7 +5,15 @@
    media query, which gave no way for a user to override their OS setting. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-@source '../../node_modules/flowbite-svelte/dist';
+/* Scoped to only the flowbite-svelte components this app actually imports
+   (Button, Checkbox, Helper, Input, Label, Radio, Select, Textarea — all
+   under forms/ and buttons/) rather than the library's entire dist/, which
+   pulled in every other component's utility classes too (~40 components
+   never used here) and bloated the compiled CSS to ~254KB, a real
+   contributor to a sub-90 Lighthouse Performance score found during the
+   PHASE7_PLAN.md §5 hardening pass. */
+@source '../../node_modules/flowbite-svelte/dist/forms';
+@source '../../node_modules/flowbite-svelte/dist/buttons';
 
 /* flowbite-svelte components (Button, Input focus rings, links, ...) are
    styled entirely with `primary-*` classes and expect the consuming app to

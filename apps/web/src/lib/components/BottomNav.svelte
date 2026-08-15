@@ -38,7 +38,7 @@
 			href={item.key === 'lists' ? resolve('/lists') : resolve('/settings')}
 			aria-current={active ? 'page' : undefined}
 			class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium {active
-				? 'text-primary-600 dark:text-primary-400'
+				? 'text-primary-700 dark:text-primary-400'
 				: 'text-gray-500 dark:text-gray-400'}"
 		>
 			{#if item.key === 'lists'}

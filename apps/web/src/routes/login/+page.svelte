@@ -84,6 +84,6 @@
 
 	<p class="text-sm text-gray-600 dark:text-gray-300">
 		Don't have an account?
-		<a href={signupHref} class="text-primary-600 hover:underline dark:text-primary-400">Sign up</a>
+		<a href={signupHref} class="text-primary-700 underline dark:text-primary-400">Sign up</a>
 	</p>
 </main>

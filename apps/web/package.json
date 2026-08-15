@@ -15,7 +15,8 @@
 		"format": "prettier --write .",
 		"test:unit": "vitest",
 		"test": "vitest run --coverage",
-		"test:e2e": "playwright test"
+		"test:e2e": "playwright test",
+		"test:lighthouse": "node scripts/lighthouse-check.mjs"
 	},
 	"dependencies": {
 		"@adonisjs/transmit-client": "^1.1.0",
@@ -26,6 +27,7 @@
 		"flowbite-svelte": "^1.33.1"
 	},
 	"devDependencies": {
+		"@axe-core/playwright": "^4.13.0",
 		"@eslint/js": "^10.0.1",
 		"@playwright/test": "^1.60.0",
 		"@sveltejs/adapter-static": "^3.0.10",
@@ -41,6 +43,7 @@
 		"fake-indexeddb": "^6.2.5",
 		"globals": "^17.6.0",
 		"playwright": "^1.60.0",
+		"playwright-lighthouse": "^4.0.0",
 		"prettier": "^3.8.3",
 		"prettier-plugin-svelte": "^4.1.0",
 		"prettier-plugin-tailwindcss": "^0.8.0",

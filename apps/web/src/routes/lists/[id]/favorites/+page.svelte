@@ -139,7 +139,7 @@
 					<div class="ml-auto flex items-center gap-3">
 						<button
 							type="button"
-							class="text-sm text-primary-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400"
+							class="text-sm text-primary-700 underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400"
 							disabled={addingToList === favorite.id}
 							onclick={() => handleAddToList(favorite)}
 						>

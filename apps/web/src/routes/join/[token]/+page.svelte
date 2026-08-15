@@ -83,11 +83,8 @@
 		{:else}
 			<p class="text-sm text-gray-600 dark:text-gray-300">Log in or sign up to accept.</p>
 			<div class="flex gap-3">
-				<a href={loginHref} class="text-primary-600 hover:underline dark:text-primary-400">Log in</a
-				>
-				<a href={signupHref} class="text-primary-600 hover:underline dark:text-primary-400"
-					>Sign up</a
-				>
+				<a href={loginHref} class="text-primary-700 underline dark:text-primary-400">Log in</a>
+				<a href={signupHref} class="text-primary-700 underline dark:text-primary-400">Sign up</a>
 			</div>
 		{/if}
 

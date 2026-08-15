@@ -19,12 +19,51 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
 
+  e2e:
+    name: Playwright E2E (offline sync, accessibility)
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      HOST: 127.0.0.1
+      PORT: '3333'
+      NODE_ENV: development
+      LOG_LEVEL: info
+      APP_KEY: ci-3B65vVbNzQY6nqACpAxWnZUX2ZPfL5pI
+      APP_URL: http://127.0.0.1:3333
+      SESSION_DRIVER: cookie
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @everylist/shared build
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @everylist/web exec playwright install --with-deps chromium
+
+      - run: pnpm --filter @everylist/web test:e2e
+
   docker-smoke:
-    name: Build image & smoke test
+    name: Build image, smoke test, and Lighthouse audit
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
 
       - uses: docker/setup-buildx-action@v3
 
@@ -63,6 +102,16 @@ jobs:
         run: |
           curl -fsS http://localhost:3000/ | grep -q "EveryList"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/)" = "200"
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @everylist/web exec playwright install --with-deps chromium
+
+      - name: Lighthouse audit (accessibility/best-practices ≥ 90, performance regression guard)
+        # Points at the container already booted above instead of building a
+        # second image. See PHASE7_PLAN.md §5 / scripts/lighthouse-check.mjs
+        # for why the performance threshold isn't at the PLAN.md §13 target
+        # of 90 yet — a real, investigated gap, not an oversight.
+        run: LIGHTHOUSE_BASE_URL=http://localhost:3000 pnpm --filter @everylist/web test:lighthouse
 
       - name: Container logs
         if: always()
