@@ -2,25 +2,48 @@
 	import { Button, Input } from 'flowbite-svelte';
 	import Icon from './Icon.svelte';
 	import { loadMdiIcons, fromMdiExportName, toDisplayLabel } from '$lib/icons/mdi';
+	import { anchorPanel } from '$lib/actions/anchor-panel';
+	import { pickerCoordinator } from '$lib/stores/picker-coordinator.svelte';
 
 	let { value, onselect }: { value: string; onselect: (name: string) => void } = $props();
 
-	let open = $state(false);
+	const id = Symbol('icon-picker');
+	let containerEl: HTMLDivElement | undefined = $state();
+
+	let open = $derived(pickerCoordinator.activeId === id);
 	let loading = $state(false);
 	let search = $state('');
 	let names = $state<string[] | null>(null);
 	let scrollTop = $state(0);
 	let scrollEl: HTMLDivElement | undefined = $state();
 
+	// Shown before the user types a search, so opening the picker isn't just
+	// a blank "type to search" prompt — a handful of icons relevant to a
+	// shopping list app, verified to exist in @mdi/js.
+	const DEFAULT_ICONS = [
+		'cart',
+		'basket',
+		'foodApple',
+		'breadSlice',
+		'cheese',
+		'carrot',
+		'foodDrumstick',
+		'fish',
+		'egg',
+		'coffee',
+		'bottleSoda',
+		'snowflake'
+	];
+
 	const matches = $derived.by(() => {
-		// `matches` is only ever read from the template's final two branches
-		// (below `{:else if search.trim().length < 2}` and the loading
-		// check), both of which already require `names` to be loaded and the
-		// search to be 2+ characters — so this guard can't actually fire from
-		// the UI. It stays as a type-safety guard for `names.filter` below.
+		// `matches` is only ever read once `loading` is false, and `loading`
+		// only ever goes false after `names` is assigned — so this guard
+		// can't actually fire from the UI. It stays as a type-safety guard
+		// for the `.filter`/`.includes` calls below.
 		/* v8 ignore next */
-		if (!names || search.trim().length < 2) return [];
+		if (!names) return [];
 		const needle = search.trim().toLowerCase();
+		if (needle.length < 2) return DEFAULT_ICONS.filter((name) => names!.includes(name));
 		return names.filter((name) => name.toLowerCase().includes(needle));
 	});
 
@@ -55,8 +78,9 @@
 	});
 
 	async function togglePicker() {
-		open = !open;
-		if (open && !names) {
+		const opening = pickerCoordinator.activeId !== id;
+		pickerCoordinator.toggle(id);
+		if (opening && !names) {
 			loading = true;
 			const icons = await loadMdiIcons();
 			names = Object.keys(icons).map(fromMdiExportName);
@@ -66,12 +90,12 @@
 
 	function pick(name: string) {
 		onselect(name);
-		open = false;
+		pickerCoordinator.close(id);
 		search = '';
 	}
 </script>
 
-<div class="relative">
+<div class="relative" bind:this={containerEl}>
 	<Button
 		type="button"
 		color="alternative"
@@ -82,21 +106,23 @@
 		<Icon name={value} class="h-5 w-5" />
 	</Button>
 
-	{#if open}
+	{#if open && containerEl}
 		<div
-			class="absolute z-10 mt-1 w-72 max-w-[calc(100vw-2rem)] overscroll-contain rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+			use:anchorPanel={containerEl}
+			class="fixed z-10 w-72 max-w-[calc(100vw-2rem)] overscroll-contain rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-800"
 		>
 			<Input placeholder="Search icons…" bind:value={search} autofocus />
 
 			{#if loading}
 				<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading icons…</p>
-			{:else if search.trim().length < 2}
-				<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Type at least 2 characters…</p>
 			{:else if matches.length === 0}
 				<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
 					No icons match "<span>{search}</span>".
 				</p>
 			{:else}
+				{#if search.trim().length < 2}
+					<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Popular icons</p>
+				{/if}
 				<div
 					bind:this={scrollEl}
 					class="mt-2"

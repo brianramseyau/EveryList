@@ -11,12 +11,15 @@ describe('IconPicker.svelte', () => {
 		await expect.element(page.getByText('Fruit Cherries')).not.toBeInTheDocument();
 	});
 
-	it('prompts to search before showing any results', async () => {
+	it('shows a default set of shopping-related icons before any search', async () => {
 		render(IconPicker, { value: 'tag', onselect: vi.fn() });
 
 		await page.getByRole('button', { name: 'Tag' }).click();
 
-		await expect.element(page.getByText('Type at least 2 characters…')).toBeInTheDocument();
+		await expect.element(page.getByText('Popular icons')).toBeInTheDocument();
+		await expect
+			.element(page.getByRole('button', { name: 'Cart', exact: true }))
+			.toBeInTheDocument();
 	});
 
 	it('filters icons by search and calls onselect with the stored name', async () => {
@@ -79,14 +82,14 @@ describe('IconPicker.svelte', () => {
 		render(IconPicker, { value: 'tag', onselect: vi.fn() });
 
 		await page.getByRole('button', { name: 'Tag' }).click();
-		await expect.element(page.getByText('Type at least 2 characters…')).toBeInTheDocument();
+		await expect.element(page.getByText('Popular icons')).toBeInTheDocument();
 
-		// Close and reopen — should show the same "type to search" prompt
-		// immediately, without a "Loading icons…" flash the second time.
+		// Close and reopen — should show the default icons immediately,
+		// without a "Loading icons…" flash the second time.
 		await page.getByRole('button', { name: 'Tag' }).click();
 		await page.getByRole('button', { name: 'Tag' }).click();
 
-		await expect.element(page.getByText('Type at least 2 characters…')).toBeInTheDocument();
+		await expect.element(page.getByText('Popular icons')).toBeInTheDocument();
 	});
 
 	it('resets scroll position when the search term changes', async () => {

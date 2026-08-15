@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { Button } from 'flowbite-svelte';
+	import { anchorPanel } from '$lib/actions/anchor-panel';
+	import { pickerCoordinator } from '$lib/stores/picker-coordinator.svelte';
 
 	let { value, onselect }: { value: string; onselect: (color: string) => void } = $props();
+
+	const id = Symbol('color-picker');
+	let containerEl: HTMLDivElement | undefined = $state();
 
 	// A fixed Tailwind-500 swatch set rather than a raw <input type="color"> —
 	// keeps every list/store color visually consistent instead of arbitrary
@@ -27,29 +32,30 @@
 		'#6b7280'
 	];
 
-	let open = $state(false);
+	let open = $derived(pickerCoordinator.activeId === id);
 
 	function pick(color: string) {
 		onselect(color);
-		open = false;
+		pickerCoordinator.close(id);
 	}
 </script>
 
-<div class="relative">
+<div class="relative" bind:this={containerEl}>
 	<Button
 		type="button"
 		color="alternative"
-		onclick={() => (open = !open)}
+		onclick={() => pickerCoordinator.toggle(id)}
 		class="flex items-center gap-2"
+		aria-label="Color"
 	>
 		<span class="h-5 w-5 shrink-0 rounded-full" style:background-color={value} aria-hidden="true"
 		></span>
-		<span class="text-sm">Color</span>
 	</Button>
 
-	{#if open}
+	{#if open && containerEl}
 		<div
-			class="absolute z-10 mt-1 w-48 rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+			use:anchorPanel={containerEl}
+			class="fixed z-10 w-48 max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-800"
 		>
 			<div class="grid grid-cols-6 gap-2">
 				{#each PALETTE as color (color)}
