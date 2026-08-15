@@ -1,8 +1,10 @@
 import type { CategorizeSuggestionDto, ItemDto } from '@everylist/shared';
 import { suggestCategoryName } from '@everylist/shared';
+/* v8 ignore start */
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 import { getDb, type EveryListDB } from '$lib/offline/db';
 import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';
+/* v8 ignore stop */
 
 export function fetchItems(listId: number): Promise<ItemDto[]> {
 	return apiGet(`/api/v1/lists/${listId}/items`);
