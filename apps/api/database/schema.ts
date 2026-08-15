@@ -8,7 +8,18 @@ import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
 
 export class AuthAccessTokenSchema extends BaseModel {
-  static $columns = ['abilities', 'createdAt', 'expiresAt', 'hash', 'id', 'lastUsedAt', 'name', 'tokenableId', 'type', 'updatedAt'] as const
+  static $columns = [
+    'abilities',
+    'createdAt',
+    'expiresAt',
+    'hash',
+    'id',
+    'lastUsedAt',
+    'name',
+    'tokenableId',
+    'type',
+    'updatedAt',
+  ] as const
   $columns = AuthAccessTokenSchema.$columns
   @column()
   declare abilities: string
@@ -33,7 +44,19 @@ export class AuthAccessTokenSchema extends BaseModel {
 }
 
 export class CategorySchema extends BaseModel {
-  static $columns = ['createdAt', 'deletedAt', 'forkedFromId', 'icon', 'id', 'isDefault', 'listId', 'name', 'sortOrder', 'updatedAt', 'version'] as const
+  static $columns = [
+    'createdAt',
+    'deletedAt',
+    'forkedFromId',
+    'icon',
+    'id',
+    'isDefault',
+    'listId',
+    'name',
+    'sortOrder',
+    'updatedAt',
+    'version',
+  ] as const
   $columns = CategorySchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -60,7 +83,18 @@ export class CategorySchema extends BaseModel {
 }
 
 export class FavoriteItemSchema extends BaseModel {
-  static $columns = ['createdAt', 'defaultCategoryId', 'defaultQuantity', 'deletedAt', 'id', 'listId', 'name', 'updatedAt', 'userId', 'version'] as const
+  static $columns = [
+    'createdAt',
+    'defaultCategoryId',
+    'defaultQuantity',
+    'deletedAt',
+    'id',
+    'listId',
+    'name',
+    'updatedAt',
+    'userId',
+    'version',
+  ] as const
   $columns = FavoriteItemSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -85,7 +119,16 @@ export class FavoriteItemSchema extends BaseModel {
 }
 
 export class FolderSchema extends BaseModel {
-  static $columns = ['color', 'createdAt', 'id', 'name', 'sortOrder', 'updatedAt', 'userId', 'version'] as const
+  static $columns = [
+    'color',
+    'createdAt',
+    'id',
+    'name',
+    'sortOrder',
+    'updatedAt',
+    'userId',
+    'version',
+  ] as const
   $columns = FolderSchema.$columns
   @column()
   declare color: string
@@ -106,7 +149,24 @@ export class FolderSchema extends BaseModel {
 }
 
 export class ItemSchema extends BaseModel {
-  static $columns = ['categoryId', 'checked', 'checkedAt', 'createdAt', 'createdBy', 'deletedAt', 'id', 'listId', 'name', 'notes', 'price', 'quantity', 'sortOrder', 'storeId', 'updatedAt', 'version'] as const
+  static $columns = [
+    'categoryId',
+    'checked',
+    'checkedAt',
+    'createdAt',
+    'createdBy',
+    'deletedAt',
+    'id',
+    'listId',
+    'name',
+    'notes',
+    'price',
+    'quantity',
+    'sortOrder',
+    'storeId',
+    'updatedAt',
+    'version',
+  ] as const
   $columns = ItemSchema.$columns
   @column()
   declare categoryId: number | null
@@ -143,7 +203,17 @@ export class ItemSchema extends BaseModel {
 }
 
 export class ListInviteSchema extends BaseModel {
-  static $columns = ['createdAt', 'createdBy', 'expiresAt', 'id', 'listId', 'revokedAt', 'role', 'token', 'updatedAt'] as const
+  static $columns = [
+    'createdAt',
+    'createdBy',
+    'expiresAt',
+    'id',
+    'listId',
+    'revokedAt',
+    'role',
+    'token',
+    'updatedAt',
+  ] as const
   $columns = ListInviteSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -166,7 +236,16 @@ export class ListInviteSchema extends BaseModel {
 }
 
 export class ListMemberSchema extends BaseModel {
-  static $columns = ['acceptedAt', 'createdAt', 'id', 'invitedAt', 'listId', 'role', 'updatedAt', 'userId'] as const
+  static $columns = [
+    'acceptedAt',
+    'createdAt',
+    'id',
+    'invitedAt',
+    'listId',
+    'role',
+    'updatedAt',
+    'userId',
+  ] as const
   $columns = ListMemberSchema.$columns
   @column.dateTime()
   declare acceptedAt: DateTime | null
@@ -202,7 +281,20 @@ export class ListStoreSchema extends BaseModel {
 }
 
 export class ListSchema extends BaseModel {
-  static $columns = ['archived', 'badgeExcluded', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'name', 'ownerId', 'updatedAt', 'version'] as const
+  static $columns = [
+    'archived',
+    'badgeExcluded',
+    'color',
+    'createdAt',
+    'deletedAt',
+    'folderId',
+    'icon',
+    'id',
+    'name',
+    'ownerId',
+    'updatedAt',
+    'version',
+  ] as const
   $columns = ListSchema.$columns
   @column()
   declare archived: boolean
@@ -231,7 +323,16 @@ export class ListSchema extends BaseModel {
 }
 
 export class StoreCategoryOrderSchema extends BaseModel {
-  static $columns = ['categoryId', 'createdAt', 'deletedAt', 'id', 'sortOrder', 'storeId', 'updatedAt', 'version'] as const
+  static $columns = [
+    'categoryId',
+    'createdAt',
+    'deletedAt',
+    'id',
+    'sortOrder',
+    'storeId',
+    'updatedAt',
+    'version',
+  ] as const
   $columns = StoreCategoryOrderSchema.$columns
   @column()
   declare categoryId: number
@@ -252,7 +353,16 @@ export class StoreCategoryOrderSchema extends BaseModel {
 }
 
 export class StoreSchema extends BaseModel {
-  static $columns = ['color', 'createdAt', 'createdBy', 'deletedAt', 'id', 'name', 'updatedAt', 'version'] as const
+  static $columns = [
+    'color',
+    'createdAt',
+    'createdBy',
+    'deletedAt',
+    'id',
+    'name',
+    'updatedAt',
+    'version',
+  ] as const
   $columns = StoreSchema.$columns
   @column()
   declare color: string
@@ -273,7 +383,16 @@ export class StoreSchema extends BaseModel {
 }
 
 export class SyncEventSchema extends BaseModel {
-  static $columns = ['createdAt', 'entityId', 'entityType', 'id', 'listId', 'occurredAt', 'op', 'payload'] as const
+  static $columns = [
+    'createdAt',
+    'entityId',
+    'entityType',
+    'id',
+    'listId',
+    'occurredAt',
+    'op',
+    'payload',
+  ] as const
   $columns = SyncEventSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

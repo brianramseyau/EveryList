@@ -65,7 +65,7 @@ export default class ListsController {
         .send({ ...(await serialize(ListTransformer.transform(list))), conflict: true })
     }
 
-    if (rest.folderId != null) {
+    if (rest.folderId !== null && rest.folderId !== undefined) {
       await Folder.query().where('id', rest.folderId).where('userId', user.id).firstOrFail()
     }
 

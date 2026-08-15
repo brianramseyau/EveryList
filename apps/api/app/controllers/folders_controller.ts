@@ -5,7 +5,10 @@ import FolderTransformer from '#transformers/folder_transformer'
 import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
 
 async function nextSortOrder(userId: number): Promise<number> {
-  const result = await Folder.query().where('userId', userId).max('sort_order as maxSortOrder').first()
+  const result = await Folder.query()
+    .where('userId', userId)
+    .max('sort_order as maxSortOrder')
+    .first()
   return Number(result?.$extras.maxSortOrder ?? -1) + 1
 }
 
