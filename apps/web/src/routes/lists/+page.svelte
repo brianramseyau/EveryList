@@ -107,7 +107,7 @@
 			</span>
 			<span class="flex flex-1 flex-col">
 				<span class="font-display font-medium">{list.name}</span>
-				<span class="font-mono text-xs text-gray-500 tabular-nums dark:text-gray-400">
+				<span class="font-mono text-xs text-gray-600 tabular-nums dark:text-gray-400">
 					<span>{list.itemCount}</span>
 					{list.itemCount === 1 ? 'item' : 'items'}
 				</span>
@@ -169,9 +169,9 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
+		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if lists.length === 0 && folders.length === 0}
-		<p class="text-gray-500 dark:text-gray-400">No lists yet — tap + to create one.</p>
+		<p class="text-gray-600 dark:text-gray-400">No lists yet — tap + to create one.</p>
 	{:else}
 		<div class="flex flex-col gap-6">
 			{#each groups as group (group.folder.id)}
@@ -206,7 +206,7 @@
 			{#if unfiledLists.length > 0}
 				<section>
 					{#if folders.length > 0}
-						<h2 class="mb-2 text-sm font-semibold text-gray-500 dark:text-gray-400">
+						<h2 class="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400">
 							Not in a folder
 						</h2>
 					{/if}

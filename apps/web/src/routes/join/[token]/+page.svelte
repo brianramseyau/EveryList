@@ -68,7 +68,7 @@
 	<h1 class="text-2xl font-bold">Join a list</h1>
 
 	{#if loading}
-		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
+		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if preview}
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			<strong>{preview.inviterName}</strong> invited you to

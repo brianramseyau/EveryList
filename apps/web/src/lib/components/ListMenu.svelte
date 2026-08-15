@@ -130,7 +130,7 @@
 		onclick={toggle}
 		aria-label="List settings"
 		aria-expanded={open}
-		class="text-gray-500 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400"
+		class="text-gray-600 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400"
 	>
 		<Icon name="cog" class="h-5 w-5" />
 	</button>
@@ -156,7 +156,7 @@
 				<hr class="my-2 border-gray-200 dark:border-gray-700" />
 
 				<form class="flex flex-col gap-2 px-2 py-1.5" onsubmit={(event) => saveName(event, list)}>
-					<span class="text-xs font-semibold text-gray-500 dark:text-gray-400">List settings</span>
+					<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">List settings</span>
 					<Input bind:value={draftName} />
 					<div class="flex items-center gap-2">
 						<IconPicker
@@ -192,7 +192,7 @@
 
 				{#if settingPasscode}
 					<form class="flex flex-col gap-2 px-2 py-1.5" onsubmit={savePasscode}>
-						<span class="text-xs font-semibold text-gray-500 dark:text-gray-400">
+						<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">
 							{list.passcodeHash ? 'Change passcode' : 'Set passcode'}
 						</span>
 						<Input
@@ -247,7 +247,7 @@
 
 				{#if exportingEmail}
 					<form class="flex flex-col gap-2 px-2 py-1.5" onsubmit={sendEmailExport}>
-						<span class="text-xs font-semibold text-gray-500 dark:text-gray-400">
+						<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">
 							Email export
 						</span>
 						<Input type="email" placeholder="you@example.com" bind:value={exportEmail} required />

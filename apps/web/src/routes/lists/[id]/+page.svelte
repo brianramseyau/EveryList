@@ -328,7 +328,7 @@
 	</div>
 
 	{#if loading}
-		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
+		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if list}
 		{#if list.passcodeHash && !unlocked}
 			<PasscodeGate {list} onunlock={() => (unlocked = true)} />
@@ -388,7 +388,7 @@
 					<span style:color={list.color}>
 						<Icon name={list.icon ?? 'formatListChecks'} class="h-10 w-10" />
 					</span>
-					<p class="text-gray-500 dark:text-gray-400">
+					<p class="text-gray-600 dark:text-gray-400">
 						Nothing here yet. Add your first item above.
 					</p>
 				</div>
@@ -399,7 +399,7 @@
 							<h2
 								class="mb-2 flex items-center gap-2 border-b pb-1 text-sm font-semibold {group.category
 									? ''
-									: 'border-gray-200 text-gray-500 dark:border-gray-700 dark:text-gray-400'}"
+									: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
 								style:color={group.category ? list.color : undefined}
 								style:border-bottom-color={group.category ? list.color : undefined}
 							>
@@ -424,7 +424,7 @@
 											></button>
 											<span>{item.name}</span>
 											{#if item.quantity}
-												<span class="text-gray-500 dark:text-gray-400"
+												<span class="text-gray-600 dark:text-gray-400"
 													>(<span>{item.quantity}</span>)</span
 												>
 											{/if}
@@ -458,7 +458,7 @@
 										{/if}
 										<button
 											type="button"
-											class="text-xs text-gray-500 hover:text-red-600 dark:hover:text-red-400 print:hidden"
+											class="text-xs text-gray-600 hover:text-red-600 dark:hover:text-red-400 print:hidden"
 											onclick={() => removeItem(item)}
 										>
 											Remove
@@ -471,7 +471,7 @@
 
 					{#if checkedItems.length > 0}
 						<section>
-							<h2 class="mb-2 text-sm font-semibold text-gray-500 dark:text-gray-400">Checked</h2>
+							<h2 class="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400">Checked</h2>
 							<ul class="flex flex-col gap-1">
 								{#each checkedItems as item (item.id)}
 									<li class="flex items-center gap-2">
@@ -501,7 +501,7 @@
 										</label>
 										<button
 											type="button"
-											class="ml-auto text-xs text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+											class="ml-auto text-xs text-gray-600 hover:text-red-600 dark:hover:text-red-400"
 											onclick={() => removeItem(item)}
 										>
 											Remove
@@ -517,7 +517,7 @@
 					class="fixed inset-x-4 z-10 mx-auto flex max-w-lg items-center justify-between rounded-t-xl border border-b-0 border-gray-200 bg-paper px-4 py-2 text-sm shadow-sm dark:border-gray-700 print:hidden"
 					style="bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));"
 				>
-					<span class="text-gray-500 dark:text-gray-400">
+					<span class="text-gray-600 dark:text-gray-400">
 						{progressText}
 					</span>
 					{#if totalCents > 0}
@@ -537,14 +537,14 @@
 
 				{#if recentOpen}
 					{#if loadingRecent}
-						<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+						<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading…</p>
 					{:else if recentItems.length === 0}
-						<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Nothing recently deleted.</p>
+						<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Nothing recently deleted.</p>
 					{:else}
 						<ul class="mt-2 flex flex-col gap-1">
 							{#each recentItems as item (item.id)}
 								<li class="flex items-center gap-2 text-sm">
-									<span class="text-gray-500 dark:text-gray-400">{item.name}</span>
+									<span class="text-gray-600 dark:text-gray-400">{item.name}</span>
 									<button
 										type="button"
 										class="ml-auto text-primary-700 underline dark:text-primary-400"

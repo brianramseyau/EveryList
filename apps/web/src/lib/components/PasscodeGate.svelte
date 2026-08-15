@@ -38,10 +38,10 @@
 <div
 	class="flex flex-col items-center gap-4 rounded-lg border border-gray-200 p-8 text-center dark:border-gray-700"
 >
-	<Icon name="lock" class="h-8 w-8 text-gray-400 dark:text-gray-500" />
+	<Icon name="lock" class="h-8 w-8 text-gray-400 dark:text-gray-600" />
 	<div>
 		<p class="font-medium">This list is locked</p>
-		<p class="text-sm text-gray-500 dark:text-gray-400">Enter the passcode to view it.</p>
+		<p class="text-sm text-gray-600 dark:text-gray-400">Enter the passcode to view it.</p>
 	</div>
 	<form class="flex w-full max-w-xs flex-col gap-2" onsubmit={submit}>
 		<Input

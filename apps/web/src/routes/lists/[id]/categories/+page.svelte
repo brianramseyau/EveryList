@@ -131,7 +131,7 @@
 	/>
 
 	{#if loading}
-		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
+		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if list}
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			Rename, reorder, or add categories. Renaming a default category creates a copy that's

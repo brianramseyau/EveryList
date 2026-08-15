@@ -65,7 +65,7 @@
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 		<h2
-			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:border-gray-700 dark:text-gray-400"
+			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
 		>
 			Account
 		</h2>
@@ -74,7 +74,7 @@
 			<button
 				type="button"
 				onclick={handleLogout}
-				class="text-sm text-gray-500 hover:underline dark:text-gray-400"
+				class="text-sm text-gray-600 hover:underline dark:text-gray-400"
 			>
 				Log out
 			</button>
@@ -83,7 +83,7 @@
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 		<h2
-			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:border-gray-700 dark:text-gray-400"
+			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
 		>
 			Appearance
 		</h2>
@@ -133,7 +133,7 @@
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 		<h2
-			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:border-gray-700 dark:text-gray-400"
+			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
 		>
 			About
 		</h2>
