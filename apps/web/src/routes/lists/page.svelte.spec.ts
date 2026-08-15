@@ -475,5 +475,4 @@ describe('Lists +page.svelte', () => {
 			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/folders')).length)
 			.toBe(3);
 	});
-
 });

@@ -64,6 +64,8 @@ describe('New List +page.svelte', () => {
 			icon: 'formatListChecks',
 			itemCount: 0,
 			ownerId: 1,
+			folderId: null,
+			badgeExcluded: false,
 			createdAt: TS,
 			updatedAt: null,
 			version: 1
@@ -92,6 +94,8 @@ describe('New List +page.svelte', () => {
 			icon: 'formatListChecks',
 			itemCount: 0,
 			ownerId: 1,
+			folderId: null,
+			badgeExcluded: false,
 			createdAt: TS,
 			updatedAt: null,
 			version: 1
@@ -122,6 +126,8 @@ describe('New List +page.svelte', () => {
 			icon: 'tag',
 			itemCount: 0,
 			ownerId: 1,
+			folderId: null,
+			badgeExcluded: false,
 			createdAt: TS,
 			updatedAt: null,
 			version: 1
