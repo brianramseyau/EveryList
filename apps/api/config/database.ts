@@ -30,15 +30,26 @@ const dbConfig = defineConfig({
 
       /**
        * better-sqlite3 doesn't enforce FK constraints (or ON DELETE
-       * CASCADE) unless "PRAGMA foreign_keys" is turned on per connection —
-       * required for the cascading deletes used by lists/categories/items.
+       * CASCADE/SET NULL) unless "PRAGMA foreign_keys" is turned on per
+       * connection — required so e.g. deleting a folder correctly nulls out
+       * `lists.folder_id`. Left OFF during `console` (ace) commands: SQLite
+       * implements most `ALTER TABLE` column additions that carry an inline
+       * FK reference by rebuilding the table (create new, copy rows, DROP
+       * the old one, rename) — and with enforcement on, dropping the old
+       * `lists` table cascade-deletes every row in `items`/`list_members`/
+       * etc. that referenced it, even though the "drop" is just a migration
+       * implementation detail rather than a real delete. This wiped
+       * production data via the folder_id migration (see incident writeup).
+       * `web`/`test` still enforce normally since real hard-delete cascades
+       * only happen from HTTP controllers.
        */
       pool: {
         afterCreate: (
           connection: { pragma: (statement: string) => unknown },
           done: (error: Error | null, connection: unknown) => void
         ) => {
-          connection.pragma('foreign_keys = ON')
+          const enforceForeignKeys = app.getEnvironment() !== 'console'
+          connection.pragma(`foreign_keys = ${enforceForeignKeys ? 'ON' : 'OFF'}`)
           done(null, connection)
         },
       },
