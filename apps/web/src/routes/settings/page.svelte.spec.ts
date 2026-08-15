@@ -89,4 +89,58 @@ describe('Settings +page.svelte', () => {
 		window.localStorage.removeItem('everylist:accent');
 		document.documentElement.removeAttribute('data-accent');
 	});
+
+	it('switches the screen orientation preference and reflects the choice in the radio group', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		const lockSpy = vi.spyOn(screen.orientation, 'lock').mockResolvedValue(undefined);
+
+		render(SettingsPage);
+
+		const portraitOption = page.getByRole('radio', { name: 'Portrait' });
+		await expect.element(portraitOption).toHaveAttribute('aria-checked', 'false');
+
+		await portraitOption.click();
+
+		await expect.element(portraitOption).toHaveAttribute('aria-checked', 'true');
+		expect(window.localStorage.getItem('everylist:orientation')).toBe('portrait');
+		await expect.poll(() => lockSpy.mock.calls.length).toBe(1);
+		expect(lockSpy).toHaveBeenCalledWith('portrait');
+
+		window.localStorage.removeItem('everylist:orientation');
+		lockSpy.mockRestore();
+	});
+
+	it('shows an install hint when orientation locking is unavailable in a plain browser tab', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+		render(SettingsPage);
+
+		await expect
+			.element(
+				page.getByText('Install EveryList to your home screen to lock orientation', {
+					exact: false
+				})
+			)
+			.toBeInTheDocument();
+	});
+
+	it('hides the install hint once running standalone (orientation locking is available)', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		const matchMediaSpy = vi
+			.spyOn(window, 'matchMedia')
+			.mockReturnValue({ matches: true } as MediaQueryList);
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Screen Orientation')).toBeInTheDocument();
+		await expect
+			.element(
+				page.getByText('Install EveryList to your home screen to lock orientation', {
+					exact: false
+				})
+			)
+			.not.toBeInTheDocument();
+
+		matchMediaSpy.mockRestore();
+	});
 });

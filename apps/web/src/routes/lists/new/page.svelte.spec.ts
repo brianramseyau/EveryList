@@ -176,7 +176,7 @@ describe('New List +page.svelte', () => {
 	it('links Cancel back to the lists screen', async () => {
 		render(NewListPage);
 
-		const cancelLink = page.getByRole('link', { name: '← Cancel' });
+		const cancelLink = page.getByRole('link', { name: 'Cancel' });
 		await expect.element(cancelLink).toBeInTheDocument();
 		expect(cancelLink.element().getAttribute('href')).toBe('/lists');
 	});

@@ -7,6 +7,12 @@
 	import { formatBuildDate } from '$lib/api/format-build-date';
 	import { getThemePreference, setThemePreference, type ThemePreference } from '$lib/theme';
 	import { getAccentPreference, setAccentPreference, type AccentPreference } from '$lib/accent';
+	import {
+		canLockOrientation,
+		getOrientationPreference,
+		setOrientationPreference,
+		type OrientationPreference
+	} from '$lib/orientation';
 	import { logout } from '$lib/api/auth';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
@@ -15,11 +21,19 @@
 	let loadFailed = $state(false);
 	let themePreference = $state<ThemePreference>('automatic');
 	let accentPreference = $state<AccentPreference>('slate');
+	let orientationPreference = $state<OrientationPreference>('automatic');
+	let canLockOrientationNow = $state(false);
 
 	const themeOptions: { value: ThemePreference; label: string }[] = [
 		{ value: 'automatic', label: 'Automatic' },
 		{ value: 'light', label: 'Light' },
 		{ value: 'dark', label: 'Dark' }
+	];
+
+	const orientationOptions: { value: OrientationPreference; label: string }[] = [
+		{ value: 'automatic', label: 'Auto' },
+		{ value: 'portrait', label: 'Portrait' },
+		{ value: 'landscape', label: 'Landscape' }
 	];
 
 	const accentOptions: { value: AccentPreference; label: string; swatch: string }[] = [
@@ -40,6 +54,11 @@
 		setAccentPreference(preference);
 	}
 
+	function chooseOrientation(preference: OrientationPreference) {
+		orientationPreference = preference;
+		void setOrientationPreference(preference);
+	}
+
 	async function handleLogout() {
 		await logout();
 		await goto(resolve('/login'));
@@ -48,6 +67,8 @@
 	onMount(async () => {
 		themePreference = getThemePreference();
 		accentPreference = getAccentPreference();
+		orientationPreference = getOrientationPreference();
+		canLockOrientationNow = canLockOrientation();
 		try {
 			meta = await fetchMeta();
 		} catch {
@@ -129,6 +150,35 @@
 				{/each}
 			</div>
 		</div>
+		<div class="flex items-center justify-between px-4 py-3">
+			<span class="text-sm font-medium">Screen Orientation</span>
+			<div
+				role="radiogroup"
+				aria-label="Screen orientation"
+				class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
+			>
+				{#each orientationOptions as option (option.value)}
+					<button
+						type="button"
+						role="radio"
+						aria-checked={orientationPreference === option.value}
+						onclick={() => chooseOrientation(option.value)}
+						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {orientationPreference ===
+						option.value
+							? 'bg-primary-600 text-white'
+							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+					>
+						{option.label}
+					</button>
+				{/each}
+			</div>
+		</div>
+		{#if !canLockOrientationNow}
+			<p class="px-4 pb-3 text-xs text-gray-500 dark:text-gray-400">
+				Install EveryList to your home screen to lock orientation — it only takes effect once
+				running as an installed app.
+			</p>
+		{/if}
 	</section>
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">

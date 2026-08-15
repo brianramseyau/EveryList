@@ -3,22 +3,20 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Button, Input, Select } from 'flowbite-svelte';
+	import { Select } from 'flowbite-svelte';
 	import type { FolderDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchLists, updateList } from '$lib/api/lists';
-	import { createFolder, deleteFolder, fetchFolders } from '$lib/api/folders';
+	import { deleteFolder, fetchFolders } from '$lib/api/folders';
 	import { ApiError } from '$lib/api/client';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
 
 	let lists = $state<ListDto[]>([]);
 	let folders = $state<FolderDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-
-	let newFolderName = $state('');
-	let creatingFolder = $state(false);
 
 	const groups = $derived.by(() => {
 		const byFolder = new SvelteMap<number, ListDto[]>();
@@ -53,21 +51,6 @@
 		}
 		void loadAll();
 	});
-
-	async function handleCreateFolder(event: SubmitEvent) {
-		event.preventDefault();
-		if (!newFolderName.trim()) return;
-		creatingFolder = true;
-		try {
-			const folder = await createFolder({ name: newFolderName.trim() });
-			folders = [...folders, folder];
-			newFolderName = '';
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to create folder.';
-		} finally {
-			creatingFolder = false;
-		}
-	}
 
 	async function handleDeleteFolder(folder: FolderDto) {
 		folders = folders.filter((current) => current.id !== folder.id);
@@ -147,22 +130,22 @@
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
 	<PageHeader title="My Lists">
 		{#snippet actions()}
-			<a
-				href={resolve('/lists/new')}
-				aria-label="New list"
-				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-			>
-				<Icon name="plus" class="h-6 w-6" />
-			</a>
+			<PopoutMenu label="Create" iconName="plus">
+				<a
+					href={resolve('/lists/new')}
+					class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+				>
+					Create List
+				</a>
+				<a
+					href={resolve('/lists/folders/new')}
+					class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+				>
+					Create Folder
+				</a>
+			</PopoutMenu>
 		{/snippet}
 	</PageHeader>
-
-	<form class="flex gap-2" onsubmit={handleCreateFolder}>
-		<div class="flex-1">
-			<Input placeholder="New folder name" bind:value={newFolderName} />
-		</div>
-		<Button type="submit" disabled={creatingFolder || !newFolderName.trim()}>New folder</Button>
-	</form>
 
 	{#if error}
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>

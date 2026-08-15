@@ -7,6 +7,7 @@
 	import { getToken } from '$lib/api/token';
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
+	import { initOrientation } from '$lib/orientation';
 	import { startFlushLoop } from '$lib/offline/flush';
 	import { initInstallPrompt } from '$lib/pwa/install-prompt';
 	import { clearBadge, refreshBadgeCount } from '$lib/pwa/badge';
@@ -29,6 +30,7 @@
 	onMount(() => {
 		initTheme();
 		initAccent();
+		void initOrientation();
 		refreshAuth();
 		syncBadge();
 		startFlushLoop();

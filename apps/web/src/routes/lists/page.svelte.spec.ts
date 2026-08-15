@@ -19,8 +19,6 @@ function jsonResponse(data: unknown, init: { ok?: boolean; status?: number } = {
 function stubFetchByUrl(routes: {
 	lists?: unknown[];
 	folders?: unknown[];
-	createFolder?: unknown;
-	createFolderError?: { status: number; message?: string } | Error;
 	deleteFolderError?: { status: number; message?: string } | Error;
 	updateList?: unknown;
 	updateListError?: { status: number; message?: string } | Error;
@@ -40,12 +38,6 @@ function stubFetchByUrl(routes: {
 				return Promise.reject(routes.deleteFolderError);
 			if (routes.deleteFolderError) return errorResponse(routes.deleteFolderError);
 			return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(undefined) });
-		}
-		if (url.includes('/folders') && init?.method === 'POST') {
-			if (routes.createFolderError instanceof Error)
-				return Promise.reject(routes.createFolderError);
-			if (routes.createFolderError) return errorResponse(routes.createFolderError);
-			return Promise.resolve(jsonResponse(routes.createFolder));
 		}
 		if (url.includes('/folders')) return Promise.resolve(jsonResponse(routes.folders ?? []));
 		if (url.includes('/lists/') && init?.method === 'PATCH') {
@@ -199,82 +191,22 @@ describe('Lists +page.svelte', () => {
 		await expect.element(page.getByText('1 item', { exact: true })).toBeInTheDocument();
 	});
 
-	it('links the "New list" button to the dedicated creation screen', async () => {
+	it('opens the "+" popout to reveal Create List / Create Folder links', async () => {
 		setToken('test-token');
 		stubFetchByUrl({});
 
 		render(ListsPage);
 		await expect.element(page.getByText('No lists yet — tap + to create one.')).toBeInTheDocument();
 
-		const newListLink = page.getByRole('link', { name: 'New list' });
+		await page.getByRole('button', { name: 'Create' }).click();
+
+		const newListLink = page.getByRole('link', { name: 'Create List' });
 		await expect.element(newListLink).toBeInTheDocument();
 		expect(newListLink.element().getAttribute('href')).toBe('/lists/new');
-	});
 
-	it('creates a new folder from the form', async () => {
-		setToken('test-token');
-		stubFetchByUrl({
-			createFolder: {
-				id: 5,
-				userId: 1,
-				name: 'Groceries',
-				color: '#3b82f6',
-				sortOrder: 0,
-				version: 1
-			}
-		});
-
-		render(ListsPage);
-		await expect.element(page.getByText('No lists yet — tap + to create one.')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New folder name').fill('Groceries');
-		await page.getByRole('button', { name: 'New folder' }).click();
-
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-		await expect.element(page.getByText('No lists in this folder yet.')).toBeInTheDocument();
-	});
-
-	it('does not submit when the new folder name is only whitespace', async () => {
-		setToken('test-token');
-		const fetchMock = stubFetchByUrl({});
-
-		render(ListsPage);
-		await expect.element(page.getByText('No lists yet — tap + to create one.')).toBeInTheDocument();
-
-		const input = page.getByPlaceholder('New folder name');
-		await input.fill('   ');
-		input
-			.element()
-			.closest('form')
-			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-
-		await expect.poll(() => fetchMock.mock.calls.length).toBe(2);
-	});
-
-	it('shows a generic error message when creating a folder fails without an ApiError', async () => {
-		setToken('test-token');
-		stubFetchByUrl({ createFolderError: new TypeError('network down') });
-
-		render(ListsPage);
-		await expect.element(page.getByText('No lists yet — tap + to create one.')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New folder name').fill('Groceries');
-		await page.getByRole('button', { name: 'New folder' }).click();
-
-		await expect.element(page.getByText('Failed to create folder.')).toBeInTheDocument();
-	});
-
-	it('shows the ApiError message when creating a folder fails', async () => {
-		setToken('test-token');
-		stubFetchByUrl({ createFolderError: { status: 422, message: 'Name already exists' } });
-
-		render(ListsPage);
-		await expect.element(page.getByText('No lists yet — tap + to create one.')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New folder name').fill('Groceries');
-		await page.getByRole('button', { name: 'New folder' }).click();
-
-		await expect.element(page.getByText('Name already exists')).toBeInTheDocument();
+		const newFolderLink = page.getByRole('link', { name: 'Create Folder' });
+		await expect.element(newFolderLink).toBeInTheDocument();
+		expect(newFolderLink.element().getAttribute('href')).toBe('/lists/folders/new');
 	});
 
 	it('groups lists under two folders in sortOrder, and moves one list back to "Not in a folder"', async () => {
