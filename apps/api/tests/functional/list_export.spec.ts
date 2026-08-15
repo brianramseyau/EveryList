@@ -20,6 +20,21 @@ test.group('List export', (group) => {
     mail.fake()
     return () => mail.restore()
   })
+  // CI has no real SMTP2GO credentials in its env (nor should it) — stub
+  // dummy ones so isMailConfigured() is true by default; the "not
+  // configured" test below deletes them for its own scope instead.
+  group.each.setup(() => {
+    const originalUsername = process.env.SMTP2GO_USERNAME
+    const originalPassword = process.env.SMTP2GO_PASSWORD
+    process.env.SMTP2GO_USERNAME = 'test-user'
+    process.env.SMTP2GO_PASSWORD = 'test-pass'
+    return () => {
+      if (originalUsername === undefined) delete process.env.SMTP2GO_USERNAME
+      else process.env.SMTP2GO_USERNAME = originalUsername
+      if (originalPassword === undefined) delete process.env.SMTP2GO_PASSWORD
+      else process.env.SMTP2GO_PASSWORD = originalPassword
+    }
+  })
 
   test('emails the uncompleted items on a list', async ({ client }) => {
     const token = await signupAndGetToken(client)
