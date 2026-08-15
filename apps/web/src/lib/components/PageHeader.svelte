@@ -26,8 +26,8 @@
 {/if}
 
 {#if title}
-	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-bold">{title}</h1>
+	<div class="flex items-center justify-between border-b border-gray-200 pb-2 dark:border-gray-700">
+		<h1 class="font-display text-2xl font-bold">{title}</h1>
 		{#if actions}
 			<div class="flex items-center gap-3 text-sm print:hidden">{@render actions()}</div>
 		{/if}

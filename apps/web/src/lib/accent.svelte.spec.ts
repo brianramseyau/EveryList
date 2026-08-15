@@ -10,13 +10,13 @@ describe('accent (browser)', () => {
 		document.documentElement.removeAttribute('data-accent');
 	});
 
-	it('defaults to ocean when nothing is stored', () => {
-		expect(getAccentPreference()).toBe('ocean');
+	it('defaults to slate when nothing is stored', () => {
+		expect(getAccentPreference()).toBe('slate');
 	});
 
-	it('ignores a corrupted stored value and falls back to ocean', () => {
+	it('ignores a corrupted stored value and falls back to slate', () => {
 		window.localStorage.setItem('everylist:accent', 'not-a-real-accent');
-		expect(getAccentPreference()).toBe('ocean');
+		expect(getAccentPreference()).toBe('slate');
 	});
 
 	it('applyAccent sets the data-accent attribute', () => {

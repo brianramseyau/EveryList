@@ -215,13 +215,19 @@ describe('List detail +page.svelte', () => {
 		const produceHeader = page.getByText('Produce').element().closest('h2');
 		expect(produceHeader).not.toBeNull();
 		expect(produceHeader?.style.color).toBe('rgb(59, 130, 246)');
+
+		// Neither item has a price set, so the progress strip's total is hidden.
+		await expect.element(page.getByText('1 of 2 done')).toBeInTheDocument();
+		await expect.element(page.getByText(/^Total:/)).not.toBeInTheDocument();
 	});
 
 	it('adds a new item with a quantity via the form', async () => {
 		vi.mocked(createItem).mockResolvedValue(makeItem({ id: 200, name: 'Bread', quantity: '2' }));
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		await page.getByPlaceholder('Item name').fill('Bread');
 		await page.getByPlaceholder('Qty').fill('2');
@@ -263,7 +269,9 @@ describe('List detail +page.svelte', () => {
 		// carries its own guard, reachable via a raw 'submit' event and not
 		// just a click on the (disabled) button.
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		const input = page.getByPlaceholder('Item name');
 		await input.fill('   ');
@@ -279,7 +287,9 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(createItem).mockRejectedValue(new TypeError('network down'));
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		await page.getByPlaceholder('Item name').fill('Bread');
 		await page.getByRole('button', { name: 'Add' }).click();
@@ -291,7 +301,9 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(createItem).mockRejectedValue(new ApiError(422, 'Duplicate item'));
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		await page.getByPlaceholder('Item name').fill('Bread');
 		await page.getByRole('button', { name: 'Add' }).click();
@@ -301,7 +313,9 @@ describe('List detail +page.svelte', () => {
 
 	it('opens and closes the paste-import form', async () => {
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Paste in a list…' }).click();
 		await expect
@@ -321,7 +335,9 @@ describe('List detail +page.svelte', () => {
 		]);
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Paste in a list…' }).click();
 		await page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs').fill('Milk\nBread');
@@ -336,7 +352,9 @@ describe('List detail +page.svelte', () => {
 
 	it('does not import when the pasted text is only whitespace', async () => {
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Paste in a list…' }).click();
 		const textarea = page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs');
@@ -353,7 +371,9 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(importItems).mockRejectedValue(new TypeError('network down'));
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Paste in a list…' }).click();
 		await page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs').fill('Milk');
@@ -366,7 +386,9 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(importItems).mockRejectedValue(new ApiError(422, 'Could not parse items'));
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Paste in a list…' }).click();
 		await page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs').fill('Milk');
@@ -384,11 +406,13 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+		await expect.element(page.getByText('0 of 2 done')).toBeInTheDocument();
 
 		await page.getByRole('checkbox', { name: 'Bananas' }).click();
 
 		expect(updateItem).toHaveBeenCalledWith(1, 100, { checked: true });
 		await expect.element(page.getByText('Checked')).toBeInTheDocument();
+		await expect.element(page.getByText('1 of 2 done')).toBeInTheDocument();
 		// Bread stays unchecked (and thus still in the main list) — proves the
 		// map only updates the toggled item, not every item.
 		await expect.element(page.getByRole('checkbox', { name: 'Bread' })).not.toBeChecked();
@@ -673,7 +697,9 @@ describe('List detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'Remove' }).click();
 
 		expect(deleteItem).toHaveBeenCalledWith(1, 100);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 	});
 
 	it('removes an item', async () => {
@@ -687,7 +713,9 @@ describe('List detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'Remove' }).click();
 
 		expect(deleteItem).toHaveBeenCalledWith(1, 100);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 	});
 
 	it('prepends a removed item to the recently-deleted list when it is open', async () => {
@@ -743,7 +771,9 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchRecentItems).mockRejectedValue(new TypeError('network down'));
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Show recently deleted' }).click();
 
@@ -756,7 +786,9 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchRecentItems).mockRejectedValue(new ApiError(500, 'Could not load recent'));
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Show recently deleted' }).click();
 
@@ -765,7 +797,9 @@ describe('List detail +page.svelte', () => {
 
 	it('hides the recently-deleted panel again on a second click', async () => {
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Show recently deleted' }).click();
 		await expect.element(page.getByText('Nothing recently deleted.')).toBeInTheDocument();
@@ -834,7 +868,9 @@ describe('List detail +page.svelte', () => {
 		});
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 		expect(subscribeToList).toHaveBeenCalledWith(1, expect.any(Function));
 
 		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null, version: 1 });
@@ -858,7 +894,9 @@ describe('List detail +page.svelte', () => {
 		});
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		handler({ entityType: 'item', entityId: 1, op: 'update', payload: null, version: 2 });
 		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
@@ -983,7 +1021,9 @@ describe('List detail +page.svelte', () => {
 		});
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 
 		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null, version: 1 });
 		await expect.element(page.getByText('This list was updated')).toBeInTheDocument();
@@ -999,7 +1039,9 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 
 		await expect.element(page.getByText('This list is locked')).toBeInTheDocument();
-		await expect.element(page.getByText('No items yet — add one above.')).not.toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.not.toBeInTheDocument();
 		// The header/menu stay reachable even while locked (recovery path).
 		await expect.element(page.getByRole('button', { name: 'List settings' })).toBeInTheDocument();
 	});
@@ -1015,7 +1057,9 @@ describe('List detail +page.svelte', () => {
 		await page.getByLabelText('Passcode').fill('1234');
 		await page.getByRole('button', { name: 'Unlock' }).click();
 
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 	});
 
 	it('skips the passcode gate on a later visit within the same session', async () => {
@@ -1025,7 +1069,9 @@ describe('List detail +page.svelte', () => {
 
 		render(ListDetailPage);
 
-		await expect.element(page.getByText('No items yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
 		await expect.element(page.getByText('This list is locked')).not.toBeInTheDocument();
 	});
 });

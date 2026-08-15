@@ -14,7 +14,7 @@
 	let meta = $state<MetaResponse | null>(null);
 	let loadFailed = $state(false);
 	let themePreference = $state<ThemePreference>('automatic');
-	let accentPreference = $state<AccentPreference>('ocean');
+	let accentPreference = $state<AccentPreference>('slate');
 
 	const themeOptions: { value: ThemePreference; label: string }[] = [
 		{ value: 'automatic', label: 'Automatic' },
@@ -23,6 +23,7 @@
 	];
 
 	const accentOptions: { value: AccentPreference; label: string; swatch: string }[] = [
+		{ value: 'slate', label: 'Slate', swatch: '#3e4c63' },
 		{ value: 'ocean', label: 'Ocean', swatch: '#0ea5e9' },
 		{ value: 'forest', label: 'Forest', swatch: '#22c55e' },
 		{ value: 'berry', label: 'Berry', swatch: '#d946ef' },

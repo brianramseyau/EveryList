@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Checkbox, Input, Select, Textarea } from 'flowbite-svelte';
+	import { Button, Input, Select, Textarea } from 'flowbite-svelte';
 	import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { deleteList, fetchList, updateList } from '$lib/api/lists';
@@ -102,6 +102,8 @@
 	}
 
 	const totalText = $derived(`Total: ${formatPrice(totalCents)}`);
+
+	const progressText = $derived(`${checkedItems.length} of ${visibleItems.length} done`);
 
 	async function loadAll() {
 		loading = true;
@@ -381,43 +383,58 @@
 				</div>
 			{/if}
 
-			{#if totalCents > 0}
-				<p class="text-sm font-semibold text-gray-700 dark:text-gray-300">{totalText}</p>
-			{/if}
-
 			{#if items.length === 0}
-				<p class="text-gray-500 dark:text-gray-400">No items yet — add one above.</p>
+				<div class="flex flex-col items-center gap-2 py-8 text-center">
+					<span style:color={list.color}>
+						<Icon name={list.icon ?? 'formatListChecks'} class="h-10 w-10" />
+					</span>
+					<p class="text-gray-500 dark:text-gray-400">
+						Nothing here yet. Add your first item above.
+					</p>
+				</div>
 			{:else}
-				<div class="flex flex-col gap-6">
+				<div class="flex flex-col gap-6 pb-16">
 					{#each groups as group (group.category?.id ?? 'uncategorized')}
 						<section>
 							<h2
-								class="mb-2 flex items-center gap-2 text-sm font-semibold"
+								class="mb-2 flex items-center gap-2 border-b pb-1 text-sm font-semibold {group.category
+									? ''
+									: 'border-gray-200 text-gray-500 dark:border-gray-700 dark:text-gray-400'}"
 								style:color={group.category ? list.color : undefined}
+								style:border-bottom-color={group.category ? list.color : undefined}
 							>
 								{#if group.category}
 									<Icon name={group.category.icon} class="h-4 w-4" />
 								{/if}
-								<span class={group.category ? '' : 'text-gray-500 dark:text-gray-400'}>
+								<span>
 									{group.category?.name ?? 'Uncategorized'}
 								</span>
 							</h2>
 							<ul class="flex flex-col gap-1">
 								{#each group.items as item (item.id)}
 									<li class="flex items-center gap-2">
-										<Checkbox checked={item.checked} onchange={() => toggleChecked(item)}>
+										<label class="flex flex-1 items-center gap-2">
+											<button
+												type="button"
+												role="checkbox"
+												aria-checked="false"
+												aria-label={item.name}
+												onclick={() => toggleChecked(item)}
+												class="check-glyph flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-gray-300 bg-transparent dark:border-gray-600"
+											></button>
 											<span>{item.name}</span>
 											{#if item.quantity}
 												<span class="text-gray-500 dark:text-gray-400"
 													>(<span>{item.quantity}</span>)</span
 												>
 											{/if}
-										</Checkbox>
+										</label>
 										<div class="ml-auto w-16 print:hidden">
 											<Input
 												size="sm"
 												inputmode="decimal"
 												placeholder="Price"
+												class="font-mono"
 												value={item.price !== null ? (item.price / 100).toFixed(2) : ''}
 												onchange={(event) => {
 													void tagItemPrice(item, (event.target as HTMLInputElement).value);
@@ -458,9 +475,30 @@
 							<ul class="flex flex-col gap-1">
 								{#each checkedItems as item (item.id)}
 									<li class="flex items-center gap-2">
-										<Checkbox checked={item.checked} onchange={() => toggleChecked(item)}>
+										<label class="flex flex-1 items-center gap-2">
+											<button
+												type="button"
+												role="checkbox"
+												aria-checked="true"
+												aria-label={item.name}
+												onclick={() => toggleChecked(item)}
+												class="check-glyph flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-signal bg-signal"
+											>
+												<svg
+													class="h-3.5 w-3.5 text-white"
+													viewBox="0 0 16 16"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2.5"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													aria-hidden="true"
+												>
+													<path d="M3 8.5l3.2 3.2L13 4.5" />
+												</svg>
+											</button>
 											<span class="text-gray-400 line-through">{item.name}</span>
-										</Checkbox>
+										</label>
 										<button
 											type="button"
 											class="ml-auto text-xs text-gray-500 hover:text-red-600 dark:hover:text-red-400"
@@ -472,6 +510,18 @@
 								{/each}
 							</ul>
 						</section>
+					{/if}
+				</div>
+
+				<div
+					class="fixed inset-x-4 z-10 mx-auto flex max-w-lg items-center justify-between rounded-t-xl border border-b-0 border-gray-200 bg-paper px-4 py-2 text-sm shadow-sm dark:border-gray-700 print:hidden"
+					style="bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));"
+				>
+					<span class="text-gray-500 dark:text-gray-400">
+						{progressText}
+					</span>
+					{#if totalCents > 0}
+						<span class="font-mono font-semibold tabular-nums">{totalText}</span>
 					{/if}
 				</div>
 			{/if}
@@ -515,3 +565,25 @@
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 	{/if}
 </main>
+
+<style>
+	@media (prefers-reduced-motion: no-preference) {
+		.check-glyph[aria-checked='true'] svg {
+			animation: check-settle 180ms ease-out;
+		}
+	}
+
+	@keyframes check-settle {
+		0% {
+			transform: scale(0.5);
+			opacity: 0;
+		}
+		60% {
+			transform: scale(1.15);
+			opacity: 1;
+		}
+		100% {
+			transform: scale(1);
+		}
+	}
+</style>
