@@ -50,6 +50,11 @@ export interface ItemDto {
 	version: number;
 }
 
+/** Response for `GET /lists/:listId/items/categorize` — see PHASE7_PLAN.md §3. */
+export interface CategorizeSuggestionDto {
+	categoryId: number | null;
+}
+
 export interface FavoriteItemDto {
 	id: number;
 	userId: number;

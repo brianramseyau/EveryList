@@ -292,6 +292,7 @@ export class ListSchema extends BaseModel {
     'id',
     'name',
     'ownerId',
+    'passcodeHash',
     'updatedAt',
     'version',
   ] as const
@@ -316,6 +317,8 @@ export class ListSchema extends BaseModel {
   declare name: string
   @column()
   declare ownerId: number
+  @column()
+  declare passcodeHash: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()

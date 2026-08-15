@@ -15,7 +15,7 @@ vi.mock('./client', () => ({
 	}
 }));
 
-const { apiPost, apiPatch, apiDelete } = await import('./client');
+const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { createItem, updateItem, deleteItem } = await import('./items');
 
@@ -44,7 +44,21 @@ describe('createItem (Dexie available)', () => {
 		return cached?.categoryId;
 	}
 
-	it('guesses a categoryId from cached categories when none is given explicitly', async () => {
+	it('uses the personalized suggestion from the categorize endpoint when it succeeds', async () => {
+		vi.mocked(apiGet).mockResolvedValue({ categoryId: 77 });
+		let captured: number | null | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			captured = await capturedOptimisticCategoryId();
+			return { id: 42, name: 'Bananas', version: 1 };
+		});
+
+		await createItem(1, { name: 'Bananas' });
+
+		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists/1/items/categorize?name=Bananas');
+		expect(captured).toBe(77);
+	});
+
+	it('falls back to the static keyword table when the categorize endpoint fails (offline)', async () => {
 		const db = getDb()!;
 		await db.categories.put({
 			id: 9,
@@ -58,10 +72,36 @@ describe('createItem (Dexie available)', () => {
 			deletedAt: null,
 			version: 1
 		});
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('Failed to fetch'));
 		let captured: number | null | undefined;
 		vi.mocked(apiPost).mockImplementation(async (...args) => {
 			captured = await capturedOptimisticCategoryId();
 			return { id: 42, name: (args[1] as { name: string }).name, version: 1 };
+		});
+
+		await createItem(1, { name: 'Bananas' });
+
+		expect(captured).toBe(9);
+	});
+
+	it('falls back to a global-default category when no list-scoped match exists', async () => {
+		const db = getDb()!;
+		await db.categories.put({
+			id: 9,
+			name: 'Produce',
+			icon: 'fruit',
+			sortOrder: 0,
+			listId: null,
+			isDefault: true,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		let captured: number | null | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			captured = await capturedOptimisticCategoryId();
+			return { id: 42, name: 'Bananas', version: 1 };
 		});
 
 		await createItem(1, { name: 'Bananas' });

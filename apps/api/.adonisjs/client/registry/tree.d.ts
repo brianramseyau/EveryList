@@ -22,6 +22,14 @@ export interface ApiDefinition {
   metas: {
     show: typeof routes['metas.show']
   }
+  folders: {
+    folders: {
+      index: typeof routes['folders.folders.index']
+      store: typeof routes['folders.folders.store']
+      update: typeof routes['folders.folders.update']
+      destroy: typeof routes['folders.folders.destroy']
+    }
+  }
   lists: {
     lists: {
       index: typeof routes['lists.lists.index']
@@ -40,6 +48,7 @@ export interface ApiDefinition {
     items: {
       index: typeof routes['lists.items.index']
       recent: typeof routes['lists.items.recent']
+      categorize: typeof routes['lists.items.categorize']
       store: typeof routes['lists.items.store']
       import: typeof routes['lists.items.import']
       update: typeof routes['lists.items.update']
@@ -62,6 +71,9 @@ export interface ApiDefinition {
       index: typeof routes['lists.list_members.index']
       update: typeof routes['lists.list_members.update']
       destroy: typeof routes['lists.list_members.destroy']
+    }
+    listExport: {
+      email: typeof routes['lists.list_export.email']
     }
     listInvites: {
       index: typeof routes['lists.list_invites.index']

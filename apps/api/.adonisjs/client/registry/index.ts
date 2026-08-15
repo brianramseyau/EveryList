@@ -42,6 +42,30 @@ const routes = {
     tokens: [{"old":"/api/v1/meta","type":0,"val":"api","end":""},{"old":"/api/v1/meta","type":0,"val":"v1","end":""},{"old":"/api/v1/meta","type":0,"val":"meta","end":""}],
     types: placeholder as Registry['metas.show']['types'],
   },
+  'folders.folders.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/folders',
+    tokens: [{"old":"/api/v1/folders","type":0,"val":"api","end":""},{"old":"/api/v1/folders","type":0,"val":"v1","end":""},{"old":"/api/v1/folders","type":0,"val":"folders","end":""}],
+    types: placeholder as Registry['folders.folders.index']['types'],
+  },
+  'folders.folders.store': {
+    methods: ["POST"],
+    pattern: '/api/v1/folders',
+    tokens: [{"old":"/api/v1/folders","type":0,"val":"api","end":""},{"old":"/api/v1/folders","type":0,"val":"v1","end":""},{"old":"/api/v1/folders","type":0,"val":"folders","end":""}],
+    types: placeholder as Registry['folders.folders.store']['types'],
+  },
+  'folders.folders.update': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/folders/:id',
+    tokens: [{"old":"/api/v1/folders/:id","type":0,"val":"api","end":""},{"old":"/api/v1/folders/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/folders/:id","type":0,"val":"folders","end":""},{"old":"/api/v1/folders/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['folders.folders.update']['types'],
+  },
+  'folders.folders.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/folders/:id',
+    tokens: [{"old":"/api/v1/folders/:id","type":0,"val":"api","end":""},{"old":"/api/v1/folders/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/folders/:id","type":0,"val":"folders","end":""},{"old":"/api/v1/folders/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['folders.folders.destroy']['types'],
+  },
   'lists.lists.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/lists',
@@ -113,6 +137,12 @@ const routes = {
     pattern: '/api/v1/lists/:listId/items/recent',
     tokens: [{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"recent","end":""}],
     types: placeholder as Registry['lists.items.recent']['types'],
+  },
+  'lists.items.categorize': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/lists/:listId/items/categorize',
+    tokens: [{"old":"/api/v1/lists/:listId/items/categorize","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/categorize","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/categorize","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/categorize","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/categorize","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/categorize","type":0,"val":"categorize","end":""}],
+    types: placeholder as Registry['lists.items.categorize']['types'],
   },
   'lists.items.store': {
     methods: ["POST"],
@@ -209,6 +239,12 @@ const routes = {
     pattern: '/api/v1/lists/:listId/members/:memberId',
     tokens: [{"old":"/api/v1/lists/:listId/members/:memberId","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/members/:memberId","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/members/:memberId","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/members/:memberId","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/members/:memberId","type":0,"val":"members","end":""},{"old":"/api/v1/lists/:listId/members/:memberId","type":1,"val":"memberId","end":""}],
     types: placeholder as Registry['lists.list_members.destroy']['types'],
+  },
+  'lists.list_export.email': {
+    methods: ["POST"],
+    pattern: '/api/v1/lists/:listId/export/email',
+    tokens: [{"old":"/api/v1/lists/:listId/export/email","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/export/email","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/export/email","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/export/email","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/export/email","type":0,"val":"export","end":""},{"old":"/api/v1/lists/:listId/export/email","type":0,"val":"email","end":""}],
+    types: placeholder as Registry['lists.list_export.email']['types'],
   },
   'lists.list_invites.index': {
     methods: ["GET","HEAD"],
