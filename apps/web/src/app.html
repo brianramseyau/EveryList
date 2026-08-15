@@ -11,8 +11,9 @@
 		<link rel="manifest" href="/manifest.webmanifest" />
 		<script>
 			// Blocking (non-module) script, runs before first paint, so the app
-			// never flashes the wrong theme. Keep this logic in sync with
-			// getThemePreference()/applyTheme() in src/lib/theme.ts.
+			// never flashes the wrong theme or accent. Keep this logic in sync
+			// with getThemePreference()/applyTheme() in src/lib/theme.ts and
+			// getAccentPreference()/applyAccent() in src/lib/accent.ts.
 			(function () {
 				try {
 					var stored = localStorage.getItem('everylist:theme');
@@ -21,6 +22,16 @@
 					if (isDark) document.documentElement.classList.add('dark');
 				} catch (e) {
 					/* localStorage/matchMedia unavailable (e.g. privacy mode) — fall back to light. */
+				}
+				try {
+					var accent = localStorage.getItem('everylist:accent');
+					var validAccents = ['ocean', 'forest', 'berry', 'sunset'];
+					document.documentElement.setAttribute(
+						'data-accent',
+						validAccents.indexOf(accent) !== -1 ? accent : 'ocean'
+					);
+				} catch (e) {
+					/* localStorage unavailable — fall back to the default Ocean accent. */
 				}
 			})();
 		</script>
