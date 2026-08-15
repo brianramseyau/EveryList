@@ -4,7 +4,7 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
-		<meta name="theme-color" content="#0284c7" />
+		<meta name="theme-color" content="#33404f" />
 		<link rel="manifest" href="/manifest.webmanifest" />
 		<script>
 			// Blocking (non-module) script, runs before first paint, so the app
@@ -22,13 +22,13 @@
 				}
 				try {
 					var accent = localStorage.getItem('everylist:accent');
-					var validAccents = ['ocean', 'forest', 'berry', 'sunset'];
+					var validAccents = ['slate', 'ocean', 'forest', 'berry', 'sunset'];
 					document.documentElement.setAttribute(
 						'data-accent',
-						validAccents.indexOf(accent) !== -1 ? accent : 'ocean'
+						validAccents.indexOf(accent) !== -1 ? accent : 'slate'
 					);
 				} catch (e) {
-					/* localStorage unavailable — fall back to the default Ocean accent. */
+					/* localStorage unavailable — fall back to the default Slate accent. */
 				}
 			})();
 		</script>

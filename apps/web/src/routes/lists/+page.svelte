@@ -95,7 +95,8 @@
 	<li class="flex items-center gap-2">
 		<a
 			href={resolve('/lists/[id]', { id: String(list.id) })}
-			class="flex flex-1 items-center gap-3 rounded-lg border border-gray-200 p-4 hover:border-primary-500 dark:border-gray-700"
+			class="flex flex-1 items-center gap-3 rounded-lg border border-l-4 border-gray-200 p-4 hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:hover:border-gray-600"
+			style:border-left-color={list.color}
 		>
 			<span
 				class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"
@@ -105,8 +106,8 @@
 				<Icon name={list.icon ?? 'formatListChecks'} class="h-5 w-5" />
 			</span>
 			<span class="flex flex-1 flex-col">
-				<span class="font-medium">{list.name}</span>
-				<span class="text-xs text-gray-500 dark:text-gray-400">
+				<span class="font-display font-medium">{list.name}</span>
+				<span class="font-mono text-xs text-gray-600 tabular-nums dark:text-gray-400">
 					<span>{list.itemCount}</span>
 					{list.itemCount === 1 ? 'item' : 'items'}
 				</span>
@@ -168,9 +169,9 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
+		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if lists.length === 0 && folders.length === 0}
-		<p class="text-gray-500 dark:text-gray-400">No lists yet — tap + to create one.</p>
+		<p class="text-gray-600 dark:text-gray-400">No lists yet — tap + to create one.</p>
 	{:else}
 		<div class="flex flex-col gap-6">
 			{#each groups as group (group.folder.id)}
@@ -205,7 +206,7 @@
 			{#if unfiledLists.length > 0}
 				<section>
 					{#if folders.length > 0}
-						<h2 class="mb-2 text-sm font-semibold text-gray-500 dark:text-gray-400">
+						<h2 class="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400">
 							Not in a folder
 						</h2>
 					{/if}

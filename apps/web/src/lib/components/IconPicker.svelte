@@ -114,14 +114,14 @@
 			<Input placeholder="Search icons…" bind:value={search} autofocus />
 
 			{#if loading}
-				<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading icons…</p>
+				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading icons…</p>
 			{:else if matches.length === 0}
-				<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
 					No icons match "<span>{search}</span>".
 				</p>
 			{:else}
 				{#if search.trim().length < 2}
-					<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Popular icons</p>
+					<p class="mt-2 text-xs text-gray-600 dark:text-gray-400">Popular icons</p>
 				{/if}
 				<div
 					bind:this={scrollEl}

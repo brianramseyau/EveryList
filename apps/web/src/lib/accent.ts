@@ -1,7 +1,13 @@
-export type AccentPreference = 'ocean' | 'forest' | 'berry' | 'sunset';
+export type AccentPreference = 'slate' | 'ocean' | 'forest' | 'berry' | 'sunset';
 
 const STORAGE_KEY = 'everylist:accent';
-const VALID_PREFERENCES: readonly AccentPreference[] = ['ocean', 'forest', 'berry', 'sunset'];
+const VALID_PREFERENCES: readonly AccentPreference[] = [
+	'slate',
+	'ocean',
+	'forest',
+	'berry',
+	'sunset'
+];
 
 /** Guards every browser API access — this module runs during prerendering
  * (Node, no `window`) as well as in the browser, like $lib/theme.ts. */
@@ -14,9 +20,9 @@ function isAccentPreference(value: string | null): value is AccentPreference {
 }
 
 export function getAccentPreference(): AccentPreference {
-	if (!hasWindow()) return 'ocean';
+	if (!hasWindow()) return 'slate';
 	const stored = window.localStorage.getItem(STORAGE_KEY);
-	return isAccentPreference(stored) ? stored : 'ocean';
+	return isAccentPreference(stored) ? stored : 'slate';
 }
 
 /** See routes/layout.css's [data-accent='...'] blocks — the palette itself

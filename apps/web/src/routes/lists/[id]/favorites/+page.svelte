@@ -121,9 +121,9 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
+		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if favorites.length === 0}
-		<p class="text-gray-500 dark:text-gray-400">No favorites yet — add one above.</p>
+		<p class="text-gray-600 dark:text-gray-400">No favorites yet — add one above.</p>
 	{:else}
 		<ul class="flex flex-col gap-2">
 			{#each favorites as favorite (favorite.id)}
@@ -132,7 +132,7 @@
 				>
 					<span>{favorite.name}</span>
 					{#if favorite.defaultQuantity}
-						<span class="text-gray-500 dark:text-gray-400"
+						<span class="text-gray-600 dark:text-gray-400"
 							>(<span>{favorite.defaultQuantity}</span>)</span
 						>
 					{/if}

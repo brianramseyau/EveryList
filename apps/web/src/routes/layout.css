@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '../lib/fonts.css';
 
 /* Class-based dark mode: toggled by adding/removing `.dark` on <html> (see
    $lib/theme.ts), instead of Tailwind's default bare `prefers-color-scheme`
@@ -18,14 +19,44 @@
 /* flowbite-svelte components (Button, Input focus rings, links, ...) are
    styled entirely with `primary-*` classes and expect the consuming app to
    define that palette — Tailwind v4 ships no color named "primary" out of
-   the box. The values declared here (Ocean, the app icon's original
-   cyan/sky gradient) are both the @theme default *and* the values Tailwind's
-   generated `bg-primary-*` etc. utilities read at runtime through
-   var(--color-primary-*) — so the [data-accent='...'] blocks below, which
-   plain-CSS-override the same custom properties for a non-default accent,
-   re-theme every component with zero component-level changes. See
-   $lib/accent.ts and PHASE7_PLAN.md §4. */
+   the box. The values declared here (Slate, the app's default brand/chrome
+   color — see PHASE8_PLAN.md "The Index") are both the @theme default *and*
+   the values Tailwind's generated `bg-primary-*` etc. utilities read at
+   runtime through var(--color-primary-*) — so the [data-accent='...']
+   blocks below, which plain-CSS-override the same custom properties for a
+   non-default accent, re-theme every component with zero component-level
+   changes. See $lib/accent.ts and PHASE7_PLAN.md §4.
+
+   Slate is deliberately quiet: it's used for UI chrome only (buttons, nav,
+   links) so it never competes with a list's own user-chosen `list.color`,
+   which is the app's real source of visual personality (PHASE8_PLAN.md). */
 @theme {
+	--color-paper: #f6f5f1;
+	--color-ink: #201f1d;
+	--color-signal: #2e8b57;
+
+	--color-primary-50: #f1f3f6;
+	--color-primary-100: #dfe3ea;
+	--color-primary-200: #c1c9d6;
+	--color-primary-300: #9aa7bc;
+	--color-primary-400: #6c7c97;
+	--color-primary-500: #3e4c63;
+	--color-primary-600: #33404f;
+	--color-primary-700: #293240;
+	--color-primary-800: #212831;
+	--color-primary-900: #191e25;
+	--color-primary-950: #101318;
+
+	--font-display: 'Space Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-sans: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+}
+
+/* The app's original default palette (the app icon's cyan/sky gradient),
+   now a selectable accent alongside Forest/Berry/Sunset rather than the
+   default — see the 'slate' pseudo-accent in $lib/accent.ts for how users
+   get back to the base Slate tokens above. */
+[data-accent='ocean'] {
 	--color-primary-50: #f0f9ff;
 	--color-primary-100: #e0f2fe;
 	--color-primary-200: #bae6fd;
@@ -87,16 +118,23 @@
    theme. */
 :root {
 	color-scheme: light;
+	/* BottomNav.svelte's fixed-height content (icon + label + py-2) — a
+	   single source of truth so other fixed-positioned UI (e.g. the list
+	   progress strip) can stack directly above it without a hardcoded
+	   duplicate number. */
+	--bottom-nav-h: 4rem;
 }
 
 :root.dark {
 	color-scheme: dark;
+	--color-paper: #1b1d1f;
+	--color-ink: #edeae3;
 }
 
 html {
-	background-color: #fff;
+	background-color: #f6f5f1;
 }
 
 html.dark {
-	background-color: #111827;
+	background-color: #1b1d1f;
 }

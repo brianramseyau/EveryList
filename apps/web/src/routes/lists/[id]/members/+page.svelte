@@ -125,7 +125,7 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
+		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if list}
 		<section class="flex flex-col gap-2">
 			<h2 class="text-sm font-semibold">Members</h2>
@@ -136,7 +136,7 @@
 					>
 						<div class="flex flex-col">
 							<span>{member.user.fullName ?? member.user.email}</span>
-							<span class="text-xs text-gray-500 dark:text-gray-400">{member.user.email}</span>
+							<span class="text-xs text-gray-600 dark:text-gray-400">{member.user.email}</span>
 						</div>
 						<div class="ml-auto flex items-center gap-2">
 							{#if isOwner && member.role !== 'owner'}
@@ -159,7 +159,7 @@
 									Remove
 								</button>
 							{:else}
-								<span class="text-sm text-gray-500 capitalize dark:text-gray-400"
+								<span class="text-sm text-gray-600 capitalize dark:text-gray-400"
 									>{member.role}</span
 								>
 							{/if}
@@ -196,7 +196,7 @@
 								class="flex items-center gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700"
 							>
 								<span class="capitalize">{invite.role}</span>
-								<span class="text-gray-500 dark:text-gray-400">invite</span>
+								<span class="text-gray-600 dark:text-gray-400">invite</span>
 								<button
 									type="button"
 									class="ml-auto text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"

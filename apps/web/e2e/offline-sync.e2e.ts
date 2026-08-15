@@ -27,7 +27,7 @@ test('adds an item while offline and syncs it once back online', async ({ page }
 	await page.getByPlaceholder('List name').fill('Camping Trip');
 	await page.getByRole('button', { name: 'Save' }).click();
 	await page.getByRole('link', { name: /Camping Trip/ }).click();
-	await expect(page.getByText('No items yet — add one above.')).toBeVisible();
+	await expect(page.getByText('Nothing here yet. Add your first item above.')).toBeVisible();
 
 	await page.context().setOffline(true);
 

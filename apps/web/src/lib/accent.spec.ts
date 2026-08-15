@@ -5,8 +5,8 @@ import { applyAccent, getAccentPreference, initAccent, setAccentPreference } fro
 // the SSR/prerendering guard on every export. See accent.svelte.spec.ts for
 // the real browser/localStorage behavior.
 describe('accent (no window)', () => {
-	it('getAccentPreference defaults to ocean', () => {
-		expect(getAccentPreference()).toBe('ocean');
+	it('getAccentPreference defaults to slate', () => {
+		expect(getAccentPreference()).toBe('slate');
 	});
 
 	it('applyAccent, setAccentPreference, and initAccent are no-ops without throwing', () => {

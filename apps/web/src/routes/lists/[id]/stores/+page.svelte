@@ -98,7 +98,7 @@
 	/>
 
 	{#if loading}
-		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
+		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if list}
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			Pick the store you're shopping at so categories match its aisle layout. This choice is only
@@ -118,7 +118,7 @@
 		{/if}
 
 		{#if stores.length === 0}
-			<p class="text-gray-500 dark:text-gray-400">No stores yet — add one above.</p>
+			<p class="text-gray-600 dark:text-gray-400">No stores yet — add one above.</p>
 		{:else}
 			<ul class="flex flex-col gap-2">
 				<li>

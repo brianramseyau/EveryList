@@ -50,7 +50,7 @@
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 
-<div class="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+<div class="min-h-screen bg-paper text-ink">
 	<div class={showNav ? 'pb-16' : ''}>
 		{@render children()}
 	</div>

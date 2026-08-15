@@ -90,7 +90,7 @@
 	/>
 
 	{#if loading}
-		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
+		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if list}
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			Reorder categories to match this store's real aisle layout. Everyone who shops at "{storeName}"
