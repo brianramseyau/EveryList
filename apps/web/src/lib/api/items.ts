@@ -132,6 +132,7 @@ export async function updateItem(
 		storeId: number | null;
 		price: number | null;
 		checked: boolean;
+		sortOrder: number;
 	}>
 ): Promise<ItemDto | void> {
 	return offlineMutate<ItemDto>({
