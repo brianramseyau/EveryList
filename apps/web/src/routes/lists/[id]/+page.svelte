@@ -4,20 +4,12 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Input, Select, Textarea } from 'flowbite-svelte';
+	import { Input, Select } from 'flowbite-svelte';
 	import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { deleteList, fetchList, updateList } from '$lib/api/lists';
+	import { fetchList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
-	import {
-		createItem,
-		deleteItem,
-		fetchItems,
-		fetchRecentItems,
-		importItems,
-		restoreItem,
-		updateItem
-	} from '$lib/api/items';
+	import { createItem, deleteItem, fetchItems, updateItem } from '$lib/api/items';
 	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
 	import { getSelectedStore } from '$lib/api/selected-store';
 	import { isRowDirty } from '$lib/offline/db';
@@ -25,8 +17,9 @@
 	import { subscribeToList } from '$lib/realtime';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import { isListUnlocked } from '$lib/passcode';
+	import { pressHoldReorder } from '$lib/actions/press-hold-reorder';
+	import { swipeReveal } from '$lib/actions/swipe-reveal';
 	import Icon from '$lib/components/Icon.svelte';
-	import ListMenu from '$lib/components/ListMenu.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PasscodeGate from '$lib/components/PasscodeGate.svelte';
 	import SyncToast from '$lib/components/SyncToast.svelte';
@@ -43,19 +36,20 @@
 	let error = $state<string | null>(null);
 
 	let newItemName = $state('');
-	let newItemQuantity = $state('');
 	let adding = $state(false);
 
-	let importText = $state('');
-	let importOpen = $state(false);
-	let importing = $state(false);
-
-	let recentItems = $state<ItemDto[]>([]);
-	let recentOpen = $state(false);
-	let loadingRecent = $state(false);
+	// Checked items stay under their category header instead of moving to a
+	// separate section (PHASE9_PLAN.md #3) — this toggle controls whether
+	// they're visible at all, defaulting to shown.
+	let showChecked = $state(true);
 
 	let syncToastVisible = $state(false);
 	let unsubscribeRealtime: (() => void) | null = null;
+
+	// Coarse (touch) pointers get the swipe-to-delete gesture; fine pointers
+	// (mouse/trackpad) get a static "×" fallback instead (PHASE9_PLAN.md #9)
+	// — checked once on mount since input capability doesn't change mid-session.
+	let isCoarsePointer = $state(false);
 
 	// Store-specific aisle order, if the shopper has picked a store for this
 	// list on this device — purely local, see $lib/api/selected-store.ts.
@@ -68,10 +62,15 @@
 	const groups = $derived.by(() => {
 		const byCategory = new SvelteMap<number | null, ItemDto[]>();
 		for (const item of visibleItems) {
-			if (item.checked) continue;
+			if (item.checked && !showChecked) continue;
 			const key = item.categoryId;
 			if (!byCategory.has(key)) byCategory.set(key, []);
 			byCategory.get(key)!.push(item);
+		}
+		// Checked items sink to the bottom of their own category's list,
+		// unchecked items keep their relative order above them.
+		for (const bucket of byCategory.values()) {
+			bucket.sort((a, b) => Number(a.checked) - Number(b.checked));
 		}
 
 		const orderedCategories = [...categories].sort((a, b) => {
@@ -91,6 +90,16 @@
 	});
 
 	const checkedItems = $derived(visibleItems.filter((item) => item.checked));
+
+	// Flat, cross-category index of each item as currently rendered — drag
+	// targets are computed against this single flat ordering (PHASE9_PLAN.md
+	// #7), so dragging past a category's last row naturally crosses into the
+	// next section.
+	const flatIndexById = $derived.by(() => {
+		const map = new SvelteMap<number, number>();
+		groups.flatMap((group) => group.items).forEach((item, index) => map.set(item.id, index));
+		return map;
+	});
 
 	const totalCents = $derived(visibleItems.reduce((sum, item) => sum + (item.price ?? 0), 0));
 
@@ -136,6 +145,7 @@
 			void goto(resolve('/login'));
 			return;
 		}
+		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		void loadAll();
 		unsubscribeRealtime = subscribeToList(listId, (event) => {
 			// An unacked local edit on this exact row means the eventual flush response is
@@ -155,65 +165,18 @@
 		void loadAll();
 	}
 
-	async function handleListUpdate(
-		input: Partial<{
-			name: string;
-			color: string;
-			icon: string | null;
-			archived: boolean;
-			badgeExcluded: boolean;
-			passcodeHash: string | null;
-		}>
-	) {
-		try {
-			list = await updateList(listId, input);
-			void refreshBadgeCount();
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to update list.';
-		}
-	}
-
-	async function handleListDelete() {
-		try {
-			await deleteList(listId);
-			await goto(resolve('/lists'));
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to delete list.';
-		}
-	}
-
 	async function handleAddItem(event: SubmitEvent) {
 		event.preventDefault();
 		if (!newItemName.trim()) return;
 		adding = true;
 		try {
-			const item = await createItem(listId, {
-				name: newItemName.trim(),
-				quantity: newItemQuantity.trim() || null
-			});
+			const item = await createItem(listId, { name: newItemName.trim() });
 			items = [...items, item];
 			newItemName = '';
-			newItemQuantity = '';
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to add item.';
 		} finally {
 			adding = false;
-		}
-	}
-
-	async function handleImport(event: SubmitEvent) {
-		event.preventDefault();
-		if (!importText.trim()) return;
-		importing = true;
-		try {
-			const imported = await importItems(listId, importText);
-			items = [...items, ...imported];
-			importText = '';
-			importOpen = false;
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to import items.';
-		} finally {
-			importing = false;
 		}
 	}
 
@@ -255,41 +218,91 @@
 		}
 	}
 
-	async function removeItem(item: ItemDto) {
-		items = items.filter((current) => current.id !== item.id);
+	let itemsContainerEl: HTMLDivElement | undefined = $state();
+	let dragOriginItemId: number | null = null;
+
+	function getItemRects(): DOMRect[] {
+		// Only reachable before the item list has ever rendered — the drag
+		// handles this feeds don't exist yet either, so it can't be exercised.
+		/* v8 ignore next */
+		if (!itemsContainerEl) return [];
+		return [...itemsContainerEl.querySelectorAll('li')].map((el) => el.getBoundingClientRect());
+	}
+
+	function handleItemDragStart(itemId: number) {
+		dragOriginItemId = itemId;
+	}
+
+	// Reassigns categoryId as soon as the drag crosses into a different
+	// section, so the item visually moves into that category immediately
+	// rather than only on drop — matching AnyList's drag-to-recategorize.
+	function handleItemDragMove(toIndex: number) {
+		// onmove only ever fires after onstart already set this — see
+		// press-hold-reorder.ts's `startDragging`/`handlePointerMove`.
+		/* v8 ignore next */
+		if (dragOriginItemId === null) return;
+		const flat = groups.flatMap((group) => group.items);
+		const fromIndex = flat.findIndex((current) => current.id === dragOriginItemId);
+		// fromIndex is -1 only if the dragged item vanished from `items`
+		// mid-drag (e.g. a concurrent remove) — not reachable through the
+		// drag gesture itself.
+		/* v8 ignore next */
+		if (fromIndex === -1) return;
+		if (toIndex === fromIndex) return;
+
+		const draggedItem = flat[fromIndex]!;
+		const targetNeighbor = flat[toIndex];
+		const targetCategoryId = targetNeighbor
+			? targetNeighbor.categoryId
+			: (groups.at(-1)?.category?.id ?? null);
+
+		const updated: ItemDto =
+			draggedItem.categoryId === targetCategoryId
+				? draggedItem
+				: { ...draggedItem, categoryId: targetCategoryId };
+
+		const withoutDragged = items.filter((current) => current.id !== dragOriginItemId);
+		const neighborIndexInItems = targetNeighbor
+			? withoutDragged.findIndex((current) => current.id === targetNeighbor.id)
+			: -1;
+		const insertAt = neighborIndexInItems === -1 ? withoutDragged.length : neighborIndexInItems;
+		withoutDragged.splice(insertAt, 0, updated);
+		items = withoutDragged;
+	}
+
+	async function handleItemDrop() {
+		// ondrop only ever fires after onstart already set this.
+		/* v8 ignore next */
+		if (dragOriginItemId === null) return;
+		const draggedId = dragOriginItemId;
+		dragOriginItemId = null;
+
+		const flat = groups.flatMap((group) => group.items);
+		const finalIndex = flat.findIndex((current) => current.id === draggedId);
+		const finalItem = flat[finalIndex];
+		// The dragged item is always still in `flat` at drop time — same
+		// invariant as the fromIndex/-1 guard above.
+		/* v8 ignore next */
+		if (!finalItem) return;
+
 		try {
-			await deleteItem(listId, item.id);
-			if (recentOpen) recentItems = [item, ...recentItems];
+			await updateItem(listId, draggedId, {
+				categoryId: finalItem.categoryId,
+				sortOrder: finalIndex
+			});
 		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to delete item.';
+			error = err instanceof ApiError ? err.message : 'Failed to reorder item.';
 			void loadAll();
 		}
 	}
 
-	async function loadRecent() {
-		loadingRecent = true;
+	async function removeItem(item: ItemDto) {
+		items = items.filter((current) => current.id !== item.id);
 		try {
-			recentItems = await fetchRecentItems(listId);
+			await deleteItem(listId, item.id);
 		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to load recently deleted items.';
-		} finally {
-			loadingRecent = false;
-		}
-	}
-
-	function toggleRecent() {
-		recentOpen = !recentOpen;
-		if (recentOpen) void loadRecent();
-	}
-
-	async function restoreRecentItem(item: ItemDto) {
-		recentItems = recentItems.filter((current) => current.id !== item.id);
-		try {
-			const restored = await restoreItem(listId, item.id);
-			items = [...items, restored];
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to restore item.';
-			void loadRecent();
+			error = err instanceof ApiError ? err.message : 'Failed to delete item.';
+			void loadAll();
 		}
 	}
 </script>
@@ -309,13 +322,26 @@
 				<Icon name="heart" class="h-5 w-5" />
 			</a>
 			<a
+				href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
+				aria-label="Recently deleted"
+				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+			>
+				<Icon name="history" class="h-5 w-5" />
+			</a>
+			<a
 				href={resolve('/lists/[id]/stores', { id: String(listId) })}
 				aria-label="Stores"
 				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
 			>
 				<Icon name="store" class="h-5 w-5" />
 			</a>
-			<ListMenu {listId} {list} onupdate={handleListUpdate} ondelete={handleListDelete} />
+			<a
+				href={resolve('/lists/[id]/settings', { id: String(listId) })}
+				aria-label="List settings"
+				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+			>
+				<Icon name="cog" class="h-5 w-5" />
+			</a>
 		{/snippet}
 	</PageHeader>
 
@@ -333,36 +359,34 @@
 		{#if list.passcodeHash && !unlocked}
 			<PasscodeGate {list} onunlock={() => (unlocked = true)} />
 		{:else}
-			<form class="flex gap-2 print:hidden" onsubmit={handleAddItem}>
+			<form class="group flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
+				<a
+					href={resolve('/lists/[id]/import', { id: String(listId) })}
+					aria-label="Paste in a list"
+					class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 group-focus-within:hidden dark:text-gray-400"
+				>
+					<Icon name="clipboardText" class="h-5 w-5" />
+				</a>
+				<button
+					type="button"
+					aria-label={showChecked ? 'Hide checked items' : 'Show checked items'}
+					onclick={() => (showChecked = !showChecked)}
+					class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 group-focus-within:hidden dark:text-gray-400"
+				>
+					<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
+				</button>
 				<div class="flex-1">
 					<Input placeholder="Item name" bind:value={newItemName} />
 				</div>
-				<div class="w-24">
-					<Input placeholder="Qty" bind:value={newItemQuantity} />
-				</div>
-				<Button type="submit" disabled={adding || !newItemName.trim()}>Add</Button>
+				<button
+					type="submit"
+					aria-label="Add item"
+					disabled={adding || !newItemName.trim()}
+					class="flex h-11 w-11 shrink-0 items-center justify-center text-primary-600 disabled:opacity-30 dark:text-primary-400"
+				>
+					<Icon name="plusCircle" class="h-7 w-7" />
+				</button>
 			</form>
-
-			<button
-				type="button"
-				class="self-start text-sm text-primary-700 underline dark:text-primary-400 print:hidden"
-				onclick={() => (importOpen = !importOpen)}
-			>
-				{importOpen ? 'Cancel paste import' : 'Paste in a list…'}
-			</button>
-
-			{#if importOpen}
-				<form class="flex flex-col gap-2 print:hidden" onsubmit={handleImport}>
-					<Textarea
-						bind:value={importText}
-						rows={4}
-						placeholder="One item per line, e.g. Milk, Bread, Eggs"
-					/>
-					<Button type="submit" disabled={importing || !importText.trim()} class="self-start"
-						>{importing ? 'Importing…' : 'Import items'}</Button
-					>
-				</form>
-			{/if}
 
 			{#if error}
 				<p class="text-sm text-red-600 dark:text-red-400 print:hidden">{error}</p>
@@ -393,7 +417,7 @@
 					</p>
 				</div>
 			{:else}
-				<div class="flex flex-col gap-6 pb-16">
+				<div class="flex flex-col gap-6 pb-16" bind:this={itemsContainerEl}>
 					{#each groups as group (group.category?.id ?? 'uncategorized')}
 						<section>
 							<h2
@@ -412,105 +436,121 @@
 							</h2>
 							<ul class="flex flex-col gap-1">
 								{#each group.items as item (item.id)}
-									<li class="flex items-center gap-2">
-										<label class="flex flex-1 items-center gap-2">
+									<li class="relative overflow-hidden rounded-lg">
+										<div
+											class="absolute inset-y-0 right-0 flex w-20 items-center justify-center bg-red-600 text-white print:hidden"
+											aria-hidden="true"
+										>
+											<Icon name="trashCanOutline" class="h-5 w-5" />
+										</div>
+										<div
+											class="relative flex items-center gap-2 bg-paper"
+											style="touch-action: pan-y;"
+											use:swipeReveal={{
+												disabled: !isCoarsePointer,
+												ondelete: () => removeItem(item)
+											}}
+										>
 											<button
 												type="button"
 												role="checkbox"
-												aria-checked="false"
+												aria-checked={item.checked}
 												aria-label={item.name}
 												onclick={() => toggleChecked(item)}
-												class="check-glyph flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-gray-300 bg-transparent dark:border-gray-600"
-											></button>
-											<span>{item.name}</span>
-											{#if item.quantity}
-												<span class="text-gray-600 dark:text-gray-400"
-													>(<span>{item.quantity}</span>)</span
-												>
+												class="check-glyph flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 {item.checked
+													? 'border-signal bg-signal'
+													: 'border-gray-300 bg-transparent dark:border-gray-600'}"
+											>
+												{#if item.checked}
+													<svg
+														class="h-3.5 w-3.5 text-white"
+														viewBox="0 0 16 16"
+														fill="none"
+														stroke="currentColor"
+														stroke-width="2.5"
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														aria-hidden="true"
+													>
+														<path d="M3 8.5l3.2 3.2L13 4.5" />
+													</svg>
+												{/if}
+											</button>
+											<a
+												href={resolve('/lists/[id]/items/[itemId]', {
+													id: String(listId),
+													itemId: String(item.id)
+												})}
+												class="flex flex-1 items-center gap-2"
+											>
+												<span class={item.checked ? 'text-gray-400 line-through' : ''}>
+													{item.name}
+												</span>
+												{#if item.quantity}
+													<span class="text-gray-600 dark:text-gray-400"
+														>(<span>{item.quantity}</span>)</span
+													>
+												{/if}
+											</a>
+											{#if !item.checked}
+												<div class="ml-auto w-16 print:hidden">
+													<Input
+														size="sm"
+														inputmode="decimal"
+														placeholder="Price"
+														class="font-mono"
+														value={item.price !== null ? (item.price / 100).toFixed(2) : ''}
+														onchange={(event) => {
+															void tagItemPrice(item, (event.target as HTMLInputElement).value);
+														}}
+													/>
+												</div>
+												{#if stores.length > 0}
+													<div class="w-32 print:hidden">
+														<Select
+															size="sm"
+															items={stores.map((store) => ({ value: store.id, name: store.name }))}
+															placeholder="No store"
+															clearable
+															value={item.storeId ?? ''}
+															onchange={(event) => {
+																const raw = (event.target as HTMLSelectElement).value;
+																void tagItemStore(item, raw === '' ? null : Number(raw));
+															}}
+														/>
+													</div>
+												{/if}
 											{/if}
-										</label>
-										<div class="ml-auto w-16 print:hidden">
-											<Input
-												size="sm"
-												inputmode="decimal"
-												placeholder="Price"
-												class="font-mono"
-												value={item.price !== null ? (item.price / 100).toFixed(2) : ''}
-												onchange={(event) => {
-													void tagItemPrice(item, (event.target as HTMLInputElement).value);
+											<button
+												type="button"
+												aria-label={`Drag to reorder ${item.name}`}
+												class="ml-auto flex h-11 w-11 shrink-0 touch-none items-center justify-center text-gray-400 print:hidden"
+												use:pressHoldReorder={{
+													index: flatIndexById.get(item.id)!,
+													getItemRects,
+													onstart: () => handleItemDragStart(item.id),
+													onmove: handleItemDragMove,
+													ondrop: handleItemDrop
 												}}
-											/>
+											>
+												<Icon name="dragVertical" class="h-5 w-5" />
+											</button>
+											{#if !isCoarsePointer}
+												<button
+													type="button"
+													aria-label={`Delete ${item.name}`}
+													class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-red-600 dark:hover:text-red-400 print:hidden"
+													onclick={() => removeItem(item)}
+												>
+													<Icon name="close" class="h-5 w-5" />
+												</button>
+											{/if}
 										</div>
-										{#if stores.length > 0}
-											<div class="w-32 print:hidden">
-												<Select
-													size="sm"
-													items={stores.map((store) => ({ value: store.id, name: store.name }))}
-													placeholder="No store"
-													clearable
-													value={item.storeId ?? ''}
-													onchange={(event) => {
-														const raw = (event.target as HTMLSelectElement).value;
-														void tagItemStore(item, raw === '' ? null : Number(raw));
-													}}
-												/>
-											</div>
-										{/if}
-										<button
-											type="button"
-											class="text-xs text-gray-600 hover:text-red-600 dark:hover:text-red-400 print:hidden"
-											onclick={() => removeItem(item)}
-										>
-											Remove
-										</button>
 									</li>
 								{/each}
 							</ul>
 						</section>
 					{/each}
-
-					{#if checkedItems.length > 0}
-						<section>
-							<h2 class="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400">Checked</h2>
-							<ul class="flex flex-col gap-1">
-								{#each checkedItems as item (item.id)}
-									<li class="flex items-center gap-2">
-										<label class="flex flex-1 items-center gap-2">
-											<button
-												type="button"
-												role="checkbox"
-												aria-checked="true"
-												aria-label={item.name}
-												onclick={() => toggleChecked(item)}
-												class="check-glyph flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-signal bg-signal"
-											>
-												<svg
-													class="h-3.5 w-3.5 text-white"
-													viewBox="0 0 16 16"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2.5"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													aria-hidden="true"
-												>
-													<path d="M3 8.5l3.2 3.2L13 4.5" />
-												</svg>
-											</button>
-											<span class="text-gray-400 line-through">{item.name}</span>
-										</label>
-										<button
-											type="button"
-											class="ml-auto text-xs text-gray-600 hover:text-red-600 dark:hover:text-red-400"
-											onclick={() => removeItem(item)}
-										>
-											Remove
-										</button>
-									</li>
-								{/each}
-							</ul>
-						</section>
-					{/if}
 				</div>
 
 				<div
@@ -525,39 +565,6 @@
 					{/if}
 				</div>
 			{/if}
-
-			<div class="print:hidden">
-				<button
-					type="button"
-					class="text-sm text-primary-700 underline dark:text-primary-400"
-					onclick={toggleRecent}
-				>
-					{recentOpen ? 'Hide recently deleted' : 'Show recently deleted'}
-				</button>
-
-				{#if recentOpen}
-					{#if loadingRecent}
-						<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading…</p>
-					{:else if recentItems.length === 0}
-						<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Nothing recently deleted.</p>
-					{:else}
-						<ul class="mt-2 flex flex-col gap-1">
-							{#each recentItems as item (item.id)}
-								<li class="flex items-center gap-2 text-sm">
-									<span class="text-gray-600 dark:text-gray-400">{item.name}</span>
-									<button
-										type="button"
-										class="ml-auto text-primary-700 underline dark:text-primary-400"
-										onclick={() => restoreRecentItem(item)}
-									>
-										Restore
-									</button>
-								</li>
-							{/each}
-						</ul>
-					{/if}
-				{/if}
-			</div>
 		{/if}
 	{:else}
 		<!-- Reachable only once loadAll's finally has run: loading is false, and

@@ -109,7 +109,7 @@
 					<div class="flex flex-col">
 						<button
 							type="button"
-							class="text-gray-400 hover:text-gray-700 disabled:opacity-30 dark:hover:text-gray-200"
+							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30 dark:hover:text-gray-200"
 							disabled={index === 0 || reordering}
 							onclick={() => move(index, -1)}
 							aria-label="Move up"
@@ -118,7 +118,7 @@
 						</button>
 						<button
 							type="button"
-							class="text-gray-400 hover:text-gray-700 disabled:opacity-30 dark:hover:text-gray-200"
+							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30 dark:hover:text-gray-200"
 							disabled={index === orderedCategories.length - 1 || reordering}
 							onclick={() => move(index, 1)}
 							aria-label="Move down"

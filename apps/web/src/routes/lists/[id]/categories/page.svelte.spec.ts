@@ -1,8 +1,14 @@
 import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import type { CategoryDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
+import { HOLD_MS } from '$lib/actions/press-hold-reorder';
+
+function delay(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -283,49 +289,134 @@ describe('Categories +page.svelte', () => {
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 	});
 
-	it('reorders categories by moving the second one up', async () => {
+	function dragHandles() {
+		return page.getByRole('button', { name: /^Drag to reorder/ });
+	}
+
+	async function dragFirstBelowSecond() {
+		const handles = dragHandles();
+		const first = handles.first().element();
+		const second = handles.nth(1).element();
+		const secondRect = second.closest('li')!.getBoundingClientRect();
+
+		first.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		first.dispatchEvent(
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: secondRect.top + secondRect.height + 1
+			})
+		);
+		first.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: secondRect.top + secondRect.height + 1
+			})
+		);
+	}
+
+	it('reorders categories by dragging the first one below the second', async () => {
 		vi.mocked(reorderCategories).mockResolvedValue([custom, produce]);
 
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		const upButtons = page.getByRole('button', { name: 'Move up' });
-		await upButtons.nth(1).click();
+		await dragFirstBelowSecond();
 
+		await expect.poll(() => vi.mocked(reorderCategories).mock.calls.length).toBe(1);
 		expect(reorderCategories).toHaveBeenCalledWith(1, [11, 10]);
 	});
 
-	it('reorders categories by moving the first one down', async () => {
+	it('reorders categories by dragging the second one above the first', async () => {
 		vi.mocked(reorderCategories).mockResolvedValue([custom, produce]);
 
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		const downButtons = page.getByRole('button', { name: 'Move down' });
-		await downButtons.nth(0).click();
+		const handles = dragHandles();
+		const first = handles.first().element();
+		const second = handles.nth(1).element();
+		const firstRect = first.closest('li')!.getBoundingClientRect();
 
+		second.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		second.dispatchEvent(
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: firstRect.top
+			})
+		);
+		second.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: firstRect.top
+			})
+		);
+
+		await expect.poll(() => vi.mocked(reorderCategories).mock.calls.length).toBe(1);
 		expect(reorderCategories).toHaveBeenCalledWith(1, [11, 10]);
 	});
 
-	it('does not reorder past the top or bottom of the list', async () => {
-		// Move up/down are already disabled at the boundary, but move() has
-		// its own bounds guard, reachable via a raw click that bypasses the
-		// disabled attribute.
+	it('does not reorder while a drag never crosses into a new position', async () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		page
-			.getByRole('button', { name: 'Move up' })
-			.first()
-			.element()
-			.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-		page
-			.getByRole('button', { name: 'Move down' })
-			.nth(1)
-			.element()
-			.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		const first = dragHandles().first().element();
+		first.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		// Pointer stays over the same (first) slot — onmove still fires, but
+		// with toIndex === fromIndex.
+		first.dispatchEvent(
+			new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		first.dispatchEvent(
+			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
 
-		await expect.poll(() => vi.mocked(reorderCategories).mock.calls.length).toBe(0);
+		expect(reorderCategories).not.toHaveBeenCalled();
+	});
+
+	it('disables the drag handles while a reorder is in flight', async () => {
+		let resolveReorder!: (value: CategoryDto[]) => void;
+		vi.mocked(reorderCategories).mockReturnValue(
+			new Promise((resolve) => {
+				resolveReorder = resolve;
+			})
+		);
+
+		render(CategoriesPage);
+		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+
+		await dragFirstBelowSecond();
+
+		await expect.element(dragHandles().first()).toBeDisabled();
+		resolveReorder([custom, produce]);
+	});
+
+	it('labels each drag handle with the category it reorders', async () => {
+		render(CategoriesPage);
+		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+
+		await expect
+			.element(page.getByRole('button', { name: 'Drag to reorder Produce' }))
+			.toBeInTheDocument();
+		await expect
+			.element(page.getByRole('button', { name: 'Drag to reorder Pet Supplies' }))
+			.toBeInTheDocument();
 	});
 
 	it('reloads the list when reordering fails without an ApiError', async () => {
@@ -334,10 +425,9 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Move up' }).nth(1).click();
+		await dragFirstBelowSecond();
 
 		await expect.poll(() => vi.mocked(fetchCategories).mock.calls.length).toBe(2);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 	});
 
 	it('reloads the list when reordering fails with an ApiError', async () => {
@@ -346,9 +436,8 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Move up' }).nth(1).click();
+		await dragFirstBelowSecond();
 
 		await expect.poll(() => vi.mocked(fetchCategories).mock.calls.length).toBe(2);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 	});
 });

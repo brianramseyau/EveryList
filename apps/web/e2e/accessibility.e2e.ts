@@ -32,7 +32,7 @@ test('list detail page has no automatically-detectable accessibility violations'
 	// rather than creating another, so this page has real content on it.
 	await page.getByRole('link', { name: /Groceries/ }).click();
 	await page.getByPlaceholder('Item name').fill('Milk');
-	await page.getByRole('button', { name: 'Add' }).click();
+	await page.getByRole('button', { name: 'Add item' }).click();
 	await expect(page.getByText('Milk')).toBeVisible();
 
 	const results = await new AxeBuilder({ page }).analyze();

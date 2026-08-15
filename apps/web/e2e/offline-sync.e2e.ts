@@ -23,7 +23,8 @@ test('adds an item while offline and syncs it once back online', async ({ page }
 
 	// Signup already seeds a starter "Groceries" list (see PLAN.md's Phase 2
 	// status note) — a distinct name avoids ambiguous locator matches.
-	await page.getByRole('link', { name: 'New list' }).click();
+	await page.getByRole('button', { name: 'Create' }).click();
+	await page.getByRole('link', { name: 'Create List' }).click();
 	await page.getByPlaceholder('List name').fill('Camping Trip');
 	await page.getByRole('button', { name: 'Save' }).click();
 	await page.getByRole('link', { name: /Camping Trip/ }).click();
@@ -32,7 +33,7 @@ test('adds an item while offline and syncs it once back online', async ({ page }
 	await page.context().setOffline(true);
 
 	await page.getByPlaceholder('Item name').fill('Milk');
-	await page.getByRole('button', { name: 'Add' }).click();
+	await page.getByRole('button', { name: 'Add item' }).click();
 
 	// Optimistic render happens immediately, entirely from the Dexie-backed write path —
 	// no network request has succeeded yet.
