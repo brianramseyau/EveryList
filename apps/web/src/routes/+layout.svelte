@@ -53,9 +53,13 @@
 		{@render children()}
 	</div>
 	{#if showNav}
-		<BottomNav />
+		<div class="print:hidden">
+			<BottomNav />
+		</div>
 	{/if}
 	{#if loggedIn}
-		<SyncStatusBanner />
+		<div class="print:hidden">
+			<SyncStatusBanner />
+		</div>
 	{/if}
 </div>

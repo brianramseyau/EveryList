@@ -8,7 +8,8 @@ vi.mock('./client', () => ({
 }));
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
-const { createList, deleteList, fetchList, fetchLists, updateList } = await import('./lists');
+const { createList, deleteList, emailExportList, fetchList, fetchLists, updateList } =
+	await import('./lists');
 
 describe('lists api', () => {
 	it('fetchLists GETs the collection', () => {
@@ -39,6 +40,13 @@ describe('lists api', () => {
 	it('updateList PATCHes a badgeExcluded toggle', () => {
 		updateList(1, { badgeExcluded: true });
 		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1', { badgeExcluded: true });
+	});
+
+	it('emailExportList POSTs the recipient email', () => {
+		emailExportList(1, 'friend@example.com');
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/export/email', {
+			email: 'friend@example.com'
+		});
 	});
 
 	it('deleteList DELETEs the given id', () => {

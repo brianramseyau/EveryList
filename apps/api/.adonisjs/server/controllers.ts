@@ -10,6 +10,7 @@ export const controllers = {
   Folders: () => import('#controllers/folders_controller'),
   InviteAccept: () => import('#controllers/invite_accept_controller'),
   Items: () => import('#controllers/items_controller'),
+  ListExport: () => import('#controllers/list_export_controller'),
   ListInvites: () => import('#controllers/list_invites_controller'),
   ListMembers: () => import('#controllers/list_members_controller'),
   Lists: () => import('#controllers/lists_controller'),

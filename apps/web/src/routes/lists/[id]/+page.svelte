@@ -89,9 +89,7 @@
 
 	const checkedItems = $derived(visibleItems.filter((item) => item.checked));
 
-	const totalCents = $derived(
-		visibleItems.reduce((sum, item) => sum + (item.price ?? 0), 0)
-	);
+	const totalCents = $derived(visibleItems.reduce((sum, item) => sum + (item.price ?? 0), 0));
 
 	function formatPrice(cents: number): string {
 		return (cents / 100).toLocaleString('en-US', {
@@ -314,16 +312,18 @@
 		{/snippet}
 	</PageHeader>
 
-	<SyncToast
-		visible={syncToastVisible}
-		onrefresh={refreshFromSync}
-		ondismiss={() => (syncToastVisible = false)}
-	/>
+	<div class="print:hidden">
+		<SyncToast
+			visible={syncToastVisible}
+			onrefresh={refreshFromSync}
+			ondismiss={() => (syncToastVisible = false)}
+		/>
+	</div>
 
 	{#if loading}
 		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
 	{:else if list}
-		<form class="flex gap-2" onsubmit={handleAddItem}>
+		<form class="flex gap-2 print:hidden" onsubmit={handleAddItem}>
 			<div class="flex-1">
 				<Input placeholder="Item name" bind:value={newItemName} />
 			</div>
@@ -335,14 +335,14 @@
 
 		<button
 			type="button"
-			class="self-start text-sm text-primary-600 hover:underline dark:text-primary-400"
+			class="self-start text-sm text-primary-600 hover:underline dark:text-primary-400 print:hidden"
 			onclick={() => (importOpen = !importOpen)}
 		>
 			{importOpen ? 'Cancel paste import' : 'Paste in a list…'}
 		</button>
 
 		{#if importOpen}
-			<form class="flex flex-col gap-2" onsubmit={handleImport}>
+			<form class="flex flex-col gap-2 print:hidden" onsubmit={handleImport}>
 				<Textarea
 					bind:value={importText}
 					rows={4}
@@ -355,11 +355,11 @@
 		{/if}
 
 		{#if error}
-			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
+			<p class="text-sm text-red-600 dark:text-red-400 print:hidden">{error}</p>
 		{/if}
 
 		{#if stores.length > 0}
-			<div class="w-48">
+			<div class="w-48 print:hidden">
 				<Select
 					items={stores.map((store) => ({ value: store.id, name: store.name }))}
 					placeholder="All stores"
@@ -405,7 +405,7 @@
 											>
 										{/if}
 									</Checkbox>
-									<div class="ml-auto w-16">
+									<div class="ml-auto w-16 print:hidden">
 										<Input
 											size="sm"
 											inputmode="decimal"
@@ -417,7 +417,7 @@
 										/>
 									</div>
 									{#if stores.length > 0}
-										<div class="w-32">
+										<div class="w-32 print:hidden">
 											<Select
 												size="sm"
 												items={stores.map((store) => ({ value: store.id, name: store.name }))}
@@ -433,7 +433,7 @@
 									{/if}
 									<button
 										type="button"
-										class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+										class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400 print:hidden"
 										onclick={() => removeItem(item)}
 									>
 										Remove
@@ -468,7 +468,7 @@
 			</div>
 		{/if}
 
-		<div>
+		<div class="print:hidden">
 			<button
 				type="button"
 				class="text-sm text-primary-600 hover:underline dark:text-primary-400"

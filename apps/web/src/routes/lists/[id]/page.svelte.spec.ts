@@ -7,7 +7,12 @@ import { ApiError } from '$lib/api/client';
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn(), updateList: vi.fn(), deleteList: vi.fn() }));
+vi.mock('$lib/api/lists', () => ({
+	fetchList: vi.fn(),
+	updateList: vi.fn(),
+	deleteList: vi.fn(),
+	emailExportList: vi.fn()
+}));
 vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
 vi.mock('$lib/api/items', () => ({
 	fetchItems: vi.fn(),

@@ -36,12 +36,14 @@ function stubFetchByUrl(routes: {
 	const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
 		if (url.includes('/folders/')) {
 			// DELETE /folders/:id
-			if (routes.deleteFolderError instanceof Error) return Promise.reject(routes.deleteFolderError);
+			if (routes.deleteFolderError instanceof Error)
+				return Promise.reject(routes.deleteFolderError);
 			if (routes.deleteFolderError) return errorResponse(routes.deleteFolderError);
 			return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(undefined) });
 		}
 		if (url.includes('/folders') && init?.method === 'POST') {
-			if (routes.createFolderError instanceof Error) return Promise.reject(routes.createFolderError);
+			if (routes.createFolderError instanceof Error)
+				return Promise.reject(routes.createFolderError);
 			if (routes.createFolderError) return errorResponse(routes.createFolderError);
 			return Promise.resolve(jsonResponse(routes.createFolder));
 		}
@@ -178,7 +180,14 @@ describe('Lists +page.svelte', () => {
 	it('creates a new folder from the form', async () => {
 		setToken('test-token');
 		stubFetchByUrl({
-			createFolder: { id: 5, userId: 1, name: 'Groceries', color: '#3b82f6', sortOrder: 0, version: 1 }
+			createFolder: {
+				id: 5,
+				userId: 1,
+				name: 'Groceries',
+				color: '#3b82f6',
+				sortOrder: 0,
+				version: 1
+			}
 		});
 
 		render(ListsPage);
@@ -267,8 +276,22 @@ describe('Lists +page.svelte', () => {
 		};
 		// Given out of sortOrder, so grouping into display order exercises the
 		// comparator, not just a pass-through of already-sorted input.
-		const household = { id: 6, userId: 1, name: 'Household', color: '#3b82f6', sortOrder: 1, version: 1 };
-		const groceries = { id: 5, userId: 1, name: 'Groceries', color: '#3b82f6', sortOrder: 0, version: 1 };
+		const household = {
+			id: 6,
+			userId: 1,
+			name: 'Household',
+			color: '#3b82f6',
+			sortOrder: 1,
+			version: 1
+		};
+		const groceries = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
 		stubFetchByUrl({
 			lists: [costco, wholeFoods, target],
 			folders: [household, groceries],
@@ -304,7 +327,14 @@ describe('Lists +page.svelte', () => {
 			folderId: null,
 			itemCount: 0
 		};
-		const folder = { id: 5, userId: 1, name: 'Groceries', color: '#3b82f6', sortOrder: 0, version: 1 };
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
 		const fetchMock = stubFetchByUrl({
 			lists: [list],
 			folders: [folder],
@@ -316,9 +346,9 @@ describe('Lists +page.svelte', () => {
 
 		await page.getByRole('combobox').selectOptions('5');
 
-		await expect.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/lists')).length).toBe(
-			3
-		);
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/lists')).length)
+			.toBe(3);
 	});
 
 	it('reloads when moving a list to a folder fails with an ApiError', async () => {
@@ -332,7 +362,14 @@ describe('Lists +page.svelte', () => {
 			folderId: null,
 			itemCount: 0
 		};
-		const folder = { id: 5, userId: 1, name: 'Groceries', color: '#3b82f6', sortOrder: 0, version: 1 };
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
 		const fetchMock = stubFetchByUrl({
 			lists: [list],
 			folders: [folder],
@@ -344,9 +381,9 @@ describe('Lists +page.svelte', () => {
 
 		await page.getByRole('combobox').selectOptions('5');
 
-		await expect.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/lists')).length).toBe(
-			3
-		);
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/lists')).length)
+			.toBe(3);
 	});
 
 	it('deletes a folder, unfiling only the lists it contained', async () => {
@@ -369,7 +406,14 @@ describe('Lists +page.svelte', () => {
 			folderId: null,
 			itemCount: 0
 		};
-		const folder = { id: 5, userId: 1, name: 'Groceries', color: '#3b82f6', sortOrder: 0, version: 1 };
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
 		stubFetchByUrl({ lists: [filed, alreadyUnfiled], folders: [folder] });
 
 		render(ListsPage);
@@ -384,7 +428,14 @@ describe('Lists +page.svelte', () => {
 
 	it('reloads when deleting a folder fails without an ApiError', async () => {
 		setToken('test-token');
-		const folder = { id: 5, userId: 1, name: 'Groceries', color: '#3b82f6', sortOrder: 0, version: 1 };
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
 		const fetchMock = stubFetchByUrl({
 			folders: [folder],
 			deleteFolderError: new TypeError('network down')
@@ -395,14 +446,21 @@ describe('Lists +page.svelte', () => {
 
 		await page.getByRole('button', { name: 'Delete folder' }).click();
 
-		await expect.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/folders')).length).toBe(
-			3
-		);
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/folders')).length)
+			.toBe(3);
 	});
 
 	it('reloads when deleting a folder fails with an ApiError', async () => {
 		setToken('test-token');
-		const folder = { id: 5, userId: 1, name: 'Groceries', color: '#3b82f6', sortOrder: 0, version: 1 };
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
 		const fetchMock = stubFetchByUrl({
 			folders: [folder],
 			deleteFolderError: { status: 500, message: 'Could not delete folder' }
@@ -413,9 +471,9 @@ describe('Lists +page.svelte', () => {
 
 		await page.getByRole('button', { name: 'Delete folder' }).click();
 
-		await expect.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/folders')).length).toBe(
-			3
-		);
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/folders')).length)
+			.toBe(3);
 	});
 
 });

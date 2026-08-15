@@ -30,3 +30,7 @@ export function updateList(
 export function deleteList(id: number): Promise<void> {
 	return apiDelete(`/api/v1/lists/${id}`);
 }
+
+export function emailExportList(id: number, email: string): Promise<void> {
+	return apiPost<void>(`/api/v1/lists/${id}/export/email`, { email });
+}

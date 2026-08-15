@@ -1,8 +1,13 @@
 import { page } from 'vitest/browser';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import type { ListDto } from '@everylist/shared';
-import ListMenu from './ListMenu.svelte';
+import { ApiError } from '$lib/api/client';
+
+vi.mock('$lib/api/lists', () => ({ emailExportList: vi.fn() }));
+
+const { emailExportList } = await import('$lib/api/lists');
+const ListMenu = (await import('./ListMenu.svelte')).default;
 
 const list: ListDto = {
 	id: 42,
@@ -22,6 +27,10 @@ const list: ListDto = {
 function open() {
 	return page.getByRole('button', { name: 'List settings' }).click();
 }
+
+afterEach(() => {
+	vi.clearAllMocks();
+});
 
 describe('ListMenu.svelte', () => {
 	it('hides the menu links until the cog is opened', async () => {
@@ -222,5 +231,93 @@ describe('ListMenu.svelte', () => {
 
 		await expect.element(page.getByRole('button', { name: 'Delete list' })).toBeInTheDocument();
 		await expect.element(page.getByRole('textbox')).toHaveValue('Groceries');
+	});
+
+	it('prints the list via window.print', async () => {
+		const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
+		render(ListMenu, { listId: 42, list, onupdate: vi.fn(), ondelete: vi.fn() });
+
+		await open();
+		await page.getByRole('button', { name: 'Print list' }).click();
+
+		expect(printSpy).toHaveBeenCalled();
+		printSpy.mockRestore();
+	});
+
+	it('sends an email export and shows a success message', async () => {
+		vi.mocked(emailExportList).mockResolvedValue(undefined);
+		render(ListMenu, { listId: 42, list, onupdate: vi.fn(), ondelete: vi.fn() });
+
+		await open();
+		await page.getByRole('button', { name: 'Email export…' }).click();
+		await page.getByPlaceholder('you@example.com').fill('friend@example.com');
+		await page.getByRole('button', { name: 'Send' }).click();
+
+		expect(emailExportList).toHaveBeenCalledWith(42, 'friend@example.com');
+		await expect.element(page.getByText('Export sent.')).toBeInTheDocument();
+		await expect.element(page.getByPlaceholder('you@example.com')).toHaveValue('');
+	});
+
+	it('shows the ApiError message when the email export fails', async () => {
+		vi.mocked(emailExportList).mockRejectedValue(
+			new ApiError(503, 'Email export is not configured on this server.')
+		);
+		render(ListMenu, { listId: 42, list, onupdate: vi.fn(), ondelete: vi.fn() });
+
+		await open();
+		await page.getByRole('button', { name: 'Email export…' }).click();
+		await page.getByPlaceholder('you@example.com').fill('friend@example.com');
+		await page.getByRole('button', { name: 'Send' }).click();
+
+		await expect
+			.element(page.getByText('Email export is not configured on this server.'))
+			.toBeInTheDocument();
+	});
+
+	it('shows a generic error message when the email export fails without an ApiError', async () => {
+		vi.mocked(emailExportList).mockRejectedValue(new Error('network down'));
+		render(ListMenu, { listId: 42, list, onupdate: vi.fn(), ondelete: vi.fn() });
+
+		await open();
+		await page.getByRole('button', { name: 'Email export…' }).click();
+		await page.getByPlaceholder('you@example.com').fill('friend@example.com');
+		await page.getByRole('button', { name: 'Send' }).click();
+
+		await expect.element(page.getByText('Failed to send export.')).toBeInTheDocument();
+	});
+
+	it('does not submit the email export form with only whitespace', async () => {
+		render(ListMenu, { listId: 42, list, onupdate: vi.fn(), ondelete: vi.fn() });
+
+		await open();
+		await page.getByRole('button', { name: 'Email export…' }).click();
+
+		const input = page.getByPlaceholder('you@example.com');
+		const form = input.element().closest('form');
+		await input.fill('   ');
+		form?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+		expect(emailExportList).not.toHaveBeenCalled();
+	});
+
+	it('cancels the email export form', async () => {
+		render(ListMenu, { listId: 42, list, onupdate: vi.fn(), ondelete: vi.fn() });
+
+		await open();
+		await page.getByRole('button', { name: 'Email export…' }).click();
+		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+		await expect.element(page.getByRole('button', { name: 'Email export…' })).toBeInTheDocument();
+	});
+
+	it('resets the email export form when reopened', async () => {
+		render(ListMenu, { listId: 42, list, onupdate: vi.fn(), ondelete: vi.fn() });
+
+		await open();
+		await page.getByRole('button', { name: 'Email export…' }).click();
+		await open(); // close
+		await open(); // reopen
+
+		await expect.element(page.getByRole('button', { name: 'Email export…' })).toBeInTheDocument();
 	});
 });

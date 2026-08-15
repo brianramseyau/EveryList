@@ -81,6 +81,8 @@ router
         router.patch(':listId/members/:memberId', [controllers.ListMembers, 'update'])
         router.delete(':listId/members/:memberId', [controllers.ListMembers, 'destroy'])
 
+        router.post(':listId/export/email', [controllers.ListExport, 'email'])
+
         router.get(':listId/invites', [controllers.ListInvites, 'index'])
         router.post(':listId/invites', [controllers.ListInvites, 'store'])
         router.delete(':listId/invites/:inviteId', [controllers.ListInvites, 'destroy'])
