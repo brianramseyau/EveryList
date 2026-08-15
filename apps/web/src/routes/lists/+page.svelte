@@ -2,25 +2,16 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Button, Input } from 'flowbite-svelte';
 	import type { ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { createList, fetchLists } from '$lib/api/lists';
+	import { fetchLists } from '$lib/api/lists';
 	import { ApiError } from '$lib/api/client';
 	import Icon from '$lib/components/Icon.svelte';
-	import IconPicker from '$lib/components/IconPicker.svelte';
-	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
-
-	const DEFAULT_COLOR = '#3b82f6';
 
 	let lists = $state<ListDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-	let newListName = $state('');
-	let newListColor = $state(DEFAULT_COLOR);
-	let newListIcon = $state('formatListChecks');
-	let creating = $state(false);
 
 	async function loadLists() {
 		loading = true;
@@ -41,27 +32,6 @@
 		}
 		void loadLists();
 	});
-
-	async function handleCreate(event: SubmitEvent) {
-		event.preventDefault();
-		if (!newListName.trim()) return;
-		creating = true;
-		try {
-			const list = await createList({
-				name: newListName.trim(),
-				color: newListColor,
-				icon: newListIcon
-			});
-			lists = [...lists, list];
-			newListName = '';
-			newListColor = DEFAULT_COLOR;
-			newListIcon = 'formatListChecks';
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to create list.';
-		} finally {
-			creating = false;
-		}
-	}
 </script>
 
 <svelte:head>
@@ -69,16 +39,17 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<PageHeader title="My Lists" />
-
-	<form class="flex flex-wrap gap-2" onsubmit={handleCreate}>
-		<div class="min-w-40 flex-1">
-			<Input placeholder="New list name" bind:value={newListName} />
-		</div>
-		<IconPicker value={newListIcon} onselect={(name) => (newListIcon = name)} />
-		<ColorPicker value={newListColor} onselect={(color) => (newListColor = color)} />
-		<Button type="submit" disabled={creating || !newListName.trim()}>Add</Button>
-	</form>
+	<PageHeader title="My Lists">
+		{#snippet actions()}
+			<a
+				href={resolve('/lists/new')}
+				aria-label="New list"
+				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+			>
+				<Icon name="plus" class="h-6 w-6" />
+			</a>
+		{/snippet}
+	</PageHeader>
 
 	{#if error}
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -87,7 +58,7 @@
 	{#if loading}
 		<p class="text-gray-500 dark:text-gray-400">Loading…</p>
 	{:else if lists.length === 0}
-		<p class="text-gray-500 dark:text-gray-400">No lists yet — create one above.</p>
+		<p class="text-gray-500 dark:text-gray-400">No lists yet — tap + to create one.</p>
 	{:else}
 		<ul class="flex flex-col gap-2">
 			{#each lists as list (list.id)}
