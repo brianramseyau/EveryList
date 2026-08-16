@@ -172,7 +172,7 @@ export class ListInviteSchema extends BaseModel {
 }
 
 export class ListMemberSchema extends BaseModel {
-  static $columns = ['acceptedAt', 'createdAt', 'id', 'invitedAt', 'listId', 'role', 'updatedAt', 'userId'] as const
+  static $columns = ['acceptedAt', 'createdAt', 'id', 'invitedAt', 'listId', 'role', 'sortOrder', 'updatedAt', 'userId'] as const
   $columns = ListMemberSchema.$columns
   @column.dateTime()
   declare acceptedAt: DateTime | null
@@ -186,6 +186,8 @@ export class ListMemberSchema extends BaseModel {
   declare listId: number
   @column()
   declare role: string
+  @column()
+  declare sortOrder: number
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()

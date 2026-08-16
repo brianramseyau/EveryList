@@ -8,6 +8,7 @@ import List from '#models/list'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { findActiveInvite } from '#services/invite_lookup'
+import { nextListMemberSortOrder } from '#services/list_member_sort'
 
 export default class InviteAcceptController {
   /** Unauthenticated — lets the join page render a preview before login/signup. */
@@ -46,6 +47,7 @@ export default class InviteAcceptController {
         role: inviteRole,
         invitedAt: now,
         acceptedAt: now,
+        sortOrder: await nextListMemberSortOrder(user.id),
       })
     } else if (ROLE_RANK[inviteRole] > ROLE_RANK[existing.role]) {
       existing.role = inviteRole
