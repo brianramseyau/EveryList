@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { getBadgeCount, isBadgingSupported, onBadgeCountChange } from '$lib/pwa/badge';
+	import { markSkipTransition } from '$lib/nav-direction';
 
 	type NavKey = 'lists' | 'settings';
 
@@ -36,6 +37,7 @@
 		{@const active = isActive(item.match)}
 		<a
 			href={item.key === 'lists' ? resolve('/lists') : resolve('/settings')}
+			onclick={markSkipTransition}
 			aria-current={active ? 'page' : undefined}
 			class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium {active
 				? 'text-primary-700 dark:text-primary-400'

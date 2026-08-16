@@ -1,6 +1,7 @@
 import { tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { consumeSkipTransition } from '$lib/nav-direction';
 
 // $app/state's `page` is read-only application state normally supplied by
 // SvelteKit's router; stub it with a mutable pathname so each test can
@@ -40,6 +41,30 @@ describe('BottomNav.svelte', () => {
 
 		const labels = [...container.querySelectorAll('a span')].map((span) => span.textContent);
 		expect(labels).toEqual(['Lists', 'Settings']);
+	});
+
+	it('marks the navigation to skip the view transition when a nav link is activated', () => {
+		state.pathname = '/lists';
+		const { container } = render(BottomNav);
+
+		// This link is a real, attached <a href> in a real browser, and
+		// Svelte 5 delegates click handling up to a document-level listener
+		// (so onclick={markSkipTransition} needs a bubbling event to fire at
+		// all) — which SvelteKit's own document-level router, live in this
+		// test environment, would *also* see and intercept as a genuine
+		// client-side navigation, sending this iframe off and risking
+		// flakiness in other concurrently running test files against the
+		// shared dev server. A capture-phase preventDefault on `document`
+		// runs before either bubble-phase listener, so SvelteKit's router
+		// (which itself skips already-prevented clicks) never navigates,
+		// while Svelte's delegated onclick still fires normally.
+		const link = container.querySelector('a')!;
+		const preventNav = (event: Event) => event.preventDefault();
+		document.addEventListener('click', preventNav, { capture: true });
+		link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		document.removeEventListener('click', preventNav, { capture: true });
+
+		expect(consumeSkipTransition()).toBe(true);
 	});
 
 	it('marks the Lists link active on the list index', () => {
