@@ -4,6 +4,7 @@ import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import User from '#models/user'
 import List from '#models/list'
 import Category from '#models/category'
+import Store from '#models/store'
 
 export default class FavoriteItem extends FavoriteItemSchema {
   @belongsTo(() => User, { foreignKey: 'userId' })
@@ -14,4 +15,7 @@ export default class FavoriteItem extends FavoriteItemSchema {
 
   @belongsTo(() => Category, { foreignKey: 'defaultCategoryId' })
   declare defaultCategory: BelongsTo<typeof Category>
+
+  @belongsTo(() => Store, { foreignKey: 'storeId' })
+  declare store: BelongsTo<typeof Store>
 }

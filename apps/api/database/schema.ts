@@ -91,6 +91,9 @@ export class FavoriteItemSchema extends BaseModel {
     'id',
     'listId',
     'name',
+    'notes',
+    'price',
+    'storeId',
     'updatedAt',
     'userId',
     'version',
@@ -110,6 +113,12 @@ export class FavoriteItemSchema extends BaseModel {
   declare listId: number
   @column()
   declare name: string
+  @column()
+  declare notes: string | null
+  @column()
+  declare price: number | null
+  @column()
+  declare storeId: number | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()

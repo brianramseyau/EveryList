@@ -10,7 +10,11 @@ export async function createFavorite(
 	listId: number,
 	input: {
 		name: string;
+		defaultCategoryId?: number | null;
 		defaultQuantity?: string | null;
+		storeId?: number | null;
+		notes?: string | null;
+		price?: number | null;
 	}
 ): Promise<FavoriteItemDto> {
 	return offlineCreate<FavoriteItemDto>({
@@ -23,8 +27,11 @@ export async function createFavorite(
 			listId,
 			userId: 0,
 			name: input.name,
-			defaultCategoryId: null,
+			defaultCategoryId: input.defaultCategoryId ?? null,
 			defaultQuantity: input.defaultQuantity ?? null,
+			storeId: input.storeId ?? null,
+			notes: input.notes ?? null,
+			price: input.price ?? null,
 			createdAt: new Date().toISOString(),
 			updatedAt: null,
 			deletedAt: null,
@@ -39,7 +46,14 @@ export async function createFavorite(
 export async function updateFavorite(
 	listId: number,
 	id: number,
-	input: Partial<{ name: string; defaultQuantity: string | null }>
+	input: Partial<{
+		name: string;
+		defaultCategoryId: number | null;
+		defaultQuantity: string | null;
+		storeId: number | null;
+		notes: string | null;
+		price: number | null;
+	}>
 ): Promise<FavoriteItemDto | void> {
 	return offlineMutate<FavoriteItemDto>({
 		entityType: 'favorite_item',

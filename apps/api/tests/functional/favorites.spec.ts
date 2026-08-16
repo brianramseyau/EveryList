@@ -147,7 +147,7 @@ test.group('Favorites', (group) => {
     assert.lengthOf(bodyData<FavoriteItemDto[]>(index), 1)
   })
 
-  test('a duplicate favorite name on the same list returns a friendly 422, not a 500', async ({
+  test('creating a favorite with an already-live duplicate name updates it in place instead of erroring', async ({
     client,
     assert,
   }) => {
@@ -157,15 +157,160 @@ test.group('Favorites', (group) => {
     const first = await client
       .post(`/api/v1/lists/${listId}/favorites`)
       .header('Authorization', `Bearer ${token}`)
-      .json({ name: 'Bananas' })
+      .json({ name: 'Bananas', defaultQuantity: '1 bunch' })
     first.assertStatus(200)
+    const firstFavorite = bodyData<FavoriteItemDto>(first)
 
     const second = await client
       .post(`/api/v1/lists/${listId}/favorites`)
       .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bananas', defaultQuantity: '2 bunches', notes: 'Ripe ones', price: 250 })
+    second.assertStatus(200)
+    const secondFavorite = bodyData<FavoriteItemDto>(second)
+    assert.equal(secondFavorite.id, firstFavorite.id)
+    assert.equal(secondFavorite.defaultQuantity, '2 bunches')
+    assert.equal(secondFavorite.notes, 'Ripe ones')
+    assert.equal(secondFavorite.price, 250)
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+    assert.lengthOf(bodyData<FavoriteItemDto[]>(index), 1)
+  })
+
+  test('deleting a favorite then re-adding it by the same name un-deletes it instead of erroring', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bananas', defaultQuantity: '1 bunch' })
+    create.assertStatus(200)
+    const favoriteId = bodyData<FavoriteItemDto>(create).id
+
+    const destroy = await client
+      .delete(`/api/v1/lists/${listId}/favorites/${favoriteId}`)
+      .header('Authorization', `Bearer ${token}`)
+    destroy.assertStatus(204)
+
+    const recreate = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
       .json({ name: 'Bananas' })
-    second.assertStatus(422)
-    assert.equal(second.body().errors[0].message, 'That name is already in use.')
+    recreate.assertStatus(200)
+    const recreated = bodyData<FavoriteItemDto>(recreate)
+    assert.equal(recreated.id, favoriteId)
+    assert.isNull(recreated.deletedAt)
+    assert.isNull(recreated.defaultQuantity)
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+    assert.lengthOf(bodyData<FavoriteItemDto[]>(index), 1)
+  })
+
+  test('adding a favorite already on the list as an unchecked item is a no-op', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bananas' })
+    const favoriteId = bodyData<FavoriteItemDto>(create).id
+
+    const first = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+    first.assertStatus(200)
+    const firstItem = bodyData<ItemDto>(first)
+
+    const second = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+    second.assertStatus(200)
+    const secondItem = bodyData<ItemDto>(second)
+    assert.equal(secondItem.id, firstItem.id)
+
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+    assert.lengthOf(bodyData<ItemDto[]>(items), 1)
+  })
+
+  test('adding a favorite already on the list as a checked item un-checks it instead of duplicating', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bananas' })
+    const favoriteId = bodyData<FavoriteItemDto>(create).id
+
+    const added = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+    const item = bodyData<ItemDto>(added)
+
+    const checked = await client
+      .patch(`/api/v1/lists/${listId}/items/${item.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ checked: true })
+    checked.assertStatus(200)
+
+    const readded = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+    readded.assertStatus(200)
+    const readdedItem = bodyData<ItemDto>(readded)
+    assert.equal(readdedItem.id, item.id)
+    assert.isFalse(readdedItem.checked)
+
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+    assert.lengthOf(bodyData<ItemDto[]>(items), 1)
+  })
+
+  test('addToList carries the favorite store, notes, and price onto the new item', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const store = await client
+      .post(`/api/v1/lists/${listId}/stores`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Corner Shop', color: '#123456' })
+    const storeId = bodyData<{ id: number }>(store).id
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bananas', storeId, notes: 'Ripe ones', price: 250 })
+    create.assertStatus(200)
+    const favoriteId = bodyData<FavoriteItemDto>(create).id
+
+    const addToList = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+    addToList.assertStatus(200)
+    const item = bodyData<ItemDto>(addToList)
+    assert.equal(item.storeId, storeId)
+    assert.equal(item.notes, 'Ripe ones')
+    assert.equal(item.price, 250)
   })
 
   test('rejects access to a favorite via a list the user does not own', async ({
