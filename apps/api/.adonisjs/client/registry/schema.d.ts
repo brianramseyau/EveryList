@@ -43,6 +43,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/profile_controller').default['show']>>>
     }
   }
+  'profile.profile.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/account/profile'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/user').updateProfileValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/user').updateProfileValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/profile_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/profile_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'profile.access_tokens.destroy': {
     methods: ["POST"]
     pattern: '/api/v1/account/logout'
@@ -149,6 +161,18 @@ export interface Registry {
       query: ExtractQuery<InferInput<(typeof import('#validators/list').createListValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['store']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.lists.reorder': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/lists/reorder'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/list').reorderListsValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/list').reorderListsValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['reorder']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['reorder']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
   'lists.lists.show': {
@@ -269,6 +293,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['recent']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['recent']>>>
+    }
+  }
+  'lists.items.recent_names': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/items/recent-names'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['recentNames']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['recentNames']>>>
     }
   }
   'lists.items.categorize': {

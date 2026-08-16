@@ -13,6 +13,7 @@ export interface ApiDefinition {
   profile: {
     profile: {
       show: typeof routes['profile.profile.show']
+      update: typeof routes['profile.profile.update']
     }
     accessTokens: {
       destroy: typeof routes['profile.access_tokens.destroy']
@@ -34,6 +35,7 @@ export interface ApiDefinition {
     lists: {
       index: typeof routes['lists.lists.index']
       store: typeof routes['lists.lists.store']
+      reorder: typeof routes['lists.lists.reorder']
       show: typeof routes['lists.lists.show']
       update: typeof routes['lists.lists.update']
       destroy: typeof routes['lists.lists.destroy']
@@ -48,6 +50,7 @@ export interface ApiDefinition {
     items: {
       index: typeof routes['lists.items.index']
       recent: typeof routes['lists.items.recent']
+      recentNames: typeof routes['lists.items.recent_names']
       categorize: typeof routes['lists.items.categorize']
       store: typeof routes['lists.items.store']
       import: typeof routes['lists.items.import']
