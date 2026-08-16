@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Input, Select } from 'flowbite-svelte';
+	import { Select } from 'flowbite-svelte';
 	import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
@@ -21,6 +21,7 @@
 	import { pressHoldReorder } from '$lib/actions/press-hold-reorder';
 	import { swipeReveal } from '$lib/actions/swipe-reveal';
 	import Icon from '$lib/components/Icon.svelte';
+	import ItemAutocomplete from '$lib/components/ItemAutocomplete.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PasscodeGate from '$lib/components/PasscodeGate.svelte';
 	import SyncToast from '$lib/components/SyncToast.svelte';
@@ -374,9 +375,11 @@
 				>
 					<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
 				</button>
-				<div class="flex-1">
-					<Input placeholder="Item name" bind:value={newItemName} />
-				</div>
+				<ItemAutocomplete
+					{listId}
+					bind:value={newItemName}
+					existingNames={items.map((item) => item.name)}
+				/>
 				<button
 					type="submit"
 					aria-label="Add item"

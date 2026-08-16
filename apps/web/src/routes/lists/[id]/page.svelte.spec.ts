@@ -20,8 +20,10 @@ vi.mock('$lib/api/items', () => ({
 	fetchItems: vi.fn(),
 	createItem: vi.fn(),
 	deleteItem: vi.fn(),
-	updateItem: vi.fn()
+	updateItem: vi.fn(),
+	fetchRecentItemNames: vi.fn()
 }));
+vi.mock('$lib/api/favorites', () => ({ fetchFavorites: vi.fn() }));
 vi.mock('$lib/api/stores', () => ({ fetchStoreCategoryOrder: vi.fn(), fetchStores: vi.fn() }));
 vi.mock('$lib/api/selected-store', () => ({
 	getSelectedStore: vi.fn(),
@@ -32,7 +34,9 @@ vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 
 const { fetchList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
-const { fetchItems, createItem, deleteItem, updateItem } = await import('$lib/api/items');
+const { fetchItems, createItem, deleteItem, updateItem, fetchRecentItemNames } =
+	await import('$lib/api/items');
+const { fetchFavorites } = await import('$lib/api/favorites');
 const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores');
 const { getSelectedStore } = await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
@@ -113,6 +117,8 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchStores).mockResolvedValue([]);
 		vi.mocked(getSelectedStore).mockResolvedValue(null);
 		vi.mocked(goto).mockResolvedValue(undefined);
+		vi.mocked(fetchRecentItemNames).mockResolvedValue([]);
+		vi.mocked(fetchFavorites).mockResolvedValue([]);
 	});
 
 	afterEach(async () => {
@@ -408,6 +414,23 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByPlaceholder('Item name')).toHaveValue('');
 		// A sibling row is left untouched by the in-place replace.
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+	});
+
+	it('passes the current item names to the autocomplete so it can badge suggestions already on the list', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		vi.mocked(fetchFavorites).mockResolvedValue([]);
+		vi.mocked(fetchRecentItemNames).mockResolvedValue(['Bananas']);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		const input = page.getByPlaceholder('Item name');
+		await input.click();
+		await input.fill('ban');
+
+		await expect.element(page.getByTitle('Already on this list')).toBeInTheDocument();
 	});
 
 	it('does not submit when the new item name is only whitespace', async () => {

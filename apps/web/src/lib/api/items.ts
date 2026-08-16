@@ -117,6 +117,34 @@ export async function createItem(
 	});
 }
 
+/** Distinct, most-recent-first item names for this list, backing the add-item autocomplete
+ * (PHASE10_PLAN.md #0.3). Falls back to deriving the same list from Dexie's cached items —
+ * offline or a network failure — mirroring `guessCategoryId`'s server-then-local-fallback shape
+ * above; the cache only ever holds non-deleted items, so unlike the server's endpoint this
+ * fallback can't surface names from checked/deleted history. */
+export async function fetchRecentItemNames(listId: number): Promise<string[]> {
+	try {
+		return await apiGet<string[]>(`/api/v1/lists/${listId}/items/recent-names`);
+	} catch {
+		const db = getDb();
+		if (!db) return [];
+
+		const rows = await db.items.filter((item) => item.listId === listId).toArray();
+		rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+		const seen = new Set<string>();
+		const names: string[] = [];
+		for (const row of rows) {
+			const key = row.name.trim().toLowerCase();
+			if (seen.has(key)) continue;
+			seen.add(key);
+			names.push(row.name.trim());
+			if (names.length >= 50) break;
+		}
+		return names;
+	}
+}
+
 export function importItems(listId: number, text: string): Promise<ItemDto[]> {
 	return apiPost<ItemDto[]>(`/api/v1/lists/${listId}/items/import`, { text });
 }

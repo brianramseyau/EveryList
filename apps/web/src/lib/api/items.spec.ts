@@ -12,6 +12,7 @@ const {
 	createItem,
 	deleteItem,
 	fetchItems,
+	fetchRecentItemNames,
 	fetchRecentItems,
 	importItems,
 	restoreItem,
@@ -65,5 +66,16 @@ describe('items api', () => {
 	it('deleteItem DELETEs the given item', () => {
 		deleteItem(1, 100);
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/100');
+	});
+
+	it('fetchRecentItemNames GETs the recent-names endpoint', () => {
+		vi.mocked(apiGet).mockResolvedValue(['Bananas']);
+		fetchRecentItemNames(1);
+		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists/1/items/recent-names');
+	});
+
+	it('fetchRecentItemNames falls back to an empty list when the request fails and Dexie is unavailable', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+		await expect(fetchRecentItemNames(1)).resolves.toEqual([]);
 	});
 });
