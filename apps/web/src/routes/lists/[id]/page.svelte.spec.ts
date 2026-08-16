@@ -433,6 +433,26 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByTitle('Already on this list')).toBeInTheDocument();
 	});
 
+	it('adds the item immediately when a suggestion is picked, without touching the Add button', async () => {
+		vi.mocked(fetchFavorites).mockResolvedValue([]);
+		vi.mocked(fetchRecentItemNames).mockResolvedValue(['Bread']);
+		vi.mocked(createItem).mockResolvedValue(makeItem({ id: 200, name: 'Bread' }));
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		const input = page.getByPlaceholder('Item name');
+		await input.click();
+		await input.fill('bre');
+		await page.getByRole('button', { name: 'Bread' }).click();
+
+		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread' });
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+		await expect.element(input).toHaveValue('');
+	});
+
 	it('does not submit when the new item name is only whitespace', async () => {
 		// The Add button is already disabled in this state, but handleAddItem
 		// carries its own guard, reachable via a raw 'submit' event and not

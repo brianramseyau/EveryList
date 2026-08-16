@@ -179,9 +179,8 @@
 		void loadAll();
 	}
 
-	async function handleAddItem(event: SubmitEvent) {
-		event.preventDefault();
-		const name = newItemName.trim();
+	async function addItem(rawName: string) {
+		const name = rawName.trim();
 		if (!name) return;
 
 		// Best-effort local pre-check against what's already loaded (PHASE10_PLAN.md
@@ -215,6 +214,11 @@
 		} finally {
 			adding = false;
 		}
+	}
+
+	async function handleAddItem(event: SubmitEvent) {
+		event.preventDefault();
+		await addItem(newItemName);
 	}
 
 	async function toggleChecked(item: ItemDto) {
@@ -379,6 +383,7 @@
 					{listId}
 					bind:value={newItemName}
 					existingNames={items.map((item) => item.name)}
+					onselect={(name) => void addItem(name)}
 				/>
 				<button
 					type="submit"
