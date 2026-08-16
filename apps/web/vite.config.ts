@@ -5,6 +5,7 @@ import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { pwaManifest, workboxOptions } from './pwa.config.mjs';
 
 // Some sandboxed dev environments pre-cache a Chromium build at a fixed path
 // under a different revision than the one this Playwright version expects,
@@ -41,39 +42,21 @@ export default defineConfig({
 		// built output directly via Vite's build hooks, which sidesteps needing to
 		// verify a SvelteKit-specific integration against adapter-static's non-default
 		// `fallback: '200.html'` output — see PHASE5_PLAN.md §5.
+		//
+		// This plugin's own sw.js is NOT the artifact that ships: its `writeBundle`
+		// hook globs the client build output before @sveltejs/adapter-static has
+		// prerendered any HTML into it (that copy happens in SvelteKit's own
+		// `closeBundle`, which runs after `writeBundle`), so the precache manifest
+		// it produces has zero .html entries — including /200.html, the
+		// navigateFallback target every offline cold start depends on. Kept here
+		// only for manifest.webmanifest/icon generation and dev-mode; `pnpm build`'s
+		// `postbuild` step (scripts/generate-sw.mjs) regenerates the real sw.js
+		// against the final `build/` directory with this same config.
 		VitePWA({
 			registerType: 'autoUpdate',
 			injectRegister: null,
-			manifest: {
-				name: 'EveryList',
-				short_name: 'EveryList',
-				description: 'Shared, offline-first shopping lists.',
-				start_url: '/lists',
-				scope: '/',
-				display: 'standalone',
-				background_color: '#f6f5f1',
-				theme_color: '#33404f',
-				icons: [
-					{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-					{ src: '/icon-512.png', sizes: '512x512', type: 'image/png' }
-				]
-			},
-			workbox: {
-				navigateFallback: '/200.html',
-				globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
-				// The icon-picker's lazily-loaded @mdi/js chunk is ~2.8MB — above Workbox's
-				// default 2MB precache limit. It's still lazy (only fetched when the icon
-				// picker opens), just also precached up front like everything else here.
-				maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-				runtimeCaching: [
-					{
-						urlPattern: ({ url, request }) =>
-							url.pathname.startsWith('/api/v1/') && request.method === 'GET',
-						handler: 'StaleWhileRevalidate',
-						options: { cacheName: 'api-get-cache' }
-					}
-				]
-			}
+			manifest: pwaManifest,
+			workbox: workboxOptions
 		})
 	],
 	server: {
