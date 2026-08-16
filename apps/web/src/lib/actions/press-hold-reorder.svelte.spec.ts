@@ -67,27 +67,41 @@ describe('finalIndexForInsertionPoint', () => {
 });
 
 describe('gapOffsetPx', () => {
+	const uniformRects = [rect(0, 40), rect(40, 40), rect(80, 40), rect(120, 40)];
+
 	it('never offsets the dragged row itself', () => {
-		expect(gapOffsetPx(1, 1, 3, 40)).toBe(0);
+		expect(gapOffsetPx(1, 1, 3, uniformRects)).toBe(0);
 	});
 
-	it('lifts rows between the drag origin and a lower target up by one row', () => {
-		expect(gapOffsetPx(2, 0, 3, 40)).toBe(-40);
-		expect(gapOffsetPx(3, 0, 3, 40)).toBe(-40);
+	it("lifts rows between the drag origin and a lower target up into their neighbor's slot", () => {
+		expect(gapOffsetPx(2, 0, 3, uniformRects)).toBe(-40);
+		expect(gapOffsetPx(3, 0, 3, uniformRects)).toBe(-40);
 	});
 
 	it('leaves rows outside that range alone when dragging down', () => {
-		expect(gapOffsetPx(0, 1, 3, 40)).toBe(0);
-		expect(gapOffsetPx(4, 1, 3, 40)).toBe(0);
+		expect(gapOffsetPx(0, 1, 3, uniformRects)).toBe(0);
+		// Row 4 doesn't exist in uniformRects, but it's outside the shifted
+		// range so its offset is 0 without ever indexing into rects.
+		expect(gapOffsetPx(4, 1, 3, uniformRects)).toBe(0);
 	});
 
-	it('drops rows between a higher target and the drag origin down by one row', () => {
-		expect(gapOffsetPx(1, 3, 1, 40)).toBe(40);
-		expect(gapOffsetPx(2, 3, 1, 40)).toBe(40);
+	it("drops rows between a higher target and the drag origin down into their neighbor's slot", () => {
+		expect(gapOffsetPx(1, 3, 1, uniformRects)).toBe(40);
+		expect(gapOffsetPx(2, 3, 1, uniformRects)).toBe(40);
 	});
 
 	it('is a no-op when the target equals the origin', () => {
-		expect(gapOffsetPx(2, 1, 1, 40)).toBe(0);
+		expect(gapOffsetPx(2, 1, 1, uniformRects)).toBe(0);
+	});
+
+	it('accounts for uneven gaps between rows, e.g. a category heading sitting between two of them', () => {
+		// Row 1 sits 90px below row 0 instead of the uniform 40px — as if a
+		// category heading (and its margins) occupies the extra 50px between
+		// them. Dragging row 0 down past row 1 must shift row 1 up by the
+		// full real distance to its old slot, not a flat row height, or it
+		// lands overlapping the heading instead of clearing it.
+		const unevenRects = [rect(0, 40), rect(90, 40), rect(130, 40)];
+		expect(gapOffsetPx(1, 0, 2, unevenRects)).toBe(-90);
 	});
 });
 

@@ -38,6 +38,12 @@ export function deleteList(id: number): Promise<void> {
 	return apiDelete(`/api/v1/lists/${id}`);
 }
 
+/** `order` is the full desired list of list ids, in the new order — reorders only the
+ *  requesting user's own view (per-user preference, not shared list state). */
+export function reorderLists(order: number[]): Promise<ListDto[]> {
+	return apiPatch('/api/v1/lists/reorder', { order });
+}
+
 export function emailExportList(id: number, email: string): Promise<void> {
 	return apiPost<void>(`/api/v1/lists/${id}/export/email`, { email });
 }

@@ -8,7 +8,7 @@ vi.mock('./client', () => ({
 }));
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
-const { createList, deleteList, emailExportList, fetchList, fetchLists, updateList } =
+const { createList, deleteList, emailExportList, fetchList, fetchLists, updateList, reorderLists } =
 	await import('./lists');
 
 describe('lists api', () => {
@@ -52,5 +52,10 @@ describe('lists api', () => {
 	it('deleteList DELETEs the given id', () => {
 		deleteList(1);
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1');
+	});
+
+	it('reorderLists PATCHes the full desired order', () => {
+		reorderLists([3, 1, 2]);
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/reorder', { order: [3, 1, 2] });
 	});
 });

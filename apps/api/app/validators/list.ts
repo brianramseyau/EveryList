@@ -18,3 +18,7 @@ export const updateListValidator = vine.create({
   passcodeHash: vine.string().trim().maxLength(200).nullable().optional(),
   expectedVersion: vine.number().optional(),
 })
+
+export const reorderListsValidator = vine.create({
+  order: vine.array(vine.number().positive()).minLength(1),
+})

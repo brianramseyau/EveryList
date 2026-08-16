@@ -3,6 +3,7 @@ import ListMember from '#models/list_member'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { seedStarterCategories } from '#services/category_service'
+import { nextListMemberSortOrder } from '#services/list_member_sort'
 
 export interface CreateOwnedListInput {
   ownerId: number
@@ -33,6 +34,7 @@ export async function createOwnedList(input: CreateOwnedListInput) {
     role: 'owner',
     invitedAt: now,
     acceptedAt: now,
+    sortOrder: await nextListMemberSortOrder(input.ownerId),
   })
 
   await broadcastSync({

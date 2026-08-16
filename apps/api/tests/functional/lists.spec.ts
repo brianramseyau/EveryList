@@ -375,4 +375,93 @@ test.group('Lists CRUD', (group) => {
       .json({ name: 'Camping Trip', archived: true })
     noopRename.assertStatus(200)
   })
+
+  test('reordering lists persists a per-user sort order and skips ids the user has no membership on', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const authed = () => client.get('/api/v1/lists').header('Authorization', `Bearer ${token}`)
+
+    const index = await authed()
+    const ids = bodyData<ListDto[]>(index).map((list) => list.id)
+
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Camping Trip' })
+    ids.push(bodyData<ListDto>(create).id)
+
+    const reversed = [...ids].reverse()
+
+    const otherToken = await signupAndGetToken(client)
+    const otherCreate = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${otherToken}`)
+      .json({ name: "Someone else's list" })
+    const otherListId = bodyData<ListDto>(otherCreate).id
+    const otherIndexBefore = await client
+      .get('/api/v1/lists')
+      .header('Authorization', `Bearer ${otherToken}`)
+    const otherIdsBefore = bodyData<ListDto[]>(otherIndexBefore).map((list) => list.id)
+
+    const reorder = await client
+      .patch('/api/v1/lists/reorder')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ order: [otherListId, ...reversed] })
+    reorder.assertStatus(200)
+
+    const reorderedIds = bodyData<ListDto[]>(reorder).map((list) => list.id)
+    assert.deepEqual(reorderedIds, reversed)
+
+    const reload = await authed()
+    assert.deepEqual(
+      bodyData<ListDto[]>(reload).map((list) => list.id),
+      reversed
+    )
+
+    // The foreign id in the reorder payload must be silently skipped — it
+    // isn't `token`'s own membership row, so it can't touch `otherToken`'s order.
+    const otherIndexAfter = await client
+      .get('/api/v1/lists')
+      .header('Authorization', `Bearer ${otherToken}`)
+    assert.deepEqual(
+      bodyData<ListDto[]>(otherIndexAfter).map((list) => list.id),
+      otherIdsBefore
+    )
+  })
+
+  test('each member has their own independent order for a shared list', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const firstCreate = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'First' })
+    const firstId = bodyData<ListDto>(firstCreate).id
+    const secondCreate = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Second' })
+    const secondId = bodyData<ListDto>(secondCreate).id
+
+    const viewer = await signupAndGetUser(client)
+    await addMember(firstId, viewer.id, 'viewer')
+    await addMember(secondId, viewer.id, 'viewer')
+
+    await client
+      .patch('/api/v1/lists/reorder')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ order: [secondId, firstId] })
+
+    const viewerIndex = await client
+      .get('/api/v1/lists')
+      .header('Authorization', `Bearer ${viewer.token}`)
+    const viewerIds = bodyData<ListDto[]>(viewerIndex)
+      .map((list) => list.id)
+      .filter((id) => id === firstId || id === secondId)
+    assert.deepEqual(viewerIds, [firstId, secondId])
+  })
 })

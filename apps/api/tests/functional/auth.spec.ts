@@ -90,6 +90,56 @@ test.group('Auth flow', (group) => {
     assert.equal(response.body().data.email, 'ada@example.com')
   })
 
+  test('updating profile requires authentication', async ({ client }) => {
+    const response = await client.patch('/api/v1/account/profile').json({ fullName: 'Ada' })
+
+    response.assertStatus(401)
+  })
+
+  test('profile update persists a new fullName for the authenticated user', async ({
+    client,
+    assert,
+  }) => {
+    const signup = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+    const token = signup.body().data.token
+
+    const response = await client
+      .patch('/api/v1/account/profile')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ fullName: 'Ada King' })
+
+    response.assertStatus(200)
+    assert.equal(response.body().data.fullName, 'Ada King')
+
+    const profile = await client
+      .get('/api/v1/account/profile')
+      .header('Authorization', `Bearer ${token}`)
+    assert.equal(profile.body().data.fullName, 'Ada King')
+  })
+
+  test('profile update accepts a null fullName', async ({ client, assert }) => {
+    const signup = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+    const token = signup.body().data.token
+
+    const response = await client
+      .patch('/api/v1/account/profile')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ fullName: null })
+
+    response.assertStatus(200)
+    assert.isNull(response.body().data.fullName)
+  })
+
   test('refresh rotates the access token', async ({ client, assert }) => {
     const signup = await client.post('/api/v1/auth/signup').json({
       fullName: 'Ada Lovelace',

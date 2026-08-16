@@ -24,6 +24,12 @@ const routes = {
     tokens: [{"old":"/api/v1/account/profile","type":0,"val":"api","end":""},{"old":"/api/v1/account/profile","type":0,"val":"v1","end":""},{"old":"/api/v1/account/profile","type":0,"val":"account","end":""},{"old":"/api/v1/account/profile","type":0,"val":"profile","end":""}],
     types: placeholder as Registry['profile.profile.show']['types'],
   },
+  'profile.profile.update': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/account/profile',
+    tokens: [{"old":"/api/v1/account/profile","type":0,"val":"api","end":""},{"old":"/api/v1/account/profile","type":0,"val":"v1","end":""},{"old":"/api/v1/account/profile","type":0,"val":"account","end":""},{"old":"/api/v1/account/profile","type":0,"val":"profile","end":""}],
+    types: placeholder as Registry['profile.profile.update']['types'],
+  },
   'profile.access_tokens.destroy': {
     methods: ["POST"],
     pattern: '/api/v1/account/logout',
@@ -77,6 +83,12 @@ const routes = {
     pattern: '/api/v1/lists',
     tokens: [{"old":"/api/v1/lists","type":0,"val":"api","end":""},{"old":"/api/v1/lists","type":0,"val":"v1","end":""},{"old":"/api/v1/lists","type":0,"val":"lists","end":""}],
     types: placeholder as Registry['lists.lists.store']['types'],
+  },
+  'lists.lists.reorder': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/lists/reorder',
+    tokens: [{"old":"/api/v1/lists/reorder","type":0,"val":"api","end":""},{"old":"/api/v1/lists/reorder","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/reorder","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/reorder","type":0,"val":"reorder","end":""}],
+    types: placeholder as Registry['lists.lists.reorder']['types'],
   },
   'lists.lists.show': {
     methods: ["GET","HEAD"],
@@ -137,6 +149,12 @@ const routes = {
     pattern: '/api/v1/lists/:listId/items/recent',
     tokens: [{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"recent","end":""}],
     types: placeholder as Registry['lists.items.recent']['types'],
+  },
+  'lists.items.recent_names': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/lists/:listId/items/recent-names',
+    tokens: [{"old":"/api/v1/lists/:listId/items/recent-names","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/recent-names","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/recent-names","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/recent-names","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/recent-names","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/recent-names","type":0,"val":"recent-names","end":""}],
+    types: placeholder as Registry['lists.items.recent_names']['types'],
   },
   'lists.items.categorize': {
     methods: ["GET","HEAD"],

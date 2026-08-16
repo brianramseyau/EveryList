@@ -4,9 +4,10 @@
 //
 // This is a "commit on drop" design, not a live one: dragging never touches
 // the caller's real item array mid-gesture. Instead the dragged row free-
-// follows the pointer via its own transform, sibling rows shift by one row-
-// height to open a visual gap at the current target index, and the actual
-// reorder callback fires exactly once, on release. An earlier version
+// follows the pointer via its own transform, sibling rows shift into their
+// neighbor's drag-start slot (from measured rects, not a flat row height —
+// see gapOffsetPx) to open a visual gap at the current target index, and
+// the actual reorder callback fires exactly once, on release. An earlier version
 // mutated the bound array on every index crossed, which fed back into
 // `getItemRects()`'s live DOM query (rows re-render mid-gesture, so
 // positions genuinely moved under the pointer) and only ever advanced one
@@ -47,16 +48,28 @@ export function finalIndexForInsertionPoint(insertionIndex: number, fromIndex: n
 
 /** Vertical offset (px) for a sibling row (identified by its drag-start
  * index) so the list visually opens a gap at `toIndex` while the dragged
- * row itself is excluded (it free-follows the pointer instead). */
+ * row itself is excluded (it free-follows the pointer instead).
+ *
+ * Derived from each row's own drag-start rect rather than a flat per-row
+ * height: a row doesn't just shift by "one row" of space, it shifts into
+ * the exact slot its neighbor started in. That distinction only matters
+ * when rows aren't uniformly spaced — e.g. items dragged across a category
+ * boundary, where a heading (and its margins) sits between two rows in the
+ * flat list — a flat height would under-shift rows past that boundary and
+ * land them overlapping the heading instead of clearing it. */
 export function gapOffsetPx(
 	rowIndex: number,
 	fromIndex: number,
 	toIndex: number,
-	rowHeightPx: number
+	rects: readonly DOMRect[]
 ): number {
 	if (rowIndex === fromIndex) return 0;
-	if (toIndex > fromIndex) return rowIndex > fromIndex && rowIndex <= toIndex ? -rowHeightPx : 0;
-	if (toIndex < fromIndex) return rowIndex >= toIndex && rowIndex < fromIndex ? rowHeightPx : 0;
+	if (toIndex > fromIndex && rowIndex > fromIndex && rowIndex <= toIndex) {
+		return rects[rowIndex - 1]!.top - rects[rowIndex]!.top;
+	}
+	if (toIndex < fromIndex && rowIndex >= toIndex && rowIndex < fromIndex) {
+		return rects[rowIndex + 1]!.top - rects[rowIndex]!.top;
+	}
 	return 0;
 }
 
@@ -84,7 +97,6 @@ export function pressHoldReorder(node: HTMLElement, params: PressHoldReorderPara
 	let rects: DOMRect[] = [];
 	let fromIndex = 0;
 	let targetIndex = 0;
-	let rowHeight = 0;
 	// True once a pre-hold move has been judged a plain vertical scroll
 	// rather than a hold-to-drag attempt — see handlePointerMove.
 	let scrolling = false;
@@ -108,7 +120,7 @@ export function pressHoldReorder(node: HTMLElement, params: PressHoldReorderPara
 	function applyGap() {
 		for (let i = 0; i < rows.length; i++) {
 			if (i === fromIndex) continue;
-			const offset = gapOffsetPx(i, fromIndex, targetIndex, rowHeight);
+			const offset = gapOffsetPx(i, fromIndex, targetIndex, rects);
 			rows[i]!.style.transform = offset === 0 ? '' : `translateY(${offset}px)`;
 			rows[i]!.style.transition = 'transform 120ms ease';
 		}
@@ -133,13 +145,16 @@ export function pressHoldReorder(node: HTMLElement, params: PressHoldReorderPara
 		rects = rows.map((row) => row.getBoundingClientRect());
 		fromIndex = current.index;
 		targetIndex = fromIndex;
-		rowHeight = rects[fromIndex]?.height ?? 0;
 		// pointerId is always set by handlePointerDown before this timer can
 		// fire — the null case isn't reachable through the gesture itself.
 		/* v8 ignore next */
 		if (pointerId !== null) node.setPointerCapture(pointerId);
 		node.style.position = 'relative';
-		node.style.zIndex = '20';
+		// Below category headings' z-10 (see +page.svelte) so a row dragged
+		// across a category boundary slides under the heading rather than
+		// painting over it — still above ordinary rows (position:relative,
+		// z-index:auto) so it visually lifts off the list while dragging.
+		node.style.zIndex = '5';
 		node.style.boxShadow = '0 8px 20px rgba(0, 0, 0, 0.25)';
 		node.classList.add('is-dragging');
 		current.onstart?.(fromIndex);

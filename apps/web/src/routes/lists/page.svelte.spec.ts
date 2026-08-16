@@ -2,11 +2,16 @@ import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { setToken, clearToken } from '$lib/api/token';
+import { HOLD_MS } from '$lib/actions/press-hold-reorder';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 const { goto } = await import('$app/navigation');
 const ListsPage = (await import('./+page.svelte')).default;
+
+function delay(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function jsonResponse(data: unknown, init: { ok?: boolean; status?: number } = {}) {
 	return { ok: true, status: 200, ...init, json: () => Promise.resolve({ data }) };
@@ -22,6 +27,8 @@ function stubFetchByUrl(routes: {
 	deleteFolderError?: { status: number; message?: string } | Error;
 	updateList?: unknown;
 	updateListError?: { status: number; message?: string } | Error;
+	reorderLists?: unknown[];
+	reorderListsError?: { status: number; message?: string } | Error;
 }) {
 	function errorResponse(err: { status: number; message?: string }) {
 		return Promise.resolve({
@@ -40,6 +47,12 @@ function stubFetchByUrl(routes: {
 			return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(undefined) });
 		}
 		if (url.includes('/folders')) return Promise.resolve(jsonResponse(routes.folders ?? []));
+		if (url.includes('/lists/reorder')) {
+			if (routes.reorderListsError instanceof Error)
+				return Promise.reject(routes.reorderListsError);
+			if (routes.reorderListsError) return errorResponse(routes.reorderListsError);
+			return Promise.resolve(jsonResponse(routes.reorderLists ?? routes.lists ?? []));
+		}
 		if (url.includes('/lists/') && init?.method === 'PATCH') {
 			if (routes.updateListError instanceof Error) return Promise.reject(routes.updateListError);
 			if (routes.updateListError) return errorResponse(routes.updateListError);
@@ -514,6 +527,230 @@ describe('Lists +page.svelte', () => {
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/folders')).length)
+			.toBe(3);
+	});
+
+	function rows() {
+		return page.getByRole('listitem');
+	}
+
+	const first = {
+		id: 1,
+		name: 'Groceries',
+		archived: false,
+		color: '#3b82f6',
+		icon: null,
+		folderId: null,
+		itemCount: 0
+	};
+	const second = {
+		id: 2,
+		name: 'Hardware',
+		archived: false,
+		color: '#ef4444',
+		icon: null,
+		folderId: null,
+		itemCount: 0
+	};
+
+	async function dragFirstBelowSecond() {
+		const items = rows();
+		const firstEl = items.first().element();
+		const secondEl = items.nth(1).element();
+		const secondRect = secondEl.getBoundingClientRect();
+
+		firstEl.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		firstEl.dispatchEvent(
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: secondRect.top + secondRect.height + 1
+			})
+		);
+		firstEl.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: secondRect.top + secondRect.height + 1
+			})
+		);
+	}
+
+	it('reorders lists by dragging the first one below the second', async () => {
+		setToken('test-token');
+		const fetchMock = stubFetchByUrl({
+			lists: [first, second],
+			reorderLists: [second, first]
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await dragFirstBelowSecond();
+
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
+			.toBe(1);
+		const [, init] = fetchMock.mock.calls.find(([u]) => String(u).includes('/lists/reorder'))!;
+		expect(JSON.parse((init as RequestInit).body as string)).toEqual({ order: [2, 1] });
+	});
+
+	it('leaves a list in another folder section untouched by an unfiled-section drag', async () => {
+		setToken('test-token');
+		const inFolder = {
+			id: 3,
+			name: 'Camping',
+			archived: false,
+			color: '#22c55e',
+			icon: null,
+			folderId: 9,
+			itemCount: 0
+		};
+		const folder = { id: 9, userId: 1, name: 'Trips', color: '#22c55e', sortOrder: 0, version: 1 };
+		const fetchMock = stubFetchByUrl({
+			lists: [inFolder, first, second],
+			folders: [folder],
+			reorderLists: [inFolder, second, first]
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Camping')).toBeInTheDocument();
+
+		// Folder groups render before the unfiled section, so the unfiled rows
+		// are the 2nd and 3rd `listitem`s, not the 1st.
+		const items = rows();
+		const firstEl = items.nth(1).element();
+		const secondEl = items.nth(2).element();
+		const secondRect = secondEl.getBoundingClientRect();
+
+		firstEl.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		firstEl.dispatchEvent(
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: secondRect.top + secondRect.height + 1
+			})
+		);
+		firstEl.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: secondRect.top + secondRect.height + 1
+			})
+		);
+
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
+			.toBe(1);
+		const [, init] = fetchMock.mock.calls.find(([u]) => String(u).includes('/lists/reorder'))!;
+		// The foldered list (id 3) keeps its original slot; only the unfiled pair swaps.
+		expect(JSON.parse((init as RequestInit).body as string)).toEqual({ order: [3, 2, 1] });
+	});
+
+	it('reorders lists within a folder section by dragging the first one below the second', async () => {
+		setToken('test-token');
+		const tent = {
+			id: 3,
+			name: 'Tent',
+			archived: false,
+			color: '#22c55e',
+			icon: null,
+			folderId: 9,
+			itemCount: 0
+		};
+		const stove = {
+			id: 4,
+			name: 'Stove',
+			archived: false,
+			color: '#22c55e',
+			icon: null,
+			folderId: 9,
+			itemCount: 0
+		};
+		const folder = { id: 9, userId: 1, name: 'Trips', color: '#22c55e', sortOrder: 0, version: 1 };
+		const fetchMock = stubFetchByUrl({
+			lists: [tent, stove],
+			folders: [folder],
+			reorderLists: [stove, tent]
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Tent')).toBeInTheDocument();
+
+		const items = rows();
+		const firstEl = items.first().element();
+		const secondEl = items.nth(1).element();
+		const secondRect = secondEl.getBoundingClientRect();
+
+		firstEl.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		firstEl.dispatchEvent(
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: secondRect.top + secondRect.height + 1
+			})
+		);
+		firstEl.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: secondRect.top + secondRect.height + 1
+			})
+		);
+
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
+			.toBe(1);
+		const [, init] = fetchMock.mock.calls.find(([u]) => String(u).includes('/lists/reorder'))!;
+		expect(JSON.parse((init as RequestInit).body as string)).toEqual({ order: [4, 3] });
+	});
+
+	it('reloads when reordering lists fails without an ApiError', async () => {
+		setToken('test-token');
+		const fetchMock = stubFetchByUrl({
+			lists: [first, second],
+			reorderListsError: new TypeError('network down')
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await dragFirstBelowSecond();
+
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists')).length)
+			.toBe(3);
+	});
+
+	it('reloads when reordering lists fails with an ApiError', async () => {
+		setToken('test-token');
+		const fetchMock = stubFetchByUrl({
+			lists: [first, second],
+			reorderListsError: { status: 500, message: 'Could not reorder' }
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await dragFirstBelowSecond();
+
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists')).length)
 			.toBe(3);
 	});
 });

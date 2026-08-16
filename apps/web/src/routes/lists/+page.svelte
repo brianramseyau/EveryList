@@ -6,17 +6,71 @@
 	import { Select } from 'flowbite-svelte';
 	import type { FolderDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { fetchLists, updateList } from '$lib/api/lists';
+	import { fetchLists, updateList, reorderLists } from '$lib/api/lists';
 	import { deleteFolder, fetchFolders } from '$lib/api/folders';
 	import { ApiError } from '$lib/api/client';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
+	import { pressHoldReorder } from '$lib/actions/press-hold-reorder';
 
 	let lists = $state<ListDto[]>([]);
 	let folders = $state<FolderDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+	let reordering = $state(false);
+
+	// One drag container per section (each folder's group, plus "unfiled") —
+	// dragging never crosses sections, since moving a list to a different
+	// folder already has its own affordance (the folder `<Select>`).
+	const sectionEls = new SvelteMap<string, HTMLUListElement>();
+
+	function sectionKey(folderId: number | null): string {
+		return folderId === null ? 'unfiled' : `folder-${folderId}`;
+	}
+
+	function getRowEls(folderId: number | null): HTMLElement[] {
+		const el = sectionEls.get(sectionKey(folderId));
+		/* v8 ignore next */
+		if (!el) return [];
+		return [...el.children] as HTMLElement[];
+	}
+
+	/** Registers a section's `<ul>` element under its key so `getRowEls` can find it —
+	 *  `bind:this` doesn't support the dynamic, map-keyed targets a per-folder section needs.
+	 *  `key` is stable for the lifetime of the node: each section's `{#each ... (group.folder.id)}`
+	 *  keeps the same DOM node for the same folder, so there's no update case to handle. */
+	function registerSection(node: HTMLUListElement, key: string) {
+		sectionEls.set(key, node);
+		return {
+			destroy() {
+				sectionEls.delete(key);
+			}
+		};
+	}
+
+	// Fires once, on release — dragging itself never touches `lists`. Only the
+	// dragged section's relative order changes; every other list keeps its
+	// original slot in the full per-user order sent to the server.
+	async function handleDrop(sectionLists: ListDto[], fromIndex: number, toIndex: number) {
+		const reorderedSection = [...sectionLists];
+		const [moved] = reorderedSection.splice(fromIndex, 1);
+		reorderedSection.splice(toIndex, 0, moved!);
+
+		const sectionIds = new Set(sectionLists.map((list) => list.id));
+		let cursor = 0;
+		lists = lists.map((list) => (sectionIds.has(list.id) ? reorderedSection[cursor++]! : list));
+
+		reordering = true;
+		try {
+			lists = await reorderLists(lists.map((list) => list.id));
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to reorder lists.';
+			void loadAll();
+		} finally {
+			reordering = false;
+		}
+	}
 
 	const groups = $derived.by(() => {
 		const byFolder = new SvelteMap<number, ListDto[]>();
@@ -74,8 +128,22 @@
 	}
 </script>
 
-{#snippet listCard(list: ListDto)}
-	<li class="flex items-center gap-2">
+{#snippet listCard(list: ListDto, index: number, sectionLists: ListDto[])}
+	<li
+		class="flex items-center gap-2"
+		use:pressHoldReorder={{
+			index,
+			disabled: reordering,
+			getRowEls: () => getRowEls(list.folderId),
+			ondrop: (fromIndex, toIndex) => handleDrop(sectionLists, fromIndex, toIndex)
+		}}
+	>
+		<span
+			aria-hidden="true"
+			class="flex h-11 w-6 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
+		>
+			<Icon name="dragVertical" class="h-5 w-5" />
+		</span>
 		<a
 			href={resolve('/lists/[id]', { id: String(list.id) })}
 			class="flex flex-1 items-center gap-3 rounded-lg border border-l-4 border-gray-200 p-4 hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:hover:border-gray-600"
@@ -123,7 +191,7 @@
 			{/if}
 		</a>
 		{#if folders.length > 0}
-			<div class="w-32">
+			<div class="w-32" data-reorder-ignore>
 				<Select
 					size="sm"
 					items={folders.map((folder) => ({ value: folder.id, name: folder.name }))}
@@ -173,6 +241,8 @@
 	{:else if lists.length === 0 && folders.length === 0}
 		<p class="text-gray-600 dark:text-gray-400">No lists yet — tap + to create one.</p>
 	{:else}
+		<p class="text-xs text-gray-400">Press and hold a list to drag it into place.</p>
+
 		<div class="flex flex-col gap-6">
 			{#each groups as group (group.folder.id)}
 				<section>
@@ -194,9 +264,9 @@
 					{#if group.lists.length === 0}
 						<p class="text-xs text-gray-400">No lists in this folder yet.</p>
 					{:else}
-						<ul class="flex flex-col gap-2">
-							{#each group.lists as list (list.id)}
-								{@render listCard(list)}
+						<ul class="flex flex-col gap-2" use:registerSection={sectionKey(group.folder.id)}>
+							{#each group.lists as list, index (list.id)}
+								{@render listCard(list, index, group.lists)}
 							{/each}
 						</ul>
 					{/if}
@@ -210,9 +280,9 @@
 							Not in a folder
 						</h2>
 					{/if}
-					<ul class="flex flex-col gap-2">
-						{#each unfiledLists as list (list.id)}
-							{@render listCard(list)}
+					<ul class="flex flex-col gap-2" use:registerSection={sectionKey(null)}>
+						{#each unfiledLists as list, index (list.id)}
+							{@render listCard(list, index, unfiledLists)}
 						{/each}
 					</ul>
 				</section>

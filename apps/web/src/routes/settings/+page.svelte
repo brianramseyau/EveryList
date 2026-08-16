@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import type { MetaResponse } from '@everylist/shared';
+	import { Input } from 'flowbite-svelte';
+	import type { MetaResponse, UserDto } from '@everylist/shared';
 	import { fetchMeta } from '$lib/api/meta';
 	import { formatBuildDate } from '$lib/api/format-build-date';
 	import { getThemePreference, setThemePreference, type ThemePreference } from '$lib/theme';
@@ -13,13 +14,19 @@
 		setOrientationPreference,
 		type OrientationPreference
 	} from '$lib/orientation';
-	import { logout } from '$lib/api/auth';
+	import { fetchProfile, logout, updateProfile } from '$lib/api/auth';
+	import { ApiError } from '$lib/api/client';
 	import { resetApp } from '$lib/pwa/reset';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
 
 	let meta = $state<MetaResponse | null>(null);
 	let loadFailed = $state(false);
+	let profile = $state<UserDto | null>(null);
+	let profileError = $state<string | null>(null);
+	// Snapshots the name at focus time so blur can skip saving when nothing
+	// changed — mirrors the categories page's editStartNames pattern.
+	let editStartName: string | null = null;
 	let themePreference = $state<ThemePreference>('automatic');
 	let accentPreference = $state<AccentPreference>('slate');
 	let orientationPreference = $state<OrientationPreference>('automatic');
@@ -65,6 +72,24 @@
 		await goto(resolve('/login'));
 	}
 
+	function handleNameFocus() {
+		// Only wired up inside the `{#if profile}` block, so `profile` is
+		// always set here — the `?.` exists solely to satisfy the type.
+		/* v8 ignore next */
+		editStartName = profile?.fullName ?? null;
+	}
+
+	async function handleNameBlur() {
+		if (!profile || profile.fullName === editStartName) return;
+		const fullName = profile.fullName?.trim() ? profile.fullName.trim() : null;
+		try {
+			profile = await updateProfile({ fullName });
+			profileError = null;
+		} catch (err) {
+			profileError = err instanceof ApiError ? err.message : 'Failed to save name.';
+		}
+	}
+
 	let resetting = $state(false);
 
 	async function handleResetApp() {
@@ -82,6 +107,11 @@
 		} catch {
 			loadFailed = true;
 		}
+		try {
+			profile = await fetchProfile();
+		} catch (err) {
+			profileError = err instanceof ApiError ? err.message : 'Failed to load account.';
+		}
 	});
 </script>
 
@@ -98,6 +128,31 @@
 		>
 			Account
 		</h2>
+		{#if profileError}
+			<p class="px-4 pt-3 text-sm text-red-600 dark:text-red-400">{profileError}</p>
+		{/if}
+		{#if profile}
+			<div class="flex items-center justify-between px-4 py-3">
+				<span class="text-sm font-medium">Email</span>
+				<span class="text-sm text-gray-600 dark:text-gray-400">{profile.email}</span>
+			</div>
+			<div class="flex items-center justify-between gap-4 px-4 py-3">
+				<span class="shrink-0 text-sm font-medium">Name</span>
+				<Input
+					bind:value={
+						() => profile?.fullName ?? '',
+						(value) => {
+							// Only wired up inside the `{#if profile}` block.
+							/* v8 ignore next */
+							if (profile) profile.fullName = value;
+						}
+					}
+					placeholder="Add your name"
+					onfocus={handleNameFocus}
+					onblur={handleNameBlur}
+				/>
+			</div>
+		{/if}
 		<div class="flex items-center justify-between px-4 py-3">
 			<span class="text-sm font-medium">Signed in</span>
 			<button

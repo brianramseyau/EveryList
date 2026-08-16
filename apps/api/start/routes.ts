@@ -25,6 +25,7 @@ router
     router
       .group(() => {
         router.get('profile', [controllers.Profile, 'show'])
+        router.patch('profile', [controllers.Profile, 'update'])
         router.post('logout', [controllers.AccessTokens, 'destroy'])
         router.post('refresh', [controllers.AccessTokens, 'refresh'])
       })
@@ -49,6 +50,7 @@ router
       .group(() => {
         router.get('/', [controllers.Lists, 'index'])
         router.post('/', [controllers.Lists, 'store'])
+        router.patch('/reorder', [controllers.Lists, 'reorder'])
         router.get(':id', [controllers.Lists, 'show'])
         router.patch(':id', [controllers.Lists, 'update'])
         router.delete(':id', [controllers.Lists, 'destroy'])
