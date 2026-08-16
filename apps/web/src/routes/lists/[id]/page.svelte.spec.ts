@@ -159,9 +159,12 @@ describe('List detail +page.svelte', () => {
 			{ id: 1, storeId: 7, categoryId: 10, sortOrder: 5, deletedAt: null, version: 1 },
 			{ id: 2, storeId: 7, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 }
 		]);
+		// Tagged to the selected store (7) — otherwise the new auto-filter
+		// (PHASE10_PLAN.md #0.5) would hide them, since they'd belong to no
+		// store while a store is selected.
 		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
-			makeItem({ id: 101, name: 'Milk', categoryId: 11 })
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 7 }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 11, storeId: 7 })
 		]);
 
 		render(ListDetailPage);
@@ -320,7 +323,7 @@ describe('List detail +page.svelte', () => {
 		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread' });
 	});
 
-	it('keeps an existing item’s store tag select stable when a new item is added', async () => {
+	it('keeps an existing item stable when a new item is added', async () => {
 		const store = {
 			id: 20,
 			name: 'Corner Shop',
@@ -520,7 +523,7 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Duplicate item')).toBeInTheDocument();
 	});
 
-	it("links an item's name to its detail screen", async () => {
+	it("links a desktop edit icon to an item's detail screen, and the item's name is no longer a link", async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
 		]);
@@ -528,8 +531,59 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		const itemLink = page.getByRole('link', { name: 'Bananas' });
-		expect(itemLink.element().getAttribute('href')).toBe('/lists/1/items/100');
+		const editLink = page.getByRole('link', { name: 'Edit Bananas' });
+		expect(editLink.element().getAttribute('href')).toBe('/lists/1/items/100');
+		await expect
+			.element(page.getByRole('link', { name: 'Bananas', exact: true }))
+			.not.toBeInTheDocument();
+	});
+
+	it('shows a store subheading under an item tagged with a store, and none for an untagged item', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: null })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Corner Shop')).toBeInTheDocument();
+		const breadRow = page.getByText('Bread').element().closest('li') as HTMLElement;
+		expect(breadRow.textContent).not.toContain('Corner Shop');
+	});
+
+	it("colors the header's store icon to match the currently selected store", async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(getSelectedStore).mockResolvedValue(20);
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		const storesLink = page.getByRole('link', { name: 'Stores' }).element() as HTMLElement;
+		const colorSpan = storesLink.querySelector('span') as HTMLElement;
+		expect(colorSpan.style.color).toBe('rgb(59, 130, 246)');
 	});
 
 	it('toggles one item checked without affecting a sibling item', async () => {
@@ -566,7 +620,7 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByRole('checkbox', { name: 'Bananas' })).not.toBeChecked();
 	});
 
-	it('filters items down to the selected store', async () => {
+	it('auto-filters items down to the currently selected store, with no filter UI to override it here', async () => {
 		const store = {
 			id: 20,
 			name: 'Corner Shop',
@@ -578,27 +632,19 @@ describe('List detail +page.svelte', () => {
 			version: 1
 		};
 		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(getSelectedStore).mockResolvedValue(20);
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),
 			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: null })
 		]);
 
 		render(ListDetailPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-		await expect.element(page.getByText('Bread')).toBeInTheDocument();
-
-		await page.getByRole('combobox').first().selectOptions('20');
 
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 		await expect.element(page.getByText('Bread')).not.toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Close' }).first().click();
-
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 	});
 
-	it('tags an item with a store via its per-item select', async () => {
+	it('shows every item when no store is currently selected', async () => {
 		const store = {
 			id: 20,
 			name: 'Corner Shop',
@@ -610,94 +656,16 @@ describe('List detail +page.svelte', () => {
 			version: 1
 		};
 		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(getSelectedStore).mockResolvedValue(null);
 		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null }),
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),
 			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: null })
 		]);
 
 		render(ListDetailPage);
+
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
-
-		await page.getByRole('combobox').nth(1).selectOptions('20');
-
-		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
-		expect(updateItem).toHaveBeenCalledWith(1, 100, { storeId: 20 });
-	});
-
-	it('reloads the list when tagging a store fails without an ApiError', async () => {
-		const store = {
-			id: 20,
-			name: 'Corner Shop',
-			color: '#3b82f6',
-			createdBy: 1,
-			createdAt: TS,
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		};
-		vi.mocked(fetchStores).mockResolvedValue([store]);
-		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null })
-		]);
-		vi.mocked(updateItem).mockRejectedValue(new TypeError('network down'));
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByRole('combobox').last().selectOptions('20');
-
-		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
-	});
-
-	it('clears an item store tag back to null via its per-item select', async () => {
-		const store = {
-			id: 20,
-			name: 'Corner Shop',
-			color: '#3b82f6',
-			createdBy: 1,
-			createdAt: TS,
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		};
-		vi.mocked(fetchStores).mockResolvedValue([store]);
-		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 })
-		]);
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Close' }).last().click();
-
-		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
-		expect(updateItem).toHaveBeenCalledWith(1, 100, { storeId: null });
-	});
-
-	it('reloads the list when tagging a store fails', async () => {
-		const store = {
-			id: 20,
-			name: 'Corner Shop',
-			color: '#3b82f6',
-			createdBy: 1,
-			createdAt: TS,
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		};
-		vi.mocked(fetchStores).mockResolvedValue([store]);
-		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null })
-		]);
-		vi.mocked(updateItem).mockRejectedValue(new ApiError(500, 'Could not tag store'));
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByRole('combobox').last().selectOptions('20');
-
-		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
 	});
 
 	it('shows the running total from item prices without a per-item price field', async () => {
@@ -1008,7 +976,7 @@ describe('List detail +page.svelte', () => {
 		} as unknown as MediaQueryList);
 	}
 
-	it('hides the desktop delete button and swipes to delete on a coarse-pointer device', async () => {
+	it('hides the desktop delete/edit icons and swipes right to delete on a coarse-pointer device', async () => {
 		const matchMediaSpy = mockCoarsePointer();
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
@@ -1019,6 +987,37 @@ describe('List detail +page.svelte', () => {
 		await expect
 			.element(page.getByRole('button', { name: 'Delete Bananas' }))
 			.not.toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'Edit Bananas' })).not.toBeInTheDocument();
+
+		const row = page
+			.getByText('Bananas')
+			.element()
+			.closest('li')!
+			.querySelector(':scope > div:last-of-type') as HTMLElement;
+		row.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		row.dispatchEvent(
+			new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 60, clientY: 0 })
+		);
+		row.dispatchEvent(
+			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 60, clientY: 0 })
+		);
+
+		await expect.poll(() => vi.mocked(deleteItem).mock.calls.length).toBe(1);
+		expect(deleteItem).toHaveBeenCalledWith(1, 100);
+
+		matchMediaSpy.mockRestore();
+	});
+
+	it('swipes left to navigate to item edit on a coarse-pointer device', async () => {
+		const matchMediaSpy = mockCoarsePointer();
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
 		const row = page
 			.getByText('Bananas')
@@ -1035,8 +1034,9 @@ describe('List detail +page.svelte', () => {
 			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: -60, clientY: 0 })
 		);
 
-		await expect.poll(() => vi.mocked(deleteItem).mock.calls.length).toBe(1);
-		expect(deleteItem).toHaveBeenCalledWith(1, 100);
+		expect(deleteItem).not.toHaveBeenCalled();
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(goto).toHaveBeenCalledWith('/lists/1/items/100');
 
 		matchMediaSpy.mockRestore();
 	});
@@ -1050,6 +1050,7 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
 		await expect.element(page.getByRole('button', { name: 'Delete Bananas' })).toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'Edit Bananas' })).toBeInTheDocument();
 	});
 
 	it('subscribes to the list channel and shows a toast on a sync event, refreshing on click', async () => {

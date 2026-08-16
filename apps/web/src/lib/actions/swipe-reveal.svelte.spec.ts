@@ -27,8 +27,9 @@ describe('swipeReveal', () => {
 	});
 
 	it('does not track movement below the direction dead zone', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { ondelete });
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { onCommitRight, onCommitLeft });
 
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: 5, clientY: 0 });
@@ -37,8 +38,9 @@ describe('swipeReveal', () => {
 	});
 
 	it('translates the row leftward once a horizontal swipe is detected', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { ondelete });
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { onCommitRight, onCommitLeft });
 
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: -30, clientY: 0 });
@@ -48,8 +50,9 @@ describe('swipeReveal', () => {
 	});
 
 	it('clamps the translation at REVEAL_PX', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { ondelete });
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { onCommitRight, onCommitLeft });
 
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: -30, clientY: 0 });
@@ -59,8 +62,9 @@ describe('swipeReveal', () => {
 	});
 
 	it('translates the row rightward too, revealing the mirrored panel', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { ondelete });
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { onCommitRight, onCommitLeft });
 
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: 30, clientY: 0 });
@@ -70,8 +74,9 @@ describe('swipeReveal', () => {
 	});
 
 	it('clamps rightward translation at REVEAL_PX', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { ondelete });
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { onCommitRight, onCommitLeft });
 
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: 30, clientY: 0 });
@@ -80,21 +85,38 @@ describe('swipeReveal', () => {
 		expect(node.style.transform).toBe(`translateX(${REVEAL_PX}px)`);
 	});
 
-	it('fires ondelete when released rightward past the commit threshold', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { ondelete });
+	it('fires onCommitRight when released rightward past the commit threshold', () => {
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { onCommitRight, onCommitLeft });
 
 		const past = Math.ceil(REVEAL_PX * COMMIT_RATIO) + 5;
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: past, clientY: 0 });
 		firePointer(node, 'pointerup', { clientX: past, clientY: 0 });
 
-		expect(ondelete).toHaveBeenCalledOnce();
+		expect(onCommitRight).toHaveBeenCalledOnce();
+		expect(onCommitLeft).not.toHaveBeenCalled();
+	});
+
+	it('fires onCommitLeft when released leftward past the commit threshold', () => {
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { onCommitRight, onCommitLeft });
+
+		const past = -Math.ceil(REVEAL_PX * COMMIT_RATIO) - 5;
+		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
+		firePointer(node, 'pointermove', { clientX: past, clientY: 0 });
+		firePointer(node, 'pointerup', { clientX: past, clientY: 0 });
+
+		expect(onCommitLeft).toHaveBeenCalledOnce();
+		expect(onCommitRight).not.toHaveBeenCalled();
 	});
 
 	it('releases tracking when the initial movement is vertical-dominant, leaving scroll native', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { ondelete });
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { onCommitRight, onCommitLeft });
 
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: 5, clientY: 30 });
@@ -104,46 +126,39 @@ describe('swipeReveal', () => {
 		expect(node.setPointerCapture).not.toHaveBeenCalled();
 	});
 
-	it('snaps back without deleting when released short of the commit threshold', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { ondelete });
+	it('snaps back without committing when released short of the commit threshold', () => {
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { onCommitRight, onCommitLeft });
 
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: -20, clientY: 0 });
 		firePointer(node, 'pointerup', { clientX: -20, clientY: 0 });
 
-		expect(ondelete).not.toHaveBeenCalled();
+		expect(onCommitLeft).not.toHaveBeenCalled();
+		expect(onCommitRight).not.toHaveBeenCalled();
 		expect(node.style.transform).toBe('');
 	});
 
-	it('fires ondelete when released past the commit threshold', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { ondelete });
-
-		const past = -Math.ceil(REVEAL_PX * COMMIT_RATIO) - 5;
-		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
-		firePointer(node, 'pointermove', { clientX: past, clientY: 0 });
-		firePointer(node, 'pointerup', { clientX: past, clientY: 0 });
-
-		expect(ondelete).toHaveBeenCalledOnce();
-	});
-
-	it('does not delete on pointercancel even past the commit threshold, but still resets', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { ondelete });
+	it('does not commit on pointercancel even past the commit threshold, but still resets', () => {
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { onCommitRight, onCommitLeft });
 
 		const past = -Math.ceil(REVEAL_PX * COMMIT_RATIO) - 5;
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: past, clientY: 0 });
 		firePointer(node, 'pointercancel', { clientX: past, clientY: 0 });
 
-		expect(ondelete).not.toHaveBeenCalled();
+		expect(onCommitLeft).not.toHaveBeenCalled();
+		expect(onCommitRight).not.toHaveBeenCalled();
 		expect(node.style.transform).toBe('');
 	});
 
 	it('ignores pointerdown while disabled', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { disabled: true, ondelete });
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { disabled: true, onCommitRight, onCommitLeft });
 
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: -30, clientY: 0 });
@@ -152,8 +167,9 @@ describe('swipeReveal', () => {
 	});
 
 	it('ignores events from an unrelated pointer id', () => {
-		const ondelete = vi.fn();
-		swipeReveal(node, { ondelete });
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		swipeReveal(node, { onCommitRight, onCommitLeft });
 
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0, pointerId: 1 });
 		firePointer(node, 'pointermove', { clientX: -30, clientY: 0, pointerId: 2 });
@@ -162,23 +178,27 @@ describe('swipeReveal', () => {
 	});
 
 	it('picks up updated params via update()', () => {
-		const ondeleteA = vi.fn();
-		const ondeleteB = vi.fn();
-		const action = swipeReveal(node, { ondelete: ondeleteA });
-		action.update({ ondelete: ondeleteB });
+		const onCommitLeftA = vi.fn();
+		const onCommitLeftB = vi.fn();
+		const action = swipeReveal(node, {
+			onCommitRight: vi.fn(),
+			onCommitLeft: onCommitLeftA
+		});
+		action.update({ onCommitRight: vi.fn(), onCommitLeft: onCommitLeftB });
 
 		const past = -Math.ceil(REVEAL_PX * COMMIT_RATIO) - 5;
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: past, clientY: 0 });
 		firePointer(node, 'pointerup', { clientX: past, clientY: 0 });
 
-		expect(ondeleteA).not.toHaveBeenCalled();
-		expect(ondeleteB).toHaveBeenCalledOnce();
+		expect(onCommitLeftA).not.toHaveBeenCalled();
+		expect(onCommitLeftB).toHaveBeenCalledOnce();
 	});
 
 	it('removes its listeners on destroy', () => {
-		const ondelete = vi.fn();
-		const action = swipeReveal(node, { ondelete });
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		const action = swipeReveal(node, { onCommitRight, onCommitLeft });
 
 		action.destroy();
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
