@@ -589,7 +589,11 @@
 	}
 
 	.item-row-highlight {
-		background-color: color-mix(in srgb, var(--color-primary-500) 25%, transparent);
+		/* Mixed against the opaque paper background, not "transparent" — this row
+		   sits in front of the swipe-reveal delete/edit panels (absolutely
+		   positioned behind it), which a translucent highlight would let show
+		   through underneath. */
+		background-color: color-mix(in srgb, var(--color-primary-500) 25%, var(--color-paper) 75%);
 		transition: none;
 	}
 
