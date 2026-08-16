@@ -58,14 +58,38 @@ describe('swipeReveal', () => {
 		expect(node.style.transform).toBe(`translateX(${-REVEAL_PX}px)`);
 	});
 
-	it('never drags rightward past zero', () => {
+	it('translates the row rightward too, revealing the mirrored panel', () => {
 		const ondelete = vi.fn();
 		swipeReveal(node, { ondelete });
 
 		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
 		firePointer(node, 'pointermove', { clientX: 30, clientY: 0 });
 
-		expect(node.style.transform).toBe('translateX(0px)');
+		expect(node.style.transform).toBe('translateX(30px)');
+		expect(node.setPointerCapture).toHaveBeenCalledWith(1);
+	});
+
+	it('clamps rightward translation at REVEAL_PX', () => {
+		const ondelete = vi.fn();
+		swipeReveal(node, { ondelete });
+
+		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
+		firePointer(node, 'pointermove', { clientX: 30, clientY: 0 });
+		firePointer(node, 'pointermove', { clientX: REVEAL_PX + 50, clientY: 0 });
+
+		expect(node.style.transform).toBe(`translateX(${REVEAL_PX}px)`);
+	});
+
+	it('fires ondelete when released rightward past the commit threshold', () => {
+		const ondelete = vi.fn();
+		swipeReveal(node, { ondelete });
+
+		const past = Math.ceil(REVEAL_PX * COMMIT_RATIO) + 5;
+		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
+		firePointer(node, 'pointermove', { clientX: past, clientY: 0 });
+		firePointer(node, 'pointerup', { clientX: past, clientY: 0 });
+
+		expect(ondelete).toHaveBeenCalledOnce();
 	});
 
 	it('releases tracking when the initial movement is vertical-dominant, leaving scroll native', () => {

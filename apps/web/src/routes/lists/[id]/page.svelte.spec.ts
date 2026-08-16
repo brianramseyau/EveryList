@@ -181,17 +181,19 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Uncategorized')).toBeInTheDocument();
 	});
 
-	it('groups items by category, keeping checked items under the same header, sunk below unchecked ones', async () => {
+	it('groups items by category, keeping checked items under the same header without reordering them', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', quantity: '2', categoryId: 10 }),
+			// Checked item listed FIRST — it must stay first, not sink below
+			// the unchecked one that follows it.
 			makeItem({
 				id: 101,
 				name: 'Milk',
 				categoryId: 10,
 				checked: true,
 				checkedAt: '2026-08-13T00:00:00.000Z',
-				sortOrder: 1
-			})
+				sortOrder: 0
+			}),
+			makeItem({ id: 100, name: 'Bananas', quantity: '2', categoryId: 10, sortOrder: 1 })
 		]);
 
 		render(ListDetailPage);
@@ -207,11 +209,12 @@ describe('List detail +page.svelte', () => {
 		expect(produceHeader).not.toBeNull();
 		expect(produceHeader?.style.color).toBe('rgb(59, 130, 246)');
 
-		// Both items render under the same "Produce" section, checked one last.
+		// Both items render under the same "Produce" section, in their
+		// original order — checked status doesn't move Milk to the end.
 		const names = [...produceHeader!.parentElement!.querySelectorAll('li span')]
 			.map((el) => el.textContent?.trim())
 			.filter((t) => t === 'Bananas' || t === 'Milk');
-		expect(names).toEqual(['Bananas', 'Milk']);
+		expect(names).toEqual(['Milk', 'Bananas']);
 
 		// Neither item has a price set, so the progress strip's total is hidden.
 		await expect.element(page.getByText('1 of 2 done')).toBeInTheDocument();
@@ -542,88 +545,22 @@ describe('List detail +page.svelte', () => {
 		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
 	});
 
-	it('sets an item price via its per-item input, leaving a sibling item untouched, and shows the running total', async () => {
+	it('shows the running total from item prices without a per-item price field', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, price: 399 }),
 			makeItem({ id: 101, name: 'Bread', categoryId: 10, price: 250 })
 		]);
-		vi.mocked(updateItem).mockResolvedValue(undefined);
 
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByPlaceholder('Price').first().fill('3.99');
-		await page.getByText('Groceries').click();
-
-		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
-		expect(updateItem).toHaveBeenCalledWith(1, 100, { price: 399 });
+		await expect.element(page.getByPlaceholder('Price')).not.toBeInTheDocument();
 		await expect.element(page.getByText('Total: $6.49')).toBeInTheDocument();
 
 		// Toggling a checkbox reassigns `items` without touching any price, so
 		// the running total recomputes to the same value it already displayed.
 		await page.getByRole('checkbox', { name: 'Bread' }).click();
 		await expect.element(page.getByText('Total: $6.49')).toBeInTheDocument();
-	});
-
-	it('reloads the list when setting a price fails with an ApiError', async () => {
-		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
-		]);
-		vi.mocked(updateItem).mockRejectedValue(new ApiError(500, 'Could not set price'));
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByPlaceholder('Price').fill('3.99');
-		await page.getByText('Groceries').click();
-
-		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
-	});
-
-	it('clears an item price back to null via its per-item input', async () => {
-		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', categoryId: 10, price: 399 })
-		]);
-		vi.mocked(updateItem).mockResolvedValue(undefined);
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-		await expect.element(page.getByText('Total: $3.99')).toBeInTheDocument();
-
-		await page.getByPlaceholder('Price').clear();
-		await page.getByText('Groceries').click();
-
-		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
-		expect(updateItem).toHaveBeenCalledWith(1, 100, { price: null });
-	});
-
-	it('ignores a non-numeric price entry', async () => {
-		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
-		]);
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByPlaceholder('Price').fill('abc');
-		await page.getByText('Groceries').click();
-
-		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(0);
-	});
-
-	it('reloads the list when setting a price fails without an ApiError', async () => {
-		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
-		]);
-		vi.mocked(updateItem).mockRejectedValue(new TypeError('network down'));
-
-		render(ListDetailPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByPlaceholder('Price').fill('3.99');
-		await page.getByText('Groceries').click();
-
-		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
 	});
 
 	it('reloads the list when toggling checked fails without an ApiError', async () => {
@@ -692,19 +629,19 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
-	function dragHandleFor(name: string) {
-		return page.getByRole('button', { name: `Drag to reorder ${name}` });
+	function rowFor(name: string): HTMLElement {
+		return page.getByText(name).element().closest('li') as HTMLElement;
 	}
 
 	async function drag(fromName: string, belowElementSelector: () => Element) {
-		const handle = dragHandleFor(fromName).element();
+		const row = rowFor(fromName);
 		const targetRect = belowElementSelector().getBoundingClientRect();
 
-		handle.dispatchEvent(
+		row.dispatchEvent(
 			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
 		);
 		await delay(HOLD_MS + 50);
-		handle.dispatchEvent(
+		row.dispatchEvent(
 			new PointerEvent('pointermove', {
 				bubbles: true,
 				pointerId: 1,
@@ -712,7 +649,7 @@ describe('List detail +page.svelte', () => {
 				clientY: targetRect.top + targetRect.height + 1
 			})
 		);
-		handle.dispatchEvent(
+		row.dispatchEvent(
 			new PointerEvent('pointerup', {
 				bubbles: true,
 				pointerId: 1,
@@ -768,13 +705,13 @@ describe('List detail +page.svelte', () => {
 		// Drop just above Bread (not below the last item) — Bread is the
 		// target neighbor, so the insertion point is computed from its index
 		// rather than falling back to the end of the list.
-		const handle = dragHandleFor('Carrots').element();
+		const row = rowFor('Carrots');
 		const breadRect = page.getByText('Bread').element().closest('li')!.getBoundingClientRect();
-		handle.dispatchEvent(
+		row.dispatchEvent(
 			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
 		);
 		await delay(HOLD_MS + 50);
-		handle.dispatchEvent(
+		row.dispatchEvent(
 			new PointerEvent('pointermove', {
 				bubbles: true,
 				pointerId: 1,
@@ -782,7 +719,7 @@ describe('List detail +page.svelte', () => {
 				clientY: breadRect.top
 			})
 		);
-		handle.dispatchEvent(
+		row.dispatchEvent(
 			new PointerEvent('pointerup', {
 				bubbles: true,
 				pointerId: 1,
@@ -803,17 +740,17 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		const handle = dragHandleFor('Bananas').element();
-		handle.dispatchEvent(
+		const row = rowFor('Bananas');
+		row.dispatchEvent(
 			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
 		);
 		await delay(HOLD_MS + 50);
-		// Pointer stays over the same slot — onmove still fires, but with
+		// Pointer stays over the same slot — onhover still fires, but with
 		// toIndex === fromIndex.
-		handle.dispatchEvent(
+		row.dispatchEvent(
 			new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
 		);
-		handle.dispatchEvent(
+		row.dispatchEvent(
 			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
 		);
 
@@ -928,8 +865,11 @@ describe('List detail +page.svelte', () => {
 			.element(page.getByRole('button', { name: 'Delete Bananas' }))
 			.not.toBeInTheDocument();
 
-		const row = page.getByText('Bananas').element().closest('li')!.querySelector('div')!
-			.nextElementSibling as HTMLElement;
+		const row = page
+			.getByText('Bananas')
+			.element()
+			.closest('li')!
+			.querySelector(':scope > div:last-of-type') as HTMLElement;
 		row.dispatchEvent(
 			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
 		);
