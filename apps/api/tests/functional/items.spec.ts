@@ -1,9 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
-import db from '@adonisjs/lucid/services/db'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
-import type { ListDto } from '@everylist/shared'
-import DefaultCategorySeeder from '#database/seeders/default_category_seeder'
+import type { CategoryDto, ListDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 async function createList(client: ApiClient, token: string) {
@@ -14,6 +12,33 @@ async function createList(client: ApiClient, token: string) {
   return bodyData<ListDto>(response).id
 }
 
+/**
+ * Creates the 8 "starter" categories directly on a given list, in the same
+ * name/order the old global-default seeder used to provide, for tests that
+ * rely on auto-categorization or on a specific category being present.
+ */
+async function seedStarterCategories(client: ApiClient, token: string, listId: number) {
+  const names: Array<[string, string]> = [
+    ['Produce', 'fruitCherries'],
+    ['Dairy', 'cheese'],
+    ['Meat', 'foodDrumstick'],
+    ['Bakery', 'breadSlice'],
+    ['Frozen', 'snowflake'],
+    ['Pantry', 'foodCanArrowUp'],
+    ['Household', 'spray'],
+    ['Other', 'dotsHorizontalCircle'],
+  ]
+  const categories: CategoryDto[] = []
+  for (const [name, icon] of names) {
+    const response = await client
+      .post(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name, icon })
+    categories.push(bodyData<CategoryDto>(response))
+  }
+  return categories
+}
+
 test.group('Items CRUD', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
 
@@ -21,9 +46,9 @@ test.group('Items CRUD', (group) => {
     client,
     assert,
   }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
+    await seedStarterCategories(client, token, listId)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const create = await auth(
@@ -117,9 +142,9 @@ test.group('Items CRUD', (group) => {
   })
 
   test('bulk import splits pasted text into items', async ({ client, assert }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
+    await seedStarterCategories(client, token, listId)
 
     const response = await client
       .post(`/api/v1/lists/${listId}/items/import`)
@@ -135,9 +160,9 @@ test.group('Items CRUD', (group) => {
     client,
     assert,
   }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
+    await seedStarterCategories(client, token, listId)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))
@@ -255,9 +280,9 @@ test.group('Items CRUD', (group) => {
     client,
     assert,
   }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
+    await seedStarterCategories(client, token, listId)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))
@@ -339,9 +364,9 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     client,
     assert,
   }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
+    await seedStarterCategories(client, token, listId)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const suggestion = await auth(
@@ -361,9 +386,9 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     client,
     assert,
   }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
+    await seedStarterCategories(client, token, listId)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))

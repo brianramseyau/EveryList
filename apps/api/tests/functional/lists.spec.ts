@@ -11,17 +11,14 @@ test.group('Lists CRUD', (group) => {
     response.assertStatus(401)
   })
 
-  test('signup seeds a starter Groceries list owned by the new user', async ({
-    client,
-    assert,
-  }) => {
+  test('signup seeds a starter Shopping List owned by the new user', async ({ client, assert }) => {
     const token = await signupAndGetToken(client)
 
     const index = await client.get('/api/v1/lists').header('Authorization', `Bearer ${token}`)
     index.assertStatus(200)
     const indexed = bodyData<ListDto[]>(index)
     assert.lengthOf(indexed, 1)
-    assert.equal(indexed[0]?.name, 'Groceries')
+    assert.equal(indexed[0]?.name, 'Shopping List')
     assert.equal(indexed[0]?.icon, 'basket')
     assert.equal(indexed[0]?.color, '#f97316')
     assert.equal(indexed[0]?.itemCount, 0)
@@ -45,7 +42,7 @@ test.group('Lists CRUD', (group) => {
     const index = await authed()
     index.assertStatus(200)
     const indexed = bodyData<ListDto[]>(index)
-    // Signup seeds a starter "Groceries" list, so the index has that plus
+    // Signup seeds a starter "Shopping List" list, so the index has that plus
     // the one created above.
     assert.lengthOf(indexed, 2)
     const indexedCreated = indexed.find((list) => list.id === listId)
@@ -305,12 +302,12 @@ test.group('Lists CRUD', (group) => {
   }) => {
     const token = await signupAndGetToken(client)
 
-    // Signup already seeded a "Groceries" list for this owner — creating
+    // Signup already seeded a "Shopping List" list for this owner — creating
     // another with different casing/whitespace should collide with it.
     const duplicate = await client
       .post('/api/v1/lists')
       .header('Authorization', `Bearer ${token}`)
-      .json({ name: '  groceries  ' })
+      .json({ name: '  shopping list  ' })
     duplicate.assertStatus(422)
     assert.equal(
       (duplicate.body() as unknown as { errors: { message: string }[] }).errors[0]?.message,
@@ -347,7 +344,7 @@ test.group('Lists CRUD', (group) => {
     const rename = await client
       .patch(`/api/v1/lists/${listId}`)
       .header('Authorization', `Bearer ${token}`)
-      .json({ name: 'GROCERIES' })
+      .json({ name: 'SHOPPING LIST' })
     rename.assertStatus(422)
     assert.equal(rename.body().errors[0].message, 'You already have a list with this name.')
 

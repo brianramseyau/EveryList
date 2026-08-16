@@ -7,7 +7,7 @@ import {
 } from '#validators/category'
 import type { HttpContext } from '@adonisjs/core/http'
 import CategoryTransformer from '#transformers/category_transformer'
-import { getEffectiveCategories, forkCategoryForList } from '#services/category_service'
+import { getEffectiveCategories } from '#services/category_service'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
 import { DateTime } from 'luxon'
@@ -57,36 +57,32 @@ export default class CategoriesController {
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const category = await Category.query()
       .where('id', params.categoryId)
-      .where((query) => query.where('listId', list.id).orWhereNull('listId'))
+      .where('listId', list.id)
       .whereNull('deletedAt')
       .firstOrFail()
 
     const payload = await request.validateUsing(updateCategoryValidator)
     const { expectedVersion, ...rest } = payload
 
-    // Checked against the pre-fork row: if not yet forked for this list,
-    // the client's cached view was of the global default, so its version
-    // is what expectedVersion should match.
     if (hasVersionConflict(category, expectedVersion)) {
       return response
         .status(409)
         .send({ ...(await serialize(CategoryTransformer.transform(category))), conflict: true })
     }
 
-    const listCategory = await forkCategoryForList(list, category)
-    listCategory.merge(rest)
-    listCategory.version += 1
-    await listCategory.save()
+    category.merge(rest)
+    category.version += 1
+    await category.save()
 
     await broadcastSync({
       listId: list.id,
       entityType: 'category',
-      entityId: listCategory.id,
+      entityId: category.id,
       op: 'update',
-      version: listCategory.version,
+      version: category.version,
     })
 
-    return serialize(CategoryTransformer.transform(listCategory))
+    return serialize(CategoryTransformer.transform(category))
   }
 
   async destroy({ auth, params, request, response, serialize }: HttpContext) {
@@ -127,7 +123,7 @@ export default class CategoriesController {
 
     const categories = await Category.query()
       .whereIn('id', order)
-      .where((query) => query.where('listId', list.id).orWhereNull('listId'))
+      .where('listId', list.id)
       .whereNull('deletedAt')
 
     const categoriesById = new Map(categories.map((category) => [category.id, category]))
@@ -136,10 +132,9 @@ export default class CategoriesController {
       const category = categoriesById.get(categoryId)
       if (!category) continue
 
-      const listCategory = await forkCategoryForList(list, category)
-      listCategory.sortOrder = index
-      listCategory.version += 1
-      await listCategory.save()
+      category.sortOrder = index
+      category.version += 1
+      await category.save()
     }
 
     await broadcastSync({

@@ -6,7 +6,7 @@
  *
  * `Category.icon` stores the export name minus its "mdi" prefix, camelCase
  * (e.g. `"fruitCherries"` for the `mdiFruitCherries` export) — see
- * apps/api's default_category_seeder.ts for the existing convention.
+ * apps/api's category_service.ts (STARTER_CATEGORIES) for the existing convention.
  */
 export type MdiModule = Record<string, string>;
 

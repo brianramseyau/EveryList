@@ -1,9 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
-import db from '@adonisjs/lucid/services/db'
 import type { ApiClient } from '@japa/api-client'
 import type { CategoryDto, ListDto, StoreDto } from '@everylist/shared'
-import DefaultCategorySeeder from '#database/seeders/default_category_seeder'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 interface StoreCategoryOrderDto {
@@ -24,6 +22,14 @@ async function createList(client: ApiClient, token: string) {
   return bodyData<ListDto>(response).id
 }
 
+async function createCategory(client: ApiClient, token: string, listId: number, name: string) {
+  const response = await client
+    .post(`/api/v1/lists/${listId}/categories`)
+    .header('Authorization', `Bearer ${token}`)
+    .json({ name, icon: 'basket' })
+  return bodyData<CategoryDto>(response).id
+}
+
 test.group('Stores', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
 
@@ -31,9 +37,9 @@ test.group('Stores', (group) => {
     client,
     assert,
   }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
+    const categoryId = await createCategory(client, token, listId, 'Produce')
 
     const create = await client
       .post(`/api/v1/lists/${listId}/stores`)
@@ -48,11 +54,6 @@ test.group('Stores', (group) => {
       .get(`/api/v1/lists/${listId}/stores`)
       .header('Authorization', `Bearer ${token}`)
     assert.lengthOf(bodyData<StoreDto[]>(index), 1)
-
-    const categories = await client
-      .get(`/api/v1/lists/${listId}/categories`)
-      .header('Authorization', `Bearer ${token}`)
-    const categoryId = bodyData<CategoryDto[]>(categories)[0]!.id
 
     const reorder = await client
       .patch(`/api/v1/stores/${storeId}/categories`)
@@ -150,7 +151,6 @@ test.group('Stores', (group) => {
     client,
     assert,
   }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
 
@@ -174,9 +174,9 @@ test.group('Stores', (group) => {
   })
 
   test('reordering categories silently skips ids that do not exist', async ({ client, assert }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
+    const categoryId = await createCategory(client, token, listId, 'Produce')
 
     const create = await client
       .post(`/api/v1/lists/${listId}/stores`)
@@ -184,10 +184,6 @@ test.group('Stores', (group) => {
       .json({ name: 'Kroger' })
     const storeId = bodyData<StoreDto>(create).id
 
-    const categories = await client
-      .get(`/api/v1/lists/${listId}/categories`)
-      .header('Authorization', `Bearer ${token}`)
-    const categoryId = bodyData<CategoryDto[]>(categories)[0]!.id
     const bogusCategoryId = 999_999
 
     const reorder = await client

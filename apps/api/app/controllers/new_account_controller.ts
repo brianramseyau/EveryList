@@ -7,7 +7,7 @@ import { findActiveInvite } from '#services/invite_lookup'
 import { createOwnedList } from '#services/list_creation'
 
 /** Every new account starts with one list so signup doesn't land on an empty index. */
-const STARTER_LIST = { name: 'Groceries', icon: 'basket', color: '#f97316' } as const
+const STARTER_LIST = { name: 'Shopping List', icon: 'basket', color: '#f97316' } as const
 
 export default class NewAccountController {
   async store({ request, response, serialize }: HttpContext) {
@@ -23,7 +23,7 @@ export default class NewAccountController {
 
     const user = await User.create({ fullName, email, password })
     const token = await User.accessTokens.create(user)
-    await createOwnedList({ ownerId: user.id, ...STARTER_LIST })
+    await createOwnedList({ ownerId: user.id, ...STARTER_LIST, seedStarterCategories: true })
 
     return serialize({
       user: UserTransformer.transform(user),
