@@ -139,7 +139,11 @@ export function pressHoldReorder(node: HTMLElement, params: PressHoldReorderPara
 		/* v8 ignore next */
 		if (pointerId !== null) node.setPointerCapture(pointerId);
 		node.style.position = 'relative';
-		node.style.zIndex = '20';
+		// Below category headings' z-10 (see +page.svelte) so a row dragged
+		// across a category boundary slides under the heading rather than
+		// painting over it — still above ordinary rows (position:relative,
+		// z-index:auto) so it visually lifts off the list while dragging.
+		node.style.zIndex = '5';
 		node.style.boxShadow = '0 8px 20px rgba(0, 0, 0, 0.25)';
 		node.classList.add('is-dragging');
 		current.onstart?.(fromIndex);

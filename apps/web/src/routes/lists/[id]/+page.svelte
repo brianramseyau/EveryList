@@ -490,7 +490,7 @@
 						<section>
 							{#if list.useCategories !== false}
 								<h2
-									class="mb-2 flex items-center gap-2 border-b pb-1 text-sm font-semibold {group.category
+									class="relative z-10 mb-2 flex items-center gap-2 border-b bg-paper pb-1 text-sm font-semibold {group.category
 										? ''
 										: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
 									style:color={group.category ? list.color : undefined}
