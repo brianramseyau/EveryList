@@ -110,7 +110,7 @@
 				<Input placeholder="New store name" bind:value={newStoreName} />
 			</div>
 			<ColorPicker value={newStoreColor} onselect={(color) => (newStoreColor = color)} />
-			<Button type="submit" disabled={creating || !newStoreName.trim()}>Add store</Button>
+			<Button type="submit" disabled={creating || !newStoreName.trim()}>Add</Button>
 		</form>
 
 		{#if error}

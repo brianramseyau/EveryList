@@ -304,6 +304,14 @@
 			void loadAll();
 		}
 	}
+
+	// Bulk-deletes via the same soft-delete path as a single item, one request
+	// per item rather than a new backend endpoint (PHASE10_PLAN.md #0.11) — each
+	// call targets a different id, so there's no version-conflict risk running
+	// them concurrently, and it inherits the offline-queue behavior for free.
+	async function clearChecked() {
+		await Promise.all(checkedItems.map((item) => removeItem(item)));
+	}
 </script>
 
 <svelte:head>
@@ -381,6 +389,16 @@
 				>
 					<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
 				</button>
+				{#if checkedItems.length > 0}
+					<button
+						type="button"
+						aria-label="Clear checked items"
+						onclick={() => void clearChecked()}
+						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+					>
+						<Icon name="deleteSweep" class="h-5 w-5" />
+					</button>
+				{/if}
 				<ItemAutocomplete
 					{listId}
 					bind:value={newItemName}

@@ -801,6 +801,46 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
+	it('hides the "Clear checked items" button until at least one visible item is checked', async () => {
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await expect
+			.element(page.getByRole('button', { name: 'Clear checked items' }))
+			.not.toBeInTheDocument();
+
+		await page.getByRole('checkbox', { name: 'Bananas' }).click();
+
+		await expect
+			.element(page.getByRole('button', { name: 'Clear checked items' }))
+			.toBeInTheDocument();
+	});
+
+	it('clears every checked item at once via the "Clear checked items" button, leaving unchecked items alone', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 10, checked: true }),
+			makeItem({ id: 102, name: 'Bread', categoryId: 10, checked: false })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Clear checked items' }).click();
+
+		await expect.poll(() => vi.mocked(deleteItem).mock.calls.length).toBe(2);
+		expect(deleteItem).toHaveBeenCalledWith(1, 100);
+		expect(deleteItem).toHaveBeenCalledWith(1, 101);
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+		await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+		await expect.element(page.getByText('Milk')).not.toBeInTheDocument();
+	});
+
 	function rowFor(name: string): HTMLElement {
 		return page.getByText(name).element().closest('li') as HTMLElement;
 	}
