@@ -67,11 +67,6 @@
 			if (!byCategory.has(key)) byCategory.set(key, []);
 			byCategory.get(key)!.push(item);
 		}
-		// Checked items sink to the bottom of their own category's list,
-		// unchecked items keep their relative order above them.
-		for (const bucket of byCategory.values()) {
-			bucket.sort((a, b) => Number(a.checked) - Number(b.checked));
-		}
 
 		const orderedCategories = [...categories].sort((a, b) => {
 			const aOrder = storeCategoryOverrides.get(a.id) ?? a.sortOrder;
