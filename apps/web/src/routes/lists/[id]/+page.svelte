@@ -41,6 +41,7 @@
 
 	let newItemName = $state('');
 	let adding = $state(false);
+	let itemInputFocused = $state(false);
 
 	// Briefly highlights a row when adding matched an existing item instead of
 	// creating a new one (PHASE10_PLAN.md #0.2) — both the local pre-check and
@@ -371,39 +372,46 @@
 			<PasscodeGate {list} onunlock={() => (unlocked = true)} />
 		{:else}
 			<form class="flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
-				<a
-					href={resolve('/lists/[id]/import', { id: String(listId) })}
-					aria-label="Paste in a list"
-					class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+				<div
+					class="flex shrink-0 items-center overflow-hidden transition-all duration-200 {itemInputFocused
+						? 'w-0 gap-0 opacity-0'
+						: 'w-auto gap-2 opacity-100'}"
 				>
-					<Icon name="clipboardText" class="h-5 w-5" />
-				</a>
-				<button
-					type="button"
-					aria-label={showChecked ? 'Hide checked items' : 'Show checked items'}
-					onclick={() => {
-						showChecked = !showChecked;
-						setShowChecked(listId, showChecked);
-					}}
-					class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
-				>
-					<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
-				</button>
-				{#if checkedItems.length > 0}
-					<button
-						type="button"
-						aria-label="Clear checked items"
-						onclick={() => void clearChecked()}
+					<a
+						href={resolve('/lists/[id]/import', { id: String(listId) })}
+						aria-label="Paste in a list"
 						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
 					>
-						<Icon name="deleteSweep" class="h-5 w-5" />
+						<Icon name="clipboardText" class="h-5 w-5" />
+					</a>
+					<button
+						type="button"
+						aria-label={showChecked ? 'Hide checked items' : 'Show checked items'}
+						onclick={() => {
+							showChecked = !showChecked;
+							setShowChecked(listId, showChecked);
+						}}
+						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+					>
+						<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
 					</button>
-				{/if}
+					{#if checkedItems.length > 0}
+						<button
+							type="button"
+							aria-label="Clear checked items"
+							onclick={() => void clearChecked()}
+							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+						>
+							<Icon name="deleteSweep" class="h-5 w-5" />
+						</button>
+					{/if}
+				</div>
 				<ItemAutocomplete
 					{listId}
 					bind:value={newItemName}
 					existingNames={items.map((item) => item.name)}
 					onselect={(name) => void addItem(name)}
+					onfocuschange={(focused) => (itemInputFocused = focused)}
 				/>
 				<button
 					type="submit"
@@ -538,7 +546,7 @@
 												{#if item.storeId}
 													{@const itemStore = stores.find((store) => store.id === item.storeId)}
 													{#if itemStore}
-														<span class="text-xs text-gray-500 dark:text-gray-400">
+														<span class="text-xs" style:color={itemStore.color}>
 															{itemStore.name}
 														</span>
 													{/if}
@@ -609,6 +617,8 @@
 	}
 
 	.item-row {
+		min-height: 3.5rem;
+		padding-block: 0.5rem;
 		transition: background-color 600ms ease-out;
 	}
 

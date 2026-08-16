@@ -68,6 +68,7 @@
 		bind:value={importText}
 		autofocus
 		placeholder="One item per line, e.g. Milk, Bread, Eggs"
+		classes={{ div: 'flex flex-1 flex-col' }}
 		class="flex-1 resize-none"
 	/>
 </main>
