@@ -17,6 +17,7 @@
 	import { subscribeToList } from '$lib/realtime';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import { isListUnlocked } from '$lib/passcode';
+	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
 	import { pressHoldReorder } from '$lib/actions/press-hold-reorder';
 	import { swipeReveal } from '$lib/actions/swipe-reveal';
 	import Icon from '$lib/components/Icon.svelte';
@@ -40,7 +41,8 @@
 
 	// Checked items stay under their category header instead of moving to a
 	// separate section (PHASE9_PLAN.md #3) — this toggle controls whether
-	// they're visible at all, defaulting to shown.
+	// they're visible at all, defaulting to shown. Persisted per list/device
+	// via $lib/list-prefs so it survives reload and revisiting the list.
 	let showChecked = $state(true);
 
 	let syncToastVisible = $state(false);
@@ -141,6 +143,7 @@
 			return;
 		}
 		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+		showChecked = getShowChecked(listId);
 		void loadAll();
 		unsubscribeRealtime = subscribeToList(listId, (event) => {
 			// An unacked local edit on this exact row means the eventual flush response is
@@ -314,19 +317,22 @@
 		{#if list.passcodeHash && !unlocked}
 			<PasscodeGate {list} onunlock={() => (unlocked = true)} />
 		{:else}
-			<form class="group flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
+			<form class="flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
 				<a
 					href={resolve('/lists/[id]/import', { id: String(listId) })}
 					aria-label="Paste in a list"
-					class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 group-focus-within:hidden dark:text-gray-400"
+					class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
 				>
 					<Icon name="clipboardText" class="h-5 w-5" />
 				</a>
 				<button
 					type="button"
 					aria-label={showChecked ? 'Hide checked items' : 'Show checked items'}
-					onclick={() => (showChecked = !showChecked)}
-					class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 group-focus-within:hidden dark:text-gray-400"
+					onclick={() => {
+						showChecked = !showChecked;
+						setShowChecked(listId, showChecked);
+					}}
+					class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
 				>
 					<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
 				</button>
