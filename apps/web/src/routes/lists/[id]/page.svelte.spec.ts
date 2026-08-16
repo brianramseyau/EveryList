@@ -433,6 +433,26 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByTitle('Already on this list')).toBeInTheDocument();
 	});
 
+	it('clears the input when a picked suggestion matches an existing unchecked item, highlighting it instead of adding a duplicate', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		vi.mocked(fetchFavorites).mockResolvedValue([]);
+		vi.mocked(fetchRecentItemNames).mockResolvedValue(['Bananas']);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		const input = page.getByPlaceholder('Item name');
+		await input.click();
+		await input.fill('ban');
+		page.getByTitle('Already on this list').element().closest('button')!.click();
+
+		expect(createItem).not.toHaveBeenCalled();
+		await expect.element(input).toHaveValue('');
+		expect(page.getByText('Bananas', { exact: true }).elements()).toHaveLength(1);
+	});
+
 	it('adds the item immediately when a suggestion is picked, without touching the Add button', async () => {
 		vi.mocked(fetchFavorites).mockResolvedValue([]);
 		vi.mocked(fetchRecentItemNames).mockResolvedValue(['Bread']);

@@ -62,7 +62,10 @@
 	}
 
 	function pick(name: string) {
-		value = name;
+		// Picking a suggestion adds it right away (see the parent's onselect) —
+		// clear rather than fill, so the input never shows a name that's about
+		// to be submitted out from under it.
+		value = '';
 		focused = false;
 		onselect?.(name);
 	}

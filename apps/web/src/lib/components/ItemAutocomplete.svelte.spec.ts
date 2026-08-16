@@ -55,7 +55,7 @@ describe('ItemAutocomplete.svelte', () => {
 		await expect.element(page.getByRole('button', { name: 'Butter' })).toBeInTheDocument();
 	});
 
-	it('fills the input and calls onselect without submitting when a suggestion is picked', async () => {
+	it('clears the input and calls onselect with the picked name, leaving the caller to add it', async () => {
 		vi.mocked(fetchFavorites).mockResolvedValue([favorite('Bananas')]);
 		vi.mocked(fetchRecentItemNames).mockResolvedValue([]);
 		const onselect = vi.fn();
@@ -67,7 +67,7 @@ describe('ItemAutocomplete.svelte', () => {
 		await page.getByRole('button', { name: 'Bananas' }).click();
 
 		expect(onselect).toHaveBeenCalledWith('Bananas');
-		await expect.element(input).toHaveValue('Bananas');
+		await expect.element(input).toHaveValue('');
 		await expect.element(page.getByRole('button', { name: 'Bananas' })).not.toBeInTheDocument();
 	});
 
