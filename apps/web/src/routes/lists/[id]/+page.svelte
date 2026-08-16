@@ -407,11 +407,11 @@
 					</p>
 				</div>
 			{:else if visibleItems.length === 0}
-				<div class="flex flex-col items-center gap-2 py-8 text-center">
-					<span style:color={list.color}>
-						<Icon name="filterOutline" class="h-10 w-10" />
-					</span>
-					<p class="text-gray-600 dark:text-gray-400">
+				<div
+					class="flex flex-col items-center gap-2 py-8 text-center text-gray-400 dark:text-gray-500"
+				>
+					<Icon name="filterOutline" class="h-8 w-8" />
+					<p class="text-sm">
 						{#if selectedStore}
 							{`No items are tagged for ${selectedStore.name}. Change the store you're shopping at from the store icon above to see the rest of this list.`}
 						{:else}
