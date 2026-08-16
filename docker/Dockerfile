@@ -155,4 +155,14 @@ ENV HOST=0.0.0.0 \
 VOLUME /config
 EXPOSE 3000
 
+# Lets Docker (and anything watching container health — Unraid, a reverse
+# proxy's upstream check, a rolling-restart script) know when the app is
+# actually serving, not just that the process started — s6-overlay's init
+# can take a moment (migrations, APP_KEY generation) before AdonisJS is
+# listening. Uses node's built-in fetch instead of curl/wget: curl is
+# purged above once s6-overlay is installed, and this avoids adding wget
+# just for the check.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/v1/meta').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 ENTRYPOINT ["/init"]

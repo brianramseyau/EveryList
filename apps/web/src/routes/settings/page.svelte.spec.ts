@@ -4,9 +4,11 @@ import { render } from 'vitest-browser-svelte';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/auth', () => ({ logout: vi.fn() }));
+vi.mock('$lib/pwa/reset', () => ({ resetApp: vi.fn() }));
 
 const { goto } = await import('$app/navigation');
 const { logout } = await import('$lib/api/auth');
+const { resetApp } = await import('$lib/pwa/reset');
 const SettingsPage = (await import('./+page.svelte')).default;
 
 describe('Settings +page.svelte', () => {
@@ -142,5 +144,25 @@ describe('Settings +page.svelte', () => {
 			.not.toBeInTheDocument();
 
 		matchMediaSpy.mockRestore();
+	});
+
+	it('clears cached app data via the Reset app button', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		let resolveReset!: () => void;
+		vi.mocked(resetApp).mockReturnValue(
+			new Promise((resolve) => {
+				resolveReset = resolve;
+			})
+		);
+
+		render(SettingsPage);
+
+		const resetButton = page.getByRole('button', { name: 'Reset app' });
+		await resetButton.click();
+
+		expect(resetApp).toHaveBeenCalled();
+		await expect.element(page.getByRole('button', { name: 'Resetting…' })).toBeDisabled();
+
+		resolveReset();
 	});
 });

@@ -48,7 +48,22 @@ export const workboxOptions = {
 			// The cache is still used as an offline fallback when the network
 			// request fails.
 			handler: 'NetworkFirst',
-			options: { cacheName: 'api-get-cache' }
+			options: {
+				cacheName: 'api-get-cache',
+				plugins: [
+					{
+						// A reverse-proxy hiccup mid-restart can return a 200 with an
+						// HTML placeholder/error page instead of the real JSON body —
+						// never let that get cached as if it were a legitimate API
+						// response (see the SWAG-splash-screen incident writeup).
+						/** @param {{ response: Response }} args */
+						cacheWillUpdate: async ({ response }) => {
+							const contentType = response.headers.get('content-type') ?? '';
+							return contentType.includes('application/json') ? response : null;
+						}
+					}
+				]
+			}
 		}
 	]
 };
