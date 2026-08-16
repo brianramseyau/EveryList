@@ -289,15 +289,15 @@ describe('Categories +page.svelte', () => {
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 	});
 
-	function dragHandles() {
-		return page.getByRole('button', { name: /^Drag to reorder/ });
+	function rows() {
+		return page.getByRole('listitem');
 	}
 
 	async function dragFirstBelowSecond() {
-		const handles = dragHandles();
-		const first = handles.first().element();
-		const second = handles.nth(1).element();
-		const secondRect = second.closest('li')!.getBoundingClientRect();
+		const items = rows();
+		const first = items.first().element();
+		const second = items.nth(1).element();
+		const secondRect = second.getBoundingClientRect();
 
 		first.dispatchEvent(
 			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
@@ -339,10 +339,10 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		const handles = dragHandles();
-		const first = handles.first().element();
-		const second = handles.nth(1).element();
-		const firstRect = first.closest('li')!.getBoundingClientRect();
+		const items = rows();
+		const first = items.first().element();
+		const second = items.nth(1).element();
+		const firstRect = first.getBoundingClientRect();
 
 		second.dispatchEvent(
 			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
@@ -373,12 +373,12 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		const first = dragHandles().first().element();
+		const first = rows().first().element();
 		first.dispatchEvent(
 			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
 		);
 		await delay(HOLD_MS + 50);
-		// Pointer stays over the same (first) slot — onmove still fires, but
+		// Pointer stays over the same (first) slot — onhover still fires, but
 		// with toIndex === fromIndex.
 		first.dispatchEvent(
 			new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
@@ -390,7 +390,7 @@ describe('Categories +page.svelte', () => {
 		expect(reorderCategories).not.toHaveBeenCalled();
 	});
 
-	it('disables the drag handles while a reorder is in flight', async () => {
+	it('ignores a new drag attempt while a reorder is already in flight', async () => {
 		let resolveReorder!: (value: CategoryDto[]) => void;
 		vi.mocked(reorderCategories).mockReturnValue(
 			new Promise((resolve) => {
@@ -402,21 +402,14 @@ describe('Categories +page.svelte', () => {
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
 		await dragFirstBelowSecond();
+		expect(reorderCategories).toHaveBeenCalledTimes(1);
 
-		await expect.element(dragHandles().first()).toBeDisabled();
+		// A second drag attempt while the first reorder is still in flight
+		// (`disabled: reordering` on the row) must not fire another one.
+		await dragFirstBelowSecond();
+		expect(reorderCategories).toHaveBeenCalledTimes(1);
+
 		resolveReorder([custom, produce]);
-	});
-
-	it('labels each drag handle with the category it reorders', async () => {
-		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
-
-		await expect
-			.element(page.getByRole('button', { name: 'Drag to reorder Produce' }))
-			.toBeInTheDocument();
-		await expect
-			.element(page.getByRole('button', { name: 'Drag to reorder Pet Supplies' }))
-			.toBeInTheDocument();
 	});
 
 	it('reloads the list when reordering fails without an ApiError', async () => {
