@@ -12,6 +12,13 @@ export interface ListDto {
 	/** Client-computed `"<saltHex>:<sha256Hex>"` — the server never sees the raw PIN. See PHASE7_PLAN.md §2. */
 	passcodeHash: string | null;
 	itemCount: number;
+	/** The requesting user's own membership role on this list. Always present on real API
+	 *  responses; optional here only so existing test fixtures don't all need updating. */
+	role?: 'owner' | 'editor' | 'viewer' | null;
+	/** Accepted members, including the owner — 1 means "not shared". */
+	memberCount?: number;
+	/** The owning user's display name, for lists shared to you that you don't own. */
+	ownerName?: string | null;
 	createdAt: string;
 	updatedAt: string | null;
 	version: number;

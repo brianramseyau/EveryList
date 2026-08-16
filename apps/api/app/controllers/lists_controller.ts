@@ -29,6 +29,9 @@ export default class ListsController {
       .whereHas('members', (query) => query.where('userId', user.id).whereNotNull('acceptedAt'))
       .whereNull('deletedAt')
       .withCount('items', (query) => query.whereNull('deletedAt').where('checked', false))
+      .withCount('members', (query) => query.whereNotNull('acceptedAt'))
+      .preload('members', (query) => query.where('userId', user.id))
+      .preload('owner')
       .orderBy('createdAt', 'asc')
 
     return serialize(ListTransformer.transform(lists))
@@ -61,6 +64,9 @@ export default class ListsController {
       .where('id', params.id)
       .whereNull('deletedAt')
       .withCount('items', (query) => query.whereNull('deletedAt').where('checked', false))
+      .withCount('members', (query) => query.whereNotNull('acceptedAt'))
+      .preload('members', (query) => query.where('userId', user.id))
+      .preload('owner')
       .firstOrFail()
 
     return serialize(ListTransformer.transform(list))
