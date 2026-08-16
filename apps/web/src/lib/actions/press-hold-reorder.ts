@@ -111,6 +111,7 @@ export function pressHoldReorder(node: HTMLElement, params: PressHoldReorderPara
 		node.style.zIndex = '';
 		node.style.boxShadow = '';
 		node.style.position = '';
+		node.style.touchAction = '';
 	}
 
 	function startDragging() {
@@ -125,6 +126,11 @@ export function pressHoldReorder(node: HTMLElement, params: PressHoldReorderPara
 		// fire — the null case isn't reachable through the gesture itself.
 		/* v8 ignore next */
 		if (pointerId !== null) node.setPointerCapture(pointerId);
+		// Lock out native scroll now, before any touchmove has been seen (the
+		// pre-hold 10px slop check guarantees none has) — a descendant row's
+		// own `touch-action: pan-y` (for swipe-to-reveal) can't loosen this,
+		// since the effective touch-action is the intersection with ancestors.
+		node.style.touchAction = 'none';
 		node.style.position = 'relative';
 		node.style.zIndex = '20';
 		node.style.boxShadow = '0 8px 20px rgba(0, 0, 0, 0.25)';
