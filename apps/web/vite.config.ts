@@ -4,7 +4,8 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { VitePWA } from 'vite-plugin-pwa';
+import { SvelteKitPWA } from '@vite-pwa/sveltekit';
+import { pwaManifest, workboxOptions } from './pwa.config.mjs';
 
 // Some sandboxed dev environments pre-cache a Chromium build at a fixed path
 // under a different revision than the one this Playwright version expects,
@@ -37,42 +38,39 @@ export default defineConfig({
 		// `generateSW` (not `injectManifest`) — every caching rule this app needs
 		// (precache the app shell, stale-while-revalidate on API GETs, an offline
 		// navigation fallback) is fully declarative, so no custom SW source file is
-		// needed. Plain `vite-plugin-pwa` (not `@vite-pwa/sveltekit`) operates on the
-		// built output directly via Vite's build hooks, which sidesteps needing to
-		// verify a SvelteKit-specific integration against adapter-static's non-default
-		// `fallback: '200.html'` output — see PHASE5_PLAN.md §5.
-		VitePWA({
+		// needed.
+		//
+		// `@vite-pwa/sveltekit` (not plain `vite-plugin-pwa`) specifically because
+		// plain `vite-plugin-pwa` globs the built output from a `writeBundle` hook,
+		// which fires before @sveltejs/adapter-static prerenders this app's HTML and
+		// copies it into `build/` (that happens in SvelteKit's own `closeBundle`, a
+		// later hook) — its precache manifest ends up with zero .html entries,
+		// including /200.html, the navigateFallback target every offline cold start
+		// needs. This package generates the SW from the *server* build's
+		// `closeBundle` instead — after SvelteKit's own prerender crawl has written
+		// `.svelte-kit/output/prerendered/`, but before the adapter runs — then
+		// relocates the finished sw.js into `.svelte-kit/output/client/` so
+		// adapter-static's later copy picks it up like any other static asset. That
+		// correctly precaches every *prerendered* route (login/signup/lists/etc.).
+		//
+		// The one thing it still can't see at that point is the adapter's fallback
+		// page (200.html): `builder.generateFallback()` — which actually renders it —
+		// is called by adapter-static itself, inside `adapt()`, which runs *after*
+		// this plugin's closeBundle (`kit.adapterFallback` alone, which just renames
+		// a pre-existing precache entry, is a no-op here — there's nothing to rename
+		// yet). `kit.spa: true` covers that gap: instead of needing the file's bytes
+		// at build time, it adds a manifest entry for it up front with a synthetic
+		// revision (hashed from `_app/version.json`, which does exist by then), and
+		// Workbox fetches the real content over the network during the service
+		// worker's own install step, by which point the deployed 200.html exists.
+		SvelteKitPWA({
 			registerType: 'autoUpdate',
 			injectRegister: null,
-			manifest: {
-				name: 'EveryList',
-				short_name: 'EveryList',
-				description: 'Shared, offline-first shopping lists.',
-				start_url: '/lists',
-				scope: '/',
-				display: 'standalone',
-				background_color: '#f6f5f1',
-				theme_color: '#33404f',
-				icons: [
-					{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-					{ src: '/icon-512.png', sizes: '512x512', type: 'image/png' }
-				]
-			},
-			workbox: {
-				navigateFallback: '/200.html',
-				globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
-				// The icon-picker's lazily-loaded @mdi/js chunk is ~2.8MB — above Workbox's
-				// default 2MB precache limit. It's still lazy (only fetched when the icon
-				// picker opens), just also precached up front like everything else here.
-				maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-				runtimeCaching: [
-					{
-						urlPattern: ({ url, request }) =>
-							url.pathname.startsWith('/api/v1/') && request.method === 'GET',
-						handler: 'StaleWhileRevalidate',
-						options: { cacheName: 'api-get-cache' }
-					}
-				]
+			manifest: pwaManifest,
+			workbox: workboxOptions,
+			kit: {
+				adapterFallback: '200.html',
+				spa: true
 			}
 		})
 	],
