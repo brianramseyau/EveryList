@@ -41,7 +41,13 @@ export const workboxOptions = {
 			/** @param {{ url: URL; request: Request }} args */
 			urlPattern: ({ url, request }) =>
 				url.pathname.startsWith('/api/v1/') && request.method === 'GET',
-			handler: 'StaleWhileRevalidate',
+			// NetworkFirst (not StaleWhileRevalidate): a GET made right after a
+			// mutation (e.g. reloading the list screen after editing an item, or
+			// the list index after creating a list) must see the fresh server
+			// state, not a stale cached response served ahead of the revalidation.
+			// The cache is still used as an offline fallback when the network
+			// request fails.
+			handler: 'NetworkFirst',
 			options: { cacheName: 'api-get-cache' }
 		}
 	]
