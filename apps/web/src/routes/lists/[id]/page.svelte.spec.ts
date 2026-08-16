@@ -670,18 +670,27 @@ describe('List detail +page.svelte', () => {
 			.not.toBeInTheDocument();
 	});
 
-	it('falls back to a generic filter-empty message when the selected store no longer exists', async () => {
+	it('regression: shows every item, not none, when the locally-selected store no longer exists on this list', async () => {
+		// Reproduces a real bug: a stale/orphaned selectedStoreId (e.g. the store
+		// was removed some other way than the normal "Remove" flow, or is left
+		// over from stale local storage) used to still filter against, silently
+		// hiding every item with no filter UI left to clear it from this screen.
+		// An id that doesn't resolve to a real, currently-loaded store must be
+		// treated exactly like "no store selected."
 		vi.mocked(fetchStores).mockResolvedValue([]);
-		vi.mocked(getSelectedStore).mockResolvedValue(20);
+		vi.mocked(getSelectedStore).mockResolvedValue(999);
 		vi.mocked(fetchItems).mockResolvedValue([
-			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null })
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: 5 })
 		]);
 
 		render(ListDetailPage);
 
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 		await expect
 			.element(page.getByText('No items match the currently selected store.'))
-			.toBeInTheDocument();
+			.not.toBeInTheDocument();
 	});
 
 	it('shows every item when no store is currently selected', async () => {

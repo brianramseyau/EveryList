@@ -74,11 +74,15 @@
 	// list on this device — purely local, see $lib/api/selected-store.ts.
 	let storeCategoryOverrides: Map<number, number> = new SvelteMap();
 
-	const visibleItems = $derived(
-		selectedStoreId === null ? items : items.filter((item) => item.storeId === selectedStoreId)
-	);
-
 	const selectedStore = $derived(stores.find((store) => store.id === selectedStoreId) ?? null);
+
+	// Only filter once selectedStoreId resolves to a store that's actually still
+	// on this list — a stale/orphaned id (e.g. a store removed outside the normal
+	// flow) must behave like "no store selected" rather than silently hiding
+	// every item with no way to clear it from this screen.
+	const visibleItems = $derived(
+		selectedStore === null ? items : items.filter((item) => item.storeId === selectedStore.id)
+	);
 
 	const groups = $derived.by(() => {
 		const byCategory = new SvelteMap<number | null, ItemDto[]>();
@@ -412,11 +416,7 @@
 				>
 					<Icon name="filterOutline" class="h-8 w-8" />
 					<p class="text-sm">
-						{#if selectedStore}
-							{`No items are tagged for ${selectedStore.name}. Change the store you're shopping at from the store icon above to see the rest of this list.`}
-						{:else}
-							No items match the currently selected store.
-						{/if}
+						{`No items are tagged for ${selectedStore!.name}. Change the store you're shopping at from the store icon above to see the rest of this list.`}
 					</p>
 				</div>
 			{:else}
