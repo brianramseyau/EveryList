@@ -119,6 +119,7 @@ describe('List detail +page.svelte', () => {
 		vi.clearAllMocks();
 		clearToken();
 		window.sessionStorage.clear();
+		window.localStorage.clear();
 		await resetDbForTesting();
 	});
 
@@ -236,6 +237,28 @@ describe('List detail +page.svelte', () => {
 
 		await page.getByRole('button', { name: 'Show checked items' }).click();
 		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+	});
+
+	it('remembers the hide-checked-items toggle for this list across remounts', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 10, checked: true })
+		]);
+
+		const { unmount } = render(ListDetailPage);
+		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Hide checked items' }).click();
+		await expect.element(page.getByText('Milk')).not.toBeInTheDocument();
+
+		unmount();
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Milk')).not.toBeInTheDocument();
+		await expect
+			.element(page.getByRole('button', { name: 'Show checked items' }))
+			.toBeInTheDocument();
 	});
 
 	it('drops a category section entirely once its only item is checked and hidden', async () => {
