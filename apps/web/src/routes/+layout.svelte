@@ -38,7 +38,22 @@
 		initInstallPrompt();
 		// vite-plugin-pwa's virtual module only exists in a built/dev-served app, never under
 		// Vitest — dynamic-imported so test runs never need to resolve it.
-		void import('virtual:pwa-register').then(({ registerSW }) => registerSW({ immediate: true }));
+		void import('virtual:pwa-register').then(({ registerSW }) =>
+			registerSW({
+				immediate: true,
+				// Without this, autoUpdate's default reload fires the instant the new SW
+				// activates — which can land mid-hydration on a cold PWA launch right after
+				// a deploy (skipWaiting/clientsClaim let the new SW claim the page before its
+				// first load finishes), interrupting that load and leaving the app stuck on
+				// the OS splash screen. Deferring until the page's own load has settled keeps
+				// the reload from racing the app's first paint.
+				onNeedReload() {
+					const reload = () => window.location.reload();
+					if (document.readyState === 'complete') reload();
+					else window.addEventListener('load', reload, { once: true });
+				}
+			})
+		);
 	});
 	afterNavigate(() => {
 		refreshAuth();
