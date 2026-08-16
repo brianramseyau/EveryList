@@ -85,6 +85,19 @@ export function pressHoldReorder(node: HTMLElement, params: PressHoldReorderPara
 	let fromIndex = 0;
 	let targetIndex = 0;
 	let rowHeight = 0;
+	// True once a pre-hold move has been judged a plain vertical scroll
+	// rather than a hold-to-drag attempt — see handlePointerMove.
+	let scrolling = false;
+	let lastY = 0;
+
+	// touch-action must be locked in before the browser resolves the touch
+	// sequence's default action (Chrome pins it at gesture start and ignores
+	// later changes), so `none` is set once here rather than toggled per-drag.
+	// A descendant row's own `touch-action: pan-y` (for swipe-to-reveal)
+	// can't loosen this, since the effective value is the intersection with
+	// ancestors — which also means native scroll is gone for good on this
+	// row, so plain (non-hold) vertical swipes are scrolled manually below.
+	node.style.touchAction = 'none';
 
 	function clearHoldTimer() {
 		if (holdTimer === undefined) return;
@@ -111,7 +124,6 @@ export function pressHoldReorder(node: HTMLElement, params: PressHoldReorderPara
 		node.style.zIndex = '';
 		node.style.boxShadow = '';
 		node.style.position = '';
-		node.style.touchAction = '';
 	}
 
 	function startDragging() {
@@ -126,11 +138,6 @@ export function pressHoldReorder(node: HTMLElement, params: PressHoldReorderPara
 		// fire — the null case isn't reachable through the gesture itself.
 		/* v8 ignore next */
 		if (pointerId !== null) node.setPointerCapture(pointerId);
-		// Lock out native scroll now, before any touchmove has been seen (the
-		// pre-hold 10px slop check guarantees none has) — a descendant row's
-		// own `touch-action: pan-y` (for swipe-to-reveal) can't loosen this,
-		// since the effective touch-action is the intersection with ancestors.
-		node.style.touchAction = 'none';
 		node.style.position = 'relative';
 		node.style.zIndex = '20';
 		node.style.boxShadow = '0 8px 20px rgba(0, 0, 0, 0.25)';
@@ -144,18 +151,35 @@ export function pressHoldReorder(node: HTMLElement, params: PressHoldReorderPara
 		pointerId = event.pointerId;
 		startX = event.clientX;
 		startY = event.clientY;
+		lastY = event.clientY;
+		scrolling = false;
 		clearHoldTimer();
 		holdTimer = setTimeout(startDragging, HOLD_MS);
 	}
 
 	function handlePointerMove(event: PointerEvent) {
+		if (scrolling) {
+			window.scrollBy(0, lastY - event.clientY);
+			lastY = event.clientY;
+			return;
+		}
 		if (!dragging) {
 			if (holdTimer === undefined) return;
 			const dx = Math.abs(event.clientX - startX);
 			const dy = Math.abs(event.clientY - startY);
 			// Real scroll/tap/swipe gestures move before the hold fires —
-			// cancel rather than let one accidentally arm a drag.
-			if (dx > MOVE_CANCEL_THRESHOLD_PX || dy > MOVE_CANCEL_THRESHOLD_PX) clearHoldTimer();
+			// cancel rather than let one accidentally arm a drag. touch-action
+			// is locked to `none` on this row, so native scroll won't happen on
+			// its own — a vertical-dominant move takes over scrolling by hand;
+			// a horizontal-dominant one is left for swipeReveal to handle.
+			if (dx > MOVE_CANCEL_THRESHOLD_PX || dy > MOVE_CANCEL_THRESHOLD_PX) {
+				clearHoldTimer();
+				if (dy >= dx) {
+					scrolling = true;
+					window.scrollBy(0, startY - event.clientY);
+					lastY = event.clientY;
+				}
+			}
 			return;
 		}
 		node.style.transform = `translateY(${event.clientY - startY}px)`;
@@ -171,6 +195,7 @@ export function pressHoldReorder(node: HTMLElement, params: PressHoldReorderPara
 
 	function endDrag() {
 		clearHoldTimer();
+		scrolling = false;
 		if (dragging) {
 			dragging = false;
 			node.classList.remove('is-dragging');
