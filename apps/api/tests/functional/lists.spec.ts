@@ -34,11 +34,11 @@ test.group('Lists CRUD', (group) => {
     const create = await client
       .post('/api/v1/lists')
       .header('Authorization', `Bearer ${token}`)
-      .json({ name: 'Groceries' })
+      .json({ name: 'Camping Trip' })
     create.assertStatus(200)
     const createdList = bodyData<ListDto>(create)
     const listId = createdList.id
-    assert.equal(createdList.name, 'Groceries')
+    assert.equal(createdList.name, 'Camping Trip')
     assert.equal(createdList.color, '#3b82f6')
     assert.equal(createdList.itemCount, 0)
 
@@ -118,7 +118,7 @@ test.group('Lists CRUD', (group) => {
     const create = await client
       .post('/api/v1/lists')
       .header('Authorization', `Bearer ${token}`)
-      .json({ name: 'Groceries' })
+      .json({ name: 'Camping Trip' })
     const list = bodyData<ListDto & { version: number }>(create)
     assert.equal(list.version, 1)
 
@@ -297,5 +297,66 @@ test.group('Lists CRUD', (group) => {
       .header('Authorization', `Bearer ${viewer.token}`)
     const ids = bodyData<ListDto[]>(index).map((list) => list.id)
     assert.include(ids, listId)
+  })
+
+  test('list names are unique per owner, case-insensitively and trimmed, but not across owners', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    // Signup already seeded a "Groceries" list for this owner — creating
+    // another with different casing/whitespace should collide with it.
+    const duplicate = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: '  groceries  ' })
+    duplicate.assertStatus(422)
+    assert.equal(
+      (duplicate.body() as unknown as { errors: { message: string }[] }).errors[0]?.message,
+      'You already have a list with this name.'
+    )
+
+    const first = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Camping Trip' })
+    first.assertStatus(200)
+
+    // A different owner using the exact same name must not collide —
+    // the constraint is scoped per-owner, not global.
+    const otherToken = await signupAndGetToken(client)
+    const second = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${otherToken}`)
+      .json({ name: 'Camping Trip' })
+    second.assertStatus(200)
+  })
+
+  test("renaming a list to match another of the same owner's list names is rejected", async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Camping Trip' })
+    const listId = bodyData<ListDto>(create).id
+
+    const rename = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'GROCERIES' })
+    rename.assertStatus(422)
+    assert.equal(rename.body().errors[0].message, 'You already have a list with this name.')
+
+    // Renaming a list to its own current name (no-op rename) must not
+    // collide with itself.
+    const noopRename = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Camping Trip', archived: true })
+    noopRename.assertStatus(200)
   })
 })

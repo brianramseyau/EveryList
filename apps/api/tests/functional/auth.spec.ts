@@ -174,7 +174,7 @@ test.group('Public signup toggle', (group) => {
     const listResponse = await client
       .post('/api/v1/lists')
       .header('Authorization', `Bearer ${ownerToken}`)
-      .json({ name: 'Groceries' })
+      .json({ name: 'Shared Household' })
     const listId = bodyData<ListDto>(listResponse).id
 
     const inviteResponse = await client

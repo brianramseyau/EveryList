@@ -10,7 +10,7 @@ async function createList(client: ApiClient, token: string) {
   const response = await client
     .post('/api/v1/lists')
     .header('Authorization', `Bearer ${token}`)
-    .json({ name: 'Groceries' })
+    .json({ name: 'Test List' })
   return bodyData<ListDto>(response).id
 }
 
@@ -427,6 +427,116 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
       .get(`/api/v1/lists/${listId}/items/categorize`)
       .header('Authorization', `Bearer ${stranger.token}`)
       .qs({ name: 'Milk' })
+    strangerResponse.assertStatus(404)
+  })
+
+  test('adding a name that matches an unchecked item returns the existing item instead of creating a duplicate', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const first = await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk' }))
+    const firstItem = first.body().data
+
+    const duplicate = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: '  MILK  ' })
+    )
+    duplicate.assertStatus(200)
+    const duplicateItem = duplicate.body().data
+    assert.equal(duplicateItem.id, firstItem.id)
+    assert.isFalse(duplicateItem.checked)
+
+    const index = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.lengthOf(index.body().data, 1, 'no duplicate row was created')
+  })
+
+  test('adding a name that matches a checked item unchecks it instead of creating a duplicate', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const first = await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk' }))
+    const firstItem = first.body().data
+    await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${firstItem.id}`)
+        .json({ checked: true, expectedVersion: firstItem.version })
+    )
+
+    const readded = await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'milk' }))
+    readded.assertStatus(200)
+    const readdedItem = readded.body().data
+    assert.equal(readdedItem.id, firstItem.id)
+    assert.isFalse(readdedItem.checked)
+    assert.isNull(readdedItem.checkedAt)
+    assert.equal(
+      readdedItem.version,
+      firstItem.version + 2,
+      'checked bumped it, uncheck bumps again'
+    )
+
+    const index = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.lengthOf(index.body().data, 1, 'no duplicate row was created')
+  })
+
+  test('recent-names returns distinct, most-recent-first item names including checked and deleted history', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const bananas = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bananas' })
+    )
+    await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bread' }))
+    await auth(client.delete(`/api/v1/lists/${listId}/items/${bananas.body().data.id}`))
+    // Re-adding "bananas" (different case) after it was deleted exercises
+    // the case-insensitive dedup within recentNames' own history scan —
+    // deleted items aren't excluded from the source query, only the
+    // duplicate name is collapsed to one entry.
+    await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'bananas' }))
+
+    const recentNames = await auth(client.get(`/api/v1/lists/${listId}/items/recent-names`))
+    recentNames.assertStatus(200)
+    const names: string[] = recentNames.body().data
+    assert.deepEqual(names, ['bananas', 'Bread'])
+  })
+
+  test('recent-names caps out at 50 distinct names', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const names = Array.from({ length: 55 }, (_, i) => `Item ${i}`)
+    await auth(client.post(`/api/v1/lists/${listId}/items/import`).json({ text: names.join('\n') }))
+
+    const recentNames = await auth(client.get(`/api/v1/lists/${listId}/items/recent-names`))
+    assert.lengthOf(recentNames.body().data, 50)
+  })
+
+  test('recent-names is viewer-accessible but requires list membership', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+
+    const viewer = await signupAndGetUser(client)
+    await addMember(listId, viewer.id, 'viewer')
+    const viewerResponse = await client
+      .get(`/api/v1/lists/${listId}/items/recent-names`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    viewerResponse.assertStatus(200)
+
+    const stranger = await signupAndGetUser(client)
+    const strangerResponse = await client
+      .get(`/api/v1/lists/${listId}/items/recent-names`)
+      .header('Authorization', `Bearer ${stranger.token}`)
     strangerResponse.assertStatus(404)
   })
 })

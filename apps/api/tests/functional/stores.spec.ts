@@ -14,11 +14,13 @@ interface StoreCategoryOrderDto {
   version: number
 }
 
+let listCounter = 0
 async function createList(client: ApiClient, token: string) {
+  listCounter += 1
   const response = await client
     .post('/api/v1/lists')
     .header('Authorization', `Bearer ${token}`)
-    .json({ name: 'Groceries' })
+    .json({ name: `Test List ${listCounter}` })
   return bodyData<ListDto>(response).id
 }
 

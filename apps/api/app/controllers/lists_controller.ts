@@ -9,6 +9,19 @@ import { broadcastSync } from '#services/sync_broadcaster'
 import { createOwnedList } from '#services/list_creation'
 import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
 
+async function findDuplicateNamedList(ownerId: number, name: string, excludeId?: number) {
+  const query = List.query()
+    .where('ownerId', ownerId)
+    .whereNull('deletedAt')
+    .whereRaw('LOWER(TRIM(name)) = ?', [name.trim().toLowerCase()])
+
+  if (excludeId !== undefined) {
+    query.whereNot('id', excludeId)
+  }
+
+  return query.first()
+}
+
 export default class ListsController {
   async index({ auth, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
@@ -21,9 +34,15 @@ export default class ListsController {
     return serialize(ListTransformer.transform(lists))
   }
 
-  async store({ auth, request, serialize }: HttpContext) {
+  async store({ auth, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const payload = await request.validateUsing(createListValidator)
+
+    if (await findDuplicateNamedList(user.id, payload.name)) {
+      return response.status(422).send({
+        errors: [{ field: 'name', message: 'You already have a list with this name.' }],
+      })
+    }
 
     const list = await createOwnedList({
       ownerId: user.id,
@@ -67,6 +86,12 @@ export default class ListsController {
 
     if (rest.folderId !== null && rest.folderId !== undefined) {
       await Folder.query().where('id', rest.folderId).where('userId', user.id).firstOrFail()
+    }
+
+    if (rest.name !== undefined && (await findDuplicateNamedList(user.id, rest.name, list.id))) {
+      return response.status(422).send({
+        errors: [{ field: 'name', message: 'You already have a list with this name.' }],
+      })
     }
 
     list.merge(rest)
