@@ -9,6 +9,8 @@
 	import { fetchCategories } from '$lib/api/categories';
 	import { fetchStoreCategoryOrder, fetchStores, reorderStoreCategories } from '$lib/api/stores';
 	import { ApiError } from '$lib/api/client';
+	import { pressHoldReorder } from '$lib/actions/press-hold-reorder';
+	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	const listId = $derived(Number(page.params.id));
@@ -55,12 +57,21 @@
 		void loadAll();
 	});
 
-	async function move(index: number, direction: -1 | 1) {
-		const target = index + direction;
-		if (target < 0 || target >= orderedCategories.length) return;
+	let listEl: HTMLUListElement | undefined = $state();
 
+	function getRowEls(): HTMLElement[] {
+		// Only reachable before the list has ever rendered — the drag this
+		// feeds doesn't exist yet either, so it can't be exercised.
+		/* v8 ignore next */
+		if (!listEl) return [];
+		return [...listEl.children] as HTMLElement[];
+	}
+
+	// Fires once, on release — dragging itself never touches `orderedCategories`.
+	async function handleDrop(fromIndex: number, toIndex: number) {
 		const reordered = [...orderedCategories];
-		[reordered[index], reordered[target]] = [reordered[target]!, reordered[index]!];
+		const [moved] = reordered.splice(fromIndex, 1);
+		reordered.splice(toIndex, 0, moved!);
 		orderedCategories = reordered;
 
 		reordering = true;
@@ -101,31 +112,20 @@
 			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 		{/if}
 
-		<ul class="flex flex-col gap-2">
+		<p class="text-xs text-gray-400">Press and hold a category to drag it into place.</p>
+
+		<ul class="flex flex-col gap-2" bind:this={listEl}>
 			{#each orderedCategories as category, index (category.id)}
 				<li
-					class="flex items-center gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700"
+					class="flex items-center gap-2 rounded-lg border border-gray-200 bg-paper p-3 dark:border-gray-700"
+					use:pressHoldReorder={{ index, disabled: reordering, getRowEls, ondrop: handleDrop }}
 				>
-					<div class="flex flex-col">
-						<button
-							type="button"
-							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30 dark:hover:text-gray-200"
-							disabled={index === 0 || reordering}
-							onclick={() => move(index, -1)}
-							aria-label="Move up"
-						>
-							▲
-						</button>
-						<button
-							type="button"
-							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30 dark:hover:text-gray-200"
-							disabled={index === orderedCategories.length - 1 || reordering}
-							onclick={() => move(index, 1)}
-							aria-label="Move down"
-						>
-							▼
-						</button>
-					</div>
+					<span
+						aria-hidden="true"
+						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
+					>
+						<Icon name="dragVertical" class="h-5 w-5" />
+					</span>
 					<span>{category.name}</span>
 				</li>
 			{/each}

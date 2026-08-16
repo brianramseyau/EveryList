@@ -3,6 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
+import { HOLD_MS } from '$lib/actions/press-hold-reorder';
+
+function delay(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1', storeId: '20' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -145,9 +150,41 @@ describe('Store aisle order +page.svelte', () => {
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		const names = document.querySelectorAll('li span');
+		const names = document.querySelectorAll('li > span:last-child');
 		expect([...names].map((el) => el.textContent)).toEqual(['Dairy', 'Produce']);
 	});
+
+	function rows() {
+		return page.getByRole('listitem');
+	}
+
+	async function dragFirstBelowSecond() {
+		const items = rows();
+		const first = items.first().element();
+		const second = items.nth(1).element();
+		const secondRect = second.getBoundingClientRect();
+
+		first.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		first.dispatchEvent(
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: secondRect.top + secondRect.height + 1
+			})
+		);
+		first.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: secondRect.top + secondRect.height + 1
+			})
+		);
+	}
 
 	it('moves a category down and persists the new order', async () => {
 		vi.mocked(reorderStoreCategories).mockResolvedValue([
@@ -158,7 +195,7 @@ describe('Store aisle order +page.svelte', () => {
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Move down' }).first().click();
+		await dragFirstBelowSecond();
 
 		expect(reorderStoreCategories).toHaveBeenCalledWith(20, [
 			{ categoryId: 11, sortOrder: 0 },
@@ -166,7 +203,7 @@ describe('Store aisle order +page.svelte', () => {
 		]);
 	});
 
-	it('moves a category up', async () => {
+	it('moves a category up by dragging it above its neighbor', async () => {
 		vi.mocked(reorderStoreCategories).mockResolvedValue([
 			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 },
 			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1, deletedAt: null, version: 1 }
@@ -175,7 +212,31 @@ describe('Store aisle order +page.svelte', () => {
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Move up' }).nth(1).click();
+		const items = rows();
+		const first = items.first().element();
+		const second = items.nth(1).element();
+		const firstRect = first.getBoundingClientRect();
+
+		second.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		second.dispatchEvent(
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: firstRect.top
+			})
+		);
+		second.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: 0,
+				clientY: firstRect.top
+			})
+		);
 
 		expect(reorderStoreCategories).toHaveBeenCalledWith(20, [
 			{ categoryId: 11, sortOrder: 0 },
@@ -183,29 +244,27 @@ describe('Store aisle order +page.svelte', () => {
 		]);
 	});
 
-	it('does not reorder past the top or bottom of the list', async () => {
-		// Move up/down are already disabled at the boundary, but move() has
-		// its own bounds guard, reachable via a raw click that bypasses the
-		// disabled attribute.
+	it('does not reorder while a drag never crosses into a new position', async () => {
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		page
-			.getByRole('button', { name: 'Move up' })
-			.first()
-			.element()
-			.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-		page
-			.getByRole('button', { name: 'Move down' })
-			.nth(1)
-			.element()
-			.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		const first = rows().first().element();
+		first.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		await delay(HOLD_MS + 50);
+		first.dispatchEvent(
+			new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		first.dispatchEvent(
+			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
 
-		await expect.poll(() => vi.mocked(reorderStoreCategories).mock.calls.length).toBe(0);
+		expect(reorderStoreCategories).not.toHaveBeenCalled();
 	});
 
 	it('shows an error banner over the still-loaded list when a reload after a failure also fails', async () => {
-		// move()'s catch reloads via loadAll(); if that reload's own fetch
+		// handleDrop's catch reloads via loadAll(); if that reload's own fetch
 		// also fails, `list` stays populated (the destructuring assignment
 		// that would clear it never runs) while `error` gets set — the one
 		// path where the error banner renders inside the loaded-list view
@@ -218,7 +277,7 @@ describe('Store aisle order +page.svelte', () => {
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Move down' }).first().click();
+		await dragFirstBelowSecond();
 
 		await expect
 			.element(page.getByText('Failed to load store category order.'))
@@ -227,16 +286,16 @@ describe('Store aisle order +page.svelte', () => {
 	});
 
 	it('reloads the list when reordering fails without an ApiError', async () => {
-		// move's catch sets `error` and immediately triggers a reload via
-		// loadAll(), which flips `loading` back to true in the same tick —
-		// the page collapses to its "Loading…" state before the error
+		// handleDrop's catch sets `error` and immediately triggers a reload
+		// via loadAll(), which flips `loading` back to true in the same tick
+		// — the page collapses to its "Loading…" state before the error
 		// message ever paints, so what's observable here is the reload.
 		vi.mocked(reorderStoreCategories).mockRejectedValue(new TypeError('network down'));
 
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Move down' }).first().click();
+		await dragFirstBelowSecond();
 
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
@@ -248,7 +307,7 @@ describe('Store aisle order +page.svelte', () => {
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Move down' }).first().click();
+		await dragFirstBelowSecond();
 
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
