@@ -23,6 +23,13 @@ export function onConflict(listener: ConflictListener | null): void {
 async function replay(mutation: QueuedMutation): Promise<void> {
 	if (mutation.op === 'create') {
 		await apiPost(mutation.url, mutation.payload);
+		// The already-online path (sync-engine.ts's offlineCreate) deletes the optimistic
+		// temp row on success; replaying a queued create from here needs the same cleanup,
+		// or the temp row lingers in Dexie forever alongside whatever the server actually
+		// created/matched (full reconciliation with the server's response is a known gap —
+		// see PHASE10_PLAN.md §0.2).
+		const table = tableForEntity(mutation.entityType as QueueableEntityType);
+		await table.delete(mutation.targetId);
 		return;
 	}
 	if (mutation.op === 'update') {

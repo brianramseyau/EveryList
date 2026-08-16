@@ -17,7 +17,7 @@ vi.mock('./client', () => ({
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { createItem, updateItem, deleteItem } = await import('./items');
+const { createItem, updateItem, deleteItem, fetchRecentItemNames } = await import('./items');
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -313,5 +313,94 @@ describe('deleteItem (Dexie available)', () => {
 	it('is a no-op against Dexie when the row was never cached', async () => {
 		vi.mocked(apiDelete).mockResolvedValue(undefined);
 		await expect(deleteItem(1, 999)).resolves.toBeUndefined();
+	});
+});
+
+describe('fetchRecentItemNames', () => {
+	it('returns the server response when the request succeeds', async () => {
+		vi.mocked(apiGet).mockResolvedValue(['Bananas', 'Bread']);
+
+		await expect(fetchRecentItemNames(1)).resolves.toEqual(['Bananas', 'Bread']);
+		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists/1/items/recent-names');
+	});
+
+	it('falls back to distinct, most-recent-first cached names for the list when the request fails', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+		const db = getDb()!;
+		const base = {
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		await db.items.put({
+			...base,
+			id: 1,
+			listId: 1,
+			name: 'Bananas',
+			createdAt: '2026-08-01T00:00:00.000Z'
+		});
+		await db.items.put({
+			...base,
+			id: 2,
+			listId: 1,
+			name: 'bananas',
+			createdAt: '2026-08-03T00:00:00.000Z'
+		});
+		await db.items.put({
+			...base,
+			id: 3,
+			listId: 1,
+			name: 'Bread',
+			createdAt: '2026-08-02T00:00:00.000Z'
+		});
+		await db.items.put({
+			...base,
+			id: 4,
+			listId: 2,
+			name: 'Other list item',
+			createdAt: '2026-08-04T00:00:00.000Z'
+		});
+
+		await expect(fetchRecentItemNames(1)).resolves.toEqual(['bananas', 'Bread']);
+	});
+
+	it('caps the offline fallback at 50 distinct names', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+		const db = getDb()!;
+		const base = {
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		for (let i = 0; i < 55; i++) {
+			await db.items.put({
+				...base,
+				id: i + 1,
+				listId: 1,
+				name: `Item ${i}`,
+				createdAt: `2026-08-01T00:${String(i).padStart(2, '0')}:00.000Z`
+			});
+		}
+
+		const names = await fetchRecentItemNames(1);
+		expect(names).toHaveLength(50);
 	});
 });

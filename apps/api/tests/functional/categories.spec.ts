@@ -10,7 +10,7 @@ async function createList(client: ApiClient, token: string) {
   const response = await client
     .post('/api/v1/lists')
     .header('Authorization', `Bearer ${token}`)
-    .json({ name: 'Groceries' })
+    .json({ name: 'Test List' })
   return bodyData<ListDto>(response).id
 }
 

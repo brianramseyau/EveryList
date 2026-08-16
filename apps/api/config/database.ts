@@ -68,9 +68,13 @@ const dbConfig = defineConfig({
 
       schemaGeneration: {
         /**
-         * Enable schema generation from Lucid models.
+         * Enable schema generation from Lucid models. Disabled under tests —
+         * the test runner migrates a scratch DB up/down on every run, which
+         * would otherwise rewrite database/schema.ts in AdonisJS's own
+         * (unformatted) style and diverge from the prettier-formatted,
+         * committed version on every `pnpm test`.
          */
-        enabled: true,
+        enabled: !app.inTest,
 
         /**
          * Custom schema rules file paths.

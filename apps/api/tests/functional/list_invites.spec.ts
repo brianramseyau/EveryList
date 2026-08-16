@@ -11,7 +11,7 @@ async function createList(client: ApiClient, token: string) {
   const response = await client
     .post('/api/v1/lists')
     .header('Authorization', `Bearer ${token}`)
-    .json({ name: 'Groceries' })
+    .json({ name: 'Test List' })
   return bodyData<ListDto>(response).id
 }
 
@@ -86,7 +86,7 @@ test.group('List invites', (group) => {
     const preview = await client.get(`/api/v1/invites/${token}`)
     preview.assertStatus(200)
     const previewData = bodyData<ListInvitePreviewDto>(preview)
-    assert.equal(previewData.listName, 'Groceries')
+    assert.equal(previewData.listName, 'Test List')
     assert.equal(previewData.role, 'editor')
     assert.isDefined(previewData.inviterName)
   })

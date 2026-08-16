@@ -65,10 +65,65 @@ export default class ItemsController {
     return serialize(ItemTransformer.transform(items))
   }
 
+  /** Distinct item names from this list's full history (incl. checked/deleted), most recent first — backs autocomplete. */
+  async recentNames({ auth, params, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
+
+    // createdAt has only second-level precision, so ties are common between
+    // requests in the same second — break ties by id desc so the most
+    // recently *inserted* row still wins the earlier dedup slot.
+    const rows = await Item.query()
+      .where('listId', list.id)
+      .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc')
+      .select('name')
+
+    const seen = new Set<string>()
+    const names: string[] = []
+    for (const row of rows) {
+      const key = row.name.trim().toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      names.push(row.name.trim())
+      if (names.length >= 50) break
+    }
+
+    // `serialize()` only wraps Lucid models/transformer output — a plain
+    // string[] falls through its isObject() check and returns unwrapped,
+    // so the {data: ...} envelope has to be built by hand here.
+    return response.ok({ data: names })
+  }
+
   async store({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const payload = await request.validateUsing(createItemValidator)
+
+    const existing = await Item.query()
+      .where('listId', list.id)
+      .whereNull('deletedAt')
+      .whereRaw('LOWER(TRIM(name)) = ?', [payload.name.trim().toLowerCase()])
+      .first()
+
+    if (existing) {
+      if (existing.checked) {
+        existing.checked = false
+        existing.checkedAt = null
+        existing.version += 1
+        await existing.save()
+
+        await broadcastSync({
+          listId: list.id,
+          entityType: 'item',
+          entityId: existing.id,
+          op: 'update',
+          version: existing.version,
+        })
+      }
+
+      return serialize(ItemTransformer.transform(existing))
+    }
 
     const categoryId = await resolveCategoryId(list, payload.name, payload.categoryId)
 

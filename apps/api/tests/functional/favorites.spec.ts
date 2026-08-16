@@ -4,11 +4,13 @@ import type { ApiClient } from '@japa/api-client'
 import type { FavoriteItemDto, ItemDto, ListDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
+let listCounter = 0
 async function createList(client: ApiClient, token: string) {
+  listCounter += 1
   const response = await client
     .post('/api/v1/lists')
     .header('Authorization', `Bearer ${token}`)
-    .json({ name: 'Groceries' })
+    .json({ name: `Test List ${listCounter}` })
   return bodyData<ListDto>(response).id
 }
 
@@ -143,6 +145,27 @@ test.group('Favorites', (group) => {
       .get(`/api/v1/lists/${listId}/favorites`)
       .header('Authorization', `Bearer ${token}`)
     assert.lengthOf(bodyData<FavoriteItemDto[]>(index), 1)
+  })
+
+  test('a duplicate favorite name on the same list returns a friendly 422, not a 500', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const first = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bananas' })
+    first.assertStatus(200)
+
+    const second = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bananas' })
+    second.assertStatus(422)
+    assert.equal(second.body().errors[0].message, 'That name is already in use.')
   })
 
   test('rejects access to a favorite via a list the user does not own', async ({

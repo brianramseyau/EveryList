@@ -117,14 +117,14 @@ describe('Stores +page.svelte', () => {
 		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
 
 		await page.getByPlaceholder('New store name').fill('Costco');
-		await page.getByRole('button', { name: 'Add store' }).click();
+		await page.getByRole('button', { name: 'Add' }).click();
 
 		expect(attachStore).toHaveBeenCalledWith(1, { name: 'Costco', color: '#3b82f6' });
 		await expect.element(page.getByText('Costco')).toBeInTheDocument();
 	});
 
 	it('does not submit when the new store name is only whitespace', async () => {
-		// The Add store button is already disabled in this state, but
+		// The Add button is already disabled in this state, but
 		// handleCreate carries its own guard, reachable via a raw 'submit'
 		// event and not just a click on the (disabled) button.
 		render(StoresPage);
@@ -147,7 +147,7 @@ describe('Stores +page.svelte', () => {
 		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
 
 		await page.getByPlaceholder('New store name').fill('Costco');
-		await page.getByRole('button', { name: 'Add store' }).click();
+		await page.getByRole('button', { name: 'Add' }).click();
 
 		await expect.element(page.getByText('Failed to create store.')).toBeInTheDocument();
 	});
@@ -159,7 +159,7 @@ describe('Stores +page.svelte', () => {
 		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
 
 		await page.getByPlaceholder('New store name').fill('Costco');
-		await page.getByRole('button', { name: 'Add store' }).click();
+		await page.getByRole('button', { name: 'Add' }).click();
 
 		await expect.element(page.getByText('Duplicate store')).toBeInTheDocument();
 	});
@@ -182,7 +182,7 @@ describe('Stores +page.svelte', () => {
 		await page.getByRole('button', { name: 'Color' }).click();
 		await page.getByRole('button', { name: '#22c55e' }).click();
 		await page.getByPlaceholder('New store name').fill('Costco');
-		await page.getByRole('button', { name: 'Add store' }).click();
+		await page.getByRole('button', { name: 'Add' }).click();
 
 		expect(attachStore).toHaveBeenCalledWith(1, { name: 'Costco', color: '#22c55e' });
 	});

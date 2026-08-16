@@ -6,3 +6,5 @@ apps/web/build
 coverage
 pnpm-lock.yaml
 CHANGELOG.md
+apps/api/.adonisjs
+apps/api/database/schema.ts

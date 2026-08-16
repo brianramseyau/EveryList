@@ -61,6 +61,7 @@ router
 
         router.get(':listId/items', [controllers.Items, 'index'])
         router.get(':listId/items/recent', [controllers.Items, 'recent'])
+        router.get(':listId/items/recent-names', [controllers.Items, 'recentNames'])
         router.get(':listId/items/categorize', [controllers.Items, 'categorize'])
         router.post(':listId/items', [controllers.Items, 'store'])
         router.post(':listId/items/import', [controllers.Items, 'import'])

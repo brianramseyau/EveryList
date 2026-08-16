@@ -37,7 +37,7 @@
 				<Icon name="arrowLeft" class="h-6 w-6" />
 			</a>
 		{/if}
-		<h1 class="flex-1 font-display text-2xl font-bold">{title}</h1>
+		<h1 class="header-title flex-1 font-display text-2xl font-bold">{title}</h1>
 		{#if actions}
 			<div class="flex items-center gap-3 text-sm print:hidden">{@render actions()}</div>
 		{/if}
@@ -51,3 +51,13 @@
 		<Icon name="arrowLeft" class="h-6 w-6" />
 	</a>
 {/if}
+
+<style>
+	/* A tap on the title (adjacent to the back button) can trigger the
+	   browser's native text-selection/copy menu on mobile instead of
+	   registering as a tap on the back button right next to it. */
+	.header-title {
+		user-select: none;
+		-webkit-user-select: none;
+	}
+</style>

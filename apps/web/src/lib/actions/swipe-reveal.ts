@@ -1,6 +1,8 @@
-// Hand-rolled swipe-to-delete via Pointer Events (PHASE9_PLAN.md #9) — no
-// gesture library, mirrors press-hold-reorder.ts's approach of a small
-// synchronously-testable state machine driven by synthetic PointerEvents.
+// Hand-rolled directional swipe via Pointer Events (PHASE9_PLAN.md #9,
+// PHASE10_PLAN.md #0.9) — no gesture library, mirrors press-hold-reorder.ts's
+// approach of a small synchronously-testable state machine driven by
+// synthetic PointerEvents. Swipe right commits onCommitRight (delete);
+// swipe left commits onCommitLeft (edit).
 
 export const REVEAL_PX = 80;
 export const COMMIT_RATIO = 0.5;
@@ -8,7 +10,8 @@ const DIRECTION_DEAD_ZONE_PX = 10;
 
 export interface SwipeRevealParams {
 	disabled?: boolean;
-	ondelete: () => void;
+	onCommitRight: () => void;
+	onCommitLeft: () => void;
 }
 
 export function swipeReveal(node: HTMLElement, params: SwipeRevealParams) {
@@ -72,13 +75,17 @@ export function swipeReveal(node: HTMLElement, params: SwipeRevealParams) {
 		pointerId = null;
 
 		// A cancel (e.g. the browser interrupting the gesture for its own UI)
-		// never commits a delete — only a clean release past the threshold does.
-		// Either direction commits — see the two mirrored reveal panels in
-		// lists/[id]/+page.svelte.
-		const shouldDelete =
+		// never commits — only a clean release past the threshold does. The
+		// sign of dx at release picks which callback fires — see the two
+		// distinct reveal panels in lists/[id]/+page.svelte.
+		const shouldCommit =
 			event.type === 'pointerup' && dragging && Math.abs(dx) >= REVEAL_PX * COMMIT_RATIO;
+		const committedRight = dx > 0;
 		reset();
-		if (shouldDelete) current.ondelete();
+		if (shouldCommit) {
+			if (committedRight) current.onCommitRight();
+			else current.onCommitLeft();
+		}
 	}
 
 	node.addEventListener('pointerdown', handlePointerDown);

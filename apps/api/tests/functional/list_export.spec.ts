@@ -10,7 +10,7 @@ async function createList(client: ApiClient, token: string) {
   const response = await client
     .post('/api/v1/lists')
     .header('Authorization', `Bearer ${token}`)
-    .json({ name: 'Groceries' })
+    .json({ name: 'Test List' })
   return bodyData<ListDto>(response).id
 }
 
@@ -74,7 +74,7 @@ test.group('List export', (group) => {
       const message = sentMail.message
       return (
         message.hasTo('friend@example.com') &&
-        message.hasSubject('Shopping list: Groceries') &&
+        message.hasSubject('Shopping list: Test List') &&
         typeof message.nodeMailerMessage.text === 'string' &&
         message.nodeMailerMessage.text.includes('Bananas (2)') &&
         message.nodeMailerMessage.text.includes('Bread') &&

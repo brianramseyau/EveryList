@@ -4,7 +4,6 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Input, Select } from 'flowbite-svelte';
 	import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
@@ -21,6 +20,7 @@
 	import { pressHoldReorder } from '$lib/actions/press-hold-reorder';
 	import { swipeReveal } from '$lib/actions/swipe-reveal';
 	import Icon from '$lib/components/Icon.svelte';
+	import ItemAutocomplete from '$lib/components/ItemAutocomplete.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PasscodeGate from '$lib/components/PasscodeGate.svelte';
 	import SyncToast from '$lib/components/SyncToast.svelte';
@@ -32,12 +32,29 @@
 	let categories = $state<CategoryDto[]>([]);
 	let items = $state<ItemDto[]>([]);
 	let stores = $state<StoreDto[]>([]);
-	let filterStoreId = $state<number | null>(null);
+	// The store currently "shopping at" (PHASE10_PLAN.md #0.5) — local/device-only,
+	// see $lib/api/selected-store.ts. Drives both the item filter and the header
+	// store icon's color, replacing the old separate "All stores" dropdown.
+	let selectedStoreId = $state<number | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
 	let newItemName = $state('');
 	let adding = $state(false);
+
+	// Briefly highlights a row when adding matched an existing item instead of
+	// creating a new one (PHASE10_PLAN.md #0.2) — both the local pre-check and
+	// a server-side match (same id already in `items`) route through this.
+	let highlightedItemId = $state<number | null>(null);
+	let highlightTimeout: ReturnType<typeof setTimeout> | undefined;
+
+	function flashHighlight(itemId: number) {
+		highlightedItemId = itemId;
+		if (highlightTimeout) clearTimeout(highlightTimeout);
+		highlightTimeout = setTimeout(() => {
+			highlightedItemId = null;
+		}, 1200);
+	}
 
 	// Checked items stay under their category header instead of moving to a
 	// separate section (PHASE9_PLAN.md #3) — this toggle controls whether
@@ -57,8 +74,14 @@
 	// list on this device — purely local, see $lib/api/selected-store.ts.
 	let storeCategoryOverrides: Map<number, number> = new SvelteMap();
 
+	const selectedStore = $derived(stores.find((store) => store.id === selectedStoreId) ?? null);
+
+	// Only filter once selectedStoreId resolves to a store that's actually still
+	// on this list — a stale/orphaned id (e.g. a store removed outside the normal
+	// flow) must behave like "no store selected" rather than silently hiding
+	// every item with no way to clear it from this screen.
 	const visibleItems = $derived(
-		filterStoreId === null ? items : items.filter((item) => item.storeId === filterStoreId)
+		selectedStore === null ? items : items.filter((item) => item.storeId === selectedStore.id)
 	);
 
 	const groups = $derived.by(() => {
@@ -122,7 +145,7 @@
 			]);
 			unlocked = isListUnlocked(listId);
 
-			const selectedStoreId = await getSelectedStore(listId);
+			selectedStoreId = await getSelectedStore(listId);
 			const overrideEntries = selectedStoreId ? await fetchStoreCategoryOrder(selectedStoreId) : [];
 			storeCategoryOverrides.clear();
 			for (const entry of overrideEntries) {
@@ -156,6 +179,7 @@
 
 	onDestroy(() => {
 		unsubscribeRealtime?.();
+		if (highlightTimeout) clearTimeout(highlightTimeout);
 	});
 
 	function refreshFromSync() {
@@ -163,19 +187,46 @@
 		void loadAll();
 	}
 
-	async function handleAddItem(event: SubmitEvent) {
-		event.preventDefault();
-		if (!newItemName.trim()) return;
+	async function addItem(rawName: string) {
+		const name = rawName.trim();
+		if (!name) return;
+
+		// Best-effort local pre-check against what's already loaded (PHASE10_PLAN.md
+		// #0.2) — an unchecked match is left alone, just highlighted, so the input
+		// isn't cleared and no request is made. A checked match still needs the
+		// server round-trip (it flips checked → unchecked), so it falls through.
+		const normalized = name.toLowerCase();
+		const existingUnchecked = items.find(
+			(item) => !item.checked && item.name.trim().toLowerCase() === normalized
+		);
+		if (existingUnchecked) {
+			flashHighlight(existingUnchecked.id);
+			return;
+		}
+
 		adding = true;
 		try {
-			const item = await createItem(listId, { name: newItemName.trim() });
-			items = [...items, item];
+			const item = await createItem(listId, { name });
+			// The server may have matched an existing item instead of creating a new
+			// one (a checked match it unchecked) — replace that row in place rather
+			// than appending a duplicate.
+			const existingIndex = items.findIndex((current) => current.id === item.id);
+			items =
+				existingIndex === -1
+					? [...items, item]
+					: items.map((current, index) => (index === existingIndex ? item : current));
+			flashHighlight(item.id);
 			newItemName = '';
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to add item.';
 		} finally {
 			adding = false;
 		}
+	}
+
+	async function handleAddItem(event: SubmitEvent) {
+		event.preventDefault();
+		await addItem(newItemName);
 	}
 
 	async function toggleChecked(item: ItemDto) {
@@ -186,16 +237,6 @@
 		try {
 			await updateItem(listId, item.id, { checked: nextChecked });
 			void refreshBadgeCount();
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to update item.';
-			void loadAll();
-		}
-	}
-
-	async function tagItemStore(item: ItemDto, storeId: number | null) {
-		items = items.map((current) => (current.id === item.id ? { ...current, storeId } : current));
-		try {
-			await updateItem(listId, item.id, { storeId });
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to update item.';
 			void loadAll();
@@ -263,6 +304,14 @@
 			void loadAll();
 		}
 	}
+
+	// Bulk-deletes via the same soft-delete path as a single item, one request
+	// per item rather than a new backend endpoint (PHASE10_PLAN.md #0.11) — each
+	// call targets a different id, so there's no version-conflict risk running
+	// them concurrently, and it inherits the offline-queue behavior for free.
+	async function clearChecked() {
+		await Promise.all(checkedItems.map((item) => removeItem(item)));
+	}
 </script>
 
 <svelte:head>
@@ -270,38 +319,42 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<PageHeader title={list?.name} backHref={resolve('/lists')} backLabel="My Lists">
-		{#snippet actions()}
-			<a
-				href={resolve('/lists/[id]/favorites', { id: String(listId) })}
-				aria-label="Favorites"
-				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-			>
-				<Icon name="heart" class="h-5 w-5" />
-			</a>
-			<a
-				href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
-				aria-label="Recently deleted"
-				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-			>
-				<Icon name="history" class="h-5 w-5" />
-			</a>
-			<a
-				href={resolve('/lists/[id]/stores', { id: String(listId) })}
-				aria-label="Stores"
-				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-			>
-				<Icon name="store" class="h-5 w-5" />
-			</a>
-			<a
-				href={resolve('/lists/[id]/settings', { id: String(listId) })}
-				aria-label="List settings"
-				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-			>
-				<Icon name="cog" class="h-5 w-5" />
-			</a>
-		{/snippet}
-	</PageHeader>
+	<div class="sticky top-0 z-20 bg-paper pt-[env(safe-area-inset-top)]">
+		<PageHeader title={list?.name} backHref={resolve('/lists')} backLabel="My Lists">
+			{#snippet actions()}
+				<a
+					href={resolve('/lists/[id]/favorites', { id: String(listId) })}
+					aria-label="Favorites"
+					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+				>
+					<Icon name="heart" class="h-5 w-5" />
+				</a>
+				<a
+					href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
+					aria-label="Recently deleted"
+					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+				>
+					<Icon name="history" class="h-5 w-5" />
+				</a>
+				<a
+					href={resolve('/lists/[id]/stores', { id: String(listId) })}
+					aria-label="Stores"
+					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+				>
+					<span style:color={selectedStore?.color}>
+						<Icon name="store" class="h-5 w-5" />
+					</span>
+				</a>
+				<a
+					href={resolve('/lists/[id]/settings', { id: String(listId) })}
+					aria-label="List settings"
+					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+				>
+					<Icon name="cog" class="h-5 w-5" />
+				</a>
+			{/snippet}
+		</PageHeader>
+	</div>
 
 	<div class="print:hidden">
 		<SyncToast
@@ -336,9 +389,22 @@
 				>
 					<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
 				</button>
-				<div class="flex-1">
-					<Input placeholder="Item name" bind:value={newItemName} />
-				</div>
+				{#if checkedItems.length > 0}
+					<button
+						type="button"
+						aria-label="Clear checked items"
+						onclick={() => void clearChecked()}
+						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+					>
+						<Icon name="deleteSweep" class="h-5 w-5" />
+					</button>
+				{/if}
+				<ItemAutocomplete
+					{listId}
+					bind:value={newItemName}
+					existingNames={items.map((item) => item.name)}
+					onselect={(name) => void addItem(name)}
+				/>
 				<button
 					type="submit"
 					aria-label="Add item"
@@ -353,21 +419,6 @@
 				<p class="text-sm text-red-600 dark:text-red-400 print:hidden">{error}</p>
 			{/if}
 
-			{#if stores.length > 0}
-				<div class="w-48 print:hidden">
-					<Select
-						items={stores.map((store) => ({ value: store.id, name: store.name }))}
-						placeholder="All stores"
-						clearable
-						value={filterStoreId ?? ''}
-						onchange={(event) => {
-							const raw = (event.target as HTMLSelectElement).value;
-							filterStoreId = raw === '' ? null : Number(raw);
-						}}
-					/>
-				</div>
-			{/if}
-
 			{#if items.length === 0}
 				<div class="flex flex-col items-center gap-2 py-8 text-center">
 					<span style:color={list.color}>
@@ -375,6 +426,15 @@
 					</span>
 					<p class="text-gray-600 dark:text-gray-400">
 						Nothing here yet. Add your first item above.
+					</p>
+				</div>
+			{:else if visibleItems.length === 0}
+				<div
+					class="flex flex-col items-center gap-2 py-8 text-center text-gray-400 dark:text-gray-500"
+				>
+					<Icon name="filterOutline" class="h-8 w-8" />
+					<p class="text-sm">
+						{`No items are tagged for ${selectedStore!.name}. Change the store you're shopping at from the store icon above to see the rest of this list.`}
 					</p>
 				</div>
 			{:else}
@@ -412,17 +472,27 @@
 											<Icon name="trashCanOutline" class="h-5 w-5" />
 										</div>
 										<div
-											class="absolute inset-y-0 right-0 flex w-20 items-center justify-center bg-red-600 text-white print:hidden"
+											class="absolute inset-y-0 right-0 flex w-20 items-center justify-center bg-blue-600 text-white print:hidden"
 											aria-hidden="true"
 										>
-											<Icon name="trashCanOutline" class="h-5 w-5" />
+											<Icon name="pencil" class="h-5 w-5" />
 										</div>
 										<div
-											class="relative flex items-center gap-2 bg-paper"
+											class="item-row relative flex items-center gap-2 bg-paper {highlightedItemId ===
+											item.id
+												? 'item-row-highlight'
+												: ''}"
 											style="touch-action: pan-y;"
 											use:swipeReveal={{
 												disabled: !isCoarsePointer,
-												ondelete: () => removeItem(item)
+												onCommitRight: () => removeItem(item),
+												onCommitLeft: () =>
+													goto(
+														resolve('/lists/[id]/items/[itemId]', {
+															id: String(listId),
+															itemId: String(item.id)
+														})
+													)
 											}}
 										>
 											<button
@@ -451,44 +521,47 @@
 													</svg>
 												{/if}
 											</button>
-											<a
-												href={resolve('/lists/[id]/items/[itemId]', {
-													id: String(listId),
-													itemId: String(item.id)
-												})}
-												class="flex flex-1 items-center gap-2"
+											<div
+												class="flex flex-1 flex-col"
+												style="touch-action: manipulation; -webkit-touch-callout: none;"
 											>
-												<span class={item.checked ? 'text-gray-400 line-through' : ''}>
-													{item.name}
-												</span>
-												{#if item.quantity}
-													<span class="text-gray-600 dark:text-gray-400"
-														>(<span>{item.quantity}</span>)</span
-													>
-												{/if}
-											</a>
-											{#if !item.checked && stores.length > 0}
-												<div class="ml-auto w-32 print:hidden" data-reorder-ignore>
-													<Select
-														size="sm"
-														items={stores.map((store) => ({ value: store.id, name: store.name }))}
-														placeholder="No store"
-														clearable
-														value={item.storeId ?? ''}
-														onchange={(event) => {
-															const raw = (event.target as HTMLSelectElement).value;
-															void tagItemStore(item, raw === '' ? null : Number(raw));
-														}}
-													/>
+												<div class="flex items-center gap-2">
+													<span class={item.checked ? 'text-gray-400 line-through' : ''}>
+														{item.name}
+													</span>
+													{#if item.quantity}
+														<span class="text-gray-600 dark:text-gray-400"
+															>(<span>{item.quantity}</span>)</span
+														>
+													{/if}
 												</div>
-											{/if}
-											<span
-												aria-hidden="true"
-												class="ml-auto flex h-11 w-11 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
-											>
-												<Icon name="dragVertical" class="h-5 w-5" />
-											</span>
+												{#if item.storeId}
+													{@const itemStore = stores.find((store) => store.id === item.storeId)}
+													{#if itemStore}
+														<span class="text-xs text-gray-500 dark:text-gray-400">
+															{itemStore.name}
+														</span>
+													{/if}
+												{/if}
+											</div>
 											{#if !isCoarsePointer}
+												<span
+													aria-hidden="true"
+													class="ml-auto flex h-11 w-11 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
+												>
+													<Icon name="dragVertical" class="h-5 w-5" />
+												</span>
+												<a
+													href={resolve('/lists/[id]/items/[itemId]', {
+														id: String(listId),
+														itemId: String(item.id)
+													})}
+													aria-label={`Edit ${item.name}`}
+													data-reorder-ignore
+													class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 print:hidden"
+												>
+													<Icon name="pencil" class="h-5 w-5" />
+												</a>
 												<button
 													type="button"
 													aria-label={`Delete ${item.name}`}
@@ -533,6 +606,19 @@
 	   overflow-hidden, which exists only to mask the swipe-reveal panels. */
 	:global(li.is-dragging) {
 		overflow: visible;
+	}
+
+	.item-row {
+		transition: background-color 600ms ease-out;
+	}
+
+	.item-row-highlight {
+		/* Mixed against the opaque paper background, not "transparent" — this row
+		   sits in front of the swipe-reveal delete/edit panels (absolutely
+		   positioned behind it), which a translucent highlight would let show
+		   through underneath. */
+		background-color: color-mix(in srgb, var(--color-primary-500) 25%, var(--color-paper) 75%);
+		transition: none;
 	}
 
 	@media (prefers-reduced-motion: no-preference) {
