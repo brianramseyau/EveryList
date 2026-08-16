@@ -106,6 +106,15 @@ describe('Categories +page.svelte', () => {
 		await expect.element(page.getByText('List not found')).toBeInTheDocument();
 	});
 
+	it('links back to List Settings, not the list view', async () => {
+		render(CategoriesPage);
+
+		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		const backLink = page.getByRole('link', { name: 'Back to settings' });
+		await expect.element(backLink).toBeInTheDocument();
+		expect(backLink.element().getAttribute('href')).toBe('/lists/1/settings');
+	});
+
 	it('only shows Delete for list-scoped categories, not global defaults', async () => {
 		render(CategoriesPage);
 
@@ -139,9 +148,7 @@ describe('Categories +page.svelte', () => {
 		await page.getByRole('button', { name: 'Add' }).click();
 
 		expect(createCategory).toHaveBeenCalledWith(1, { name: 'Snacks', icon: 'cookie' });
-		await expect
-			.poll(async () => (await page.getByRole('button', { name: 'Save' }).all()).length)
-			.toBe(3);
+		await expect.element(page.getByRole('textbox').nth(3)).toHaveValue('Snacks');
 	});
 
 	it('does not submit when the new category name is only whitespace', async () => {
@@ -185,7 +192,7 @@ describe('Categories +page.svelte', () => {
 		await expect.element(page.getByText('Duplicate category')).toBeInTheDocument();
 	});
 
-	it('saves an edited category name', async () => {
+	it('auto-saves an edited category name when the field loses focus', async () => {
 		vi.mocked(updateCategory).mockResolvedValue({ ...produce, name: 'Fruits & Veg' });
 
 		render(CategoriesPage);
@@ -193,10 +200,23 @@ describe('Categories +page.svelte', () => {
 
 		// Textbox order: the "New category name" input, then one per category
 		// row — Produce is the first row.
-		await page.getByRole('textbox').nth(1).fill('Fruits & Veg');
-		await page.getByRole('button', { name: 'Save', exact: true }).first().click();
+		const nameInput = page.getByRole('textbox').nth(1);
+		await nameInput.fill('Fruits & Veg');
+		nameInput.element().blur();
 
+		await expect.poll(() => vi.mocked(updateCategory).mock.calls.length).toBe(1);
 		expect(updateCategory).toHaveBeenCalledWith(1, 10, { name: 'Fruits & Veg', icon: 'apple' });
+	});
+
+	it('does not save on blur when the name was not changed', async () => {
+		render(CategoriesPage);
+		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+
+		const nameInput = page.getByRole('textbox').nth(1);
+		nameInput.element().focus();
+		nameInput.element().blur();
+
+		expect(updateCategory).not.toHaveBeenCalled();
 	});
 
 	it('keeps the locally edited fields when the save is queued offline (no server response yet)', async () => {
@@ -205,14 +225,16 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		await page.getByRole('textbox').nth(1).fill('Fruits & Veg');
-		await page.getByRole('button', { name: 'Save', exact: true }).first().click();
+		const nameInput = page.getByRole('textbox').nth(1);
+		await nameInput.fill('Fruits & Veg');
+		nameInput.element().blur();
 
+		await expect.poll(() => vi.mocked(updateCategory).mock.calls.length).toBe(1);
 		expect(updateCategory).toHaveBeenCalledWith(1, 10, { name: 'Fruits & Veg', icon: 'apple' });
 		await expect.element(page.getByRole('textbox').nth(1)).toHaveValue('Fruits & Veg');
 	});
 
-	it('picks a new icon for an existing category', async () => {
+	it('picks a new icon for an existing category, saving it immediately', async () => {
 		vi.mocked(updateCategory).mockResolvedValue({ ...produce, icon: 'carrot' });
 
 		render(CategoriesPage);
@@ -221,8 +243,8 @@ describe('Categories +page.svelte', () => {
 		await page.getByRole('button', { name: 'Apple' }).click();
 		await page.getByPlaceholder('Search icons…').fill('carrot');
 		await page.getByRole('button', { name: 'Carrot', exact: true }).click();
-		await page.getByRole('button', { name: 'Save', exact: true }).first().click();
 
+		await expect.poll(() => vi.mocked(updateCategory).mock.calls.length).toBe(1);
 		expect(updateCategory).toHaveBeenCalledWith(1, 10, { name: 'Produce', icon: 'carrot' });
 	});
 
@@ -236,7 +258,9 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Save', exact: true }).first().click();
+		await page.getByRole('button', { name: 'Apple' }).click();
+		await page.getByPlaceholder('Search icons…').fill('carrot');
+		await page.getByRole('button', { name: 'Carrot', exact: true }).click();
 
 		await expect.poll(() => vi.mocked(fetchCategories).mock.calls.length).toBe(2);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
@@ -248,7 +272,9 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Save', exact: true }).first().click();
+		await page.getByRole('button', { name: 'Apple' }).click();
+		await page.getByPlaceholder('Search icons…').fill('carrot');
+		await page.getByRole('button', { name: 'Carrot', exact: true }).click();
 
 		await expect.poll(() => vi.mocked(fetchCategories).mock.calls.length).toBe(2);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();

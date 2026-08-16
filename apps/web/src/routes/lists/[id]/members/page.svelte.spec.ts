@@ -136,6 +136,15 @@ describe('Members +page.svelte', () => {
 		await expect.element(page.getByText('Server exploded')).toBeInTheDocument();
 	});
 
+	it('links back to List Settings, not the list view', async () => {
+		render(MembersPage);
+
+		await expect.element(page.getByText('Groceries — Members')).toBeInTheDocument();
+		const backLink = page.getByRole('link', { name: 'Back to settings' });
+		await expect.element(backLink).toBeInTheDocument();
+		expect(backLink.element().getAttribute('href')).toBe('/lists/5/settings');
+	});
+
 	it('lists members and lets an owner change a role', async () => {
 		vi.mocked(fetchMembers).mockResolvedValue([ownerMember, editorMember, viewerMember]);
 		vi.mocked(updateMemberRole).mockResolvedValue({ ...editorMember, role: 'viewer' });
