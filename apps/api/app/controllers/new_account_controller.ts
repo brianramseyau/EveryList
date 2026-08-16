@@ -6,8 +6,14 @@ import env from '#start/env'
 import { findActiveInvite } from '#services/invite_lookup'
 import { createOwnedList } from '#services/list_creation'
 
-/** Every new account starts with one list so signup doesn't land on an empty index. */
-const STARTER_LIST = { name: 'Shopping List', icon: 'basket', color: '#f97316' } as const
+/**
+ * Every new account starts with one list so signup doesn't land on an empty
+ * index. Color is orange-700 (not the brighter orange-500 swatch offered in
+ * the color picker) since list.color is also used as category-heading text
+ * color against the light "paper" background — orange-500 there measures a
+ * 2.57:1 contrast ratio, under WCAG AA's 4.5:1 minimum for text.
+ */
+const STARTER_LIST = { name: 'Shopping List', icon: 'basket', color: '#c2410c' } as const
 
 export default class NewAccountController {
   async store({ request, response, serialize }: HttpContext) {

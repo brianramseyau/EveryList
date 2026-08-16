@@ -28,9 +28,9 @@ test('list detail page has no automatically-detectable accessibility violations'
 	await page.getByRole('button', { name: 'Sign up' }).click();
 	await expect(page).toHaveURL(/\/lists$/);
 
-	// Signup already seeds a starter "Groceries" list — open it directly
+	// Signup already seeds a starter "Shopping List" list — open it directly
 	// rather than creating another, so this page has real content on it.
-	await page.getByRole('link', { name: /Groceries/ }).click();
+	await page.getByRole('link', { name: /Shopping List/ }).click();
 	await page.getByPlaceholder('Item name').fill('Milk');
 	await page.getByRole('button', { name: 'Add item' }).click();
 	await expect(page.getByText('Milk')).toBeVisible();

@@ -20,7 +20,7 @@ test.group('Lists CRUD', (group) => {
     assert.lengthOf(indexed, 1)
     assert.equal(indexed[0]?.name, 'Shopping List')
     assert.equal(indexed[0]?.icon, 'basket')
-    assert.equal(indexed[0]?.color, '#f97316')
+    assert.equal(indexed[0]?.color, '#c2410c')
     assert.equal(indexed[0]?.itemCount, 0)
   })
 
