@@ -138,6 +138,12 @@ const routes = {
     tokens: [{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/recent","type":0,"val":"recent","end":""}],
     types: placeholder as Registry['lists.items.recent']['types'],
   },
+  'lists.items.recent_names': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/lists/:listId/items/recent-names',
+    tokens: [{"old":"/api/v1/lists/:listId/items/recent-names","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/recent-names","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/recent-names","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/recent-names","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/recent-names","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/recent-names","type":0,"val":"recent-names","end":""}],
+    types: placeholder as Registry['lists.items.recent_names']['types'],
+  },
   'lists.items.categorize': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/lists/:listId/items/categorize',

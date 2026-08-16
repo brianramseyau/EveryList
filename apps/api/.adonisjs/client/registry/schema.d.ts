@@ -271,6 +271,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['recent']>>>
     }
   }
+  'lists.items.recent_names': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/items/recent-names'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['recentNames']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['recentNames']>>>
+    }
+  }
   'lists.items.categorize': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/lists/:listId/items/categorize'

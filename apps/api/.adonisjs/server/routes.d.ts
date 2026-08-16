@@ -26,6 +26,7 @@ export type ScannedRoutes = {
     'lists.categories.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'categoryId': ParamValue} }
     'lists.items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.recent': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.items.recent_names': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.categorize': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.import': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
@@ -80,6 +81,7 @@ export type ScannedRoutes = {
     'lists.categories.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.recent': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.items.recent_names': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.categorize': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.favorite_items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
@@ -97,6 +99,7 @@ export type ScannedRoutes = {
     'lists.categories.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.recent': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.items.recent_names': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.categorize': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.favorite_items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }

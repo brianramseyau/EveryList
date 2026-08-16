@@ -48,6 +48,7 @@ export interface ApiDefinition {
     items: {
       index: typeof routes['lists.items.index']
       recent: typeof routes['lists.items.recent']
+      recentNames: typeof routes['lists.items.recent_names']
       categorize: typeof routes['lists.items.categorize']
       store: typeof routes['lists.items.store']
       import: typeof routes['lists.items.import']
