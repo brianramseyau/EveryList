@@ -9,7 +9,12 @@ export function fetchList(id: number): Promise<ListDto> {
 	return apiGet(`/api/v1/lists/${id}`);
 }
 
-export function createList(input: { name: string; color?: string; icon?: string | null }) {
+export function createList(input: {
+	name: string;
+	color?: string;
+	icon?: string | null;
+	useCategories?: boolean;
+}) {
 	return apiPost<ListDto>('/api/v1/lists', input);
 }
 
@@ -21,6 +26,7 @@ export function updateList(
 		icon: string | null;
 		archived: boolean;
 		badgeExcluded: boolean;
+		useCategories: boolean;
 		folderId: number | null;
 		passcodeHash: string | null;
 	}>

@@ -41,6 +41,8 @@
 
 	let newItemName = $state('');
 	let adding = $state(false);
+	let itemInputFocused = $state(false);
+	let confirmingClear = $state(false);
 
 	// Briefly highlights a row when adding matched an existing item instead of
 	// creating a new one (PHASE10_PLAN.md #0.2) — both the local pre-check and
@@ -93,6 +95,13 @@
 			byCategory.get(key)!.push(item);
 		}
 
+		// Lists that opt out of categories (PHASE11_PLAN.md §E) render as a single
+		// flat section — collapse every bucket instead of grouping by categoryId.
+		if (list?.useCategories === false) {
+			const flat = [...byCategory.values()].flat();
+			return flat.length ? [{ category: null, items: flat }] : [];
+		}
+
 		const orderedCategories = [...categories].sort((a, b) => {
 			const aOrder = storeCategoryOverrides.get(a.id) ?? a.sortOrder;
 			const bOrder = storeCategoryOverrides.get(b.id) ?? b.sortOrder;
@@ -110,6 +119,12 @@
 	});
 
 	const checkedItems = $derived(visibleItems.filter((item) => item.checked));
+
+	const clearConfirmMessage = $derived(
+		checkedItems.length === 1
+			? 'Clear 1 checked item?'
+			: `Clear ${checkedItems.length} checked items?`
+	);
 
 	// Flat, cross-category index of each item as currently rendered — drag
 	// targets are computed against this single flat ordering (PHASE9_PLAN.md
@@ -310,6 +325,7 @@
 	// call targets a different id, so there's no version-conflict risk running
 	// them concurrently, and it inherits the offline-queue behavior for free.
 	async function clearChecked() {
+		confirmingClear = false;
 		await Promise.all(checkedItems.map((item) => removeItem(item)));
 	}
 </script>
@@ -371,39 +387,46 @@
 			<PasscodeGate {list} onunlock={() => (unlocked = true)} />
 		{:else}
 			<form class="flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
-				<a
-					href={resolve('/lists/[id]/import', { id: String(listId) })}
-					aria-label="Paste in a list"
-					class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+				<div
+					class="flex shrink-0 items-center overflow-hidden transition-all duration-200 {itemInputFocused
+						? 'w-0 gap-0 opacity-0'
+						: 'w-auto gap-2 opacity-100'}"
 				>
-					<Icon name="clipboardText" class="h-5 w-5" />
-				</a>
-				<button
-					type="button"
-					aria-label={showChecked ? 'Hide checked items' : 'Show checked items'}
-					onclick={() => {
-						showChecked = !showChecked;
-						setShowChecked(listId, showChecked);
-					}}
-					class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
-				>
-					<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
-				</button>
-				{#if checkedItems.length > 0}
-					<button
-						type="button"
-						aria-label="Clear checked items"
-						onclick={() => void clearChecked()}
+					<a
+						href={resolve('/lists/[id]/import', { id: String(listId) })}
+						aria-label="Paste in a list"
 						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
 					>
-						<Icon name="deleteSweep" class="h-5 w-5" />
+						<Icon name="clipboardText" class="h-5 w-5" />
+					</a>
+					<button
+						type="button"
+						aria-label={showChecked ? 'Hide checked items' : 'Show checked items'}
+						onclick={() => {
+							showChecked = !showChecked;
+							setShowChecked(listId, showChecked);
+						}}
+						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+					>
+						<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
 					</button>
-				{/if}
+					{#if checkedItems.length > 0}
+						<button
+							type="button"
+							aria-label="Clear checked items"
+							onclick={() => (confirmingClear = true)}
+							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+						>
+							<Icon name="deleteSweep" class="h-5 w-5" />
+						</button>
+					{/if}
+				</div>
 				<ItemAutocomplete
 					{listId}
 					bind:value={newItemName}
 					existingNames={items.map((item) => item.name)}
 					onselect={(name) => void addItem(name)}
+					onfocuschange={(focused) => (itemInputFocused = focused)}
 				/>
 				<button
 					type="submit"
@@ -414,6 +437,30 @@
 					<Icon name="plusCircle" class="h-7 w-7" />
 				</button>
 			</form>
+
+			{#if confirmingClear}
+				<div
+					class="flex items-center justify-between gap-2 rounded-lg border border-red-200 p-3 text-sm dark:border-red-900 print:hidden"
+				>
+					<p class="text-red-600 dark:text-red-400">{clearConfirmMessage}</p>
+					<div class="flex shrink-0 gap-2">
+						<button
+							type="button"
+							class="rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700"
+							onclick={() => void clearChecked()}
+						>
+							Confirm
+						</button>
+						<button
+							type="button"
+							class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+							onclick={() => (confirmingClear = false)}
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			{/if}
 
 			{#if error}
 				<p class="text-sm text-red-600 dark:text-red-400 print:hidden">{error}</p>
@@ -441,20 +488,22 @@
 				<div class="flex flex-col gap-6 pb-16" bind:this={itemsContainerEl}>
 					{#each groups as group (group.category?.id ?? 'uncategorized')}
 						<section>
-							<h2
-								class="mb-2 flex items-center gap-2 border-b pb-1 text-sm font-semibold {group.category
-									? ''
-									: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
-								style:color={group.category ? list.color : undefined}
-								style:border-bottom-color={group.category ? list.color : undefined}
-							>
-								{#if group.category}
-									<Icon name={group.category.icon} class="h-4 w-4" />
-								{/if}
-								<span>
-									{group.category?.name ?? 'Uncategorized'}
-								</span>
-							</h2>
+							{#if list.useCategories !== false}
+								<h2
+									class="mb-2 flex items-center gap-2 border-b pb-1 text-sm font-semibold {group.category
+										? ''
+										: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
+									style:color={group.category ? list.color : undefined}
+									style:border-bottom-color={group.category ? list.color : undefined}
+								>
+									{#if group.category}
+										<Icon name={group.category.icon} class="h-4 w-4" />
+									{/if}
+									<span>
+										{group.category?.name ?? 'Uncategorized'}
+									</span>
+								</h2>
+							{/if}
 							<ul class="flex flex-col gap-1">
 								{#each group.items as item (item.id)}
 									<li
@@ -538,7 +587,7 @@
 												{#if item.storeId}
 													{@const itemStore = stores.find((store) => store.id === item.storeId)}
 													{#if itemStore}
-														<span class="text-xs text-gray-500 dark:text-gray-400">
+														<span class="text-xs" style:color={itemStore.color}>
 															{itemStore.name}
 														</span>
 													{/if}
@@ -609,6 +658,8 @@
 	}
 
 	.item-row {
+		min-height: 3.5rem;
+		padding-block: 0.5rem;
 		transition: background-color 600ms ease-out;
 	}
 

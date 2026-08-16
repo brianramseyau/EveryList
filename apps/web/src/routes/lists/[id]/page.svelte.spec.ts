@@ -191,6 +191,36 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Uncategorized')).toBeInTheDocument();
 	});
 
+	it('renders a flat list with no category headers when the list opts out of categories', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 11, sortOrder: 1 }),
+			makeItem({ id: 102, name: 'Mystery item', categoryId: null, sortOrder: 2 })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+		await expect.element(page.getByText('Mystery item')).toBeInTheDocument();
+		await expect.element(page.getByText('Produce')).not.toBeInTheDocument();
+		await expect.element(page.getByText('Uncategorized')).not.toBeInTheDocument();
+	});
+
+	it('renders no groups when a categories-free list has only hidden checked items', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', checked: true, checkedAt: TS })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Hide checked items' }).click();
+		await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+	});
+
 	it('groups items by category, keeping checked items under the same header without reordering them', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			// Checked item listed FIRST — it must stay first, not sink below
@@ -821,7 +851,7 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
-	it('clears every checked item at once via the "Clear checked items" button, leaving unchecked items alone', async () => {
+	it('asks for confirmation before clearing checked items, then clears them on confirm', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true }),
 			makeItem({ id: 101, name: 'Milk', categoryId: 10, checked: true }),
@@ -833,12 +863,35 @@ describe('List detail +page.svelte', () => {
 
 		await page.getByRole('button', { name: 'Clear checked items' }).click();
 
+		await expect.element(page.getByText('Clear 2 checked items?')).toBeInTheDocument();
+		expect(deleteItem).not.toHaveBeenCalled();
+
+		await page.getByRole('button', { name: 'Confirm' }).click();
+
 		await expect.poll(() => vi.mocked(deleteItem).mock.calls.length).toBe(2);
 		expect(deleteItem).toHaveBeenCalledWith(1, 100);
 		expect(deleteItem).toHaveBeenCalledWith(1, 101);
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 		await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
 		await expect.element(page.getByText('Milk')).not.toBeInTheDocument();
+	});
+
+	it('cancels the clear-checked confirmation without deleting anything', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Clear checked items' }).click();
+		await expect.element(page.getByText('Clear 1 checked item?')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		await expect.element(page.getByText('Clear 1 checked item?')).not.toBeInTheDocument();
+		expect(deleteItem).not.toHaveBeenCalled();
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 	});
 
 	function rowFor(name: string): HTMLElement {

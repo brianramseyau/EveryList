@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Button, Input, Label } from 'flowbite-svelte';
+	import { Button, Input, Label, Toggle } from 'flowbite-svelte';
 	import { getToken } from '$lib/api/token';
 	import { createList } from '$lib/api/lists';
 	import { ApiError } from '$lib/api/client';
@@ -16,6 +16,7 @@
 	let name = $state('');
 	let color = $state(DEFAULT_COLOR);
 	let icon = $state(DEFAULT_ICON);
+	let useCategories = $state(true);
 	let saving = $state(false);
 	let error = $state<string | null>(null);
 
@@ -29,7 +30,7 @@
 		if (!name.trim() || saving) return;
 		saving = true;
 		try {
-			await createList({ name: name.trim(), color, icon });
+			await createList({ name: name.trim(), color, icon, useCategories });
 			await goto(resolve('/lists'));
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to create list.';
@@ -74,6 +75,13 @@
 		<div class="flex items-center justify-between">
 			<Label>Theme</Label>
 			<ColorPicker value={color} onselect={(selected) => (color = selected)} />
+		</div>
+
+		<div class="flex items-center justify-between">
+			<Label for="new-list-use-categories">
+				{useCategories ? 'Use categories' : 'Keep it simple'}
+			</Label>
+			<Toggle id="new-list-use-categories" bind:checked={useCategories} />
 		</div>
 	</form>
 </main>

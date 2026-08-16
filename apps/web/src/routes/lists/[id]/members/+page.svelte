@@ -116,8 +116,8 @@
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
 	<PageHeader
 		title={list ? `${list.name} — Members` : undefined}
-		backHref={resolve('/lists/[id]', { id: String(listId) })}
-		backLabel="Back to list"
+		backHref={resolve('/lists/[id]/settings', { id: String(listId) })}
+		backLabel="Back to settings"
 	/>
 
 	{#if error}

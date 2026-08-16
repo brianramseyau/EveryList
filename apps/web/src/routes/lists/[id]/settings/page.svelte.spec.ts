@@ -86,6 +86,15 @@ describe('List settings +page.svelte', () => {
 		expect(members.element().getAttribute('href')).toBe('/lists/1/members');
 	});
 
+	it('hides the Categories link when the list opts out of categories', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
+
+		render(SettingsPage);
+		await expect.element(page.getByRole('link', { name: 'Members' })).toBeInTheDocument();
+
+		await expect.element(page.getByRole('link', { name: 'Categories' })).not.toBeInTheDocument();
+	});
+
 	it('renames the list via the save button, but only when the name actually changed', async () => {
 		vi.mocked(updateList).mockResolvedValue({ ...list, name: 'Weekly Groceries' });
 

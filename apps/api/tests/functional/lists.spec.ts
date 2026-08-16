@@ -38,6 +38,7 @@ test.group('Lists CRUD', (group) => {
     assert.equal(createdList.name, 'Camping Trip')
     assert.equal(createdList.color, '#3b82f6')
     assert.equal(createdList.itemCount, 0)
+    assert.isTrue(createdList.useCategories)
 
     const index = await authed()
     index.assertStatus(200)
@@ -89,6 +90,13 @@ test.group('Lists CRUD', (group) => {
     excludeFromBadge.assertStatus(200)
     assert.isTrue(bodyData<ListDto>(excludeFromBadge).badgeExcluded)
 
+    const disableCategories = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ useCategories: false })
+    disableCategories.assertStatus(200)
+    assert.isFalse(bodyData<ListDto>(disableCategories).useCategories)
+
     const destroy = await client
       .delete(`/api/v1/lists/${listId}`)
       .header('Authorization', `Bearer ${token}`)
@@ -104,6 +112,17 @@ test.group('Lists CRUD', (group) => {
       .header('Authorization', `Bearer ${token}`)
       .json({ name: 'Should not apply' })
     updateDeleted.assertStatus(404)
+  })
+
+  test('a list can opt out of categories at creation time', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Errands', useCategories: false })
+    create.assertStatus(200)
+    assert.isFalse(bodyData<ListDto>(create).useCategories)
   })
 
   test('update/destroy honor expectedVersion — omitted always applies, matching applies and bumps, stale conflicts with 409', async ({

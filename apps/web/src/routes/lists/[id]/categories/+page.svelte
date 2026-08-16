@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
@@ -26,12 +27,16 @@
 	let categories = $state<CategoryDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-	let saving = $state<number | null>(null);
 	let reordering = $state(false);
 
 	let newCategoryName = $state('');
 	let newCategoryIcon = $state('tag');
 	let creating = $state(false);
+
+	// Tracks each row's name at the moment it gained focus, so blur can skip
+	// saving when nothing actually changed (user confirmed onBlur over
+	// debounced oninput — PHASE11_PLAN.md §F).
+	const editStartNames = new SvelteMap<number, string>();
 
 	async function loadAll() {
 		loading = true;
@@ -73,7 +78,6 @@
 	}
 
 	async function saveCategory(category: CategoryDto) {
-		saving = category.id;
 		try {
 			const input = { name: category.name, icon: category.icon };
 			const saved = await updateCategory(listId, category.id, input);
@@ -83,9 +87,24 @@
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to save category.';
 			void loadAll();
-		} finally {
-			saving = null;
 		}
+	}
+
+	function handleNameFocus(category: CategoryDto) {
+		editStartNames.set(category.id, category.name);
+	}
+
+	function handleNameBlur(category: CategoryDto) {
+		const original = editStartNames.get(category.id);
+		editStartNames.delete(category.id);
+		if (original !== undefined && category.name !== original) {
+			void saveCategory(category);
+		}
+	}
+
+	function handleIconSelect(category: CategoryDto, icon: string) {
+		category.icon = icon;
+		void saveCategory(category);
 	}
 
 	async function removeCategory(category: CategoryDto) {
@@ -137,8 +156,8 @@
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
 	<PageHeader
 		title={list ? `${list.name} — Categories` : undefined}
-		backHref={resolve('/lists/[id]', { id: String(listId) })}
-		backLabel="Back to list"
+		backHref={resolve('/lists/[id]/settings', { id: String(listId) })}
+		backLabel="Back to settings"
 	/>
 
 	{#if loading}
@@ -177,20 +196,17 @@
 					</span>
 
 					<div class="flex-1" data-reorder-ignore>
-						<Input bind:value={category.name} />
+						<Input
+							bind:value={category.name}
+							onfocus={() => handleNameFocus(category)}
+							onblur={() => handleNameBlur(category)}
+						/>
 					</div>
 					<div data-reorder-ignore>
-						<IconPicker value={category.icon} onselect={(name) => (category.icon = name)} />
-					</div>
-
-					<div data-reorder-ignore>
-						<Button
-							size="xs"
-							disabled={saving === category.id}
-							onclick={() => saveCategory(category)}
-						>
-							{saving === category.id ? 'Saving…' : 'Save'}
-						</Button>
+						<IconPicker
+							value={category.icon}
+							onselect={(name) => handleIconSelect(category, name)}
+						/>
 					</div>
 
 					{#if category.listId === listId}

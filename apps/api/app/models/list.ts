@@ -18,6 +18,9 @@ export default class List extends ListSchema {
   @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
   declare badgeExcluded: boolean
 
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare useCategories: boolean
+
   @belongsTo(() => User, { foreignKey: 'ownerId' })
   declare owner: BelongsTo<typeof User>
 

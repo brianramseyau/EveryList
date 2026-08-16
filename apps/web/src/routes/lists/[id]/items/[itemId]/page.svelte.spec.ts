@@ -315,6 +315,17 @@ describe('Item detail +page.svelte', () => {
 		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ categoryId: null }));
 	});
 
+	it('hides the Category field when the list opts out of categories', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await expect.element(page.getByLabelText('Category')).not.toBeInTheDocument();
+	});
+
 	it('picks a store via the select', async () => {
 		const db = getDb()!;
 		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));

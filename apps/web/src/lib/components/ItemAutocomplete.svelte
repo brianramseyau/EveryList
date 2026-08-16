@@ -15,7 +15,8 @@
 		value = $bindable(''),
 		existingNames,
 		disabled = false,
-		onselect
+		onselect,
+		onfocuschange
 	}: {
 		listId: number;
 		value: string;
@@ -23,6 +24,7 @@
 		existingNames: string[];
 		disabled?: boolean;
 		onselect?: (name: string) => void;
+		onfocuschange?: (focused: boolean) => void;
 	} = $props();
 
 	let containerEl: HTMLDivElement | undefined = $state();
@@ -50,6 +52,7 @@
 
 	function handleFocus() {
 		focused = true;
+		onfocuschange?.(true);
 		void ensureLoaded();
 	}
 
@@ -58,6 +61,7 @@
 		// closing the panel so that click still lands.
 		setTimeout(() => {
 			focused = false;
+			onfocuschange?.(false);
 		}, 150);
 	}
 

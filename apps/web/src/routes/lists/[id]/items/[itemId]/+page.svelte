@@ -12,6 +12,7 @@
 	import { fetchStores } from '$lib/api/stores';
 	import { getDb } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
+	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	const listId = $derived(Number(page.params.id));
@@ -141,38 +142,55 @@
 
 		<form class="flex flex-col gap-4" onsubmit={handleSubmit}>
 			<div class="flex flex-col gap-1">
-				<Label for="item-name">Name</Label>
+				<Label for="item-name" class="flex items-center gap-1">
+					<Icon name="pencil" class="h-4 w-4" />
+					Name
+				</Label>
 				<Input id="item-name" bind:value={draftName} autofocus />
 			</div>
 
 			<div class="flex flex-col gap-1">
-				<Label for="item-quantity">Quantity (optional)</Label>
+				<Label for="item-quantity" class="flex items-center gap-1">
+					<Icon name="counter" class="h-4 w-4" />
+					Quantity (optional)
+				</Label>
 				<Input id="item-quantity" placeholder="e.g. 2, 1 lb, a dozen" bind:value={draftQuantity} />
 			</div>
 
 			<div class="flex flex-col gap-1">
-				<Label for="item-price">Price (optional)</Label>
+				<Label for="item-price" class="flex items-center gap-1">
+					<Icon name="currencyUsd" class="h-4 w-4" />
+					Price (optional)
+				</Label>
 				<Input id="item-price" inputmode="decimal" placeholder="0.00" bind:value={draftPrice} />
 			</div>
 
-			<div class="flex flex-col gap-1">
-				<Label for="item-category">Category</Label>
-				<Select
-					id="item-category"
-					items={categories.map((category) => ({ value: category.id, name: category.name }))}
-					placeholder="Uncategorized"
-					clearable
-					value={draftCategoryId ?? ''}
-					onchange={(event) => {
-						const raw = (event.target as HTMLSelectElement).value;
-						draftCategoryId = raw === '' ? null : Number(raw);
-					}}
-				/>
-			</div>
+			{#if list?.useCategories !== false}
+				<div class="flex flex-col gap-1">
+					<Label for="item-category" class="flex items-center gap-1">
+						<Icon name="tagOutline" class="h-4 w-4" />
+						Category
+					</Label>
+					<Select
+						id="item-category"
+						items={categories.map((category) => ({ value: category.id, name: category.name }))}
+						placeholder="Uncategorized"
+						clearable
+						value={draftCategoryId ?? ''}
+						onchange={(event) => {
+							const raw = (event.target as HTMLSelectElement).value;
+							draftCategoryId = raw === '' ? null : Number(raw);
+						}}
+					/>
+				</div>
+			{/if}
 
 			{#if stores.length > 0}
 				<div class="flex flex-col gap-1">
-					<Label for="item-store">Store</Label>
+					<Label for="item-store" class="flex items-center gap-1">
+						<Icon name="store" class="h-4 w-4" />
+						Store
+					</Label>
 					<Select
 						id="item-store"
 						items={stores.map((store) => ({ value: store.id, name: store.name }))}
@@ -188,8 +206,16 @@
 			{/if}
 
 			<div class="flex flex-col gap-1">
-				<Label for="item-notes">Notes (optional)</Label>
-				<Textarea id="item-notes" rows={3} bind:value={draftNotes} />
+				<Label for="item-notes" class="flex items-center gap-1">
+					<Icon name="noteTextOutline" class="h-4 w-4" />
+					Notes (optional)
+				</Label>
+				<Textarea
+					id="item-notes"
+					rows={3}
+					bind:value={draftNotes}
+					class="w-full border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-700"
+				/>
 			</div>
 		</form>
 	{:else}

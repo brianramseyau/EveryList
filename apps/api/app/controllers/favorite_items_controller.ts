@@ -26,12 +26,50 @@ export default class FavoriteItemsController {
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const payload = await request.validateUsing(createFavoriteItemValidator)
 
+    // Re-adding a favorite by the same name previously deletes-then-recreates
+    // it at the app level rather than inserting a fresh row: the DB's
+    // (list_id, name) unique index still counts soft-deleted rows, and
+    // deleted_at is kept (rather than hard-deleting) so offline delete/sync
+    // resolves as a versioned update elsewhere in this table too.
+    const existing = await FavoriteItem.query()
+      .where('listId', list.id)
+      .whereRaw('LOWER(TRIM(name)) = ?', [payload.name.trim().toLowerCase()])
+      .first()
+
+    if (existing) {
+      const wasDeleted = existing.deletedAt !== null
+      existing.merge({
+        name: payload.name,
+        defaultCategoryId: payload.defaultCategoryId ?? null,
+        defaultQuantity: payload.defaultQuantity ?? null,
+        storeId: payload.storeId ?? null,
+        notes: payload.notes ?? null,
+        price: payload.price ?? null,
+        deletedAt: null,
+      })
+      existing.version += 1
+      await existing.save()
+
+      await broadcastSync({
+        listId: list.id,
+        entityType: 'favorite_item',
+        entityId: existing.id,
+        op: wasDeleted ? 'create' : 'update',
+        version: existing.version,
+      })
+
+      return serialize(FavoriteItemTransformer.transform(existing))
+    }
+
     const favorite = await FavoriteItem.create({
       userId: user.id,
       listId: list.id,
       name: payload.name,
       defaultCategoryId: payload.defaultCategoryId ?? null,
       defaultQuantity: payload.defaultQuantity ?? null,
+      storeId: payload.storeId ?? null,
+      notes: payload.notes ?? null,
+      price: payload.price ?? null,
       version: 1,
     })
 
@@ -126,6 +164,31 @@ export default class FavoriteItemsController {
       .whereNull('deletedAt')
       .firstOrFail()
 
+    const existing = await Item.query()
+      .where('listId', list.id)
+      .whereNull('deletedAt')
+      .whereRaw('LOWER(TRIM(name)) = ?', [favorite.name.trim().toLowerCase()])
+      .first()
+
+    if (existing) {
+      if (existing.checked) {
+        existing.checked = false
+        existing.checkedAt = null
+        existing.version += 1
+        await existing.save()
+
+        await broadcastSync({
+          listId: list.id,
+          entityType: 'item',
+          entityId: existing.id,
+          op: 'update',
+          version: existing.version,
+        })
+      }
+
+      return serialize(ItemTransformer.transform(existing))
+    }
+
     const maxSortOrder = await Item.query()
       .where('listId', list.id)
       .whereNull('deletedAt')
@@ -136,8 +199,10 @@ export default class FavoriteItemsController {
       listId: list.id,
       name: favorite.name,
       quantity: favorite.defaultQuantity,
-      notes: null,
+      notes: favorite.notes,
       categoryId: favorite.defaultCategoryId,
+      storeId: favorite.storeId,
+      price: favorite.price,
       checked: false,
       sortOrder: Number(maxSortOrder?.$extras.maxSortOrder ?? -1) + 1,
       createdBy: user.id,

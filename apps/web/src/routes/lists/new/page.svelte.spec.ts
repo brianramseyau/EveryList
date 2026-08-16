@@ -80,7 +80,8 @@ describe('New List +page.svelte', () => {
 		expect(createList).toHaveBeenCalledWith({
 			name: 'Camping',
 			color: '#3b82f6',
-			icon: 'formatListChecks'
+			icon: 'formatListChecks',
+			useCategories: true
 		});
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 		expect(vi.mocked(goto).mock.calls[0]?.[0]).toBe('/lists');
@@ -115,7 +116,8 @@ describe('New List +page.svelte', () => {
 		expect(createList).toHaveBeenCalledWith({
 			name: 'Camping',
 			color: '#3b82f6',
-			icon: 'formatListChecks'
+			icon: 'formatListChecks',
+			useCategories: true
 		});
 	});
 
@@ -148,7 +150,47 @@ describe('New List +page.svelte', () => {
 		await page.getByPlaceholder('List name').fill('Camping');
 		await page.getByRole('button', { name: 'Save' }).click();
 
-		expect(createList).toHaveBeenCalledWith({ name: 'Camping', color: '#22c55e', icon: 'tag' });
+		expect(createList).toHaveBeenCalledWith({
+			name: 'Camping',
+			color: '#22c55e',
+			icon: 'tag',
+			useCategories: true
+		});
+	});
+
+	it('toggles categories off before creating the list', async () => {
+		vi.mocked(createList).mockResolvedValue({
+			id: 9,
+			name: 'Camping',
+			archived: false,
+			color: '#3b82f6',
+			icon: 'formatListChecks',
+			itemCount: 0,
+			ownerId: 1,
+			folderId: null,
+			badgeExcluded: false,
+			useCategories: false,
+			passcodeHash: null,
+			createdAt: TS,
+			updatedAt: null,
+			version: 1
+		});
+
+		render(NewListPage);
+
+		await expect.element(page.getByText('Use categories')).toBeInTheDocument();
+		await page.getByRole('checkbox', { name: 'Use categories' }).click();
+		await expect.element(page.getByText('Keep it simple')).toBeInTheDocument();
+
+		await page.getByPlaceholder('List name').fill('Camping');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(createList).toHaveBeenCalledWith({
+			name: 'Camping',
+			color: '#3b82f6',
+			icon: 'formatListChecks',
+			useCategories: false
+		});
 	});
 
 	it('shows a generic error message when creating a list fails without an ApiError', async () => {
