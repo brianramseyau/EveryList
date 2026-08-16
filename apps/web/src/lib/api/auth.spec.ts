@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./client', () => ({ apiPost: vi.fn(), apiGet: vi.fn() }));
+vi.mock('./client', () => ({ apiPost: vi.fn(), apiGet: vi.fn(), apiPatch: vi.fn() }));
 vi.mock('./token', () => ({ setToken: vi.fn(), clearToken: vi.fn() }));
 
-const { apiPost, apiGet } = await import('./client');
+const { apiPost, apiGet, apiPatch } = await import('./client');
 const { setToken, clearToken } = await import('./token');
-const { fetchProfile, login, logout, signup } = await import('./auth');
+const { fetchProfile, login, logout, signup, updateProfile } = await import('./auth');
 
 const authResponse = {
 	user: {
@@ -69,5 +69,12 @@ describe('auth', () => {
 	it('fetchProfile GETs the current account', () => {
 		fetchProfile();
 		expect(apiGet).toHaveBeenCalledWith('/api/v1/account/profile');
+	});
+
+	it('updateProfile PATCHes the given fullName', () => {
+		updateProfile({ fullName: 'Grace Hopper' });
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/account/profile', {
+			fullName: 'Grace Hopper'
+		});
 	});
 });
