@@ -406,6 +406,19 @@
 						Nothing here yet. Add your first item above.
 					</p>
 				</div>
+			{:else if visibleItems.length === 0}
+				<div class="flex flex-col items-center gap-2 py-8 text-center">
+					<span style:color={list.color}>
+						<Icon name="filterOutline" class="h-10 w-10" />
+					</span>
+					<p class="text-gray-600 dark:text-gray-400">
+						{#if selectedStore}
+							{`No items are tagged for ${selectedStore.name}. Change the store you're shopping at from the store icon above to see the rest of this list.`}
+						{:else}
+							No items match the currently selected store.
+						{/if}
+					</p>
+				</div>
 			{:else}
 				<div class="flex flex-col gap-6 pb-16" bind:this={itemsContainerEl}>
 					{#each groups as group (group.category?.id ?? 'uncategorized')}

@@ -644,6 +644,46 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Bread')).not.toBeInTheDocument();
 	});
 
+	it('explains that the store filter is hiding every item, when the list is non-empty but the filter matches nothing', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(getSelectedStore).mockResolvedValue(20);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText(/No items are tagged for Corner Shop/)).toBeInTheDocument();
+		await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.not.toBeInTheDocument();
+	});
+
+	it('falls back to a generic filter-empty message when the selected store no longer exists', async () => {
+		vi.mocked(fetchStores).mockResolvedValue([]);
+		vi.mocked(getSelectedStore).mockResolvedValue(20);
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null })
+		]);
+
+		render(ListDetailPage);
+
+		await expect
+			.element(page.getByText('No items match the currently selected store.'))
+			.toBeInTheDocument();
+	});
+
 	it('shows every item when no store is currently selected', async () => {
 		const store = {
 			id: 20,
