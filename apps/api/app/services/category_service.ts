@@ -1,5 +1,6 @@
 import type List from '#models/list'
 import Category from '#models/category'
+import Item from '#models/item'
 
 /**
  * Merges a list's own category overrides with the global default
@@ -37,7 +38,7 @@ export async function forkCategoryForList(list: List, category: Category): Promi
     return category
   }
 
-  return Category.create({
+  const forked = await Category.create({
     listId: list.id,
     name: category.name,
     icon: category.icon,
@@ -46,4 +47,13 @@ export async function forkCategoryForList(list: List, category: Category): Promi
     forkedFromId: category.id,
     version: 1,
   })
+
+  // Items already assigned to the global default being shadowed must move
+  // to the new list-scoped fork, or getEffectiveCategories excludes the
+  // shadowed global id and the items become orphaned (invisible in the UI).
+  await Item.query().where('listId', list.id).where('categoryId', category.id).update({
+    categoryId: forked.id,
+  })
+
+  return forked
 }
