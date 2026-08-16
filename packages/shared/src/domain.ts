@@ -9,6 +9,10 @@ export interface ListDto {
   folderId: number | null
   archived: boolean
   badgeExcluded: boolean
+  /** Whether items are grouped by category on this list. Always present on real API
+   *  responses; optional here only so existing test fixtures don't all need updating —
+   *  treat a missing value as `true` (the server-side default), same convention as `role` above. */
+  useCategories?: boolean
   /** Client-computed `"<saltHex>:<sha256Hex>"` — the server never sees the raw PIN. See PHASE7_PLAN.md §2. */
   passcodeHash: string | null
   itemCount: number

@@ -9,6 +9,7 @@ export interface CreateOwnedListInput {
   name: string
   color: string
   icon: string | null
+  useCategories?: boolean
   /** Only for a brand-new user's very first list — see #controllers/new_account_controller. */
   seedStarterCategories?: boolean
 }
@@ -21,6 +22,7 @@ export async function createOwnedList(input: CreateOwnedListInput) {
     icon: input.icon,
     ownerId: input.ownerId,
     archived: false,
+    useCategories: input.useCategories ?? true,
     version: 1,
   })
 

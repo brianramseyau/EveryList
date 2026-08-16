@@ -191,6 +191,36 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Uncategorized')).toBeInTheDocument();
 	});
 
+	it('renders a flat list with no category headers when the list opts out of categories', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 11, sortOrder: 1 }),
+			makeItem({ id: 102, name: 'Mystery item', categoryId: null, sortOrder: 2 })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+		await expect.element(page.getByText('Mystery item')).toBeInTheDocument();
+		await expect.element(page.getByText('Produce')).not.toBeInTheDocument();
+		await expect.element(page.getByText('Uncategorized')).not.toBeInTheDocument();
+	});
+
+	it('renders no groups when a categories-free list has only hidden checked items', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', checked: true, checkedAt: TS })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Hide checked items' }).click();
+		await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+	});
+
 	it('groups items by category, keeping checked items under the same header without reordering them', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			// Checked item listed FIRST — it must stay first, not sink below

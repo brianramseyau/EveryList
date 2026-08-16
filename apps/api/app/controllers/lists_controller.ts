@@ -52,6 +52,7 @@ export default class ListsController {
       name: payload.name,
       color: payload.color ?? '#3b82f6',
       icon: payload.icon ?? null,
+      useCategories: payload.useCategories,
     })
 
     return serialize(ListTransformer.transform(list))

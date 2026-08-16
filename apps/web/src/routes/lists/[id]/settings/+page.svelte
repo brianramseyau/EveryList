@@ -163,12 +163,14 @@
 		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if list}
 		<nav class="flex flex-col gap-1">
-			<a
-				href={resolve('/lists/[id]/categories', { id: String(listId) })}
-				class="rounded-lg border border-gray-200 px-3 py-3 text-primary-700 hover:bg-gray-100 dark:border-gray-700 dark:text-primary-400 dark:hover:bg-gray-800"
-			>
-				Categories
-			</a>
+			{#if list.useCategories !== false}
+				<a
+					href={resolve('/lists/[id]/categories', { id: String(listId) })}
+					class="rounded-lg border border-gray-200 px-3 py-3 text-primary-700 hover:bg-gray-100 dark:border-gray-700 dark:text-primary-400 dark:hover:bg-gray-800"
+				>
+					Categories
+				</a>
+			{/if}
 			<a
 				href={resolve('/lists/[id]/members', { id: String(listId) })}
 				class="rounded-lg border border-gray-200 px-3 py-3 text-primary-700 hover:bg-gray-100 dark:border-gray-700 dark:text-primary-400 dark:hover:bg-gray-800"

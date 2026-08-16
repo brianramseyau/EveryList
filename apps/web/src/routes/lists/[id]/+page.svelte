@@ -94,6 +94,13 @@
 			byCategory.get(key)!.push(item);
 		}
 
+		// Lists that opt out of categories (PHASE11_PLAN.md §E) render as a single
+		// flat section — collapse every bucket instead of grouping by categoryId.
+		if (list?.useCategories === false) {
+			const flat = [...byCategory.values()].flat();
+			return flat.length ? [{ category: null, items: flat }] : [];
+		}
+
 		const orderedCategories = [...categories].sort((a, b) => {
 			const aOrder = storeCategoryOverrides.get(a.id) ?? a.sortOrder;
 			const bOrder = storeCategoryOverrides.get(b.id) ?? b.sortOrder;
@@ -449,20 +456,22 @@
 				<div class="flex flex-col gap-6 pb-16" bind:this={itemsContainerEl}>
 					{#each groups as group (group.category?.id ?? 'uncategorized')}
 						<section>
-							<h2
-								class="mb-2 flex items-center gap-2 border-b pb-1 text-sm font-semibold {group.category
-									? ''
-									: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
-								style:color={group.category ? list.color : undefined}
-								style:border-bottom-color={group.category ? list.color : undefined}
-							>
-								{#if group.category}
-									<Icon name={group.category.icon} class="h-4 w-4" />
-								{/if}
-								<span>
-									{group.category?.name ?? 'Uncategorized'}
-								</span>
-							</h2>
+							{#if list.useCategories !== false}
+								<h2
+									class="mb-2 flex items-center gap-2 border-b pb-1 text-sm font-semibold {group.category
+										? ''
+										: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
+									style:color={group.category ? list.color : undefined}
+									style:border-bottom-color={group.category ? list.color : undefined}
+								>
+									{#if group.category}
+										<Icon name={group.category.icon} class="h-4 w-4" />
+									{/if}
+									<span>
+										{group.category?.name ?? 'Uncategorized'}
+									</span>
+								</h2>
+							{/if}
 							<ul class="flex flex-col gap-1">
 								{#each group.items as item (item.id)}
 									<li

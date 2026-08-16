@@ -165,23 +165,25 @@
 				<Input id="item-price" inputmode="decimal" placeholder="0.00" bind:value={draftPrice} />
 			</div>
 
-			<div class="flex flex-col gap-1">
-				<Label for="item-category" class="flex items-center gap-1">
-					<Icon name="tagOutline" class="h-4 w-4" />
-					Category
-				</Label>
-				<Select
-					id="item-category"
-					items={categories.map((category) => ({ value: category.id, name: category.name }))}
-					placeholder="Uncategorized"
-					clearable
-					value={draftCategoryId ?? ''}
-					onchange={(event) => {
-						const raw = (event.target as HTMLSelectElement).value;
-						draftCategoryId = raw === '' ? null : Number(raw);
-					}}
-				/>
-			</div>
+			{#if list?.useCategories !== false}
+				<div class="flex flex-col gap-1">
+					<Label for="item-category" class="flex items-center gap-1">
+						<Icon name="tagOutline" class="h-4 w-4" />
+						Category
+					</Label>
+					<Select
+						id="item-category"
+						items={categories.map((category) => ({ value: category.id, name: category.name }))}
+						placeholder="Uncategorized"
+						clearable
+						value={draftCategoryId ?? ''}
+						onchange={(event) => {
+							const raw = (event.target as HTMLSelectElement).value;
+							draftCategoryId = raw === '' ? null : Number(raw);
+						}}
+					/>
+				</div>
+			{/if}
 
 			{#if stores.length > 0}
 				<div class="flex flex-col gap-1">
