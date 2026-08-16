@@ -66,13 +66,17 @@ export default class ItemsController {
   }
 
   /** Distinct item names from this list's full history (incl. checked/deleted), most recent first — backs autocomplete. */
-  async recentNames({ auth, params, serialize }: HttpContext) {
+  async recentNames({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
 
+    // createdAt has only second-level precision, so ties are common between
+    // requests in the same second — break ties by id desc so the most
+    // recently *inserted* row still wins the earlier dedup slot.
     const rows = await Item.query()
       .where('listId', list.id)
       .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc')
       .select('name')
 
     const seen = new Set<string>()
@@ -85,7 +89,10 @@ export default class ItemsController {
       if (names.length >= 50) break
     }
 
-    return serialize(names)
+    // `serialize()` only wraps Lucid models/transformer output — a plain
+    // string[] falls through its isObject() check and returns unwrapped,
+    // so the {data: ...} envelope has to be built by hand here.
+    return response.ok({ data: names })
   }
 
   async store({ auth, params, request, serialize }: HttpContext) {
