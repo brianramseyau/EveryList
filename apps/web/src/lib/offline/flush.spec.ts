@@ -18,8 +18,29 @@ afterEach(async () => {
 });
 
 describe('flushQueue', () => {
-	it('replays a queued create and dequeues on success', async () => {
+	it('replays a queued create, deletes the optimistic temp row, and dequeues on success', async () => {
 		vi.mocked(apiPost).mockResolvedValue({ id: 42 });
+		const db = getDb()!;
+		await db.items.put({
+			id: -1,
+			listId: 1,
+			name: 'Bananas',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 0,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_localId: '-1',
+			_dirty: true
+		});
 		await enqueueMutation({
 			entityType: 'item',
 			op: 'create',
@@ -33,6 +54,7 @@ describe('flushQueue', () => {
 
 		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items', { name: 'Bananas' });
 		expect(await pendingMutations()).toHaveLength(0);
+		expect(await db.items.get(-1)).toBeUndefined();
 	});
 
 	it('sends expectedVersion in the body when replaying a queued update', async () => {

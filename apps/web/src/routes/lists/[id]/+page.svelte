@@ -39,6 +39,20 @@
 	let newItemName = $state('');
 	let adding = $state(false);
 
+	// Briefly highlights a row when adding matched an existing item instead of
+	// creating a new one (PHASE10_PLAN.md #0.2) — both the local pre-check and
+	// a server-side match (same id already in `items`) route through this.
+	let highlightedItemId = $state<number | null>(null);
+	let highlightTimeout: ReturnType<typeof setTimeout> | undefined;
+
+	function flashHighlight(itemId: number) {
+		highlightedItemId = itemId;
+		if (highlightTimeout) clearTimeout(highlightTimeout);
+		highlightTimeout = setTimeout(() => {
+			highlightedItemId = null;
+		}, 1200);
+	}
+
 	// Checked items stay under their category header instead of moving to a
 	// separate section (PHASE9_PLAN.md #3) — this toggle controls whether
 	// they're visible at all, defaulting to shown. Persisted per list/device
@@ -156,6 +170,7 @@
 
 	onDestroy(() => {
 		unsubscribeRealtime?.();
+		if (highlightTimeout) clearTimeout(highlightTimeout);
 	});
 
 	function refreshFromSync() {
@@ -165,11 +180,34 @@
 
 	async function handleAddItem(event: SubmitEvent) {
 		event.preventDefault();
-		if (!newItemName.trim()) return;
+		const name = newItemName.trim();
+		if (!name) return;
+
+		// Best-effort local pre-check against what's already loaded (PHASE10_PLAN.md
+		// #0.2) — an unchecked match is left alone, just highlighted, so the input
+		// isn't cleared and no request is made. A checked match still needs the
+		// server round-trip (it flips checked → unchecked), so it falls through.
+		const normalized = name.toLowerCase();
+		const existingUnchecked = items.find(
+			(item) => !item.checked && item.name.trim().toLowerCase() === normalized
+		);
+		if (existingUnchecked) {
+			flashHighlight(existingUnchecked.id);
+			return;
+		}
+
 		adding = true;
 		try {
-			const item = await createItem(listId, { name: newItemName.trim() });
-			items = [...items, item];
+			const item = await createItem(listId, { name });
+			// The server may have matched an existing item instead of creating a new
+			// one (a checked match it unchecked) — replace that row in place rather
+			// than appending a duplicate.
+			const existingIndex = items.findIndex((current) => current.id === item.id);
+			items =
+				existingIndex === -1
+					? [...items, item]
+					: items.map((current, index) => (index === existingIndex ? item : current));
+			flashHighlight(item.id);
 			newItemName = '';
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to add item.';
@@ -418,7 +456,10 @@
 											<Icon name="trashCanOutline" class="h-5 w-5" />
 										</div>
 										<div
-											class="relative flex items-center gap-2 bg-paper"
+											class="item-row relative flex items-center gap-2 bg-paper {highlightedItemId ===
+											item.id
+												? 'item-row-highlight'
+												: ''}"
 											style="touch-action: pan-y;"
 											use:swipeReveal={{
 												disabled: !isCoarsePointer,
@@ -533,6 +574,15 @@
 	   overflow-hidden, which exists only to mask the swipe-reveal panels. */
 	:global(li.is-dragging) {
 		overflow: visible;
+	}
+
+	.item-row {
+		transition: background-color 600ms ease-out;
+	}
+
+	.item-row-highlight {
+		background-color: color-mix(in srgb, var(--color-primary-500) 25%, transparent);
+		transition: none;
 	}
 
 	@media (prefers-reduced-motion: no-preference) {

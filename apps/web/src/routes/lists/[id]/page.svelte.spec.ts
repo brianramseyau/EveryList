@@ -341,6 +341,75 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 	});
 
+	it('matching an existing unchecked item by name skips the request, keeps the input, and highlights the row instead of duplicating', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		const input = page.getByPlaceholder('Item name');
+		await input.fill('  BANANAS  ');
+		await page.getByRole('button', { name: 'Add item' }).click();
+
+		expect(createItem).not.toHaveBeenCalled();
+		await expect.element(input).toHaveValue('  BANANAS  ');
+		// Still exactly one "Bananas" row — no duplicate was created.
+		expect(page.getByText('Bananas', { exact: true }).elements()).toHaveLength(1);
+	});
+
+	it('clears a row highlight after it fades, and restarts the timer on a second match before it fires', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		const row = () => page.getByText('Bananas').element().closest('div.item-row') as HTMLElement;
+		const input = page.getByPlaceholder('Item name');
+
+		await input.fill('bananas');
+		await page.getByRole('button', { name: 'Add item' }).click();
+		expect(row().className).toContain('item-row-highlight');
+
+		// Re-matching before the first highlight fades restarts the timer
+		// rather than leaving two competing timeouts.
+		await input.fill('bananas');
+		await page.getByRole('button', { name: 'Add item' }).click();
+		expect(row().className).toContain('item-row-highlight');
+
+		await expect
+			.poll(() => row().className.includes('item-row-highlight'), { timeout: 2000 })
+			.toBe(false);
+	});
+
+	it('replaces the existing row in place, instead of duplicating, when the server matches an existing item by id', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Milk', categoryId: 10, checked: true }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10 })
+		]);
+		// A checked item isn't caught by the local pre-check (it's excluded on
+		// purpose — re-adding it should uncheck it via the server, not just
+		// highlight it), so this exercises the server-match branch instead.
+		vi.mocked(createItem).mockResolvedValue(
+			makeItem({ id: 100, name: 'Milk', categoryId: 10, checked: false })
+		);
+
+		render(ListDetailPage);
+		await expect.element(page.getByRole('checkbox', { name: 'Milk' })).toBeChecked();
+
+		await page.getByPlaceholder('Item name').fill('milk');
+		await page.getByRole('button', { name: 'Add item' }).click();
+
+		await expect.element(page.getByRole('checkbox', { name: 'Milk' })).not.toBeChecked();
+		expect(page.getByText('Milk', { exact: true }).elements()).toHaveLength(1);
+		await expect.element(page.getByPlaceholder('Item name')).toHaveValue('');
+		// A sibling row is left untouched by the in-place replace.
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+	});
+
 	it('does not submit when the new item name is only whitespace', async () => {
 		// The Add button is already disabled in this state, but handleAddItem
 		// carries its own guard, reachable via a raw 'submit' event and not
