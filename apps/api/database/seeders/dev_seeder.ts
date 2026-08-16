@@ -81,7 +81,13 @@ export default class extends BaseSeeder {
 
     const produce = await Category.firstOrCreate(
       { listId: groceries.id, name: 'Produce' },
-      { listId: groceries.id, name: 'Produce', icon: 'fruitCherries', isDefault: false, sortOrder: 0 }
+      {
+        listId: groceries.id,
+        name: 'Produce',
+        icon: 'fruitCherries',
+        isDefault: false,
+        sortOrder: 0,
+      }
     )
     const dairy = await Category.firstOrCreate(
       { listId: groceries.id, name: 'Dairy' },
@@ -89,7 +95,13 @@ export default class extends BaseSeeder {
     )
     const pantry = await Category.firstOrCreate(
       { listId: groceries.id, name: 'Pantry' },
-      { listId: groceries.id, name: 'Pantry', icon: 'foodCanArrowUp', isDefault: false, sortOrder: 2 }
+      {
+        listId: groceries.id,
+        name: 'Pantry',
+        icon: 'foodCanArrowUp',
+        isDefault: false,
+        sortOrder: 2,
+      }
     )
     const household = await Category.firstOrCreate(
       { listId: groceries.id, name: 'Household' },
