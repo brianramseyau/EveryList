@@ -99,35 +99,22 @@
 	}
 
 	let listEl: HTMLUListElement | undefined = $state();
-	let dragFromIndex: number | null = $state(null);
 
-	function getItemRects(): DOMRect[] {
-		// Only reachable before the list has ever rendered — the drag handle
-		// this feeds doesn't exist yet either, so it can't be exercised.
+	function getRowEls(): HTMLElement[] {
+		// Only reachable before the list has ever rendered — the drag this
+		// feeds doesn't exist yet either, so it can't be exercised.
 		/* v8 ignore next */
 		if (!listEl) return [];
-		return [...listEl.children].map((child) => child.getBoundingClientRect());
+		return [...listEl.children] as HTMLElement[];
 	}
 
-	function handleDragStart(fromIndex: number) {
-		dragFromIndex = fromIndex;
-	}
-
-	function handleDragMove(toIndex: number) {
-		// onmove only ever fires after onstart already set this — see
-		// press-hold-reorder.ts's `startDragging`/`handlePointerMove`.
-		/* v8 ignore next */
-		if (dragFromIndex === null) return;
-		if (toIndex === dragFromIndex) return;
+	// Fires once, on release — dragging itself never touches `categories`.
+	async function handleDrop(fromIndex: number, toIndex: number) {
 		const reordered = [...categories];
-		const [moved] = reordered.splice(dragFromIndex, 1);
-		reordered.splice(toIndex > dragFromIndex ? toIndex - 1 : toIndex, 0, moved!);
+		const [moved] = reordered.splice(fromIndex, 1);
+		reordered.splice(toIndex, 0, moved!);
 		categories = reordered;
-		dragFromIndex = toIndex > dragFromIndex ? toIndex - 1 : toIndex;
-	}
 
-	async function handleDrop() {
-		dragFromIndex = null;
 		reordering = true;
 		try {
 			categories = await reorderCategories(
@@ -179,41 +166,37 @@
 		<ul class="flex flex-col gap-2" bind:this={listEl}>
 			{#each categories as category, index (category.id)}
 				<li
-					class="flex items-center gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700"
+					class="flex items-center gap-2 rounded-lg border border-gray-200 bg-paper p-3 dark:border-gray-700"
+					use:pressHoldReorder={{ index, disabled: reordering, getRowEls, ondrop: handleDrop }}
 				>
-					<button
-						type="button"
-						aria-label={`Drag to reorder ${category.name}`}
-						disabled={reordering}
-						class="flex h-11 w-11 shrink-0 touch-none items-center justify-center text-gray-400 disabled:opacity-30"
-						use:pressHoldReorder={{
-							index,
-							disabled: reordering,
-							getItemRects,
-							onstart: handleDragStart,
-							onmove: handleDragMove,
-							ondrop: handleDrop
-						}}
+					<span
+						aria-hidden="true"
+						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
 					>
 						<Icon name="dragVertical" class="h-5 w-5" />
-					</button>
+					</span>
 
-					<div class="flex-1">
+					<div class="flex-1" data-reorder-ignore>
 						<Input bind:value={category.name} />
 					</div>
-					<IconPicker value={category.icon} onselect={(name) => (category.icon = name)} />
+					<div data-reorder-ignore>
+						<IconPicker value={category.icon} onselect={(name) => (category.icon = name)} />
+					</div>
 
-					<Button
-						size="xs"
-						disabled={saving === category.id}
-						onclick={() => saveCategory(category)}
-					>
-						{saving === category.id ? 'Saving…' : 'Save'}
-					</Button>
+					<div data-reorder-ignore>
+						<Button
+							size="xs"
+							disabled={saving === category.id}
+							onclick={() => saveCategory(category)}
+						>
+							{saving === category.id ? 'Saving…' : 'Save'}
+						</Button>
+					</div>
 
 					{#if category.listId === listId}
 						<button
 							type="button"
+							data-reorder-ignore
 							class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
 							onclick={() => removeCategory(category)}
 						>

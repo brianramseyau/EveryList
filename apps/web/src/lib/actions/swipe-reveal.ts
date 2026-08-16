@@ -62,7 +62,7 @@ export function swipeReveal(node: HTMLElement, params: SwipeRevealParams) {
 		/* v8 ignore next */
 		if (!dragging) return;
 
-		dx = Math.min(0, Math.max(-REVEAL_PX, moveX));
+		dx = Math.min(REVEAL_PX, Math.max(-REVEAL_PX, moveX));
 		node.style.transform = `translateX(${dx}px)`;
 	}
 
@@ -73,7 +73,10 @@ export function swipeReveal(node: HTMLElement, params: SwipeRevealParams) {
 
 		// A cancel (e.g. the browser interrupting the gesture for its own UI)
 		// never commits a delete — only a clean release past the threshold does.
-		const shouldDelete = event.type === 'pointerup' && dragging && dx <= -REVEAL_PX * COMMIT_RATIO;
+		// Either direction commits — see the two mirrored reveal panels in
+		// lists/[id]/+page.svelte.
+		const shouldDelete =
+			event.type === 'pointerup' && dragging && Math.abs(dx) >= REVEAL_PX * COMMIT_RATIO;
 		reset();
 		if (shouldDelete) current.ondelete();
 	}

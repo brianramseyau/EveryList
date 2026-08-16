@@ -5,11 +5,17 @@
 // wildly unrepresentative Performance number, so this always audits a real
 // production build.
 //
+// NOT run in CI (removed from .github/workflows/ci.yml's docker-smoke job
+// 2026-08-16): the Performance score is dominated by a well-understood,
+// already-deferred render-blocking flowbite-svelte CSS cost (see the
+// THRESHOLDS comment below), and CI's runner class alone swings the
+// resulting score by 5-15 points run to run — not something worth gating
+// merges on for a self-hosted app. Kept here for manual/local runs and for
+// a dedicated future performance sweep, rather than deleted outright.
+//
 // Usage:
 //   LIGHTHOUSE_BASE_URL=http://localhost:3000 node scripts/lighthouse-check.mjs
-//     Audits an already-running production server (what CI does — see
-//     .github/workflows/ci.yml's docker-smoke job, which points this at the
-//     container it just booted, reusing that build instead of a second one).
+//     Audits an already-running production server.
 //   node scripts/lighthouse-check.mjs
 //     No URL given: builds and boots the production Docker image itself
 //     (docker/Dockerfile — the same single-process image the app actually

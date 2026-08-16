@@ -67,11 +67,6 @@
 			if (!byCategory.has(key)) byCategory.set(key, []);
 			byCategory.get(key)!.push(item);
 		}
-		// Checked items sink to the bottom of their own category's list,
-		// unchecked items keep their relative order above them.
-		for (const bucket of byCategory.values()) {
-			bucket.sort((a, b) => Number(a.checked) - Number(b.checked));
-		}
 
 		const orderedCategories = [...categories].sort((a, b) => {
 			const aOrder = storeCategoryOverrides.get(a.id) ?? a.sortOrder;
@@ -204,91 +199,51 @@
 		}
 	}
 
-	async function tagItemPrice(item: ItemDto, raw: string) {
-		const trimmed = raw.trim();
-		const price = trimmed === '' ? null : Math.round(Number(trimmed) * 100);
-		if (price !== null && !Number.isFinite(price)) return;
-
-		items = items.map((current) => (current.id === item.id ? { ...current, price } : current));
-		try {
-			await updateItem(listId, item.id, { price });
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to update item.';
-			void loadAll();
-		}
-	}
-
 	let itemsContainerEl: HTMLDivElement | undefined = $state();
-	let dragOriginItemId: number | null = null;
 
-	function getItemRects(): DOMRect[] {
+	function getItemRowEls(): HTMLElement[] {
 		// Only reachable before the item list has ever rendered — the drag
-		// handles this feeds don't exist yet either, so it can't be exercised.
+		// this feeds doesn't exist yet either, so it can't be exercised.
 		/* v8 ignore next */
 		if (!itemsContainerEl) return [];
-		return [...itemsContainerEl.querySelectorAll('li')].map((el) => el.getBoundingClientRect());
+		return [...itemsContainerEl.querySelectorAll('li')];
 	}
 
-	function handleItemDragStart(itemId: number) {
-		dragOriginItemId = itemId;
-	}
-
-	// Reassigns categoryId as soon as the drag crosses into a different
-	// section, so the item visually moves into that category immediately
-	// rather than only on drop — matching AnyList's drag-to-recategorize.
-	function handleItemDragMove(toIndex: number) {
-		// onmove only ever fires after onstart already set this — see
-		// press-hold-reorder.ts's `startDragging`/`handlePointerMove`.
-		/* v8 ignore next */
-		if (dragOriginItemId === null) return;
+	// Fires once, on release — dragging itself never touches `items` (see
+	// press-hold-reorder.ts). `toIndex` is already a final, length-preserving
+	// index (the row this item lands at, once removed from `fromIndex`).
+	async function handleItemDrop(fromIndex: number, toIndex: number) {
 		const flat = groups.flatMap((group) => group.items);
-		const fromIndex = flat.findIndex((current) => current.id === dragOriginItemId);
-		// fromIndex is -1 only if the dragged item vanished from `items`
-		// mid-drag (e.g. a concurrent remove) — not reachable through the
-		// drag gesture itself.
+		const draggedItem = flat[fromIndex];
+		// The dragged row is always still present at drop time — nothing
+		// mutates `items` mid-gesture.
 		/* v8 ignore next */
-		if (fromIndex === -1) return;
-		if (toIndex === fromIndex) return;
+		if (!draggedItem) return;
 
-		const draggedItem = flat[fromIndex]!;
-		const targetNeighbor = flat[toIndex];
+		const targetNeighbor = flat.filter((_, index) => index !== fromIndex)[toIndex] ?? null;
 		const targetCategoryId = targetNeighbor
 			? targetNeighbor.categoryId
 			: (groups.at(-1)?.category?.id ?? null);
 
-		const updated: ItemDto =
+		// Reassigns categoryId when the drop lands in a different section —
+		// matching AnyList's drag-to-recategorize.
+		const updatedItem: ItemDto =
 			draggedItem.categoryId === targetCategoryId
 				? draggedItem
 				: { ...draggedItem, categoryId: targetCategoryId };
 
-		const withoutDragged = items.filter((current) => current.id !== dragOriginItemId);
+		const withoutDragged = items.filter((current) => current.id !== draggedItem.id);
 		const neighborIndexInItems = targetNeighbor
 			? withoutDragged.findIndex((current) => current.id === targetNeighbor.id)
 			: -1;
 		const insertAt = neighborIndexInItems === -1 ? withoutDragged.length : neighborIndexInItems;
-		withoutDragged.splice(insertAt, 0, updated);
+		withoutDragged.splice(insertAt, 0, updatedItem);
 		items = withoutDragged;
-	}
-
-	async function handleItemDrop() {
-		// ondrop only ever fires after onstart already set this.
-		/* v8 ignore next */
-		if (dragOriginItemId === null) return;
-		const draggedId = dragOriginItemId;
-		dragOriginItemId = null;
-
-		const flat = groups.flatMap((group) => group.items);
-		const finalIndex = flat.findIndex((current) => current.id === draggedId);
-		const finalItem = flat[finalIndex];
-		// The dragged item is always still in `flat` at drop time — same
-		// invariant as the fromIndex/-1 guard above.
-		/* v8 ignore next */
-		if (!finalItem) return;
 
 		try {
-			await updateItem(listId, draggedId, {
-				categoryId: finalItem.categoryId,
-				sortOrder: finalIndex
+			await updateItem(listId, draggedItem.id, {
+				categoryId: updatedItem.categoryId,
+				sortOrder: toIndex
 			});
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to reorder item.';
@@ -436,7 +391,20 @@
 							</h2>
 							<ul class="flex flex-col gap-1">
 								{#each group.items as item (item.id)}
-									<li class="relative overflow-hidden rounded-lg">
+									<li
+										class="relative overflow-hidden rounded-lg"
+										use:pressHoldReorder={{
+											index: flatIndexById.get(item.id)!,
+											getRowEls: getItemRowEls,
+											ondrop: handleItemDrop
+										}}
+									>
+										<div
+											class="absolute inset-y-0 left-0 flex w-20 items-center justify-center bg-red-600 text-white print:hidden"
+											aria-hidden="true"
+										>
+											<Icon name="trashCanOutline" class="h-5 w-5" />
+										</div>
 										<div
 											class="absolute inset-y-0 right-0 flex w-20 items-center justify-center bg-red-600 text-white print:hidden"
 											aria-hidden="true"
@@ -456,6 +424,7 @@
 												role="checkbox"
 												aria-checked={item.checked}
 												aria-label={item.name}
+												data-reorder-ignore
 												onclick={() => toggleChecked(item)}
 												class="check-glyph flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 {item.checked
 													? 'border-signal bg-signal'
@@ -492,53 +461,32 @@
 													>
 												{/if}
 											</a>
-											{#if !item.checked}
-												<div class="ml-auto w-16 print:hidden">
-													<Input
+											{#if !item.checked && stores.length > 0}
+												<div class="ml-auto w-32 print:hidden" data-reorder-ignore>
+													<Select
 														size="sm"
-														inputmode="decimal"
-														placeholder="Price"
-														class="font-mono"
-														value={item.price !== null ? (item.price / 100).toFixed(2) : ''}
+														items={stores.map((store) => ({ value: store.id, name: store.name }))}
+														placeholder="No store"
+														clearable
+														value={item.storeId ?? ''}
 														onchange={(event) => {
-															void tagItemPrice(item, (event.target as HTMLInputElement).value);
+															const raw = (event.target as HTMLSelectElement).value;
+															void tagItemStore(item, raw === '' ? null : Number(raw));
 														}}
 													/>
 												</div>
-												{#if stores.length > 0}
-													<div class="w-32 print:hidden">
-														<Select
-															size="sm"
-															items={stores.map((store) => ({ value: store.id, name: store.name }))}
-															placeholder="No store"
-															clearable
-															value={item.storeId ?? ''}
-															onchange={(event) => {
-																const raw = (event.target as HTMLSelectElement).value;
-																void tagItemStore(item, raw === '' ? null : Number(raw));
-															}}
-														/>
-													</div>
-												{/if}
 											{/if}
-											<button
-												type="button"
-												aria-label={`Drag to reorder ${item.name}`}
-												class="ml-auto flex h-11 w-11 shrink-0 touch-none items-center justify-center text-gray-400 print:hidden"
-												use:pressHoldReorder={{
-													index: flatIndexById.get(item.id)!,
-													getItemRects,
-													onstart: () => handleItemDragStart(item.id),
-													onmove: handleItemDragMove,
-													ondrop: handleItemDrop
-												}}
+											<span
+												aria-hidden="true"
+												class="ml-auto flex h-11 w-11 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
 											>
 												<Icon name="dragVertical" class="h-5 w-5" />
-											</button>
+											</span>
 											{#if !isCoarsePointer}
 												<button
 													type="button"
 													aria-label={`Delete ${item.name}`}
+													data-reorder-ignore
 													class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-red-600 dark:hover:text-red-400 print:hidden"
 													onclick={() => removeItem(item)}
 												>
@@ -574,6 +522,13 @@
 </main>
 
 <style>
+	/* The dragged row's own box-shadow/elevation (applied inline by
+	   press-hold-reorder.ts) would otherwise be clipped by this li's own
+	   overflow-hidden, which exists only to mask the swipe-reveal panels. */
+	:global(li.is-dragging) {
+		overflow: visible;
+	}
+
 	@media (prefers-reduced-motion: no-preference) {
 		.check-glyph[aria-checked='true'] svg {
 			animation: check-settle 180ms ease-out;

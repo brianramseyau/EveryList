@@ -8,6 +8,7 @@
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
 	import { initOrientation } from '$lib/orientation';
+	import { consumeNavDirection, consumeSkipTransition } from '$lib/nav-direction';
 	import { startFlushLoop } from '$lib/offline/flush';
 	import { initInstallPrompt } from '$lib/pwa/install-prompt';
 	import { clearBadge, refreshBadgeCount } from '$lib/pwa/badge';
@@ -51,8 +52,9 @@
 	// as "forward".
 	onNavigate((navigation) => {
 		if (!document.startViewTransition) return;
-		const isBack = navigation.type === 'popstate' && (navigation.delta ?? 0) < 0;
-		document.documentElement.dataset.navDirection = isBack ? 'back' : 'forward';
+		if (consumeSkipTransition()) return;
+		const isPopstateBack = navigation.type === 'popstate' && (navigation.delta ?? 0) < 0;
+		document.documentElement.dataset.navDirection = consumeNavDirection(isPopstateBack);
 
 		return new Promise((resolve) => {
 			document.startViewTransition(async () => {

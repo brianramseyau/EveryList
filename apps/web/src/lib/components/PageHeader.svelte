@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { ResolvedPathname } from '$app/types';
+	import { markBackNavigation } from '$lib/nav-direction';
 	import Icon from './Icon.svelte';
 
 	// backHref must be the return value of $app/paths' resolve() — typed as
@@ -29,6 +30,7 @@
 		{#if backHref}
 			<a
 				href={backHref}
+				onclick={markBackNavigation}
 				aria-label={backLabel}
 				class="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-800 print:hidden"
 			>
