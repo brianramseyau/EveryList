@@ -14,10 +14,7 @@ import ListStore from '#models/list_store'
  * a folder, a few lists/stores/categories, and a handful of items — so
  * `pnpm db:reset` leaves something to click around in instead of a blank
  * account. Restricted to `development` so it never touches test or prod
- * databases (prod's cont-init boot script only ever runs
- * `default_category_seeder` by file name anyway). Runs after
- * `default_category_seeder` (alphabetically first), whose global categories
- * this seeder attaches items to.
+ * databases.
  *
  * Login: dev@example.com / password (owns "Groceries" + "Hardware Store",
  * and views partner@example.com's "Weekend BBQ").
@@ -82,10 +79,34 @@ export default class extends BaseSeeder {
     await attachStore(groceries.id, costco.id)
     await attachStore(hardware.id, homeDepot.id)
 
-    const produce = await Category.query().where({ name: 'Produce', isDefault: true }).first()
-    const dairy = await Category.query().where({ name: 'Dairy', isDefault: true }).first()
-    const pantry = await Category.query().where({ name: 'Pantry', isDefault: true }).first()
-    const household = await Category.query().where({ name: 'Household', isDefault: true }).first()
+    const produce = await Category.firstOrCreate(
+      { listId: groceries.id, name: 'Produce' },
+      {
+        listId: groceries.id,
+        name: 'Produce',
+        icon: 'fruitCherries',
+        isDefault: false,
+        sortOrder: 0,
+      }
+    )
+    const dairy = await Category.firstOrCreate(
+      { listId: groceries.id, name: 'Dairy' },
+      { listId: groceries.id, name: 'Dairy', icon: 'cheese', isDefault: false, sortOrder: 1 }
+    )
+    const pantry = await Category.firstOrCreate(
+      { listId: groceries.id, name: 'Pantry' },
+      {
+        listId: groceries.id,
+        name: 'Pantry',
+        icon: 'foodCanArrowUp',
+        isDefault: false,
+        sortOrder: 2,
+      }
+    )
+    const household = await Category.firstOrCreate(
+      { listId: groceries.id, name: 'Household' },
+      { listId: groceries.id, name: 'Household', icon: 'spray', isDefault: false, sortOrder: 3 }
+    )
     const tools = await Category.firstOrCreate(
       { listId: hardware.id, name: 'Tools' },
       { listId: hardware.id, name: 'Tools', icon: 'toolbox', isDefault: false, sortOrder: 0 }
@@ -94,15 +115,15 @@ export default class extends BaseSeeder {
     await seedItems(groceries.id, dev.id, [
       {
         name: 'Bananas',
-        categoryId: produce?.id ?? null,
+        categoryId: produce.id,
         storeId: traderJoes.id,
         quantity: '1 bunch',
       },
-      { name: 'Spinach', categoryId: produce?.id ?? null, storeId: traderJoes.id, checked: true },
-      { name: 'Milk', categoryId: dairy?.id ?? null, storeId: costco.id, quantity: '1 gal' },
-      { name: 'Eggs', categoryId: dairy?.id ?? null, storeId: costco.id, quantity: '2 dozen' },
-      { name: 'Rice', categoryId: pantry?.id ?? null, storeId: costco.id, price: 8.99 },
-      { name: 'Paper towels', categoryId: household?.id ?? null, storeId: costco.id },
+      { name: 'Spinach', categoryId: produce.id, storeId: traderJoes.id, checked: true },
+      { name: 'Milk', categoryId: dairy.id, storeId: costco.id, quantity: '1 gal' },
+      { name: 'Eggs', categoryId: dairy.id, storeId: costco.id, quantity: '2 dozen' },
+      { name: 'Rice', categoryId: pantry.id, storeId: costco.id, price: 8.99 },
+      { name: 'Paper towels', categoryId: household.id, storeId: costco.id },
     ])
 
     await seedItems(hardware.id, dev.id, [

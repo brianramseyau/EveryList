@@ -1,59 +1,55 @@
 import type List from '#models/list'
 import Category from '#models/category'
-import Item from '#models/item'
+import { broadcastSync } from '#services/sync_broadcaster'
 
-/**
- * Merges a list's own category overrides with the global default
- * categories (listId: null), letting a list-scoped category shadow the
- * exact global default it was forked from (see forkCategoryForList) —
- * tracked by id via `forkedFromId`, not by name, so renaming an override
- * doesn't un-shadow the default it replaced — see PLAN.md §7.
- */
+/** A list's own categories, in display order. */
 export async function getEffectiveCategories(list: List): Promise<Category[]> {
-  const [customCategories, defaultCategories] = await Promise.all([
-    Category.query().where('listId', list.id).whereNull('deletedAt').orderBy('sortOrder', 'asc'),
-    Category.query().whereNull('listId').whereNull('deletedAt').orderBy('sortOrder', 'asc'),
-  ])
-
-  const shadowedIds = new Set(
-    customCategories
-      .map((category) => category.forkedFromId)
-      .filter((id): id is number => id !== null)
-  )
-  const merged = [
-    ...customCategories,
-    ...defaultCategories.filter((category) => !shadowedIds.has(category.id)),
-  ]
-  merged.sort((a, b) => a.sortOrder - b.sortOrder)
-  return merged
+  return Category.query()
+    .where('listId', list.id)
+    .whereNull('deletedAt')
+    .orderBy('sortOrder', 'asc')
 }
 
 /**
- * Returns a list-scoped copy of a global default category so it can be
- * renamed/re-iconed/reordered without affecting every other list that
- * still uses the shared default — creating it on first customization.
+ * Grocery aisle categories, used only to seed a brand-new user's first
+ * ("Shopping List") list — see #controllers/new_account_controller. Not a
+ * shared/global fallback: a list that doesn't want these (a todo list, a
+ * packing list) can freely rename or delete them since they're just
+ * ordinary list-scoped categories from the moment they're created.
  */
-export async function forkCategoryForList(list: List, category: Category): Promise<Category> {
-  if (category.listId === list.id) {
-    return category
+const STARTER_CATEGORIES = [
+  { name: 'Produce', icon: 'fruitCherries' },
+  { name: 'Dairy', icon: 'cheese' },
+  { name: 'Meat', icon: 'foodDrumstick' },
+  { name: 'Bakery', icon: 'breadSlice' },
+  { name: 'Frozen', icon: 'snowflake' },
+  { name: 'Pantry', icon: 'foodCanArrowUp' },
+  { name: 'Household', icon: 'spray' },
+  { name: 'Other', icon: 'dotsHorizontalCircle' },
+] as const
+
+export async function seedStarterCategories(list: List): Promise<Category[]> {
+  const categories: Category[] = []
+
+  for (const [index, starter] of STARTER_CATEGORIES.entries()) {
+    const category = await Category.create({
+      listId: list.id,
+      name: starter.name,
+      icon: starter.icon,
+      sortOrder: index,
+      isDefault: false,
+      version: 1,
+    })
+    categories.push(category)
+
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'category',
+      entityId: category.id,
+      op: 'create',
+      version: category.version,
+    })
   }
 
-  const forked = await Category.create({
-    listId: list.id,
-    name: category.name,
-    icon: category.icon,
-    sortOrder: category.sortOrder,
-    isDefault: false,
-    forkedFromId: category.id,
-    version: 1,
-  })
-
-  // Items already assigned to the global default being shadowed must move
-  // to the new list-scoped fork, or getEffectiveCategories excludes the
-  // shadowed global id and the items become orphaned (invisible in the UI).
-  await Item.query().where('listId', list.id).where('categoryId', category.id).update({
-    categoryId: forked.id,
-  })
-
-  return forked
+  return categories
 }

@@ -21,7 +21,7 @@ test('adds an item while offline and syncs it once back online', async ({ page }
 
 	await expect(page).toHaveURL(/\/lists$/);
 
-	// Signup already seeds a starter "Groceries" list (see PLAN.md's Phase 2
+	// Signup already seeds a starter "Shopping List" list (see PLAN.md's Phase 2
 	// status note) — a distinct name avoids ambiguous locator matches.
 	await page.getByRole('button', { name: 'Create' }).click();
 	await page.getByRole('link', { name: 'Create List' }).click();

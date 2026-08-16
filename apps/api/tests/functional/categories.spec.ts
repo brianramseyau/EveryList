@@ -1,9 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
-import db from '@adonisjs/lucid/services/db'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
-import type { ListDto } from '@everylist/shared'
-import DefaultCategorySeeder from '#database/seeders/default_category_seeder'
+import type { CategoryDto, ListDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 async function createList(client: ApiClient, token: string) {
@@ -14,14 +12,25 @@ async function createList(client: ApiClient, token: string) {
   return bodyData<ListDto>(response).id
 }
 
+/** Creates a real list-scoped category via the API, for tests that just need something to act on. */
+async function createCategory(
+  client: ApiClient,
+  token: string,
+  listId: number,
+  name: string,
+  icon = 'basket'
+) {
+  const response = await client
+    .post(`/api/v1/lists/${listId}/categories`)
+    .header('Authorization', `Bearer ${token}`)
+    .json({ name, icon })
+  return bodyData<CategoryDto>(response)
+}
+
 test.group('Categories', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
 
-  test('lists effective categories merging list overrides with global defaults', async ({
-    client,
-    assert,
-  }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
+  test('a freshly created list starts with zero categories', async ({ client, assert }) => {
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
 
@@ -29,12 +38,41 @@ test.group('Categories', (group) => {
       .get(`/api/v1/lists/${listId}/categories`)
       .header('Authorization', `Bearer ${token}`)
     index.assertStatus(200)
-    assert.lengthOf(index.body().data, 8)
-    assert.equal(index.body().data[0].name, 'Produce')
+    assert.lengthOf(index.body().data, 0)
+  })
+
+  test("a freshly signed-up user's first list is pre-populated with the 8 starter categories", async ({
+    client,
+    assert,
+  }) => {
+    const signup = await client.post('/api/v1/auth/signup').json({
+      fullName: 'New User',
+      email: 'starter-categories@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+    signup.assertStatus(200)
+    const token = bodyData<{ token: string }>(signup).token
+
+    const lists = await client.get('/api/v1/lists').header('Authorization', `Bearer ${token}`)
+    lists.assertStatus(200)
+    const listIndex = bodyData<ListDto[]>(lists)
+    assert.lengthOf(listIndex, 1)
+    const listId = listIndex[0]!.id
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+    index.assertStatus(200)
+    const categories = bodyData<CategoryDto[]>(index)
+    assert.lengthOf(categories, 8)
+    assert.deepEqual(
+      categories.map((c) => c.name),
+      ['Produce', 'Dairy', 'Meat', 'Bakery', 'Frozen', 'Pantry', 'Household', 'Other']
+    )
   })
 
   test('creating a custom category adds it to the list', async ({ client, assert }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
 
@@ -49,7 +87,7 @@ test.group('Categories', (group) => {
     const index = await client
       .get(`/api/v1/lists/${listId}/categories`)
       .header('Authorization', `Bearer ${token}`)
-    assert.lengthOf(index.body().data, 9)
+    assert.lengthOf(index.body().data, 1)
   })
 
   test('update/destroy honor expectedVersion — omitted always applies, matching applies and bumps, stale conflicts with 409', async ({
@@ -101,18 +139,10 @@ test.group('Categories', (group) => {
     destroy.assertStatus(204)
   })
 
-  test('renaming a global default forks it into a list-scoped override', async ({
-    client,
-    assert,
-  }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
+  test('renaming a list-scoped category updates it in place', async ({ client, assert }) => {
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
-
-    const index = await client
-      .get(`/api/v1/lists/${listId}/categories`)
-      .header('Authorization', `Bearer ${token}`)
-    const produce = index.body().data.find((c: { name: string }) => c.name === 'Produce')
+    const produce = await createCategory(client, token, listId, 'Produce', 'fruitCherries')
 
     const rename = await client
       .patch(`/api/v1/lists/${listId}/categories/${produce.id}`)
@@ -120,30 +150,24 @@ test.group('Categories', (group) => {
       .json({ name: 'Fruit & Veg' })
     rename.assertStatus(200)
     assert.equal(rename.body().data.listId, listId)
-    assert.notEqual(rename.body().data.id, produce.id)
+    assert.equal(rename.body().data.id, produce.id)
+    assert.equal(rename.body().data.name, 'Fruit & Veg')
 
-    // The global default is untouched for other lists.
-    const globalCheck = await client
+    const index = await client
       .get(`/api/v1/lists/${listId}/categories`)
       .header('Authorization', `Bearer ${token}`)
-    const names = globalCheck.body().data.map((c: { name: string }) => c.name)
+    const names = index.body().data.map((c: { name: string }) => c.name)
     assert.include(names, 'Fruit & Veg')
     assert.notInclude(names, 'Produce')
-
-    // Renaming an already-forked (list-scoped) category again should reuse
-    // the same row rather than forking a second time.
-    const rerename = await client
-      .patch(`/api/v1/lists/${listId}/categories/${rename.body().data.id}`)
-      .header('Authorization', `Bearer ${token}`)
-      .json({ name: 'Produce & Veg' })
-    rerename.assertStatus(200)
-    assert.equal(rerename.body().data.id, rename.body().data.id)
+    assert.lengthOf(names, 1)
   })
 
   test('reordering categories persists the new sort order', async ({ client, assert }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
+    await createCategory(client, token, listId, 'Produce')
+    await createCategory(client, token, listId, 'Dairy')
+    await createCategory(client, token, listId, 'Meat')
 
     const index = await client
       .get(`/api/v1/lists/${listId}/categories`)
@@ -163,9 +187,10 @@ test.group('Categories', (group) => {
   })
 
   test('reordering silently skips an id that is not in the list', async ({ client, assert }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
+    await createCategory(client, token, listId, 'Produce')
+    await createCategory(client, token, listId, 'Dairy')
 
     const index = await client
       .get(`/api/v1/lists/${listId}/categories`)
@@ -182,7 +207,6 @@ test.group('Categories', (group) => {
   })
 
   test('deleting a list-scoped category removes it', async ({ client, assert }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
 
@@ -207,9 +231,9 @@ test.group('Categories', (group) => {
   test('a viewer can list categories but cannot create, update, or delete them', async ({
     client,
   }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const owner = await signupAndGetUser(client)
     const listId = await createList(client, owner.token)
+    const produce = await createCategory(client, owner.token, listId, 'Produce', 'fruitCherries')
     const viewer = await signupAndGetUser(client)
     await addMember(listId, viewer.id, 'viewer')
 
@@ -217,7 +241,6 @@ test.group('Categories', (group) => {
       .get(`/api/v1/lists/${listId}/categories`)
       .header('Authorization', `Bearer ${viewer.token}`)
     index.assertStatus(200)
-    const produce = index.body().data.find((c: { name: string }) => c.name === 'Produce')
 
     const create = await client
       .post(`/api/v1/lists/${listId}/categories`)
@@ -238,7 +261,6 @@ test.group('Categories', (group) => {
   })
 
   test('an editor can create, update, and delete categories', async ({ client, assert }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const owner = await signupAndGetUser(client)
     const listId = await createList(client, owner.token)
     const editor = await signupAndGetUser(client)
@@ -258,7 +280,6 @@ test.group('Categories', (group) => {
   })
 
   test('a stranger gets a 404 trying to read or write categories', async ({ client }) => {
-    await new DefaultCategorySeeder(db.connection()).run()
     const owner = await signupAndGetUser(client)
     const listId = await createList(client, owner.token)
     const stranger = await signupAndGetUser(client)

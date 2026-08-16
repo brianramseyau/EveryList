@@ -522,7 +522,7 @@
 												{/if}
 											</button>
 											<div
-												class="flex flex-1 flex-col"
+												class="item-name flex flex-1 flex-col"
 												style="touch-action: manipulation; -webkit-touch-callout: none;"
 											>
 												<div class="flex items-center gap-2">
@@ -610,6 +610,14 @@
 
 	.item-row {
 		transition: background-color 600ms ease-out;
+	}
+
+	/* A tap on the item name can trigger the browser's native
+	   text-selection/copy menu on mobile instead of registering as a tap —
+	   same fix as .header-title in PageHeader.svelte. */
+	.item-name {
+		user-select: none;
+		-webkit-user-select: none;
 	}
 
 	.item-row-highlight {

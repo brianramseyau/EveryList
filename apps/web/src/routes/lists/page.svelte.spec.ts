@@ -136,6 +136,81 @@ describe('Lists +page.svelte', () => {
 		expect(document.querySelectorAll('.sr-only')).toHaveLength(1);
 	});
 
+	it('shows sharing indicators: view-only, editor-shared, and owner-shared', async () => {
+		setToken('test-token');
+		stubFetchByUrl({
+			lists: [
+				{
+					id: 1,
+					name: 'Viewer List',
+					archived: false,
+					color: '#3b82f6',
+					icon: null,
+					folderId: null,
+					itemCount: 0,
+					role: 'viewer',
+					ownerName: null,
+					memberCount: 2
+				},
+				{
+					id: 2,
+					name: 'Editor List',
+					archived: false,
+					color: '#3b82f6',
+					icon: null,
+					folderId: null,
+					itemCount: 0,
+					role: 'editor',
+					ownerName: 'Sam Owner',
+					memberCount: 2
+				},
+				{
+					id: 3,
+					name: 'My Shared List',
+					archived: false,
+					color: '#3b82f6',
+					icon: null,
+					folderId: null,
+					itemCount: 0,
+					role: 'owner',
+					ownerName: null,
+					memberCount: 2
+				},
+				{
+					id: 4,
+					name: 'My Solo List',
+					archived: false,
+					color: '#3b82f6',
+					icon: null,
+					folderId: null,
+					itemCount: 0,
+					role: 'owner',
+					ownerName: null,
+					memberCount: 1
+				},
+				{
+					id: 5,
+					name: 'My Big Shared List',
+					archived: false,
+					color: '#3b82f6',
+					icon: null,
+					folderId: null,
+					itemCount: 0,
+					role: 'owner',
+					ownerName: null,
+					memberCount: 3
+				}
+			]
+		});
+
+		render(ListsPage);
+
+		await expect.element(page.getByText('View only')).toBeInTheDocument();
+		await expect.element(page.getByText('Shared', { exact: true }).first()).toBeInTheDocument();
+		await expect.element(page.getByText('My Solo List')).toBeInTheDocument();
+		expect(document.querySelectorAll('.sr-only')).toHaveLength(2);
+	});
+
 	it('shows an empty state when there are no lists', async () => {
 		setToken('test-token');
 		stubFetchByUrl({});

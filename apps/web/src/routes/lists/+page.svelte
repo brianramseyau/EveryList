@@ -95,6 +95,23 @@
 					{list.itemCount === 1 ? 'item' : 'items'}
 				</span>
 			</span>
+			{#if list.role && list.role !== 'owner'}
+				<span
+					class="flex shrink-0 items-center gap-1 text-xs text-gray-400"
+					title={`Shared by ${list.ownerName ?? 'someone else'} · ${list.role === 'viewer' ? 'View only' : 'Can edit'}`}
+				>
+					<Icon name="accountMultiple" class="h-4 w-4" />
+					<span>{list.role === 'viewer' ? 'View only' : 'Shared'}</span>
+				</span>
+			{:else if list.memberCount && list.memberCount > 1}
+				<span
+					class="shrink-0 text-gray-400"
+					title={`Shared with ${list.memberCount - 1} other${list.memberCount - 1 === 1 ? '' : 's'}`}
+				>
+					<Icon name="accountMultiple" class="h-4 w-4" />
+					<span class="sr-only">Shared</span>
+				</span>
+			{/if}
 			{#if list.passcodeHash}
 				<span class="shrink-0 text-gray-400" title="Passcode protected">
 					<Icon name="lock" class="h-4 w-4" />
