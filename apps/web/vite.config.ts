@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { VitePWA } from 'vite-plugin-pwa';
+import { SvelteKitPWA } from '@vite-pwa/sveltekit';
 import { pwaManifest, workboxOptions } from './pwa.config.mjs';
 
 // Some sandboxed dev environments pre-cache a Chromium build at a fixed path
@@ -38,25 +38,40 @@ export default defineConfig({
 		// `generateSW` (not `injectManifest`) — every caching rule this app needs
 		// (precache the app shell, stale-while-revalidate on API GETs, an offline
 		// navigation fallback) is fully declarative, so no custom SW source file is
-		// needed. Plain `vite-plugin-pwa` (not `@vite-pwa/sveltekit`) operates on the
-		// built output directly via Vite's build hooks, which sidesteps needing to
-		// verify a SvelteKit-specific integration against adapter-static's non-default
-		// `fallback: '200.html'` output — see PHASE5_PLAN.md §5.
+		// needed.
 		//
-		// This plugin's own sw.js is NOT the artifact that ships: its `writeBundle`
-		// hook globs the client build output before @sveltejs/adapter-static has
-		// prerendered any HTML into it (that copy happens in SvelteKit's own
-		// `closeBundle`, which runs after `writeBundle`), so the precache manifest
-		// it produces has zero .html entries — including /200.html, the
-		// navigateFallback target every offline cold start depends on. Kept here
-		// only for manifest.webmanifest/icon generation and dev-mode; `pnpm build`'s
-		// `postbuild` step (scripts/generate-sw.mjs) regenerates the real sw.js
-		// against the final `build/` directory with this same config.
-		VitePWA({
+		// `@vite-pwa/sveltekit` (not plain `vite-plugin-pwa`) specifically because
+		// plain `vite-plugin-pwa` globs the built output from a `writeBundle` hook,
+		// which fires before @sveltejs/adapter-static prerenders this app's HTML and
+		// copies it into `build/` (that happens in SvelteKit's own `closeBundle`, a
+		// later hook) — its precache manifest ends up with zero .html entries,
+		// including /200.html, the navigateFallback target every offline cold start
+		// needs. This package generates the SW from the *server* build's
+		// `closeBundle` instead — after SvelteKit's own prerender crawl has written
+		// `.svelte-kit/output/prerendered/`, but before the adapter runs — then
+		// relocates the finished sw.js into `.svelte-kit/output/client/` so
+		// adapter-static's later copy picks it up like any other static asset. That
+		// correctly precaches every *prerendered* route (login/signup/lists/etc.).
+		//
+		// The one thing it still can't see at that point is the adapter's fallback
+		// page (200.html): `builder.generateFallback()` — which actually renders it —
+		// is called by adapter-static itself, inside `adapt()`, which runs *after*
+		// this plugin's closeBundle (`kit.adapterFallback` alone, which just renames
+		// a pre-existing precache entry, is a no-op here — there's nothing to rename
+		// yet). `kit.spa: true` covers that gap: instead of needing the file's bytes
+		// at build time, it adds a manifest entry for it up front with a synthetic
+		// revision (hashed from `_app/version.json`, which does exist by then), and
+		// Workbox fetches the real content over the network during the service
+		// worker's own install step, by which point the deployed 200.html exists.
+		SvelteKitPWA({
 			registerType: 'autoUpdate',
 			injectRegister: null,
 			manifest: pwaManifest,
-			workbox: workboxOptions
+			workbox: workboxOptions,
+			kit: {
+				adapterFallback: '200.html',
+				spa: true
+			}
 		})
 	],
 	server: {

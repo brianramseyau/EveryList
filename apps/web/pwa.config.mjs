@@ -1,8 +1,6 @@
-// Shared between vite.config.ts (VitePWA's `manifest` option, and its
-// `workbox` option for dev-time/intermediate output) and
-// scripts/generate-sw.mjs (the postbuild step that regenerates the real
-// sw.js — see that script for why the plugin's own build-time sw.js can't
-// be trusted as the shipped artifact).
+// SvelteKitPWA's manifest/workbox config, pulled out of vite.config.ts to
+// keep that file's plugin list readable — see the SvelteKitPWA call there
+// for why `@vite-pwa/sveltekit` (not plain `vite-plugin-pwa`) is used.
 
 /** @type {Partial<import('vite-plugin-pwa').ManifestOptions>} */
 export const pwaManifest = {
@@ -23,7 +21,17 @@ export const pwaManifest = {
 /** @type {Partial<import('workbox-build').GenerateSWOptions>} */
 export const workboxOptions = {
 	navigateFallback: '/200.html',
-	globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+	// `@vite-pwa/sveltekit` globs `.svelte-kit/output/` (client build + SvelteKit's
+	// own prerendered output), not the final flat `build/` directory adapter-static
+	// produces later — hence the `client/`/`prerendered/` prefixes. It auto-adds its
+	// own defaults for any prefix left unspecified, so this list has to be complete
+	// (icons/fonts/webmanifest under `client/`, HTML+JSON under `prerendered/`) or
+	// those defaults silently replace it instead of merging.
+	globPatterns: [
+		'client/**/*.{js,css,ico,png,svg,woff,woff2}',
+		'client/*.webmanifest',
+		'prerendered/**/*.{html,json}'
+	],
 	// The icon-picker's lazily-loaded @mdi/js chunk is ~2.8MB — above Workbox's
 	// default 2MB precache limit. It's still lazy (only fetched when the icon
 	// picker opens), just also precached up front like everything else here.
