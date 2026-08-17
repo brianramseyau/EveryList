@@ -12,12 +12,12 @@ vi.mock('$lib/api/favorites', () => ({
 	addFavoriteToList: vi.fn()
 }));
 vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn() }));
-vi.mock('$lib/api/items', () => ({ fetchItems: vi.fn() }));
+vi.mock('$lib/api/items', () => ({ fetchItems: vi.fn(), updateItem: vi.fn() }));
 vi.mock('$lib/api/stores', () => ({ fetchStores: vi.fn() }));
 
 const { fetchFavorites, deleteFavorite, addFavoriteToList } = await import('$lib/api/favorites');
 const { fetchList } = await import('$lib/api/lists');
-const { fetchItems } = await import('$lib/api/items');
+const { fetchItems, updateItem } = await import('$lib/api/items');
 const { fetchStores } = await import('$lib/api/stores');
 const { goto } = await import('$app/navigation');
 const FavoritesPage = (await import('./+page.svelte')).default;
@@ -60,6 +60,7 @@ describe('Favorites +page.svelte', () => {
 		vi.mocked(fetchList).mockResolvedValue(groceries);
 		vi.mocked(fetchItems).mockResolvedValue([]);
 		vi.mocked(fetchStores).mockResolvedValue([]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
@@ -195,6 +196,88 @@ describe('Favorites +page.svelte', () => {
 			.element(page.getByRole('button', { name: 'Add Bananas to list' }))
 			.not.toBeDisabled();
 		await expect.element(page.getByTitle('Already on this list')).not.toBeInTheDocument();
+	});
+
+	it('unchecks the matching checked item instead of creating a duplicate', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			{
+				id: 9,
+				listId: 5,
+				name: 'Bananas',
+				quantity: null,
+				notes: null,
+				categoryId: null,
+				storeId: null,
+				price: null,
+				checked: true,
+				checkedAt: '2026-08-01T00:00:00.000Z',
+				sortOrder: 0,
+				createdBy: 1,
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null,
+				deletedAt: null,
+				version: 1
+			},
+			{
+				id: 10,
+				listId: 5,
+				name: 'Bread',
+				quantity: null,
+				notes: null,
+				categoryId: null,
+				storeId: null,
+				price: null,
+				checked: false,
+				checkedAt: null,
+				sortOrder: 1,
+				createdBy: 1,
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null,
+				deletedAt: null,
+				version: 1
+			}
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(FavoritesPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Add Bananas to list' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(5, 9, { checked: false });
+		expect(addFavoriteToList).not.toHaveBeenCalled();
+		await expect.element(page.getByText('Added "Bananas" to Groceries.')).toBeInTheDocument();
+	});
+
+	it('shows a generic error message when unchecking a matching item fails without an ApiError', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			{
+				id: 9,
+				listId: 5,
+				name: 'Bananas',
+				quantity: null,
+				notes: null,
+				categoryId: null,
+				storeId: null,
+				price: null,
+				checked: true,
+				checkedAt: '2026-08-01T00:00:00.000Z',
+				sortOrder: 0,
+				createdBy: 1,
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null,
+				deletedAt: null,
+				version: 1
+			}
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new TypeError('network down'));
+
+		render(FavoritesPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Add Bananas to list' }).click();
+
+		await expect.element(page.getByText('Failed to add item to list.')).toBeInTheDocument();
 	});
 
 	it('leaves other favorites in place when one is removed', async () => {

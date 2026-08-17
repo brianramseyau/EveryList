@@ -7,7 +7,7 @@
 	import { getToken } from '$lib/api/token';
 	import { addFavoriteToList, deleteFavorite, fetchFavorites } from '$lib/api/favorites';
 	import { fetchList } from '$lib/api/lists';
-	import { fetchItems } from '$lib/api/items';
+	import { fetchItems, updateItem } from '$lib/api/items';
 	import { fetchStores } from '$lib/api/stores';
 	import { ApiError } from '$lib/api/client';
 	import Icon from '$lib/components/Icon.svelte';
@@ -70,9 +70,22 @@
 	async function handleAddToList(favorite: FavoriteItemDto) {
 		addingToList = favorite.id;
 		addedMessage = null;
+		// A checked-off item with the same name is already "on the list" — just
+		// uncheck it instead of creating a duplicate.
+		const checkedMatch = items.find(
+			(current) =>
+				current.checked && current.name.trim().toLowerCase() === favorite.name.trim().toLowerCase()
+		);
 		try {
-			const item = await addFavoriteToList(listId, favorite.id);
-			items = [...items.filter((current) => current.id !== item.id), item];
+			if (checkedMatch) {
+				items = items.map((current) =>
+					current.id === checkedMatch.id ? { ...current, checked: false } : current
+				);
+				await updateItem(listId, checkedMatch.id, { checked: false });
+			} else {
+				const item = await addFavoriteToList(listId, favorite.id);
+				items = [...items.filter((current) => current.id !== item.id), item];
+			}
 			// `list` is always loaded by the time this button is interactable
 			// (loading gates the whole form); the `?? 'the list'` only satisfies
 			// the `ListDto | null` return type.
