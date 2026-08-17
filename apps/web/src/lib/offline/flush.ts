@@ -4,7 +4,7 @@ import { getDb, type QueuedMutation } from './db';
 // this import statement (a `vi.mock`-related artifact — see the identical class of issue
 // documented on $lib/api/selected-store.ts) rather than to any real code in this file.
 /* v8 ignore start */
-import { dequeueMutation, pendingMutations, updateMutation } from './sync-queue';
+import { dequeueMutation, enqueueMutation, pendingMutations, updateMutation } from './sync-queue';
 /* v8 ignore stop */
 
 const BASE_DELAY_MS = 2000;
@@ -72,13 +72,37 @@ function tableForEntity(entityType: QueueableEntityType) {
 }
 
 /** Overwrites the cached row with the server's authoritative copy from a 409's body, so the
- * next local edit computes a fresh `expectedVersion` instead of conflicting again. Silent —
- * the caller surfaces a toast via `onConflict`, per the confirmed "silent merge + toast" UX. */
+ * next local edit computes a fresh `expectedVersion` instead of conflicting again. For an
+ * update, then re-diffs the mutation's own payload against that server copy: any field the
+ * offline edit actually changed — and that the winning edit didn't already happen to agree
+ * with — is re-applied over the fresh copy and re-enqueued as a new mutation carrying the
+ * server's `version` as its `expectedVersion`, per PHASE5_PLAN.md §4's "silent merge + toast"
+ * conflict UX (the offline edit is reconciled onto the newer edit, not discarded by it).
+ * Silent — the caller surfaces a toast via `onConflict`. */
 async function reconcileConflict(mutation: QueuedMutation, err: ApiError): Promise<void> {
-	const body = err.body as { data?: Record<string, unknown> } | undefined;
+	const body = err.body as { data?: Record<string, unknown> & { version?: number } } | undefined;
 	if (body?.data) {
 		const table = tableForEntity(mutation.entityType as QueueableEntityType);
 		await table.update(mutation.targetId, { ...body.data, _dirty: false });
+
+		if (mutation.op === 'update' && body.data.version !== undefined) {
+			const stillDiffering = Object.fromEntries(
+				Object.entries(mutation.payload).filter(
+					([key, value]) => !Object.is(body.data![key], value)
+				)
+			);
+			if (Object.keys(stillDiffering).length > 0) {
+				await table.update(mutation.targetId, { ...stillDiffering, _dirty: true });
+				await enqueueMutation({
+					entityType: mutation.entityType,
+					op: 'update',
+					targetId: mutation.targetId,
+					expectedVersion: body.data.version,
+					payload: stillDiffering,
+					url: mutation.url
+				});
+			}
+		}
 	}
 	conflictListener?.(mutation);
 }
