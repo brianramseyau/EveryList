@@ -45,6 +45,10 @@
 	let itemInputFocused = $state(false);
 	let confirmingClear = $state(false);
 
+	// Measured height of the pinned header (title bar + item entry field), so
+	// category headings can stick just beneath it instead of overlapping it.
+	let stickyHeaderHeight = $state(0);
+
 	// Briefly highlights a row when adding matched an existing item instead of
 	// creating a new one (PHASE10_PLAN.md #0.2) — both the local pre-check and
 	// a server-side match (same id already in `items`) route through this.
@@ -57,6 +61,18 @@
 		highlightTimeout = setTimeout(() => {
 			highlightedItemId = null;
 		}, 1200);
+	}
+
+	// Sets the sticky category heading's offset imperatively (rather than a
+	// templated style attribute) so it tracks stickyHeaderHeight without
+	// re-running the whole element's attribute diff on every resize.
+	function stickyTop(node: HTMLElement, top: number) {
+		node.style.top = `${top}px`;
+		return {
+			update(newTop: number) {
+				node.style.top = `${newTop}px`;
+			}
+		};
 	}
 
 	// Checked items stay under their category header instead of moving to a
@@ -327,7 +343,10 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<div class="sticky top-0 z-20 bg-paper pt-[env(safe-area-inset-top)]">
+	<div
+		class="sticky top-0 z-20 flex flex-col gap-4 bg-paper pt-[env(safe-area-inset-top)]"
+		bind:clientHeight={stickyHeaderHeight}
+	>
 		<PageHeader title={list?.name} backHref={resolve('/lists')} backLabel="My Lists">
 			{#snippet actions()}
 				<a
@@ -362,22 +381,8 @@
 				</a>
 			{/snippet}
 		</PageHeader>
-	</div>
 
-	<div class="print:hidden">
-		<SyncToast
-			visible={syncToastVisible}
-			onrefresh={refreshFromSync}
-			ondismiss={() => (syncToastVisible = false)}
-		/>
-	</div>
-
-	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
-	{:else if list}
-		{#if list.passcodeHash && !unlocked}
-			<PasscodeGate {list} onunlock={() => (unlocked = true)} />
-		{:else}
+		{#if list && !(list.passcodeHash && !unlocked)}
 			<form class="flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
 				<div
 					class="flex shrink-0 items-center overflow-hidden transition-all duration-200 {itemInputFocused
@@ -429,7 +434,23 @@
 					<Icon name="plusCircle" class="h-7 w-7" />
 				</button>
 			</form>
+		{/if}
+	</div>
 
+	<div class="print:hidden">
+		<SyncToast
+			visible={syncToastVisible}
+			onrefresh={refreshFromSync}
+			ondismiss={() => (syncToastVisible = false)}
+		/>
+	</div>
+
+	{#if loading}
+		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+	{:else if list}
+		{#if list.passcodeHash && !unlocked}
+			<PasscodeGate {list} onunlock={() => (unlocked = true)} />
+		{:else}
 			{#if confirmingClear}
 				<div
 					class="flex items-center justify-between gap-2 rounded-lg border border-red-200 p-3 text-sm dark:border-red-900 print:hidden"
@@ -482,9 +503,10 @@
 						<section>
 							{#if list.useCategories !== false}
 								<h2
-									class="relative z-10 mb-2 flex items-center gap-2 border-b bg-paper pb-1 text-sm font-semibold {group.category
+									class="sticky z-10 mb-2 flex items-center gap-2 border-b bg-paper pb-1 text-sm font-semibold {group.category
 										? ''
 										: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
+									use:stickyTop={stickyHeaderHeight}
 									style:color={group.category ? list.color : undefined}
 									style:border-bottom-color={group.category ? list.color : undefined}
 								>
