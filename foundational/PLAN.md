@@ -291,6 +291,12 @@ Tag computation uses `docker/metadata-action`, which derives all of this from a 
 | **5 — Offline & PWA** | Dexie local store (including the local-only store-selection state from §9), sync queue + conflict resolution, service worker, manifest/installability, offline E2E coverage. This phase is the MVP-complete milestone. |
 | **6 — Item-store tagging, prices, folders, export** | Item-to-store tagging + filtered "show only this store's items" view (on top of the `Store` entity from Phase 2), price/budget tracking, list folders, badge counts/exclusion, email export. |
 | **7 — Polish** | Passcode lock, extra premium-equivalent themes on top of the Phase 3 light/dark foundation, personalized autocomplete, performance/accessibility hardening pass. |
+| **8 — Visual Identity ("The Index")** | Custom color/type design tokens, per-list color spine — see `foundational/PHASE8_PLAN.md`. |
+| **9 — Refinements** | Routed screens, icon affordances, drag-and-drop, swipe gestures on top of Phase 8's visuals — see `foundational/PHASE9_PLAN.md`. |
+| **10 — Validation / Usability** | Data-integrity constraints, autocomplete, list-detail interaction fixes — see `foundational/PHASE10_PLAN.md`. |
+| **11 — List Feature Refinements** | Favorites richness, per-item icons, list-item display/detail-screen gaps — see `foundational/PHASE11_PLAN.md`. |
+| **12 — Lists Page Reorder + Account Identity** | Per-user list reorder, editable account name/identity in Settings — see `foundational/PHASE12_PLAN.md`. |
+| **13 — Native App Shell (Capacitor, iOS + Android)** | Wraps the existing SvelteKit SPA as native iOS/Android apps via Capacitor; configurable API base URL for cross-origin native builds; closes the remaining online-only sync gaps (category/store reorder, favorite/store attach) so the app is fully offline-first on native; a persistent Settings sync-status view alongside the existing banner; signed build artifacts via CI — see `foundational/PHASE13_PLAN.md`. |
 
 No calendar dates are set here since team size/velocity aren't yet known — phases are ordered by dependency, not duration.
 
