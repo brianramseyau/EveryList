@@ -8,6 +8,7 @@
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
 	import { initOrientation } from '$lib/orientation';
+	import { disablePinchZoom } from '$lib/pinch-zoom';
 	import { consumeNavDirection, consumeSkipTransition } from '$lib/nav-direction';
 	import { startFlushLoop } from '$lib/offline/flush';
 	import { initInstallPrompt } from '$lib/pwa/install-prompt';
@@ -32,6 +33,7 @@
 		initTheme();
 		initAccent();
 		void initOrientation();
+		disablePinchZoom();
 		refreshAuth();
 		syncBadge();
 		startFlushLoop();
