@@ -87,7 +87,9 @@ async function reconcileConflict(mutation: QueuedMutation, err: ApiError): Promi
 
 		if (mutation.op === 'update' && body.data.version !== undefined) {
 			const stillDiffering = Object.fromEntries(
-				Object.entries(mutation.payload).filter(([key, value]) => !Object.is(body.data![key], value))
+				Object.entries(mutation.payload).filter(
+					([key, value]) => !Object.is(body.data![key], value)
+				)
 			);
 			if (Object.keys(stillDiffering).length > 0) {
 				await table.update(mutation.targetId, { ...stillDiffering, _dirty: true });
