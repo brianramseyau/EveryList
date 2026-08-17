@@ -9,7 +9,7 @@
 	import { fetchCategories } from '$lib/api/categories';
 	import { fetchStoreCategoryOrder, fetchStores, reorderStoreCategories } from '$lib/api/stores';
 	import { ApiError } from '$lib/api/client';
-	import { pressHoldReorder } from '$lib/actions/press-hold-reorder';
+	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
@@ -57,28 +57,35 @@
 		void loadAll();
 	});
 
-	let listEl: HTMLUListElement | undefined = $state();
-
-	function getRowEls(): HTMLElement[] {
-		// Only reachable before the list has ever rendered — the drag this
-		// feeds doesn't exist yet either, so it can't be exercised.
+	// Fires once, on release, with the dragged category's new immediate
+	// neighbors (see sortable-reorder.ts) — placed among them, then the
+	// whole resulting order is sent to reorderStoreCategories, which
+	// renumbers every row server-side.
+	async function handleDrop(params: {
+		itemId: number;
+		beforeItemId: number | null;
+		afterItemId: number | null;
+	}) {
+		const dragged = orderedCategories.find((current) => current.id === params.itemId);
 		/* v8 ignore next */
-		if (!listEl) return [];
-		return [...listEl.children] as HTMLElement[];
-	}
+		if (!dragged) return;
 
-	// Fires once, on release — dragging itself never touches `orderedCategories`.
-	async function handleDrop(fromIndex: number, toIndex: number) {
-		const reordered = [...orderedCategories];
-		const [moved] = reordered.splice(fromIndex, 1);
-		reordered.splice(toIndex, 0, moved!);
-		orderedCategories = reordered;
+		const withoutDragged = orderedCategories.filter((current) => current.id !== dragged.id);
+		const beforeCategory = withoutDragged.find((current) => current.id === params.beforeItemId);
+		const afterCategory = withoutDragged.find((current) => current.id === params.afterItemId);
+		const insertAt = beforeCategory
+			? withoutDragged.indexOf(beforeCategory) + 1
+			: afterCategory
+				? withoutDragged.indexOf(afterCategory)
+				: withoutDragged.length;
+		withoutDragged.splice(insertAt, 0, dragged);
+		orderedCategories = withoutDragged;
 
 		reordering = true;
 		try {
 			await reorderStoreCategories(
 				storeId,
-				reordered.map((category, sortOrder) => ({ categoryId: category.id, sortOrder }))
+				orderedCategories.map((category, sortOrder) => ({ categoryId: category.id, sortOrder }))
 			);
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to save the new order.';
@@ -114,11 +121,14 @@
 
 		<p class="text-xs text-gray-400">Press and hold a category to drag it into place.</p>
 
-		<ul class="flex flex-col gap-2" bind:this={listEl}>
-			{#each orderedCategories as category, index (category.id)}
+		<ul
+			class="flex flex-col gap-2"
+			use:sortableReorder={{ group: 'store-categories', disabled: reordering, onDrop: handleDrop }}
+		>
+			{#each orderedCategories as category (category.id)}
 				<li
 					class="flex items-center gap-2 rounded-lg border border-gray-200 bg-paper p-3 dark:border-gray-700"
-					use:pressHoldReorder={{ index, disabled: reordering, getRowEls, ondrop: handleDrop }}
+					data-item-id={category.id}
 				>
 					<span
 						aria-hidden="true"
