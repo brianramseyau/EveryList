@@ -3,7 +3,6 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Select } from 'flowbite-svelte';
 	import type { FolderDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchLists, updateList, reorderLists } from '$lib/api/lists';
@@ -20,27 +19,37 @@
 	let error = $state<string | null>(null);
 	let reordering = $state(false);
 
-	function sectionGroup(folderId: number | null): string {
-		// A unique group per section, not shared with any other `<ul>` — this
-		// keeps SortableJS from allowing drops across sections, since moving a
-		// list to a different folder already has its own affordance (the
-		// folder `<Select>`).
-		return folderId === null ? 'unfiled' : `folder-${folderId}`;
-	}
+	// Coarse (touch) pointers reorder via press-and-hold on the row itself, so
+	// the explicit handle icon is only shown for fine pointers — same
+	// precedent as the item-row drag handle on the single-list page.
+	let isCoarsePointer = $state(false);
 
-	// Fires once, on release, with the dragged list's new immediate neighbors
-	// within its own section (see sortable-reorder.ts). Only the dragged
-	// section's relative order changes; every other list keeps its original
-	// slot in the full per-user order sent to the server.
-	async function handleDrop(
-		sectionLists: ListDto[],
-		params: { itemId: number; beforeItemId: number | null; afterItemId: number | null }
-	) {
-		const dragged = sectionLists.find((list) => list.id === params.itemId);
+	// One shared group across every folder section (and "Not in a folder") so
+	// SortableJS allows drops between them — dragging a list into a folder
+	// (including an empty one) reassigns its folderId, matching AnyList's
+	// drag-to-recategorize and the item-level cross-category drag on the
+	// single-list page.
+	const LISTS_GROUP = 'lists';
+
+	// Fires once, on release, with the dragged list's new folder (from the
+	// destination `<ul>`'s data-container-id) and its new immediate neighbors
+	// there (see sortable-reorder.ts).
+	async function handleDrop(params: {
+		itemId: number;
+		toContainerId: number | null;
+		beforeItemId: number | null;
+		afterItemId: number | null;
+	}) {
+		const dragged = lists.find((list) => list.id === params.itemId);
 		/* v8 ignore next */
 		if (!dragged) return;
 
-		const withoutDragged = sectionLists.filter((list) => list.id !== dragged.id);
+		const folderChanged = dragged.folderId !== params.toContainerId;
+		const updatedDragged = folderChanged
+			? { ...dragged, folderId: params.toContainerId }
+			: dragged;
+
+		const withoutDragged = lists.filter((list) => list.id !== dragged.id);
 		const beforeList = withoutDragged.find((list) => list.id === params.beforeItemId);
 		const afterList = withoutDragged.find((list) => list.id === params.afterItemId);
 		const insertAt = beforeList
@@ -48,15 +57,12 @@
 			: afterList
 				? withoutDragged.indexOf(afterList)
 				: withoutDragged.length;
-		const reorderedSection = [...withoutDragged];
-		reorderedSection.splice(insertAt, 0, dragged);
-
-		const sectionIds = new Set(sectionLists.map((list) => list.id));
-		let cursor = 0;
-		lists = lists.map((list) => (sectionIds.has(list.id) ? reorderedSection[cursor++]! : list));
+		withoutDragged.splice(insertAt, 0, updatedDragged);
+		lists = withoutDragged;
 
 		reordering = true;
 		try {
+			if (folderChanged) await updateList(dragged.id, { folderId: params.toContainerId });
 			lists = await reorderLists(lists.map((list) => list.id));
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to reorder lists.';
@@ -97,6 +103,7 @@
 			void goto(resolve('/login'));
 			return;
 		}
+		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		void loadAll();
 	});
 
@@ -110,29 +117,13 @@
 			void loadAll();
 		}
 	}
-
-	async function moveListToFolder(list: ListDto, folderId: number | null) {
-		lists = lists.map((current) => (current.id === list.id ? { ...current, folderId } : current));
-		try {
-			await updateList(list.id, { folderId });
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to move list.';
-			void loadAll();
-		}
-	}
 </script>
 
 {#snippet listCard(list: ListDto)}
-	<li class="flex items-center gap-2" data-item-id={list.id}>
-		<span
-			aria-hidden="true"
-			class="flex h-11 w-6 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
-		>
-			<Icon name="dragVertical" class="h-5 w-5" />
-		</span>
+	<li data-item-id={list.id}>
 		<a
 			href={resolve('/lists/[id]', { id: String(list.id) })}
-			class="flex flex-1 items-center gap-3 rounded-lg border border-l-4 border-gray-200 p-4 hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:hover:border-gray-600"
+			class="flex items-center gap-3 rounded-lg border border-l-4 border-gray-200 p-4 hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:hover:border-gray-600"
 			style:border-left-color={list.color}
 		>
 			<span
@@ -175,22 +166,15 @@
 			{#if list.archived}
 				<span class="text-xs text-gray-400">Archived</span>
 			{/if}
+			{#if !isCoarsePointer}
+				<span
+					aria-hidden="true"
+					class="flex h-11 w-6 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
+				>
+					<Icon name="dragVertical" class="h-5 w-5" />
+				</span>
+			{/if}
 		</a>
-		{#if folders.length > 0}
-			<div class="w-32" data-reorder-ignore>
-				<Select
-					size="sm"
-					items={folders.map((folder) => ({ value: folder.id, name: folder.name }))}
-					placeholder="No folder"
-					clearable
-					value={list.folderId ?? ''}
-					onchange={(event) => {
-						const raw = (event.target as HTMLSelectElement).value;
-						void moveListToFolder(list, raw === '' ? null : Number(raw));
-					}}
-				/>
-			</div>
-		{/if}
 	</li>
 {/snippet}
 
@@ -247,26 +231,26 @@
 							Delete folder
 						</button>
 					</h2>
-					{#if group.lists.length === 0}
-						<p class="text-xs text-gray-400">No lists in this folder yet.</p>
-					{:else}
-						<ul
-							class="flex flex-col gap-2"
-							use:sortableReorder={{
-								group: sectionGroup(group.folder.id),
-								disabled: reordering,
-								onDrop: (params) => handleDrop(group.lists, params)
-							}}
-						>
-							{#each group.lists as list (list.id)}
-								{@render listCard(list)}
-							{/each}
-						</ul>
-					{/if}
+					<ul
+						class="flex min-h-14 flex-col gap-2 {group.lists.length === 0
+							? 'rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700'
+							: ''}"
+						data-container-id={group.folder.id}
+						use:sortableReorder={{ group: LISTS_GROUP, disabled: reordering, onDrop: handleDrop }}
+					>
+						{#each group.lists as list (list.id)}
+							{@render listCard(list)}
+						{/each}
+						{#if group.lists.length === 0}
+							<li class="flex h-14 items-center px-4 text-xs text-gray-400" data-reorder-ignore>
+								Drag a list here to add it to this folder.
+							</li>
+						{/if}
+					</ul>
 				</section>
 			{/each}
 
-			{#if unfiledLists.length > 0}
+			{#if folders.length > 0 || unfiledLists.length > 0}
 				<section>
 					{#if folders.length > 0}
 						<h2 class="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400">
@@ -274,16 +258,18 @@
 						</h2>
 					{/if}
 					<ul
-						class="flex flex-col gap-2"
-						use:sortableReorder={{
-							group: sectionGroup(null),
-							disabled: reordering,
-							onDrop: (params) => handleDrop(unfiledLists, params)
-						}}
+						class="flex min-h-14 flex-col gap-2"
+						data-container-id="null"
+						use:sortableReorder={{ group: LISTS_GROUP, disabled: reordering, onDrop: handleDrop }}
 					>
 						{#each unfiledLists as list (list.id)}
 							{@render listCard(list)}
 						{/each}
+						{#if unfiledLists.length === 0}
+							<li class="flex h-14 items-center px-4 text-xs text-gray-400" data-reorder-ignore>
+								Drag a list here to remove it from its folder.
+							</li>
+						{/if}
 					</ul>
 				</section>
 			{/if}

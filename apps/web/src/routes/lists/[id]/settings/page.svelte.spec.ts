@@ -12,9 +12,11 @@ vi.mock('$lib/api/lists', () => ({
 	deleteList: vi.fn(),
 	emailExportList: vi.fn()
 }));
+vi.mock('$lib/api/folders', () => ({ fetchFolders: vi.fn() }));
 vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 
 const { fetchList, updateList, deleteList, emailExportList } = await import('$lib/api/lists');
+const { fetchFolders } = await import('$lib/api/folders');
 const { refreshBadgeCount } = await import('$lib/pwa/badge');
 const { goto } = await import('$app/navigation');
 const SettingsPage = (await import('./+page.svelte')).default;
@@ -41,6 +43,7 @@ describe('List settings +page.svelte', () => {
 	beforeEach(() => {
 		setToken('test-token');
 		vi.mocked(fetchList).mockResolvedValue(list);
+		vi.mocked(fetchFolders).mockResolvedValue([]);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
@@ -140,6 +143,58 @@ describe('List settings +page.svelte', () => {
 		await page.getByRole('button', { name: 'Color' }).click();
 		await page.getByRole('button', { name: '#ef4444' }).click();
 		expect(updateList).toHaveBeenCalledWith(1, { color: '#ef4444' });
+	});
+
+	it('hides the folder selector when the account has no folders', async () => {
+		render(SettingsPage);
+		await expect.element(page.getByRole('button', { name: 'Archive list' })).toBeInTheDocument();
+
+		await expect.element(page.getByRole('combobox')).not.toBeInTheDocument();
+	});
+
+	it('moves the list to a folder via the settings selector', async () => {
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			createdAt: TS,
+			updatedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchFolders).mockResolvedValue([folder]);
+		vi.mocked(updateList).mockResolvedValue({ ...list, folderId: 5 });
+
+		render(SettingsPage);
+		await expect.element(page.getByRole('combobox')).toBeInTheDocument();
+
+		await page.getByRole('combobox').selectOptions('5');
+
+		expect(updateList).toHaveBeenCalledWith(1, { folderId: 5 });
+	});
+
+	it('clears the folder via the settings selector', async () => {
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			createdAt: TS,
+			updatedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchList).mockResolvedValue({ ...list, folderId: 5 });
+		vi.mocked(fetchFolders).mockResolvedValue([folder]);
+		vi.mocked(updateList).mockResolvedValue({ ...list, folderId: null });
+
+		render(SettingsPage);
+		await expect.element(page.getByRole('combobox')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Close' }).click();
+
+		expect(updateList).toHaveBeenCalledWith(1, { folderId: null });
 	});
 
 	it('archives the list, flipping the button label', async () => {

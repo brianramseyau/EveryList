@@ -3,10 +3,11 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Input } from 'flowbite-svelte';
-	import type { ListDto } from '@everylist/shared';
+	import { Button, Input, Select } from 'flowbite-svelte';
+	import type { FolderDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { deleteList, emailExportList, fetchList, updateList } from '$lib/api/lists';
+	import { fetchFolders } from '$lib/api/folders';
 	import { ApiError } from '$lib/api/client';
 	import { buildPasscodeHash } from '$lib/passcode';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
@@ -17,6 +18,7 @@
 	const listId = $derived(Number(page.params.id));
 
 	let list = $state<ListDto | null>(null);
+	let folders = $state<FolderDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
@@ -35,7 +37,7 @@
 	async function loadAll() {
 		loading = true;
 		try {
-			list = await fetchList(listId);
+			[list, folders] = await Promise.all([fetchList(listId), fetchFolders()]);
 			draftName = list.name;
 			error = null;
 		} catch (err) {
@@ -61,6 +63,7 @@
 			archived: boolean;
 			badgeExcluded: boolean;
 			passcodeHash: string | null;
+			folderId: number | null;
 		}>
 	) {
 		try {
@@ -202,6 +205,23 @@
 				{savingName ? 'Saving…' : 'Save name'}
 			</Button>
 		</form>
+
+		{#if folders.length > 0}
+			<div class="flex flex-col gap-2">
+				<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">Folder</span>
+				<Select
+					size="sm"
+					items={folders.map((folder) => ({ value: folder.id, name: folder.name }))}
+					placeholder="No folder"
+					clearable
+					value={list.folderId ?? ''}
+					onchange={(event) => {
+						const raw = (event.target as HTMLSelectElement).value;
+						void onupdate({ folderId: raw === '' ? null : Number(raw) });
+					}}
+				/>
+			</div>
+		{/if}
 
 		<button
 			type="button"
