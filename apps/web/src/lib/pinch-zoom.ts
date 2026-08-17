@@ -9,30 +9,24 @@ function preventDefault(event: Event): void {
 	event.preventDefault();
 }
 
-/** Blocks pinch-to-zoom app-wide.
+/** Blocks pinch-to-zoom on iOS Safari.
  *
- * Android Chrome already treats this as covered by the per-element
- * `touch-action` styling on scrollable/interactive rows (see
+ * Android Chrome already blocks this via the per-element `touch-action`
+ * styling on scrollable/interactive rows (see
  * routes/lists/[id]/+page.svelte) — Blink derives the page's pinch-zoom
- * behavior from the `touch-action` of whatever's under each touch point.
- * WebKit doesn't: iOS Safari's viewport pinch-zoom is a separate native
- * gesture that `touch-action` never reaches, standalone PWA or not, so it
- * needs its own handling —
+ * behavior natively from the `touch-action` of whatever's under each touch
+ * point, entirely on the compositor thread. WebKit doesn't: iOS Safari's
+ * viewport pinch-zoom is a separate native gesture that `touch-action`
+ * never reaches, standalone PWA or not, so it needs its own handling —
  * https://developer.apple.com/documentation/webkitjs/gestureevent.
- * `gesturestart` is WebKit-only (fired for the two-finger pinch itself);
- * the multi-touch `touchmove` listener is the fallback for engines that
- * don't fire `gesturestart` at all, so between the two every engine is
- * covered without needing to branch on platform. */
+ * `gesturestart` is WebKit-only and never fires on Chrome/Android, which is
+ * exactly why it's used here instead of a generic multi-touch `touchmove`
+ * listener: a `touchmove` listener would apply to every engine, including
+ * Blink, and registering a non-passive one hands Blink's own native
+ * touch-action-driven pinch-zoom arbitration over to the main thread —
+ * regressing the Android behavior this is not meant to touch. */
 export function disablePinchZoom(): void {
 	if (!hasWindow()) return;
 
 	window.addEventListener('gesturestart', preventDefault);
-
-	window.addEventListener(
-		'touchmove',
-		(event) => {
-			if (event.touches.length > 1) event.preventDefault();
-		},
-		{ passive: false }
-	);
 }

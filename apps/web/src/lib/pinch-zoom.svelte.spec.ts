@@ -19,18 +19,9 @@ describe('pinch-zoom (browser)', () => {
 		expect(event.defaultPrevented).toBe(true);
 	});
 
-	it('prevents the default on a multi-touch touchmove (pinch-zoom fallback)', () => {
+	it('leaves an ordinary touchmove alone — no listener registered for it, unlike Android which relies on touch-action instead', () => {
 		const event = new Event('touchmove', { cancelable: true });
 		Object.defineProperty(event, 'touches', { value: [{}, {}] });
-
-		window.dispatchEvent(event);
-
-		expect(event.defaultPrevented).toBe(true);
-	});
-
-	it('leaves a single-touch touchmove alone (ordinary scroll/swipe)', () => {
-		const event = new Event('touchmove', { cancelable: true });
-		Object.defineProperty(event, 'touches', { value: [{}] });
 
 		window.dispatchEvent(event);
 
