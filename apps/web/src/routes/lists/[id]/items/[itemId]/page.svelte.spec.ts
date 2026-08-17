@@ -1,7 +1,7 @@
 import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import type { CategoryDto, ItemDto, StoreDto } from '@everylist/shared';
+import type { CategoryDto, FavoriteItemDto, ItemDto, StoreDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 
@@ -11,6 +11,11 @@ vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn() }));
 vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
 vi.mock('$lib/api/items', () => ({ fetchItems: vi.fn(), updateItem: vi.fn() }));
 vi.mock('$lib/api/stores', () => ({ fetchStores: vi.fn() }));
+vi.mock('$lib/api/favorites', () => ({
+	fetchFavorites: vi.fn(),
+	createFavorite: vi.fn(),
+	deleteFavorite: vi.fn()
+}));
 vi.mock('$lib/offline/db', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/offline/db')>();
 	return { ...actual, getDb: vi.fn(actual.getDb) };
@@ -20,6 +25,7 @@ const { fetchList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
 const { fetchItems, updateItem } = await import('$lib/api/items');
 const { fetchStores } = await import('$lib/api/stores');
+const { fetchFavorites, createFavorite, deleteFavorite } = await import('$lib/api/favorites');
 const { goto } = await import('$app/navigation');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const ItemDetailPage = (await import('./+page.svelte')).default;
@@ -66,6 +72,25 @@ const corner: StoreDto = {
 	version: 1
 };
 
+function makeFavorite(
+	overrides: Partial<FavoriteItemDto> & Pick<FavoriteItemDto, 'id' | 'name'>
+): FavoriteItemDto {
+	return {
+		listId: 1,
+		userId: 1,
+		defaultCategoryId: null,
+		defaultQuantity: null,
+		storeId: null,
+		notes: null,
+		price: null,
+		createdAt: TS,
+		updatedAt: null,
+		deletedAt: null,
+		version: 1,
+		...overrides
+	};
+}
+
 function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): ItemDto {
 	return {
 		listId: 1,
@@ -93,6 +118,7 @@ describe('Item detail +page.svelte', () => {
 		vi.mocked(fetchCategories).mockResolvedValue([produce]);
 		vi.mocked(fetchStores).mockResolvedValue([]);
 		vi.mocked(fetchItems).mockResolvedValue([]);
+		vi.mocked(fetchFavorites).mockResolvedValue([]);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
@@ -380,5 +406,109 @@ describe('Item detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'Save' }).click();
 
 		await expect.element(page.getByText('Item was changed elsewhere')).toBeInTheDocument();
+	});
+
+	it('adds the item to favorites when the heart button is not yet favorited', async () => {
+		const db = getDb()!;
+		await db.items.put(
+			makeItem({ id: 100, name: 'Bananas', quantity: '2', storeId: 20, notes: 'ripe', price: 150 })
+		);
+		vi.mocked(fetchStores).mockResolvedValue([corner]);
+		vi.mocked(createFavorite).mockResolvedValue(makeFavorite({ id: 1, name: 'Bananas' }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		const heartButton = page.getByRole('button', { name: 'Add to favorites' });
+		await heartButton.click();
+
+		expect(createFavorite).toHaveBeenCalledWith(1, {
+			name: 'Bananas',
+			defaultQuantity: '2',
+			storeId: 20,
+			notes: 'ripe',
+			price: 150
+		});
+		await expect
+			.element(page.getByRole('button', { name: 'Remove from favorites' }))
+			.toBeInTheDocument();
+	});
+
+	it('removes the item from favorites when the heart button is already favorited', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchFavorites).mockResolvedValue([makeFavorite({ id: 5, name: 'Bananas' })]);
+		vi.mocked(deleteFavorite).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await expect
+			.element(page.getByRole('button', { name: 'Remove from favorites' }))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Remove from favorites' }).click();
+
+		expect(deleteFavorite).toHaveBeenCalledWith(1, 5);
+		await expect
+			.element(page.getByRole('button', { name: 'Add to favorites' }))
+			.toBeInTheDocument();
+	});
+
+	it('matches an existing favorite by name case-insensitively, ignoring surrounding whitespace', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: '  Bananas  ' }));
+		vi.mocked(fetchFavorites).mockResolvedValue([makeFavorite({ id: 5, name: 'bananas' })]);
+
+		render(ItemDetailPage);
+
+		await expect
+			.element(page.getByRole('button', { name: 'Remove from favorites' }))
+			.toBeInTheDocument();
+	});
+
+	it('shows an error message when toggling a favorite fails', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(createFavorite).mockRejectedValue(new ApiError(500, 'Could not save favorite'));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await page.getByRole('button', { name: 'Add to favorites' }).click();
+
+		await expect.element(page.getByText('Could not save favorite')).toBeInTheDocument();
+	});
+
+	it('ignores a second click while a favorite toggle is already in flight', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		let resolveCreate: (favorite: FavoriteItemDto) => void = () => {};
+		vi.mocked(createFavorite).mockReturnValue(
+			new Promise((resolve) => {
+				resolveCreate = resolve;
+			})
+		);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		const heartButtonEl = page.getByRole('button', { name: 'Add to favorites' }).element();
+		heartButtonEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		heartButtonEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		resolveCreate(makeFavorite({ id: 1, name: 'Bananas' }));
+
+		await expect.poll(() => vi.mocked(createFavorite).mock.calls.length).toBe(1);
+	});
+
+	it('shows a generic error message when toggling a favorite fails without an ApiError', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(createFavorite).mockRejectedValue(new TypeError('network down'));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await page.getByRole('button', { name: 'Add to favorites' }).click();
+
+		await expect.element(page.getByText('Failed to update favorites.')).toBeInTheDocument();
 	});
 });

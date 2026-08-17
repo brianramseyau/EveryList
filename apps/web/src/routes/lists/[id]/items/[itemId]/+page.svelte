@@ -4,12 +4,13 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { Button, Input, Label, Select, Textarea } from 'flowbite-svelte';
-	import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
+	import type { CategoryDto, FavoriteItemDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
 	import { fetchItems, updateItem } from '$lib/api/items';
 	import { fetchStores } from '$lib/api/stores';
+	import { createFavorite, deleteFavorite, fetchFavorites } from '$lib/api/favorites';
 	import { getDb } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
 	import Icon from '$lib/components/Icon.svelte';
@@ -25,6 +26,16 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let saving = $state(false);
+	let favorites = $state<FavoriteItemDto[]>([]);
+	let togglingFavorite = $state(false);
+
+	// Only read while `item` is loaded — the heart button that reads this is
+	// gated behind `{#if item}` in the template, so `item!` is always safe here.
+	const matchingFavorite = $derived(
+		favorites.find(
+			(favorite) => favorite.name.trim().toLowerCase() === item!.name.trim().toLowerCase()
+		) ?? null
+	);
 
 	let draftName = $state('');
 	let draftQuantity = $state('');
@@ -48,16 +59,19 @@
 	async function loadAll() {
 		loading = true;
 		try {
-			const [listResult, itemResult, categoriesResult, storesResult] = await Promise.all([
-				fetchList(listId),
-				loadItem(),
-				fetchCategories(listId),
-				fetchStores(listId)
-			]);
+			const [listResult, itemResult, categoriesResult, storesResult, favoritesResult] =
+				await Promise.all([
+					fetchList(listId),
+					loadItem(),
+					fetchCategories(listId),
+					fetchStores(listId),
+					fetchFavorites(listId)
+				]);
 			list = listResult;
 			item = itemResult;
 			categories = categoriesResult;
 			stores = storesResult;
+			favorites = favoritesResult;
 
 			if (item) {
 				draftName = item.name;
@@ -108,6 +122,30 @@
 		}
 	}
 
+	async function toggleFavorite() {
+		if (togglingFavorite) return;
+		togglingFavorite = true;
+		try {
+			if (matchingFavorite) {
+				await deleteFavorite(listId, matchingFavorite.id);
+				favorites = favorites.filter((favorite) => favorite.id !== matchingFavorite.id);
+			} else {
+				const favorite = await createFavorite(listId, {
+					name: item!.name,
+					defaultQuantity: item!.quantity,
+					storeId: item!.storeId,
+					notes: item!.notes,
+					price: item!.price
+				});
+				favorites = [...favorites, favorite];
+			}
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to update favorites.';
+		} finally {
+			togglingFavorite = false;
+		}
+	}
+
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		void save();
@@ -126,6 +164,18 @@
 	>
 		{#snippet actions()}
 			{#if item}
+				<button
+					type="button"
+					aria-label={matchingFavorite ? 'Remove from favorites' : 'Add to favorites'}
+					aria-pressed={Boolean(matchingFavorite)}
+					class="flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 disabled:opacity-30 dark:text-gray-500"
+					class:text-red-600={Boolean(matchingFavorite)}
+					class:dark:text-red-400={Boolean(matchingFavorite)}
+					disabled={togglingFavorite}
+					onclick={toggleFavorite}
+				>
+					<Icon name={matchingFavorite ? 'heart' : 'heartOutline'} class="h-5 w-5" />
+				</button>
 				<Button type="button" size="sm" disabled={saving || !draftName.trim()} onclick={save}>
 					{saving ? 'Saving…' : 'Save'}
 				</Button>
