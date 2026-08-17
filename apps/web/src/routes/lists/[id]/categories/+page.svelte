@@ -9,7 +9,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import IconPicker from '$lib/components/IconPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
-	import { pressHoldReorder } from '$lib/actions/press-hold-reorder';
+	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
 	import {
@@ -117,22 +117,30 @@
 		}
 	}
 
-	let listEl: HTMLUListElement | undefined = $state();
-
-	function getRowEls(): HTMLElement[] {
-		// Only reachable before the list has ever rendered — the drag this
-		// feeds doesn't exist yet either, so it can't be exercised.
+	// Fires once, on release, with the dragged category's new immediate
+	// neighbors (see sortable-reorder.ts) — placed among them, then the
+	// whole resulting order is sent to reorderCategories, which renumbers
+	// every row (safe here: categories have no offline-sync version-conflict
+	// concern the way items do, and this endpoint already worked this way).
+	async function handleDrop(params: {
+		itemId: number;
+		beforeItemId: number | null;
+		afterItemId: number | null;
+	}) {
+		const dragged = categories.find((current) => current.id === params.itemId);
 		/* v8 ignore next */
-		if (!listEl) return [];
-		return [...listEl.children] as HTMLElement[];
-	}
+		if (!dragged) return;
 
-	// Fires once, on release — dragging itself never touches `categories`.
-	async function handleDrop(fromIndex: number, toIndex: number) {
-		const reordered = [...categories];
-		const [moved] = reordered.splice(fromIndex, 1);
-		reordered.splice(toIndex, 0, moved!);
-		categories = reordered;
+		const withoutDragged = categories.filter((current) => current.id !== dragged.id);
+		const beforeCategory = withoutDragged.find((current) => current.id === params.beforeItemId);
+		const afterCategory = withoutDragged.find((current) => current.id === params.afterItemId);
+		const insertAt = beforeCategory
+			? withoutDragged.indexOf(beforeCategory) + 1
+			: afterCategory
+				? withoutDragged.indexOf(afterCategory)
+				: withoutDragged.length;
+		withoutDragged.splice(insertAt, 0, dragged);
+		categories = withoutDragged;
 
 		reordering = true;
 		try {
@@ -182,11 +190,14 @@
 
 		<p class="text-xs text-gray-400">Press and hold a category's handle to drag it into place.</p>
 
-		<ul class="flex flex-col gap-2" bind:this={listEl}>
-			{#each categories as category, index (category.id)}
+		<ul
+			class="flex flex-col gap-2"
+			use:sortableReorder={{ group: 'categories', disabled: reordering, onDrop: handleDrop }}
+		>
+			{#each categories as category (category.id)}
 				<li
 					class="flex items-center gap-2 rounded-lg border border-gray-200 bg-paper p-3 dark:border-gray-700"
-					use:pressHoldReorder={{ index, disabled: reordering, getRowEls, ondrop: handleDrop }}
+					data-item-id={category.id}
 				>
 					<span
 						aria-hidden="true"

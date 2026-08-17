@@ -1,8 +1,8 @@
 // Hand-rolled directional swipe via Pointer Events (PHASE9_PLAN.md #9,
-// PHASE10_PLAN.md #0.9) — no gesture library, mirrors press-hold-reorder.ts's
-// approach of a small synchronously-testable state machine driven by
-// synthetic PointerEvents. Swipe right commits onCommitRight (delete);
-// swipe left commits onCommitLeft (edit).
+// PHASE10_PLAN.md #0.9) — no gesture library, driven by a small
+// synchronously-testable state machine reading synthetic PointerEvents.
+// Swipe right commits onCommitRight (delete); swipe left commits
+// onCommitLeft (edit).
 
 export const REVEAL_PX = 80;
 export const COMMIT_RATIO = 0.5;

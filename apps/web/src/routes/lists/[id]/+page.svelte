@@ -17,7 +17,8 @@
 	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import { isListUnlocked } from '$lib/passcode';
 	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
-	import { pressHoldReorder } from '$lib/actions/press-hold-reorder';
+	import { sortableReorder } from '$lib/actions/sortable-reorder';
+	import { computeMidpointSortOrder } from '$lib/item-sort-order';
 	import { swipeReveal } from '$lib/actions/swipe-reveal';
 	import Icon from '$lib/components/Icon.svelte';
 	import ItemAutocomplete from '$lib/components/ItemAutocomplete.svelte';
@@ -125,16 +126,6 @@
 			? 'Clear 1 checked item?'
 			: `Clear ${checkedItems.length} checked items?`
 	);
-
-	// Flat, cross-category index of each item as currently rendered — drag
-	// targets are computed against this single flat ordering (PHASE9_PLAN.md
-	// #7), so dragging past a category's last row naturally crosses into the
-	// next section.
-	const flatIndexById = $derived.by(() => {
-		const map = new SvelteMap<number, number>();
-		groups.flatMap((group) => group.items).forEach((item, index) => map.set(item.id, index));
-		return map;
-	});
 
 	const totalCents = $derived(visibleItems.reduce((sum, item) => sum + (item.price ?? 0), 0));
 
@@ -258,51 +249,52 @@
 		}
 	}
 
-	let itemsContainerEl: HTMLDivElement | undefined = $state();
-
-	function getItemRowEls(): HTMLElement[] {
-		// Only reachable before the item list has ever rendered — the drag
-		// this feeds doesn't exist yet either, so it can't be exercised.
-		/* v8 ignore next */
-		if (!itemsContainerEl) return [];
-		return [...itemsContainerEl.querySelectorAll('li')];
-	}
-
-	// Fires once, on release — dragging itself never touches `items` (see
-	// press-hold-reorder.ts). `toIndex` is already a final, length-preserving
-	// index (the row this item lands at, once removed from `fromIndex`).
-	async function handleItemDrop(fromIndex: number, toIndex: number) {
-		const flat = groups.flatMap((group) => group.items);
-		const draggedItem = flat[fromIndex];
+	// Fires once, on release, with the dragged item's new immediate
+	// neighbors (see sortable-reorder.ts) — `sortOrder` is derived from
+	// *their* real sortOrder values (fractional indexing), never from a flat
+	// position. A flat index collides with whatever other item already had
+	// that value (everything gets its sortOrder from an ever-increasing
+	// per-list counter at creation time — see items_controller.ts's
+	// `nextSortOrder`), and since SQLite doesn't define a tiebreak for equal
+	// `ORDER BY sortOrder` values, a collision could silently reshuffle the
+	// list on the next load even though nothing else changed.
+	async function handleItemDrop(params: {
+		itemId: number;
+		toContainerId: number | null;
+		beforeItemId: number | null;
+		afterItemId: number | null;
+	}) {
+		const draggedItem = items.find((current) => current.id === params.itemId);
 		// The dragged row is always still present at drop time — nothing
 		// mutates `items` mid-gesture.
 		/* v8 ignore next */
 		if (!draggedItem) return;
 
-		const targetNeighbor = flat.filter((_, index) => index !== fromIndex)[toIndex] ?? null;
-		const targetCategoryId = targetNeighbor
-			? targetNeighbor.categoryId
-			: (groups.at(-1)?.category?.id ?? null);
+		const withoutDragged = items.filter((current) => current.id !== draggedItem.id);
+		const beforeItem = withoutDragged.find((current) => current.id === params.beforeItemId);
+		const afterItem = withoutDragged.find((current) => current.id === params.afterItemId);
+		const insertAt = beforeItem
+			? withoutDragged.indexOf(beforeItem) + 1
+			: afterItem
+				? withoutDragged.indexOf(afterItem)
+				: withoutDragged.length;
+		const newSortOrder = computeMidpointSortOrder(beforeItem?.sortOrder, afterItem?.sortOrder);
 
 		// Reassigns categoryId when the drop lands in a different section —
 		// matching AnyList's drag-to-recategorize.
-		const updatedItem: ItemDto =
-			draggedItem.categoryId === targetCategoryId
-				? draggedItem
-				: { ...draggedItem, categoryId: targetCategoryId };
+		const updatedItem: ItemDto = {
+			...draggedItem,
+			categoryId: params.toContainerId,
+			sortOrder: newSortOrder
+		};
 
-		const withoutDragged = items.filter((current) => current.id !== draggedItem.id);
-		const neighborIndexInItems = targetNeighbor
-			? withoutDragged.findIndex((current) => current.id === targetNeighbor.id)
-			: -1;
-		const insertAt = neighborIndexInItems === -1 ? withoutDragged.length : neighborIndexInItems;
 		withoutDragged.splice(insertAt, 0, updatedItem);
 		items = withoutDragged;
 
 		try {
 			await updateItem(listId, draggedItem.id, {
 				categoryId: updatedItem.categoryId,
-				sortOrder: toIndex
+				sortOrder: newSortOrder
 			});
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to reorder item.';
@@ -485,7 +477,7 @@
 					</p>
 				</div>
 			{:else}
-				<div class="flex flex-col gap-6 pb-16" bind:this={itemsContainerEl}>
+				<div class="flex flex-col gap-6 pb-16">
 					{#each groups as group (group.category?.id ?? 'uncategorized')}
 						<section>
 							{#if list.useCategories !== false}
@@ -504,16 +496,13 @@
 									</span>
 								</h2>
 							{/if}
-							<ul class="flex flex-col gap-1">
+							<ul
+								class="flex flex-col gap-1"
+								data-container-id={group.category?.id ?? 'null'}
+								use:sortableReorder={{ group: 'list-items', onDrop: handleItemDrop }}
+							>
 								{#each group.items as item (item.id)}
-									<li
-										class="relative overflow-hidden rounded-lg"
-										use:pressHoldReorder={{
-											index: flatIndexById.get(item.id)!,
-											getRowEls: getItemRowEls,
-											ondrop: handleItemDrop
-										}}
-									>
+									<li class="relative overflow-hidden rounded-lg" data-item-id={item.id}>
 										<div
 											class="absolute inset-y-0 left-0 flex w-20 items-center justify-center bg-red-600 text-white print:hidden"
 											aria-hidden="true"
@@ -650,11 +639,20 @@
 </main>
 
 <style>
-	/* The dragged row's own box-shadow/elevation (applied inline by
-	   press-hold-reorder.ts) would otherwise be clipped by this li's own
+	/* SortableJS applies these classes to the dragged row (chosenClass while
+	   held, dragClass while its fallback element is moving) — the
+	   box-shadow/elevation would otherwise be clipped by this li's own
 	   overflow-hidden, which exists only to mask the swipe-reveal panels. */
-	:global(li.is-dragging) {
+	:global(li.sortable-chosen),
+	:global(li.sortable-drag) {
 		overflow: visible;
+		box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+		z-index: 5;
+	}
+
+	/* The placeholder left in the source slot while dragging. */
+	:global(li.sortable-ghost) {
+		opacity: 0.4;
 	}
 
 	.item-row {
