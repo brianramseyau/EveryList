@@ -8,7 +8,8 @@ vi.mock('./client', () => ({
 }));
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
-const { createFolder, deleteFolder, fetchFolders, updateFolder } = await import('./folders');
+const { createFolder, deleteFolder, fetchFolders, reorderFolders, updateFolder } =
+	await import('./folders');
 
 describe('folders api', () => {
 	it('fetchFolders GETs the collection', () => {
@@ -29,5 +30,10 @@ describe('folders api', () => {
 	it('deleteFolder DELETEs the given id', () => {
 		deleteFolder(1);
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/folders/1');
+	});
+
+	it('reorderFolders PATCHes the full desired order', () => {
+		reorderFolders([3, 1, 2]);
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/folders/reorder', { order: [3, 1, 2] });
 	});
 });

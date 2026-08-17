@@ -134,6 +134,31 @@ describe('Manage Folders +page.svelte', () => {
 		await expect.element(page.getByRole('textbox').nth(3)).toHaveValue('Trips');
 	});
 
+	it('picks a color for the new folder', async () => {
+		vi.mocked(createFolder).mockResolvedValue({
+			id: 7,
+			userId: 1,
+			name: 'Trips',
+			color: '#ef4444',
+			sortOrder: 2,
+			createdAt: TS,
+			updatedAt: null,
+			version: 1
+		});
+
+		render(FoldersPage);
+		await waitForLoad();
+
+		// The create form's own color picker is the first "Color" button.
+		await page.getByRole('button', { name: 'Color' }).first().click();
+		await page.getByRole('button', { name: '#ef4444' }).click();
+
+		await page.getByPlaceholder('New folder name').fill('Trips');
+		await page.getByRole('button', { name: 'Add' }).click();
+
+		expect(createFolder).toHaveBeenCalledWith({ name: 'Trips', color: '#ef4444' });
+	});
+
 	it('does not submit when the new folder name is only whitespace', async () => {
 		render(FoldersPage);
 		await waitForLoad();
@@ -197,8 +222,21 @@ describe('Manage Folders +page.svelte', () => {
 		expect(updateFolder).not.toHaveBeenCalled();
 	});
 
-	it('reloads when saving a folder name fails', async () => {
+	it('reloads when saving a folder name fails with an ApiError', async () => {
 		vi.mocked(updateFolder).mockRejectedValue(new ApiError(500, 'Could not save'));
+
+		render(FoldersPage);
+		await waitForLoad();
+
+		const nameInput = page.getByRole('textbox').nth(1);
+		await nameInput.fill('Grocery Runs');
+		nameInput.element().blur();
+
+		await expect.poll(() => vi.mocked(fetchFolders).mock.calls.length).toBe(2);
+	});
+
+	it('reloads when saving a folder name fails without an ApiError', async () => {
+		vi.mocked(updateFolder).mockRejectedValue(new TypeError('network down'));
 
 		render(FoldersPage);
 		await waitForLoad();
@@ -281,6 +319,18 @@ describe('Manage Folders +page.svelte', () => {
 		await waitForLoad();
 
 		triggerDrop({ itemId: 5, beforeItemId: 6, afterItemId: null });
+
+		await expect.poll(() => vi.mocked(reorderFolders).mock.calls.length).toBe(1);
+		expect(reorderFolders).toHaveBeenCalledWith([6, 5]);
+	});
+
+	it('reorders folders by dragging the second one above the first', async () => {
+		vi.mocked(reorderFolders).mockResolvedValue([household, groceries]);
+
+		render(FoldersPage);
+		await waitForLoad();
+
+		triggerDrop({ itemId: 6, beforeItemId: null, afterItemId: 5 });
 
 		await expect.poll(() => vi.mocked(reorderFolders).mock.calls.length).toBe(1);
 		expect(reorderFolders).toHaveBeenCalledWith([6, 5]);

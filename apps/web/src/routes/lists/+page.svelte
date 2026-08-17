@@ -237,29 +237,31 @@
 				</section>
 			{/each}
 
-			{#if folders.length > 0 || unfiledLists.length > 0}
-				<section>
-					{#if folders.length > 0}
-						<h2 class="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400">
-							Not in a folder
-						</h2>
+			<!-- Always rendered here: with no folders, unfiledLists === lists, which
+			     is non-empty whenever this {:else} branch itself is reached
+			     (the sibling empty-state check above already covers the only
+			     case where both would be empty). -->
+			<section>
+				{#if folders.length > 0}
+					<h2 class="mb-2 text-sm font-semibold text-gray-600 dark:text-gray-400">
+						Not in a folder
+					</h2>
+				{/if}
+				<ul
+					class="flex min-h-14 flex-col gap-2"
+					data-container-id="null"
+					use:sortableReorder={{ group: LISTS_GROUP, disabled: reordering, onDrop: handleDrop }}
+				>
+					{#each unfiledLists as list (list.id)}
+						{@render listCard(list)}
+					{/each}
+					{#if unfiledLists.length === 0}
+						<li class="flex h-14 items-center px-4 text-xs text-gray-400" data-reorder-ignore>
+							Drag a list here to remove it from its folder.
+						</li>
 					{/if}
-					<ul
-						class="flex min-h-14 flex-col gap-2"
-						data-container-id="null"
-						use:sortableReorder={{ group: LISTS_GROUP, disabled: reordering, onDrop: handleDrop }}
-					>
-						{#each unfiledLists as list (list.id)}
-							{@render listCard(list)}
-						{/each}
-						{#if unfiledLists.length === 0}
-							<li class="flex h-14 items-center px-4 text-xs text-gray-400" data-reorder-ignore>
-								Drag a list here to remove it from its folder.
-							</li>
-						{/if}
-					</ul>
-				</section>
-			{/if}
+				</ul>
+			</section>
 		</div>
 	{/if}
 </main>

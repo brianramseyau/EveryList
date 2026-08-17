@@ -101,7 +101,11 @@
 
 	// Name, icon, color, and folder all live in draft state and only reach the
 	// server together, via one Save — unlike archive/badge/passcode, which
-	// still apply immediately on click.
+	// still apply immediately on click. The `: false` fallback is only
+	// reachable while `list` is null, but this derived value is only ever
+	// read inside the `{:else if list}` branch below — same unreachable-
+	// fallback shape as `deleteConfirmMessage` further down this file.
+	/* v8 ignore next */
 	const hasChanges = $derived(
 		list
 			? draftName.trim() !== list.name ||
