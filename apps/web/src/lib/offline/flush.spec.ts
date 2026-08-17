@@ -186,7 +186,7 @@ describe('flushQueue', () => {
 		expect(mutation).toMatchObject({ status: 'failed', attempts: 8 });
 	});
 
-	it('on a 409, merges the server copy into the cache, notifies the conflict listener, and dequeues', async () => {
+	it('on a 409, merges the server copy into the cache, re-enqueues the still-differing offline edit against the new version, and notifies the conflict listener', async () => {
 		const db = getDb()!;
 		await db.items.put({
 			id: 5,
@@ -209,7 +209,7 @@ describe('flushQueue', () => {
 		});
 		vi.mocked(apiPatch).mockRejectedValue(
 			new ApiError(409, 'Conflict', {
-				data: { id: 5, name: 'Milk (2%)', version: 2 },
+				data: { id: 5, name: 'Milk', checked: false, version: 2 },
 				conflict: true
 			})
 		);
@@ -221,15 +221,74 @@ describe('flushQueue', () => {
 			op: 'update' as const,
 			targetId: 5,
 			expectedVersion: 1,
-			payload: { name: 'Milk' },
+			payload: { checked: true },
 			url: '/api/v1/lists/1/items/5'
 		};
 		await enqueueMutation(mutation);
 
 		await flushQueue();
 
+		// The winning edit (a newer version, e.g. a note change from another device) didn't touch
+		// `checked` — the offline check-off is reapplied over the fresh copy, not discarded by it.
 		const cached = await db.items.get(5);
-		expect(cached?.name).toBe('Milk (2%)');
+		expect(cached?.checked).toBe(true);
+		expect(cached?.version).toBe(2);
+		expect(cached?._dirty).toBe(true);
+		expect(listener).toHaveBeenCalledWith(expect.objectContaining({ targetId: 5 }));
+
+		const [requeued] = await pendingMutations();
+		expect(requeued).toMatchObject({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 2,
+			payload: { checked: true }
+		});
+	});
+
+	it('on a 409 where the winning edit already matches the offline change, adopts the server copy without re-queuing', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_dirty: true
+		});
+		vi.mocked(apiPatch).mockRejectedValue(
+			new ApiError(409, 'Conflict', {
+				data: { id: 5, name: 'Milk', checked: true, version: 2 },
+				conflict: true
+			})
+		);
+		const listener = vi.fn();
+		onConflict(listener);
+
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: { checked: true },
+			url: '/api/v1/lists/1/items/5'
+		});
+
+		await flushQueue();
+
+		const cached = await db.items.get(5);
+		expect(cached?.checked).toBe(true);
 		expect(cached?.version).toBe(2);
 		expect(cached?._dirty).toBe(false);
 		expect(listener).toHaveBeenCalledWith(expect.objectContaining({ targetId: 5 }));
