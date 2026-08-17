@@ -63,6 +63,18 @@
 		}, 1200);
 	}
 
+	// Sets the sticky category heading's offset imperatively (rather than a
+	// templated style attribute) so it tracks stickyHeaderHeight without
+	// re-running the whole element's attribute diff on every resize.
+	function stickyTop(node: HTMLElement, top: number) {
+		node.style.top = `${top}px`;
+		return {
+			update(newTop: number) {
+				node.style.top = `${newTop}px`;
+			}
+		};
+	}
+
 	// Checked items stay under their category header instead of moving to a
 	// separate section (PHASE9_PLAN.md #3) — this toggle controls whether
 	// they're visible at all, defaulting to shown. Persisted per list/device
@@ -494,7 +506,7 @@
 									class="sticky z-10 mb-2 flex items-center gap-2 border-b bg-paper pb-1 text-sm font-semibold {group.category
 										? ''
 										: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
-									style:top="{stickyHeaderHeight}px"
+									use:stickyTop={stickyHeaderHeight}
 									style:color={group.category ? list.color : undefined}
 									style:border-bottom-color={group.category ? list.color : undefined}
 								>
