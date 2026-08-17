@@ -186,13 +186,15 @@
 					Create Folder
 				</a>
 			</PopoutMenu>
-			<a
-				href={resolve('/lists/folders')}
-				aria-label="Manage folders"
-				class="flex h-11 w-11 items-center justify-center text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-			>
-				<Icon name="cog" class="h-6 w-6" />
-			</a>
+			{#if folders.length > 0}
+				<a
+					href={resolve('/lists/folders')}
+					aria-label="Manage folders"
+					class="flex h-11 w-11 items-center justify-center text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+				>
+					<Icon name="cog" class="h-6 w-6" />
+				</a>
+			{/if}
 		{/snippet}
 	</PageHeader>
 
