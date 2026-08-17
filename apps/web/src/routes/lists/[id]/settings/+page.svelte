@@ -23,6 +23,9 @@
 	let error = $state<string | null>(null);
 
 	let draftName = $state('');
+	let draftIcon = $state('formatListChecks');
+	let draftColor = $state('#3b82f6');
+	let draftFolderId = $state<number | null>(null);
 	let savingName = $state(false);
 	let confirmingDelete = $state(false);
 	let deleting = $state(false);
@@ -39,6 +42,9 @@
 		try {
 			[list, folders] = await Promise.all([fetchList(listId), fetchFolders()]);
 			draftName = list.name;
+			draftIcon = list.icon ?? 'formatListChecks';
+			draftColor = list.color;
+			draftFolderId = list.folderId;
 			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to load list settings.';
@@ -93,13 +99,30 @@
 		}
 	}
 
-	async function saveName(event: SubmitEvent, current: ListDto) {
+	// Name, icon, color, and folder all live in draft state and only reach the
+	// server together, via one Save — unlike archive/badge/passcode, which
+	// still apply immediately on click.
+	const hasChanges = $derived(
+		list
+			? draftName.trim() !== list.name ||
+					draftIcon !== (list.icon ?? 'formatListChecks') ||
+					draftColor !== list.color ||
+					draftFolderId !== list.folderId
+			: false
+	);
+
+	async function saveSettings(event: SubmitEvent) {
 		event.preventDefault();
 		const trimmed = draftName.trim();
-		if (!trimmed || trimmed === current.name) return;
+		if (!trimmed || !hasChanges) return;
 		savingName = true;
 		try {
-			await onupdate({ name: trimmed });
+			await onupdate({
+				name: trimmed,
+				icon: draftIcon,
+				color: draftColor,
+				folderId: draftFolderId
+			});
 		} finally {
 			savingName = false;
 		}
@@ -186,42 +209,46 @@
 			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 		{/if}
 
-		<form class="flex flex-col gap-2" onsubmit={(event) => saveName(event, list!)}>
+		<form class="flex flex-col gap-3" onsubmit={saveSettings}>
 			<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">List settings</span>
-			<Input bind:value={draftName} />
-			<div class="flex items-center gap-2">
-				<IconPicker
-					value={list.icon ?? 'formatListChecks'}
-					onselect={(icon) => onupdate({ icon })}
-				/>
-				<ColorPicker value={list.color} onselect={(color) => onupdate({ color })} />
+
+			<div class="flex flex-col gap-1">
+				<span class="text-xs text-gray-500 dark:text-gray-400">Name</span>
+				<Input bind:value={draftName} />
 			</div>
-			<Button
-				type="submit"
-				size="sm"
-				class="self-start"
-				disabled={savingName || !draftName.trim() || draftName.trim() === list.name}
-			>
-				{savingName ? 'Saving…' : 'Save name'}
+
+			<div class="flex gap-4">
+				<div class="flex flex-col gap-1">
+					<span class="text-xs text-gray-500 dark:text-gray-400">Icon</span>
+					<IconPicker value={draftIcon} onselect={(icon) => (draftIcon = icon)} />
+				</div>
+				<div class="flex flex-col gap-1">
+					<span class="text-xs text-gray-500 dark:text-gray-400">Color</span>
+					<ColorPicker value={draftColor} onselect={(color) => (draftColor = color)} />
+				</div>
+			</div>
+
+			{#if folders.length > 0}
+				<div class="flex flex-col gap-1">
+					<span class="text-xs text-gray-500 dark:text-gray-400">Folder</span>
+					<Select
+						size="sm"
+						items={folders.map((folder) => ({ value: folder.id, name: folder.name }))}
+						placeholder="No folder"
+						clearable
+						value={draftFolderId ?? ''}
+						onchange={(event) => {
+							const raw = (event.target as HTMLSelectElement).value;
+							draftFolderId = raw === '' ? null : Number(raw);
+						}}
+					/>
+				</div>
+			{/if}
+
+			<Button type="submit" class="w-full" disabled={savingName || !draftName.trim() || !hasChanges}>
+				{savingName ? 'Saving…' : 'Save changes'}
 			</Button>
 		</form>
-
-		{#if folders.length > 0}
-			<div class="flex flex-col gap-2">
-				<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">Folder</span>
-				<Select
-					size="sm"
-					items={folders.map((folder) => ({ value: folder.id, name: folder.name }))}
-					placeholder="No folder"
-					clearable
-					value={list.folderId ?? ''}
-					onchange={(event) => {
-						const raw = (event.target as HTMLSelectElement).value;
-						void onupdate({ folderId: raw === '' ? null : Number(raw) });
-					}}
-				/>
-			</div>
-		{/if}
 
 		<button
 			type="button"

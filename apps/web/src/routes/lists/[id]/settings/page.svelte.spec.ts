@@ -98,19 +98,25 @@ describe('List settings +page.svelte', () => {
 		await expect.element(page.getByRole('link', { name: 'Categories' })).not.toBeInTheDocument();
 	});
 
-	it('renames the list via the save button, but only when the name actually changed', async () => {
+	it('disables Save until something actually changes, then saves name/icon/color/folder together', async () => {
 		vi.mocked(updateList).mockResolvedValue({ ...list, name: 'Weekly Groceries' });
 
 		render(SettingsPage);
 		await expect.element(page.getByRole('textbox').first()).toHaveValue('Groceries');
 
-		const saveButton = page.getByRole('button', { name: 'Save name' });
+		const saveButton = page.getByRole('button', { name: 'Save changes' });
 		await expect.element(saveButton).toBeDisabled();
 
 		await page.getByRole('textbox').first().fill('Weekly Groceries');
+		await expect.element(saveButton).not.toBeDisabled();
 		await saveButton.click();
 
-		expect(updateList).toHaveBeenCalledWith(1, { name: 'Weekly Groceries' });
+		expect(updateList).toHaveBeenCalledWith(1, {
+			name: 'Weekly Groceries',
+			icon: 'basket',
+			color: '#3b82f6',
+			folderId: null
+		});
 	});
 
 	it('does not save when the name is only whitespace or unchanged', async () => {
@@ -129,8 +135,8 @@ describe('List settings +page.svelte', () => {
 		expect(updateList).not.toHaveBeenCalled();
 	});
 
-	it('changes the icon and color immediately on selection', async () => {
-		vi.mocked(updateList).mockResolvedValue({ ...list, icon: 'fruitCherries' });
+	it('stages icon and color changes locally until Save is clicked', async () => {
+		vi.mocked(updateList).mockResolvedValue({ ...list, icon: 'fruitCherries', color: '#ef4444' });
 
 		render(SettingsPage);
 		await expect.element(page.getByRole('button', { name: 'Basket' })).toBeInTheDocument();
@@ -138,11 +144,19 @@ describe('List settings +page.svelte', () => {
 		await page.getByRole('button', { name: 'Basket' }).click();
 		await page.getByPlaceholder('Search icons…').fill('cherries');
 		await page.getByRole('button', { name: 'Fruit Cherries', exact: true }).click();
-		expect(updateList).toHaveBeenCalledWith(1, { icon: 'fruitCherries' });
+		expect(updateList).not.toHaveBeenCalled();
 
 		await page.getByRole('button', { name: 'Color' }).click();
 		await page.getByRole('button', { name: '#ef4444' }).click();
-		expect(updateList).toHaveBeenCalledWith(1, { color: '#ef4444' });
+		expect(updateList).not.toHaveBeenCalled();
+
+		await page.getByRole('button', { name: 'Save changes' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, {
+			name: 'Groceries',
+			icon: 'fruitCherries',
+			color: '#ef4444',
+			folderId: null
+		});
 	});
 
 	it('hides the folder selector when the account has no folders', async () => {
@@ -152,7 +166,7 @@ describe('List settings +page.svelte', () => {
 		await expect.element(page.getByRole('combobox')).not.toBeInTheDocument();
 	});
 
-	it('moves the list to a folder via the settings selector', async () => {
+	it('stages a folder change locally until Save is clicked', async () => {
 		const folder = {
 			id: 5,
 			userId: 1,
@@ -170,11 +184,18 @@ describe('List settings +page.svelte', () => {
 		await expect.element(page.getByRole('combobox')).toBeInTheDocument();
 
 		await page.getByRole('combobox').selectOptions('5');
+		expect(updateList).not.toHaveBeenCalled();
 
-		expect(updateList).toHaveBeenCalledWith(1, { folderId: 5 });
+		await page.getByRole('button', { name: 'Save changes' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, {
+			name: 'Groceries',
+			icon: 'basket',
+			color: '#3b82f6',
+			folderId: 5
+		});
 	});
 
-	it('clears the folder via the settings selector', async () => {
+	it('stages clearing the folder locally until Save is clicked', async () => {
 		const folder = {
 			id: 5,
 			userId: 1,
@@ -193,8 +214,15 @@ describe('List settings +page.svelte', () => {
 		await expect.element(page.getByRole('combobox')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Close' }).click();
+		expect(updateList).not.toHaveBeenCalled();
 
-		expect(updateList).toHaveBeenCalledWith(1, { folderId: null });
+		await page.getByRole('button', { name: 'Save changes' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, {
+			name: 'Groceries',
+			icon: 'basket',
+			color: '#3b82f6',
+			folderId: null
+		});
 	});
 
 	it('archives the list, flipping the button label', async () => {
