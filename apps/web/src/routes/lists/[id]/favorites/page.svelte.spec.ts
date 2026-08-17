@@ -8,18 +8,16 @@ vi.mock('$app/state', () => ({ page: { params: { id: '5' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/favorites', () => ({
 	fetchFavorites: vi.fn(),
-	createFavorite: vi.fn(),
 	deleteFavorite: vi.fn(),
 	addFavoriteToList: vi.fn()
 }));
 vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn() }));
-vi.mock('$lib/api/items', () => ({ fetchItems: vi.fn() }));
+vi.mock('$lib/api/items', () => ({ fetchItems: vi.fn(), updateItem: vi.fn() }));
 vi.mock('$lib/api/stores', () => ({ fetchStores: vi.fn() }));
 
-const { fetchFavorites, createFavorite, deleteFavorite, addFavoriteToList } =
-	await import('$lib/api/favorites');
+const { fetchFavorites, deleteFavorite, addFavoriteToList } = await import('$lib/api/favorites');
 const { fetchList } = await import('$lib/api/lists');
-const { fetchItems } = await import('$lib/api/items');
+const { fetchItems, updateItem } = await import('$lib/api/items');
 const { fetchStores } = await import('$lib/api/stores');
 const { goto } = await import('$app/navigation');
 const FavoritesPage = (await import('./+page.svelte')).default;
@@ -62,6 +60,7 @@ describe('Favorites +page.svelte', () => {
 		vi.mocked(fetchList).mockResolvedValue(groceries);
 		vi.mocked(fetchItems).mockResolvedValue([]);
 		vi.mocked(fetchStores).mockResolvedValue([]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
@@ -117,7 +116,168 @@ describe('Favorites +page.svelte', () => {
 		await page.getByRole('button', { name: 'Remove Bananas from favorites' }).click();
 
 		expect(deleteFavorite).toHaveBeenCalledWith(5, 1);
-		await expect.element(page.getByText('No favorites yet — add one above.')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('No favorites yet — tap + to add one.'))
+			.toBeInTheDocument();
+	});
+
+	it('links to the new-favorite screen', async () => {
+		render(FavoritesPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		const link = page.getByRole('link', { name: 'New favorite' });
+		await expect.element(link).toBeInTheDocument();
+		expect(link.element().getAttribute('href')).toBe('/lists/5/favorites/new');
+	});
+
+	it('links to the edit screen for a favorite', async () => {
+		render(FavoritesPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		const link = page.getByRole('link', { name: 'Edit Bananas' });
+		await expect.element(link).toBeInTheDocument();
+		expect(link.element().getAttribute('href')).toBe('/lists/5/favorites/1');
+	});
+
+	it('adds a favorite to the list by tapping its row', async () => {
+		vi.mocked(addFavoriteToList).mockResolvedValue({
+			id: 50,
+			listId: 5,
+			name: 'Bananas',
+			quantity: '1 bunch',
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+
+		render(FavoritesPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Add Bananas to list' }).click();
+
+		expect(addFavoriteToList).toHaveBeenCalledWith(5, 1);
+	});
+
+	it('allows re-adding a favorite whose matching item is already checked off', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			{
+				id: 9,
+				listId: 5,
+				name: 'Bananas',
+				quantity: null,
+				notes: null,
+				categoryId: null,
+				storeId: null,
+				price: null,
+				checked: true,
+				checkedAt: '2026-08-01T00:00:00.000Z',
+				sortOrder: 0,
+				createdBy: 1,
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null,
+				deletedAt: null,
+				version: 1
+			}
+		]);
+
+		render(FavoritesPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await expect
+			.element(page.getByRole('button', { name: 'Add Bananas to list' }))
+			.not.toBeDisabled();
+		await expect.element(page.getByTitle('Already on this list')).not.toBeInTheDocument();
+	});
+
+	it('unchecks the matching checked item instead of creating a duplicate', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			{
+				id: 9,
+				listId: 5,
+				name: 'Bananas',
+				quantity: null,
+				notes: null,
+				categoryId: null,
+				storeId: null,
+				price: null,
+				checked: true,
+				checkedAt: '2026-08-01T00:00:00.000Z',
+				sortOrder: 0,
+				createdBy: 1,
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null,
+				deletedAt: null,
+				version: 1
+			},
+			{
+				id: 10,
+				listId: 5,
+				name: 'Bread',
+				quantity: null,
+				notes: null,
+				categoryId: null,
+				storeId: null,
+				price: null,
+				checked: false,
+				checkedAt: null,
+				sortOrder: 1,
+				createdBy: 1,
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null,
+				deletedAt: null,
+				version: 1
+			}
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(FavoritesPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Add Bananas to list' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(5, 9, { checked: false });
+		expect(addFavoriteToList).not.toHaveBeenCalled();
+		await expect.element(page.getByText('Added "Bananas" to Groceries.')).toBeInTheDocument();
+	});
+
+	it('shows a generic error message when unchecking a matching item fails without an ApiError', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			{
+				id: 9,
+				listId: 5,
+				name: 'Bananas',
+				quantity: null,
+				notes: null,
+				categoryId: null,
+				storeId: null,
+				price: null,
+				checked: true,
+				checkedAt: '2026-08-01T00:00:00.000Z',
+				sortOrder: 0,
+				createdBy: 1,
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null,
+				deletedAt: null,
+				version: 1
+			}
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new TypeError('network down'));
+
+		render(FavoritesPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Add Bananas to list' }).click();
+
+		await expect.element(page.getByText('Failed to add item to list.')).toBeInTheDocument();
 	});
 
 	it('leaves other favorites in place when one is removed', async () => {
@@ -132,74 +292,6 @@ describe('Favorites +page.svelte', () => {
 		expect(deleteFavorite).toHaveBeenCalledWith(5, 1);
 		await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
-	});
-
-	it('creates a new favorite from the form', async () => {
-		vi.mocked(createFavorite).mockResolvedValue({
-			id: 2,
-			userId: 1,
-			listId: 5,
-			name: 'Bread',
-			defaultCategoryId: null,
-			defaultQuantity: null,
-			storeId: null,
-			notes: null,
-			price: null,
-			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		});
-
-		render(FavoritesPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New favorite name').fill('Bread');
-		await page.getByPlaceholder('Notes (optional)').fill('Whole wheat');
-		await page.getByRole('button', { name: 'Add', exact: true }).click();
-
-		expect(createFavorite).toHaveBeenCalledWith(5, {
-			name: 'Bread',
-			storeId: null,
-			notes: 'Whole wheat',
-			price: null
-		});
-		await expect.element(page.getByText('Bread')).toBeInTheDocument();
-	});
-
-	it('shows a generic error message when creating a favorite fails without an ApiError', async () => {
-		vi.mocked(createFavorite).mockRejectedValue(new TypeError('network down'));
-
-		render(FavoritesPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New favorite name').fill('Bread');
-		await page.getByRole('button', { name: 'Add', exact: true }).click();
-
-		await expect.element(page.getByText('Failed to create favorite.')).toBeInTheDocument();
-	});
-
-	it('shows the ApiError message when creating a favorite fails', async () => {
-		vi.mocked(createFavorite).mockRejectedValue(new ApiError(422, 'Name already exists'));
-
-		render(FavoritesPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New favorite name').fill('Bread');
-		await page.getByRole('button', { name: 'Add', exact: true }).click();
-
-		await expect.element(page.getByText('Name already exists')).toBeInTheDocument();
-	});
-
-	it('does not submit when the price is not a valid number', async () => {
-		render(FavoritesPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New favorite name').fill('Bread');
-		await page.getByPlaceholder('Price (optional)').fill('not-a-number');
-		await page.getByRole('button', { name: 'Add', exact: true }).click();
-
-		await expect.poll(() => vi.mocked(createFavorite).mock.calls.length).toBe(0);
 	});
 
 	it('shows a store subtitle, colored by the store, for a favorite with a store', async () => {
@@ -251,95 +343,6 @@ describe('Favorites +page.svelte', () => {
 		await expect.element(page.getByTitle('Already on this list')).toBeInTheDocument();
 	});
 
-	it('lets you pick a store when creating a favorite', async () => {
-		vi.mocked(fetchStores).mockResolvedValue([
-			{
-				id: 7,
-				name: 'Corner Shop',
-				color: '#123456',
-				createdBy: 1,
-				createdAt: '2026-08-01T00:00:00.000Z',
-				updatedAt: null,
-				deletedAt: null,
-				version: 1
-			}
-		]);
-		vi.mocked(createFavorite).mockResolvedValue({
-			id: 2,
-			userId: 1,
-			listId: 5,
-			name: 'Bread',
-			defaultCategoryId: null,
-			defaultQuantity: null,
-			storeId: 7,
-			notes: null,
-			price: null,
-			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		});
-
-		render(FavoritesPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New favorite name').fill('Bread');
-		await page.getByLabelText('Store').selectOptions('7');
-		await page.getByRole('button', { name: 'Add', exact: true }).click();
-
-		expect(createFavorite).toHaveBeenCalledWith(5, {
-			name: 'Bread',
-			storeId: 7,
-			notes: null,
-			price: null
-		});
-	});
-
-	it('clears the store selection back to no store when creating a favorite', async () => {
-		vi.mocked(fetchStores).mockResolvedValue([
-			{
-				id: 7,
-				name: 'Corner Shop',
-				color: '#123456',
-				createdBy: 1,
-				createdAt: '2026-08-01T00:00:00.000Z',
-				updatedAt: null,
-				deletedAt: null,
-				version: 1
-			}
-		]);
-		vi.mocked(createFavorite).mockResolvedValue({
-			id: 2,
-			userId: 1,
-			listId: 5,
-			name: 'Bread',
-			defaultCategoryId: null,
-			defaultQuantity: null,
-			storeId: null,
-			notes: null,
-			price: null,
-			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		});
-
-		render(FavoritesPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New favorite name').fill('Bread');
-		await page.getByLabelText('Store').selectOptions('7');
-		await page.getByRole('button', { name: 'Close' }).last().click();
-		await page.getByRole('button', { name: 'Add', exact: true }).click();
-
-		expect(createFavorite).toHaveBeenCalledWith(5, {
-			name: 'Bread',
-			storeId: null,
-			notes: null,
-			price: null
-		});
-	});
-
 	it('does not render a store subtitle when the favorite store is not in the list stores', async () => {
 		vi.mocked(fetchStores).mockResolvedValue([]);
 		vi.mocked(fetchFavorites).mockResolvedValue([{ ...bananas, storeId: 99 }]);
@@ -348,23 +351,6 @@ describe('Favorites +page.svelte', () => {
 
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 		expect(document.body.textContent).not.toContain('Corner Shop');
-	});
-
-	it('does not submit when the favorite name is only whitespace', async () => {
-		// The Add button is already disabled in this state, but handleCreate
-		// carries its own guard (it's the target of the form's onsubmit, which
-		// a raw 'submit' event — not just the button click — can trigger).
-		render(FavoritesPage);
-		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
-
-		const input = page.getByPlaceholder('New favorite name');
-		await input.fill('   ');
-		input
-			.element()
-			.closest('form')
-			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-
-		await expect.poll(() => vi.mocked(createFavorite).mock.calls.length).toBe(0);
 	});
 
 	it('reloads and restores the favorite when removing it fails', async () => {
