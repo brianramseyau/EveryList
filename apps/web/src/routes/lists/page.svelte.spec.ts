@@ -593,7 +593,14 @@ describe('Lists +page.svelte', () => {
 
 	it('drags a list into a different folder, patching folderId before reordering', async () => {
 		setToken('test-token');
-		const folder = { id: 5, userId: 1, name: 'Groceries', color: '#3b82f6', sortOrder: 0, version: 1 };
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
 		const errands = {
 			id: 1,
 			name: 'Errands',
@@ -625,13 +632,22 @@ describe('Lists +page.svelte', () => {
 		)!;
 		expect(JSON.parse((patchCall[1] as RequestInit).body as string)).toEqual({ folderId: 5 });
 
-		const [, reorderInit] = fetchMock.mock.calls.find(([u]) => String(u).includes('/lists/reorder'))!;
+		const [, reorderInit] = fetchMock.mock.calls.find(([u]) =>
+			String(u).includes('/lists/reorder')
+		)!;
 		expect(JSON.parse((reorderInit as RequestInit).body as string)).toEqual({ order: [1] });
 	});
 
 	it('reloads when dragging a list into a different folder fails without an ApiError', async () => {
 		setToken('test-token');
-		const folder = { id: 5, userId: 1, name: 'Groceries', color: '#3b82f6', sortOrder: 0, version: 1 };
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
 		const list = {
 			id: 1,
 			name: 'Costco run',
@@ -659,7 +675,14 @@ describe('Lists +page.svelte', () => {
 
 	it('reloads when dragging a list into a different folder fails with an ApiError', async () => {
 		setToken('test-token');
-		const folder = { id: 5, userId: 1, name: 'Groceries', color: '#3b82f6', sortOrder: 0, version: 1 };
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
 		const list = {
 			id: 1,
 			name: 'Costco run',

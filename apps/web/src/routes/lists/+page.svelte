@@ -45,9 +45,7 @@
 		if (!dragged) return;
 
 		const folderChanged = dragged.folderId !== params.toContainerId;
-		const updatedDragged = folderChanged
-			? { ...dragged, folderId: params.toContainerId }
-			: dragged;
+		const updatedDragged = folderChanged ? { ...dragged, folderId: params.toContainerId } : dragged;
 
 		const withoutDragged = lists.filter((list) => list.id !== dragged.id);
 		const beforeList = withoutDragged.find((list) => list.id === params.beforeItemId);

@@ -245,7 +245,11 @@
 				</div>
 			{/if}
 
-			<Button type="submit" class="w-full" disabled={savingName || !draftName.trim() || !hasChanges}>
+			<Button
+				type="submit"
+				class="w-full"
+				disabled={savingName || !draftName.trim() || !hasChanges}
+			>
 				{savingName ? 'Saving…' : 'Save changes'}
 			</Button>
 		</form>

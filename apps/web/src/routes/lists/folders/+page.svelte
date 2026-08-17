@@ -10,7 +10,13 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { getToken } from '$lib/api/token';
-	import { createFolder, deleteFolder, fetchFolders, reorderFolders, updateFolder } from '$lib/api/folders';
+	import {
+		createFolder,
+		deleteFolder,
+		fetchFolders,
+		reorderFolders,
+		updateFolder
+	} from '$lib/api/folders';
 	import { ApiError } from '$lib/api/client';
 
 	const DEFAULT_COLOR = '#3b82f6';
@@ -147,7 +153,9 @@
 	{#if loading}
 		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else}
-		<p class="text-sm text-gray-600 dark:text-gray-300">Rename, recolor, reorder, or delete folders.</p>
+		<p class="text-sm text-gray-600 dark:text-gray-300">
+			Rename, recolor, reorder, or delete folders.
+		</p>
 
 		<form class="flex gap-2" onsubmit={handleCreate}>
 			<div class="flex-1">
