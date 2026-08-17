@@ -2,16 +2,32 @@ import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { setToken, clearToken } from '$lib/api/token';
-import { HOLD_MS } from '$lib/actions/press-hold-reorder';
+import type { SortableReorderParams } from '$lib/actions/sortable-reorder';
+
+// See the item-list page's spec for why this is mocked: SortableJS's own
+// drag mechanics aren't something a component test can reliably drive, so
+// this test double lets tests invoke each section's onDrop handler directly.
+vi.mock('$lib/actions/sortable-reorder', () => ({
+	sortableReorder: (
+		node: HTMLElement & { __onDrop?: SortableReorderParams['onDrop'] },
+		params: SortableReorderParams
+	) => {
+		node.__onDrop = params.onDrop;
+		return {
+			update(next: SortableReorderParams) {
+				node.__onDrop = next.onDrop;
+			},
+			destroy() {
+				delete node.__onDrop;
+			}
+		};
+	}
+}));
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 const { goto } = await import('$app/navigation');
 const ListsPage = (await import('./+page.svelte')).default;
-
-function delay(ms: number) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function jsonResponse(data: unknown, init: { ok?: boolean; status?: number } = {}) {
 	return { ok: true, status: 200, ...init, json: () => Promise.resolve({ data }) };
@@ -530,10 +546,6 @@ describe('Lists +page.svelte', () => {
 			.toBe(3);
 	});
 
-	function rows() {
-		return page.getByRole('listitem');
-	}
-
 	const first = {
 		id: 1,
 		name: 'Groceries',
@@ -553,32 +565,18 @@ describe('Lists +page.svelte', () => {
 		itemCount: 0
 	};
 
-	async function dragFirstBelowSecond() {
-		const items = rows();
-		const firstEl = items.first().element();
-		const secondEl = items.nth(1).element();
-		const secondRect = secondEl.getBoundingClientRect();
-
-		firstEl.dispatchEvent(
-			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-		await delay(HOLD_MS + 50);
-		firstEl.dispatchEvent(
-			new PointerEvent('pointermove', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: secondRect.top + secondRect.height + 1
-			})
-		);
-		firstEl.dispatchEvent(
-			new PointerEvent('pointerup', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: secondRect.top + secondRect.height + 1
-			})
-		);
+	// Invokes the onDrop handler SortableJS would have called on a real drop
+	// (see the mock above). Each section's `<ul>` closes over its own section
+	// list, so the target `<ul>` is read off an existing row in that section
+	// rather than assumed to be the only one on the page.
+	function triggerDrop(
+		anchorText: string,
+		params: { itemId: number; beforeItemId: number | null; afterItemId: number | null }
+	) {
+		const ul = page.getByText(anchorText).element().closest('ul') as HTMLElement & {
+			__onDrop?: (p: typeof params) => void;
+		};
+		ul.__onDrop?.(params);
 	}
 
 	it('reorders lists by dragging the first one below the second', async () => {
@@ -591,7 +589,9 @@ describe('Lists +page.svelte', () => {
 		render(ListsPage);
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
-		await dragFirstBelowSecond();
+		// Starting order is [Groceries(1), Hardware(2)]; drag Groceries below
+		// Hardware, landing at the end.
+		triggerDrop('Groceries', { itemId: 1, beforeItemId: 2, afterItemId: null });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
@@ -621,33 +621,10 @@ describe('Lists +page.svelte', () => {
 		render(ListsPage);
 		await expect.element(page.getByText('Camping')).toBeInTheDocument();
 
-		// Folder groups render before the unfiled section, so the unfiled rows
-		// are the 2nd and 3rd `listitem`s, not the 1st.
-		const items = rows();
-		const firstEl = items.nth(1).element();
-		const secondEl = items.nth(2).element();
-		const secondRect = secondEl.getBoundingClientRect();
-
-		firstEl.dispatchEvent(
-			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-		await delay(HOLD_MS + 50);
-		firstEl.dispatchEvent(
-			new PointerEvent('pointermove', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: secondRect.top + secondRect.height + 1
-			})
-		);
-		firstEl.dispatchEvent(
-			new PointerEvent('pointerup', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: secondRect.top + secondRect.height + 1
-			})
-		);
+		// Drag Groceries below Hardware within the unfiled section only —
+		// grabbing the `<ul>` via one of its own rows keeps this targeting the
+		// unfiled section's closure, not the folder section's.
+		triggerDrop('Groceries', { itemId: 1, beforeItemId: 2, afterItemId: null });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
@@ -655,6 +632,45 @@ describe('Lists +page.svelte', () => {
 		const [, init] = fetchMock.mock.calls.find(([u]) => String(u).includes('/lists/reorder'))!;
 		// The foldered list (id 3) keeps its original slot; only the unfiled pair swaps.
 		expect(JSON.parse((init as RequestInit).body as string)).toEqual({ order: [3, 2, 1] });
+	});
+
+	it('reorders lists by dragging the second one above the first', async () => {
+		setToken('test-token');
+		const fetchMock = stubFetchByUrl({
+			lists: [first, second],
+			reorderLists: [second, first]
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		triggerDrop('Groceries', { itemId: 2, beforeItemId: null, afterItemId: 1 });
+
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
+			.toBe(1);
+		const [, init] = fetchMock.mock.calls.find(([u]) => String(u).includes('/lists/reorder'))!;
+		expect(JSON.parse((init as RequestInit).body as string)).toEqual({ order: [2, 1] });
+	});
+
+	it('keeps a list in its original slot when the drop has no neighbors at all', async () => {
+		setToken('test-token');
+		const fetchMock = stubFetchByUrl({
+			lists: [first, second],
+			reorderLists: [first, second]
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		// No before/after neighbor — insertAt falls back to the end.
+		triggerDrop('Groceries', { itemId: 1, beforeItemId: null, afterItemId: null });
+
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
+			.toBe(1);
+		const [, init] = fetchMock.mock.calls.find(([u]) => String(u).includes('/lists/reorder'))!;
+		expect(JSON.parse((init as RequestInit).body as string)).toEqual({ order: [2, 1] });
 	});
 
 	it('reorders lists within a folder section by dragging the first one below the second', async () => {
@@ -687,31 +703,7 @@ describe('Lists +page.svelte', () => {
 		render(ListsPage);
 		await expect.element(page.getByText('Tent')).toBeInTheDocument();
 
-		const items = rows();
-		const firstEl = items.first().element();
-		const secondEl = items.nth(1).element();
-		const secondRect = secondEl.getBoundingClientRect();
-
-		firstEl.dispatchEvent(
-			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-		await delay(HOLD_MS + 50);
-		firstEl.dispatchEvent(
-			new PointerEvent('pointermove', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: secondRect.top + secondRect.height + 1
-			})
-		);
-		firstEl.dispatchEvent(
-			new PointerEvent('pointerup', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: secondRect.top + secondRect.height + 1
-			})
-		);
+		triggerDrop('Tent', { itemId: 3, beforeItemId: 4, afterItemId: null });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
@@ -730,7 +722,7 @@ describe('Lists +page.svelte', () => {
 		render(ListsPage);
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
-		await dragFirstBelowSecond();
+		triggerDrop('Groceries', { itemId: 1, beforeItemId: 2, afterItemId: null });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists')).length)
@@ -747,7 +739,7 @@ describe('Lists +page.svelte', () => {
 		render(ListsPage);
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
-		await dragFirstBelowSecond();
+		triggerDrop('Groceries', { itemId: 1, beforeItemId: 2, afterItemId: null });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists')).length)
