@@ -12,12 +12,21 @@ const MAX_DELAY_MS = 60_000;
 const MAX_ATTEMPTS = 8;
 
 export type ConflictListener = (mutation: QueuedMutation) => void;
-let conflictListener: ConflictListener | null = null;
+const conflictListeners = new Set<ConflictListener>();
 
-/** The SyncStatusBanner subscribes here to toast "some changes were reconciled" — see
- * PHASE5_PLAN.md §4's silent-merge-and-toast conflict UX. */
-export function onConflict(listener: ConflictListener | null): void {
-	conflictListener = listener;
+/** Both the SyncStatusBanner (toasts "some changes were reconciled" — see PHASE5_PLAN.md §4's
+ * silent-merge-and-toast conflict UX) and the currently-mounted list page (refreshes its stale
+ * optimistic view once the server's merge lands) subscribe here, so this supports more than one
+ * listener at a time. Returns an unsubscribe function — call it on teardown instead of passing
+ * `null`. Passing `null` clears every subscriber; that's a test-only global reset, not meant for
+ * component teardown (it would also drop unrelated listeners still mounted). */
+export function onConflict(listener: ConflictListener | null): () => void {
+	if (listener === null) {
+		conflictListeners.clear();
+		return () => {};
+	}
+	conflictListeners.add(listener);
+	return () => conflictListeners.delete(listener);
 }
 
 async function replay(mutation: QueuedMutation): Promise<void> {
@@ -104,43 +113,61 @@ async function reconcileConflict(mutation: QueuedMutation, err: ApiError): Promi
 			}
 		}
 	}
-	conflictListener?.(mutation);
+	conflictListeners.forEach((listener) => listener(mutation));
 }
+
+let flushing = false;
 
 /**
  * Drains the `pending` queue oldest-first, sequentially — preserves each row's
  * `expectedVersion` ordering (PHASE5_PLAN.md §4). Stops draining (leaving the rest queued) on
  * the first network error, since later rows would fail the same way; a real server rejection or
  * a 409 doesn't block the rest of the queue.
+ *
+ * Guarded against overlapping with itself: this is reachable from several independent triggers
+ * (the `online` listener, `startFlushLoop`'s own initial call, a backoff retry timer, and the
+ * SyncStatusBanner's "Retry now" button), and mobile connections routinely fire more than one of
+ * those in quick succession while reconnecting. Two overlapping drains would both read the same
+ * still-pending mutation and replay it twice — the second copy then 409s against the first's own
+ * just-applied version bump, producing a spurious "reconciled with a newer edit" toast for an
+ * edit nothing actually conflicted with. A later call while one is already in flight simply
+ * no-ops; the caller's own pending-count check (see `attemptFlush`) notices the queue didn't
+ * drain and retries.
  */
 export async function flushQueue(): Promise<void> {
-	/* v8 ignore next */
-	const db = getDb();
-	if (!db) return;
+	if (flushing) return;
+	flushing = true;
+	try {
+		/* v8 ignore next */
+		const db = getDb();
+		if (!db) return;
 
-	for (const mutation of await pendingMutations()) {
-		// Every row read back from Dexie's `++id` auto-increment table has a real id.
-		const id = mutation.id!;
-		try {
-			await replay(mutation);
-			await dequeueMutation(id);
-		} catch (err) {
-			if (!(err instanceof ApiError)) {
-				// Network error — stop here, the rest will retry on the next flush attempt.
-				return;
-			}
-			if (err.status === 409) {
-				await reconcileConflict(mutation, err);
+		for (const mutation of await pendingMutations()) {
+			// Every row read back from Dexie's `++id` auto-increment table has a real id.
+			const id = mutation.id!;
+			try {
+				await replay(mutation);
 				await dequeueMutation(id);
-				continue;
-			}
-			const attempts = mutation.attempts + 1;
-			if (attempts >= MAX_ATTEMPTS) {
-				await updateMutation(id, { status: 'failed', attempts, lastError: err.message });
-			} else {
-				await updateMutation(id, { attempts, lastError: err.message });
+			} catch (err) {
+				if (!(err instanceof ApiError)) {
+					// Network error — stop here, the rest will retry on the next flush attempt.
+					return;
+				}
+				if (err.status === 409) {
+					await reconcileConflict(mutation, err);
+					await dequeueMutation(id);
+					continue;
+				}
+				const attempts = mutation.attempts + 1;
+				if (attempts >= MAX_ATTEMPTS) {
+					await updateMutation(id, { status: 'failed', attempts, lastError: err.message });
+				} else {
+					await updateMutation(id, { attempts, lastError: err.message });
+				}
 			}
 		}
+	} finally {
+		flushing = false;
 	}
 }
 
@@ -227,4 +254,5 @@ export function resetFlushLoopForTesting(): void {
 	scheduled = null;
 	backoffAttempt = 0;
 	started = false;
+	flushing = false;
 }

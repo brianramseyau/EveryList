@@ -13,6 +13,7 @@
 
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 	let conflictTimeout: ReturnType<typeof setTimeout> | null = null;
+	let unsubscribeConflict: (() => void) | null = null;
 
 	async function refresh() {
 		counts = await queueCounts();
@@ -35,7 +36,7 @@
 	onMount(() => {
 		void refresh();
 		pollInterval = setInterval(() => void refresh(), POLL_INTERVAL_MS);
-		onConflict(() => {
+		unsubscribeConflict = onConflict(() => {
 			conflictMessage = 'Some changes were reconciled with a newer edit.';
 			if (conflictTimeout) clearTimeout(conflictTimeout);
 			conflictTimeout = setTimeout(() => {
@@ -48,7 +49,7 @@
 		// pollInterval is always set by onMount before onDestroy can run.
 		clearInterval(pollInterval!);
 		if (conflictTimeout) clearTimeout(conflictTimeout);
-		onConflict(null);
+		unsubscribeConflict?.();
 	});
 
 	const total = $derived(counts.pending + counts.failed + counts.conflict);

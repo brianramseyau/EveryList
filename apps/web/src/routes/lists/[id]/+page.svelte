@@ -14,6 +14,7 @@
 	import { isRowDirty } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
+	import { onConflict } from '$lib/offline/flush';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import { isListUnlocked } from '$lib/passcode';
 	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
@@ -83,6 +84,7 @@
 
 	let syncToastVisible = $state(false);
 	let unsubscribeRealtime: (() => void) | null = null;
+	let unsubscribeConflict: (() => void) | null = null;
 
 	// Coarse (touch) pointers get the swipe-to-delete gesture; fine pointers
 	// (mouse/trackpad) get a static "×" fallback instead (PHASE9_PLAN.md #9)
@@ -197,10 +199,18 @@
 				if (!dirty) syncToastVisible = true;
 			});
 		});
+		// The offline flush loop's own conflict reconciliation (offline/flush.ts) can leave this
+		// page's in-memory `items`/etc. stale relative to the server's merged copy — there's no live
+		// broadcast to catch it, since it happened while this client was offline. Same toast/refresh
+		// flow as a realtime event, not suppressed by `_dirty` since the flush already cleared it.
+		unsubscribeConflict = onConflict(() => {
+			syncToastVisible = true;
+		});
 	});
 
 	onDestroy(() => {
 		unsubscribeRealtime?.();
+		unsubscribeConflict?.();
 		if (highlightTimeout) clearTimeout(highlightTimeout);
 	});
 

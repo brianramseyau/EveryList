@@ -5,6 +5,7 @@ import type { ItemDto, SyncEventDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 import type { SortableReorderParams } from '$lib/actions/sortable-reorder';
+import type { ConflictListener } from '$lib/offline/flush';
 
 // SortableJS drives real mouse/touch gestures against real layout, neither of
 // which a component test can reliably reproduce — its own behavior (does it
@@ -50,6 +51,7 @@ vi.mock('$lib/api/selected-store', () => ({
 	setSelectedStore: vi.fn()
 }));
 vi.mock('$lib/realtime', () => ({ subscribeToList: vi.fn(() => vi.fn()) }));
+vi.mock('$lib/offline/flush', () => ({ onConflict: vi.fn(() => vi.fn()) }));
 vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 
 const { fetchList } = await import('$lib/api/lists');
@@ -62,6 +64,7 @@ const { getSelectedStore } = await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
 const { refreshBadgeCount } = await import('$lib/pwa/badge');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
+const { onConflict } = await import('$lib/offline/flush');
 const { goto } = await import('$app/navigation');
 const ListDetailPage = (await import('./+page.svelte')).default;
 
@@ -1209,6 +1212,22 @@ describe('List detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'Refresh' }).click();
 		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
 		expect(fetchList).toHaveBeenCalledTimes(2);
+	});
+
+	it('shows the sync toast when the offline flush loop reconciles a conflict', async () => {
+		let handler: ConflictListener = () => {};
+		vi.mocked(onConflict).mockImplementation((listener) => {
+			handler = listener ?? (() => {});
+			return vi.fn();
+		});
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		handler({} as Parameters<ConflictListener>[0]);
+		await expect.element(page.getByText('This list was updated')).toBeInTheDocument();
 	});
 
 	it('suppresses the sync toast for a row with an unacked local edit', async () => {
