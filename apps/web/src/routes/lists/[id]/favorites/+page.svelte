@@ -3,15 +3,9 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Input, Label, Select, Textarea } from 'flowbite-svelte';
 	import type { FavoriteItemDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import {
-		addFavoriteToList,
-		createFavorite,
-		deleteFavorite,
-		fetchFavorites
-	} from '$lib/api/favorites';
+	import { addFavoriteToList, deleteFavorite, fetchFavorites } from '$lib/api/favorites';
 	import { fetchList } from '$lib/api/lists';
 	import { fetchItems } from '$lib/api/items';
 	import { fetchStores } from '$lib/api/stores';
@@ -27,12 +21,6 @@
 	let stores = $state<StoreDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-
-	let newFavoriteName = $state('');
-	let newFavoriteStoreId = $state<number | null>(null);
-	let newFavoriteNotes = $state('');
-	let newFavoritePrice = $state('');
-	let creating = $state(false);
 
 	let addingToList = $state<number | null>(null);
 	let addedMessage = $state<string | null>(null);
@@ -63,33 +51,6 @@
 		}
 		void loadAll();
 	});
-
-	async function handleCreate(event: SubmitEvent) {
-		event.preventDefault();
-		if (!newFavoriteName.trim()) return;
-		const trimmedPrice = newFavoritePrice.trim();
-		const price = trimmedPrice === '' ? null : Math.round(Number(trimmedPrice) * 100);
-		if (price !== null && !Number.isFinite(price)) return;
-
-		creating = true;
-		try {
-			const favorite = await createFavorite(listId, {
-				name: newFavoriteName.trim(),
-				storeId: newFavoriteStoreId,
-				notes: newFavoriteNotes.trim() || null,
-				price
-			});
-			favorites = [...favorites, favorite];
-			newFavoriteName = '';
-			newFavoriteStoreId = null;
-			newFavoriteNotes = '';
-			newFavoritePrice = '';
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to create favorite.';
-		} finally {
-			creating = false;
-		}
-	}
 
 	async function removeFavorite(favorite: FavoriteItemDto) {
 		favorites = favorites.filter((current) => current.id !== favorite.id);
@@ -129,37 +90,20 @@
 		title={list ? `${list.name} — Favorites` : undefined}
 		backHref={resolve('/lists/[id]', { id: String(listId) })}
 		backLabel="Back to list"
-	/>
+	>
+		{#snippet actions()}
+			<a
+				href={resolve('/lists/[id]/favorites/new', { id: String(listId) })}
+				aria-label="New favorite"
+				class="flex h-9 w-9 shrink-0 items-center justify-center text-primary-700 dark:text-primary-400"
+			>
+				<Icon name="plus" class="h-6 w-6" />
+			</a>
+		{/snippet}
+	</PageHeader>
 	<p class="text-sm text-gray-600 dark:text-gray-300">
 		Items you buy often on this list — add one back in a tap.
 	</p>
-
-	<form class="flex flex-col gap-2" onsubmit={handleCreate}>
-		<div class="flex gap-2">
-			<div class="flex-1">
-				<Input placeholder="New favorite name" bind:value={newFavoriteName} />
-			</div>
-			<Button type="submit" disabled={creating || !newFavoriteName.trim()}>Add</Button>
-		</div>
-		{#if stores.length > 0}
-			<div class="flex flex-col gap-1">
-				<Label for="favorite-store">Store</Label>
-				<Select
-					id="favorite-store"
-					items={stores.map((store) => ({ value: store.id, name: store.name }))}
-					placeholder="No store"
-					clearable
-					value={newFavoriteStoreId ?? ''}
-					onchange={(event) => {
-						const raw = (event.target as HTMLSelectElement).value;
-						newFavoriteStoreId = raw === '' ? null : Number(raw);
-					}}
-				/>
-			</div>
-		{/if}
-		<Input inputmode="decimal" placeholder="Price (optional)" bind:value={newFavoritePrice} />
-		<Textarea placeholder="Notes (optional)" rows={2} bind:value={newFavoriteNotes} />
-	</form>
 
 	{#if error}
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -171,7 +115,7 @@
 	{#if loading}
 		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if favorites.length === 0}
-		<p class="text-gray-600 dark:text-gray-400">No favorites yet — add one above.</p>
+		<p class="text-gray-600 dark:text-gray-400">No favorites yet — tap + to add one.</p>
 	{:else}
 		<ul class="flex flex-col gap-2">
 			{#each favorites as favorite (favorite.id)}
