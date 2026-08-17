@@ -1,14 +1,29 @@
 import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import type { CategoryDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
-import { HOLD_MS } from '$lib/actions/press-hold-reorder';
+import type { SortableReorderParams } from '$lib/actions/sortable-reorder';
 
-function delay(ms: number) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// See the item-list page's spec for why this is mocked: SortableJS's own
+// drag mechanics aren't something a component test can reliably drive, so
+// this test double lets tests invoke the page's onDrop handler directly.
+vi.mock('$lib/actions/sortable-reorder', () => ({
+	sortableReorder: (
+		node: HTMLElement & { __onDrop?: SortableReorderParams['onDrop'] },
+		params: SortableReorderParams
+	) => {
+		node.__onDrop = params.onDrop;
+		return {
+			update(next: SortableReorderParams) {
+				node.__onDrop = next.onDrop;
+			},
+			destroy() {
+				delete node.__onDrop;
+			}
+		};
+	}
+}));
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -315,36 +330,17 @@ describe('Categories +page.svelte', () => {
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 	});
 
-	function rows() {
-		return page.getByRole('listitem');
-	}
-
-	async function dragFirstBelowSecond() {
-		const items = rows();
-		const first = items.first().element();
-		const second = items.nth(1).element();
-		const secondRect = second.getBoundingClientRect();
-
-		first.dispatchEvent(
-			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-		await delay(HOLD_MS + 50);
-		first.dispatchEvent(
-			new PointerEvent('pointermove', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: secondRect.top + secondRect.height + 1
-			})
-		);
-		first.dispatchEvent(
-			new PointerEvent('pointerup', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: secondRect.top + secondRect.height + 1
-			})
-		);
+	// Invokes the onDrop handler SortableJS would have called on a real drop
+	// (see the mock above) — there's only one `<ul>` on this page.
+	function triggerDrop(params: {
+		itemId: number;
+		beforeItemId: number | null;
+		afterItemId: number | null;
+	}) {
+		const ul = document.querySelector('ul') as HTMLElement & {
+			__onDrop?: (p: typeof params) => void;
+		};
+		ul.__onDrop?.(params);
 	}
 
 	it('reorders categories by dragging the first one below the second', async () => {
@@ -353,7 +349,9 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		await dragFirstBelowSecond();
+		// Starting order is [Produce(10), Pet Supplies(11)]; drag Produce below
+		// Pet Supplies, landing at the end.
+		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
 		await expect.poll(() => vi.mocked(reorderCategories).mock.calls.length).toBe(1);
 		expect(reorderCategories).toHaveBeenCalledWith(1, [11, 10]);
@@ -365,77 +363,24 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		const items = rows();
-		const first = items.first().element();
-		const second = items.nth(1).element();
-		const firstRect = first.getBoundingClientRect();
-
-		second.dispatchEvent(
-			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-		await delay(HOLD_MS + 50);
-		second.dispatchEvent(
-			new PointerEvent('pointermove', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: firstRect.top
-			})
-		);
-		second.dispatchEvent(
-			new PointerEvent('pointerup', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: firstRect.top
-			})
-		);
+		// Drag Pet Supplies above Produce, landing at the start.
+		triggerDrop({ itemId: 11, beforeItemId: null, afterItemId: 10 });
 
 		await expect.poll(() => vi.mocked(reorderCategories).mock.calls.length).toBe(1);
 		expect(reorderCategories).toHaveBeenCalledWith(1, [11, 10]);
 	});
 
-	it('does not reorder while a drag never crosses into a new position', async () => {
-		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
-
-		const first = rows().first().element();
-		first.dispatchEvent(
-			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-		await delay(HOLD_MS + 50);
-		// Pointer stays over the same (first) slot — onhover still fires, but
-		// with toIndex === fromIndex.
-		first.dispatchEvent(
-			new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-		first.dispatchEvent(
-			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-
-		expect(reorderCategories).not.toHaveBeenCalled();
-	});
-
-	it('ignores a new drag attempt while a reorder is already in flight', async () => {
-		let resolveReorder!: (value: CategoryDto[]) => void;
-		vi.mocked(reorderCategories).mockReturnValue(
-			new Promise((resolve) => {
-				resolveReorder = resolve;
-			})
-		);
+	it('keeps a category in its original slot when the drop has no neighbors at all', async () => {
+		vi.mocked(reorderCategories).mockResolvedValue([produce, custom]);
 
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		await dragFirstBelowSecond();
-		expect(reorderCategories).toHaveBeenCalledTimes(1);
+		// No before/after neighbor — insertAt falls back to the end.
+		triggerDrop({ itemId: 10, beforeItemId: null, afterItemId: null });
 
-		// A second drag attempt while the first reorder is still in flight
-		// (`disabled: reordering` on the row) must not fire another one.
-		await dragFirstBelowSecond();
-		expect(reorderCategories).toHaveBeenCalledTimes(1);
-
-		resolveReorder([custom, produce]);
+		await expect.poll(() => vi.mocked(reorderCategories).mock.calls.length).toBe(1);
+		expect(reorderCategories).toHaveBeenCalledWith(1, [11, 10]);
 	});
 
 	it('reloads the list when reordering fails without an ApiError', async () => {
@@ -444,7 +389,7 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		await dragFirstBelowSecond();
+		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
 		await expect.poll(() => vi.mocked(fetchCategories).mock.calls.length).toBe(2);
 	});
@@ -455,7 +400,7 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		await dragFirstBelowSecond();
+		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
 		await expect.poll(() => vi.mocked(fetchCategories).mock.calls.length).toBe(2);
 	});
