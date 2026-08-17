@@ -139,6 +139,21 @@ html.dark {
 	background-color: #1b1d1f;
 }
 
+/* App-wide pinch-zoom baseline for Blink (Android Chrome etc.): Blink derives
+   the page's pinch-zoom behavior from the touch-action of whatever's under
+   each touch point, so without a restrictive default here, any area of the
+   app that doesn't happen to have its own touch-action styling (which used
+   to be just two elements on the list-detail page — item rows and their
+   sticky headings) stays pinch-zoomable. `pan-x pan-y` permits ordinary
+   scrolling/panning while withholding the pinch-zoom gesture; more specific
+   values set closer to the touch point (e.g. `manipulation` on tappable
+   rows) still apply as normal. This has no effect on WebKit/iOS Safari,
+   whose viewport pinch-zoom is a separate native gesture that touch-action
+   never reaches — see $lib/pinch-zoom.ts for that handling. */
+html {
+	touch-action: pan-x pan-y;
+}
+
 /* Page-transition slide (PHASE9_PLAN.md #11) — direction is set on <html>
    by +layout.svelte's onNavigate hook just before startViewTransition()
    runs. Kept short ("snappy, not drawn out") and, like the checkmark
