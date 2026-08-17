@@ -6,7 +6,7 @@
 	import type { FolderDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchLists, updateList, reorderLists } from '$lib/api/lists';
-	import { deleteFolder, fetchFolders } from '$lib/api/folders';
+	import { fetchFolders } from '$lib/api/folders';
 	import { ApiError } from '$lib/api/client';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -106,17 +106,6 @@
 		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		void loadAll();
 	});
-
-	async function handleDeleteFolder(folder: FolderDto) {
-		folders = folders.filter((current) => current.id !== folder.id);
-		lists = lists.map((list) => (list.folderId === folder.id ? { ...list, folderId: null } : list));
-		try {
-			await deleteFolder(folder.id);
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to delete folder.';
-			void loadAll();
-		}
-	}
 </script>
 
 {#snippet listCard(list: ListDto)}
@@ -199,6 +188,13 @@
 					Create Folder
 				</a>
 			</PopoutMenu>
+			<a
+				href={resolve('/lists/folders')}
+				aria-label="Manage folders"
+				class="flex h-11 w-11 items-center justify-center text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+			>
+				<Icon name="cog" class="h-6 w-6" />
+			</a>
 		{/snippet}
 	</PageHeader>
 
@@ -223,13 +219,6 @@
 							aria-hidden="true"
 						></span>
 						<span>{group.folder.name}</span>
-						<button
-							type="button"
-							class="ml-auto text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-							onclick={() => handleDeleteFolder(group.folder)}
-						>
-							Delete folder
-						</button>
 					</h2>
 					<ul
 						class="flex min-h-14 flex-col gap-2 {group.lists.length === 0

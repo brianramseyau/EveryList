@@ -40,7 +40,6 @@ function jsonResponse(data: unknown, init: { ok?: boolean; status?: number } = {
 function stubFetchByUrl(routes: {
 	lists?: unknown[];
 	folders?: unknown[];
-	deleteFolderError?: { status: number; message?: string } | Error;
 	updateList?: unknown;
 	updateListError?: { status: number; message?: string } | Error;
 	reorderLists?: unknown[];
@@ -55,13 +54,6 @@ function stubFetchByUrl(routes: {
 	}
 
 	const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-		if (url.includes('/folders/')) {
-			// DELETE /folders/:id
-			if (routes.deleteFolderError instanceof Error)
-				return Promise.reject(routes.deleteFolderError);
-			if (routes.deleteFolderError) return errorResponse(routes.deleteFolderError);
-			return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(undefined) });
-		}
 		if (url.includes('/folders')) return Promise.resolve(jsonResponse(routes.folders ?? []));
 		if (url.includes('/lists/reorder')) {
 			if (routes.reorderListsError instanceof Error)
@@ -376,7 +368,9 @@ describe('Lists +page.svelte', () => {
 		await expect
 			.poll(() =>
 				[...document.querySelectorAll('h2')]
-					.filter((h) => h.querySelector('button'))
+					// Folder headers have a color-dot span plus a name span; "Not in
+					// a folder" is plain text with no spans at all.
+					.filter((h) => h.querySelectorAll('span').length >= 2)
 					.map((h) => h.querySelectorAll('span')[1]?.textContent)
 			)
 			.toEqual(['Groceries', 'Household']);
@@ -387,96 +381,6 @@ describe('Lists +page.svelte', () => {
 		await expect
 			.element(page.getByText('Drag a list here to remove it from its folder.'))
 			.toBeInTheDocument();
-	});
-
-	it('deletes a folder, unfiling only the lists it contained', async () => {
-		setToken('test-token');
-		const filed = {
-			id: 1,
-			name: 'Costco run',
-			archived: false,
-			color: '#3b82f6',
-			icon: null,
-			folderId: 5,
-			itemCount: 0
-		};
-		const alreadyUnfiled = {
-			id: 2,
-			name: 'Errands',
-			archived: false,
-			color: '#3b82f6',
-			icon: null,
-			folderId: null,
-			itemCount: 0
-		};
-		const folder = {
-			id: 5,
-			userId: 1,
-			name: 'Groceries',
-			color: '#3b82f6',
-			sortOrder: 0,
-			version: 1
-		};
-		stubFetchByUrl({ lists: [filed, alreadyUnfiled], folders: [folder] });
-
-		render(ListsPage);
-		await expect.element(page.getByText('Groceries').first()).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Delete folder' }).click();
-
-		await expect.element(page.getByText('Groceries')).not.toBeInTheDocument();
-		await expect.element(page.getByText('Costco run')).toBeInTheDocument();
-		await expect.element(page.getByText('Errands')).toBeInTheDocument();
-	});
-
-	it('reloads when deleting a folder fails without an ApiError', async () => {
-		setToken('test-token');
-		const folder = {
-			id: 5,
-			userId: 1,
-			name: 'Groceries',
-			color: '#3b82f6',
-			sortOrder: 0,
-			version: 1
-		};
-		const fetchMock = stubFetchByUrl({
-			folders: [folder],
-			deleteFolderError: new TypeError('network down')
-		});
-
-		render(ListsPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Delete folder' }).click();
-
-		await expect
-			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/folders')).length)
-			.toBe(3);
-	});
-
-	it('reloads when deleting a folder fails with an ApiError', async () => {
-		setToken('test-token');
-		const folder = {
-			id: 5,
-			userId: 1,
-			name: 'Groceries',
-			color: '#3b82f6',
-			sortOrder: 0,
-			version: 1
-		};
-		const fetchMock = stubFetchByUrl({
-			folders: [folder],
-			deleteFolderError: { status: 500, message: 'Could not delete folder' }
-		});
-
-		render(ListsPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Delete folder' }).click();
-
-		await expect
-			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/folders')).length)
-			.toBe(3);
 	});
 
 	const first = {

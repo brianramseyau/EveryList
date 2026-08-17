@@ -19,3 +19,9 @@ export function updateFolder(
 export function deleteFolder(id: number): Promise<void> {
 	return apiDelete(`/api/v1/folders/${id}`);
 }
+
+/** `order` is the full desired list of folder ids, in the new order — reorders every folder
+ *  the requesting user owns, in one request. */
+export function reorderFolders(order: number[]): Promise<FolderDto[]> {
+	return apiPatch('/api/v1/folders/reorder', { order });
+}

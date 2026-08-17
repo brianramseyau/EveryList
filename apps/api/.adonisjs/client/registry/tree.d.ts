@@ -27,6 +27,7 @@ export interface ApiDefinition {
     folders: {
       index: typeof routes['folders.folders.index']
       store: typeof routes['folders.folders.store']
+      reorder: typeof routes['folders.folders.reorder']
       update: typeof routes['folders.folders.update']
       destroy: typeof routes['folders.folders.destroy']
     }

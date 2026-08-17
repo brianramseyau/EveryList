@@ -60,6 +60,12 @@ const routes = {
     tokens: [{"old":"/api/v1/folders","type":0,"val":"api","end":""},{"old":"/api/v1/folders","type":0,"val":"v1","end":""},{"old":"/api/v1/folders","type":0,"val":"folders","end":""}],
     types: placeholder as Registry['folders.folders.store']['types'],
   },
+  'folders.folders.reorder': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/folders/reorder',
+    tokens: [{"old":"/api/v1/folders/reorder","type":0,"val":"api","end":""},{"old":"/api/v1/folders/reorder","type":0,"val":"v1","end":""},{"old":"/api/v1/folders/reorder","type":0,"val":"folders","end":""},{"old":"/api/v1/folders/reorder","type":0,"val":"reorder","end":""}],
+    types: placeholder as Registry['folders.folders.reorder']['types'],
+  },
   'folders.folders.update': {
     methods: ["PATCH"],
     pattern: '/api/v1/folders/:id',

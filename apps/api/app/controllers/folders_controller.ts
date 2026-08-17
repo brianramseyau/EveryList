@@ -1,5 +1,9 @@
 import Folder from '#models/folder'
-import { createFolderValidator, updateFolderValidator } from '#validators/folder'
+import {
+  createFolderValidator,
+  updateFolderValidator,
+  reorderFoldersValidator,
+} from '#validators/folder'
 import type { HttpContext } from '@adonisjs/core/http'
 import FolderTransformer from '#transformers/folder_transformer'
 import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
@@ -73,5 +77,25 @@ export default class FoldersController {
     await folder.delete()
 
     return response.noContent()
+  }
+
+  async reorder({ auth, request, serialize }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const { order } = await request.validateUsing(reorderFoldersValidator)
+
+    const folders = await Folder.query().whereIn('id', order).where('userId', user.id)
+    const foldersById = new Map(folders.map((folder) => [folder.id, folder]))
+
+    for (const [index, folderId] of order.entries()) {
+      const folder = foldersById.get(folderId)
+      if (!folder) continue
+
+      folder.sortOrder = index
+      folder.version += 1
+      await folder.save()
+    }
+
+    const allFolders = await Folder.query().where('userId', user.id).orderBy('sortOrder', 'asc')
+    return serialize(FolderTransformer.transform(allFolders))
   }
 }

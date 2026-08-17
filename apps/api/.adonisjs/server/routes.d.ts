@@ -13,6 +13,7 @@ export type ScannedRoutes = {
     'metas.show': { paramsTuple?: []; params?: {} }
     'folders.folders.index': { paramsTuple?: []; params?: {} }
     'folders.folders.store': { paramsTuple?: []; params?: {} }
+    'folders.folders.reorder': { paramsTuple?: []; params?: {} }
     'folders.folders.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'folders.folders.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.lists.index': { paramsTuple?: []; params?: {} }
@@ -112,6 +113,7 @@ export type ScannedRoutes = {
   }
   PATCH: {
     'profile.profile.update': { paramsTuple?: []; params?: {} }
+    'folders.folders.reorder': { paramsTuple?: []; params?: {} }
     'folders.folders.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.lists.reorder': { paramsTuple?: []; params?: {} }
     'lists.lists.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
