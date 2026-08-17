@@ -1,9 +1,9 @@
-// Prototype: SortableJS-backed replacement for press-hold-reorder.ts, scoped
-// to the list-detail item reorder (the cross-category case that's driven
-// three separate touch/scroll bug-fix commits by hand). One Sortable
-// instance per category `<ul>`, all sharing `group` so a drag can cross
-// between them — SortableJS's native multi-list support replaces the
-// flat-index/gap-offset math the hand-rolled version had to derive itself.
+// SortableJS-backed drag-to-reorder action, used across every reorderable
+// list in the app (list items, categories, store aisle order, and the lists
+// page). Where drags can cross containers (e.g. list items between category
+// sections), give every `<ul>` in that drag surface the same `group` — one
+// Sortable instance per container, SortableJS's native multi-list support
+// handles the rest.
 
 import Sortable from 'sortablejs';
 
@@ -66,6 +66,9 @@ export function sortableReorder(node: HTMLElement, params: SortableReorderParams
 			// evt.item is still physically inside evt.to at evt.newIndex here (the
 			// DOM-revert below hasn't happened yet) — its real siblings at this
 			// instant are exactly its new neighbors in the destination list.
+			// SortableJS's types mark newIndex optional, but onEnd only fires on
+			// an actual drop, where it's always set.
+			/* v8 ignore next */
 			const newIndex = evt.newIndex ?? 0;
 			const beforeEl = evt.to.children[newIndex - 1] as HTMLElement | undefined;
 			const afterEl = evt.to.children[newIndex + 1] as HTMLElement | undefined;
