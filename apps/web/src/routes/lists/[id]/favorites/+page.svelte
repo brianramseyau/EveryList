@@ -25,7 +25,12 @@
 	let addingToList = $state<number | null>(null);
 	let addedMessage = $state<string | null>(null);
 
-	const itemNames = $derived(new Set(items.map((item) => item.name.trim().toLowerCase())));
+	// An item blocks re-adding only while it's unchecked — a checked-off item
+	// has already been "used up", so tapping the favorite again to add a
+	// fresh one is allowed.
+	const blockingItemNames = $derived(
+		new Set(items.filter((item) => !item.checked).map((item) => item.name.trim().toLowerCase()))
+	);
 
 	async function loadAll() {
 		loading = true;
@@ -119,41 +124,54 @@
 	{:else}
 		<ul class="flex flex-col gap-2">
 			{#each favorites as favorite (favorite.id)}
-				{@const onList = itemNames.has(favorite.name.trim().toLowerCase())}
+				{@const onList = blockingItemNames.has(favorite.name.trim().toLowerCase())}
 				<li
 					class="flex items-center gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700"
 				>
-					{#if onList}
-						<span title="Already on this list">
-							<Icon name="checkCircle" class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-						</span>
-					{/if}
-					<div class="flex flex-col">
-						<div class="flex items-center gap-1">
-							<span>{favorite.name}</span>
-							{#if favorite.defaultQuantity}
-								<span class="text-gray-600 dark:text-gray-400"
-									>(<span class="font-mono tabular-nums">{favorite.defaultQuantity}</span>)</span
-								>
+					<button
+						type="button"
+						aria-label={`Add ${favorite.name} to list`}
+						class="flex flex-1 items-center gap-2 text-left disabled:opacity-50"
+						disabled={onList || addingToList === favorite.id}
+						onclick={() => handleAddToList(favorite)}
+					>
+						{#if onList}
+							<span title="Already on this list">
+								<Icon
+									name="checkCircle"
+									class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500"
+								/>
+							</span>
+						{/if}
+						<div class="flex flex-col">
+							<div class="flex items-center gap-1">
+								<span>{favorite.name}</span>
+								{#if favorite.defaultQuantity}
+									<span class="text-gray-600 dark:text-gray-400"
+										>(<span class="font-mono tabular-nums">{favorite.defaultQuantity}</span>)</span
+									>
+								{/if}
+							</div>
+							{#if favorite.storeId}
+								{@const favoriteStore = stores.find((store) => store.id === favorite.storeId)}
+								{#if favoriteStore}
+									<span class="text-xs" style:color={favoriteStore.color}>{favoriteStore.name}</span
+									>
+								{/if}
 							{/if}
 						</div>
-						{#if favorite.storeId}
-							{@const favoriteStore = stores.find((store) => store.id === favorite.storeId)}
-							{#if favoriteStore}
-								<span class="text-xs" style:color={favoriteStore.color}>{favoriteStore.name}</span>
-							{/if}
-						{/if}
-					</div>
+					</button>
 					<div class="ml-auto flex items-center gap-1">
-						<button
-							type="button"
-							aria-label={`Add ${favorite.name} to list`}
-							class="flex h-11 w-11 shrink-0 items-center justify-center text-primary-600 disabled:opacity-30 dark:text-primary-400"
-							disabled={addingToList === favorite.id}
-							onclick={() => handleAddToList(favorite)}
+						<a
+							href={resolve('/lists/[id]/favorites/[favoriteId]', {
+								id: String(listId),
+								favoriteId: String(favorite.id)
+							})}
+							aria-label={`Edit ${favorite.name}`}
+							class="flex h-11 w-11 shrink-0 items-center justify-center text-primary-600 dark:text-primary-400"
 						>
-							<Icon name="plusCircle" class="h-6 w-6" />
-						</button>
+							<Icon name="pencilCircle" class="h-6 w-6" />
+						</a>
 						<button
 							type="button"
 							aria-label={`Remove ${favorite.name} from favorites`}

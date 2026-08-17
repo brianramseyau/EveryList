@@ -129,6 +129,74 @@ describe('Favorites +page.svelte', () => {
 		expect(link.element().getAttribute('href')).toBe('/lists/5/favorites/new');
 	});
 
+	it('links to the edit screen for a favorite', async () => {
+		render(FavoritesPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		const link = page.getByRole('link', { name: 'Edit Bananas' });
+		await expect.element(link).toBeInTheDocument();
+		expect(link.element().getAttribute('href')).toBe('/lists/5/favorites/1');
+	});
+
+	it('adds a favorite to the list by tapping its row', async () => {
+		vi.mocked(addFavoriteToList).mockResolvedValue({
+			id: 50,
+			listId: 5,
+			name: 'Bananas',
+			quantity: '1 bunch',
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+
+		render(FavoritesPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Add Bananas to list' }).click();
+
+		expect(addFavoriteToList).toHaveBeenCalledWith(5, 1);
+	});
+
+	it('allows re-adding a favorite whose matching item is already checked off', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			{
+				id: 9,
+				listId: 5,
+				name: 'Bananas',
+				quantity: null,
+				notes: null,
+				categoryId: null,
+				storeId: null,
+				price: null,
+				checked: true,
+				checkedAt: '2026-08-01T00:00:00.000Z',
+				sortOrder: 0,
+				createdBy: 1,
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null,
+				deletedAt: null,
+				version: 1
+			}
+		]);
+
+		render(FavoritesPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await expect
+			.element(page.getByRole('button', { name: 'Add Bananas to list' }))
+			.not.toBeDisabled();
+		await expect.element(page.getByTitle('Already on this list')).not.toBeInTheDocument();
+	});
+
 	it('leaves other favorites in place when one is removed', async () => {
 		const bread = { ...bananas, id: 2, name: 'Bread', defaultQuantity: null };
 		vi.mocked(fetchFavorites).mockResolvedValue([bananas, bread]);
