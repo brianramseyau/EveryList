@@ -12,7 +12,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
-	import { pressHoldReorder } from '$lib/actions/press-hold-reorder';
+	import { sortableReorder } from '$lib/actions/sortable-reorder';
 
 	let lists = $state<ListDto[]>([]);
 	let folders = $state<FolderDto[]>([]);
@@ -20,42 +20,36 @@
 	let error = $state<string | null>(null);
 	let reordering = $state(false);
 
-	// One drag container per section (each folder's group, plus "unfiled") —
-	// dragging never crosses sections, since moving a list to a different
-	// folder already has its own affordance (the folder `<Select>`).
-	const sectionEls = new SvelteMap<string, HTMLUListElement>();
-
-	function sectionKey(folderId: number | null): string {
+	function sectionGroup(folderId: number | null): string {
+		// A unique group per section, not shared with any other `<ul>` — this
+		// keeps SortableJS from allowing drops across sections, since moving a
+		// list to a different folder already has its own affordance (the
+		// folder `<Select>`).
 		return folderId === null ? 'unfiled' : `folder-${folderId}`;
 	}
 
-	function getRowEls(folderId: number | null): HTMLElement[] {
-		const el = sectionEls.get(sectionKey(folderId));
+	// Fires once, on release, with the dragged list's new immediate neighbors
+	// within its own section (see sortable-reorder.ts). Only the dragged
+	// section's relative order changes; every other list keeps its original
+	// slot in the full per-user order sent to the server.
+	async function handleDrop(
+		sectionLists: ListDto[],
+		params: { itemId: number; beforeItemId: number | null; afterItemId: number | null }
+	) {
+		const dragged = sectionLists.find((list) => list.id === params.itemId);
 		/* v8 ignore next */
-		if (!el) return [];
-		return [...el.children] as HTMLElement[];
-	}
+		if (!dragged) return;
 
-	/** Registers a section's `<ul>` element under its key so `getRowEls` can find it —
-	 *  `bind:this` doesn't support the dynamic, map-keyed targets a per-folder section needs.
-	 *  `key` is stable for the lifetime of the node: each section's `{#each ... (group.folder.id)}`
-	 *  keeps the same DOM node for the same folder, so there's no update case to handle. */
-	function registerSection(node: HTMLUListElement, key: string) {
-		sectionEls.set(key, node);
-		return {
-			destroy() {
-				sectionEls.delete(key);
-			}
-		};
-	}
-
-	// Fires once, on release — dragging itself never touches `lists`. Only the
-	// dragged section's relative order changes; every other list keeps its
-	// original slot in the full per-user order sent to the server.
-	async function handleDrop(sectionLists: ListDto[], fromIndex: number, toIndex: number) {
-		const reorderedSection = [...sectionLists];
-		const [moved] = reorderedSection.splice(fromIndex, 1);
-		reorderedSection.splice(toIndex, 0, moved!);
+		const withoutDragged = sectionLists.filter((list) => list.id !== dragged.id);
+		const beforeList = withoutDragged.find((list) => list.id === params.beforeItemId);
+		const afterList = withoutDragged.find((list) => list.id === params.afterItemId);
+		const insertAt = beforeList
+			? withoutDragged.indexOf(beforeList) + 1
+			: afterList
+				? withoutDragged.indexOf(afterList)
+				: withoutDragged.length;
+		const reorderedSection = [...withoutDragged];
+		reorderedSection.splice(insertAt, 0, dragged);
 
 		const sectionIds = new Set(sectionLists.map((list) => list.id));
 		let cursor = 0;
@@ -128,16 +122,8 @@
 	}
 </script>
 
-{#snippet listCard(list: ListDto, index: number, sectionLists: ListDto[])}
-	<li
-		class="flex items-center gap-2"
-		use:pressHoldReorder={{
-			index,
-			disabled: reordering,
-			getRowEls: () => getRowEls(list.folderId),
-			ondrop: (fromIndex, toIndex) => handleDrop(sectionLists, fromIndex, toIndex)
-		}}
-	>
+{#snippet listCard(list: ListDto)}
+	<li class="flex items-center gap-2" data-item-id={list.id}>
 		<span
 			aria-hidden="true"
 			class="flex h-11 w-6 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
@@ -264,9 +250,16 @@
 					{#if group.lists.length === 0}
 						<p class="text-xs text-gray-400">No lists in this folder yet.</p>
 					{:else}
-						<ul class="flex flex-col gap-2" use:registerSection={sectionKey(group.folder.id)}>
-							{#each group.lists as list, index (list.id)}
-								{@render listCard(list, index, group.lists)}
+						<ul
+							class="flex flex-col gap-2"
+							use:sortableReorder={{
+								group: sectionGroup(group.folder.id),
+								disabled: reordering,
+								onDrop: (params) => handleDrop(group.lists, params)
+							}}
+						>
+							{#each group.lists as list (list.id)}
+								{@render listCard(list)}
 							{/each}
 						</ul>
 					{/if}
@@ -280,9 +273,16 @@
 							Not in a folder
 						</h2>
 					{/if}
-					<ul class="flex flex-col gap-2" use:registerSection={sectionKey(null)}>
-						{#each unfiledLists as list, index (list.id)}
-							{@render listCard(list, index, unfiledLists)}
+					<ul
+						class="flex flex-col gap-2"
+						use:sortableReorder={{
+							group: sectionGroup(null),
+							disabled: reordering,
+							onDrop: (params) => handleDrop(unfiledLists, params)
+						}}
+					>
+						{#each unfiledLists as list (list.id)}
+							{@render listCard(list)}
 						{/each}
 					</ul>
 				</section>
