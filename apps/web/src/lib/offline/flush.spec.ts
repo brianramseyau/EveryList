@@ -324,6 +324,51 @@ describe('flushQueue', () => {
 		}
 	);
 
+	it('on a 409 for a queued delete with a response body, adopts the server copy without attempting to re-diff/re-enqueue', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: '2026-08-16T00:00:00.000Z',
+			version: 1,
+			_dirty: true
+		});
+		vi.mocked(apiDelete).mockRejectedValue(
+			new ApiError(409, 'Conflict', { data: { id: 5, deletedAt: null, version: 2 } })
+		);
+		const listener = vi.fn();
+		onConflict(listener);
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'delete',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5'
+		});
+
+		await flushQueue();
+
+		const cached = await db.items.get(5);
+		expect(cached?.deletedAt).toBeNull();
+		expect(cached?.version).toBe(2);
+		expect(cached?._dirty).toBe(false);
+		expect(listener).toHaveBeenCalledWith(expect.objectContaining({ targetId: 5 }));
+		expect(await pendingMutations()).toHaveLength(0);
+	});
+
 	it('on a 409 without a response body, still notifies the listener and dequeues without touching the cache', async () => {
 		vi.mocked(apiDelete).mockRejectedValue(new ApiError(409, 'Conflict'));
 		const listener = vi.fn();
