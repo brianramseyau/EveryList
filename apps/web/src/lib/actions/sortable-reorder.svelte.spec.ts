@@ -25,6 +25,33 @@ function wait(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function nextFrame() {
+	return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+// Yields to two real paint frames before an optional timer wait — a fixed
+// setTimeout alone isn't a reliable proxy for "the browser has processed the
+// event and updated internal state", especially under CI's slower/throttled
+// headless Chromium, since SortableJS's own move/animation handling is
+// itself paced by requestAnimationFrame.
+async function settle(ms = 0) {
+	await nextFrame();
+	await nextFrame();
+	if (ms > 0) await wait(ms);
+}
+
+async function waitUntil(predicate: () => boolean, timeoutMs = 2000) {
+	const deadline = Date.now() + timeoutMs;
+	while (!predicate()) {
+		if (Date.now() > deadline) return;
+		await settle(20);
+	}
+}
+
+function hasFallbackGhost() {
+	return document.querySelector('.sortable-fallback') !== null;
+}
+
 // `toYFraction` positions the drop within the target row (0 = top edge, 1 =
 // bottom edge). SortableJS's fallback swap decision is threshold-based
 // (swapThreshold: 0.65) — landing near the row's exact center is a genuine
@@ -53,15 +80,28 @@ async function drag(from: HTMLElement, to: HTMLElement, toYFraction = 0.5) {
 			clientY: startY
 		})
 	);
-	await wait(20);
+	// A tiny first move is what actually starts the drag (SortableJS creates
+	// its fallback ghost element on the first qualifying pointermove, not on
+	// pointerdown) — wait for that ghost to exist rather than guessing a
+	// fixed delay, so this doesn't race a slower browser.
+	document.dispatchEvent(
+		new PointerEvent('pointermove', {
+			bubbles: true,
+			cancelable: true,
+			pointerId: 1,
+			pointerType: 'mouse',
+			button: 0,
+			clientX: startX + 1,
+			clientY: startY + 1
+		})
+	);
+	await waitUntil(hasFallbackGhost);
 
-	// Fine-grained, multi-step moves with a real gap between them — SortableJS's
-	// fallback drag tracks position via pointermove, and needs both enough
-	// steps and enough time between them to register the drag start and the
-	// hover-over-target swap/container-crossing logic; steps fired back to
-	// back (e.g. every 10ms) land too fast for it to pick up a container
-	// crossing.
-	const steps = 10;
+	// Fine-grained, multi-step moves — SortableJS's fallback drag tracks
+	// position via pointermove, and needs enough steps (each settled to a
+	// real paint frame) to register the hover-over-target swap/
+	// container-crossing logic; a single big jump doesn't give it a chance.
+	const steps = 12;
 	for (let i = 1; i <= steps; i++) {
 		document.dispatchEvent(
 			new PointerEvent('pointermove', {
@@ -74,7 +114,7 @@ async function drag(from: HTMLElement, to: HTMLElement, toYFraction = 0.5) {
 				clientY: startY + ((endY - startY) * i) / steps
 			})
 		);
-		await wait(20);
+		await settle(20);
 	}
 
 	document.dispatchEvent(
@@ -88,11 +128,15 @@ async function drag(from: HTMLElement, to: HTMLElement, toYFraction = 0.5) {
 			clientY: endY
 		})
 	);
+	// The fallback ghost is removed synchronously in onEnd's handling, so
+	// waiting for it to disappear confirms the drop itself has been fully
+	// processed (onDrop already called, if it was going to be).
+	await waitUntil(() => !hasFallbackGhost());
 	// `animation: 150` means SortableJS's own cleanup (clearing its internal
 	// dragEl, which _onTapStart checks and silently no-ops on if still set)
-	// finishes asynchronously — outlasting a short wait here would cause the
-	// next drag in the same test file to silently do nothing.
-	await wait(200);
+	// finishes asynchronously after that — outlasting a short wait here would
+	// cause the next drag in the same test to silently do nothing.
+	await settle(250);
 }
 
 describe('sortableReorder', () => {
@@ -174,7 +218,6 @@ describe('sortableReorder', () => {
 				clientY: y
 			})
 		);
-		await wait(10);
 		// A tiny move at the same slot still starts the drag (and still
 		// exercises onEnd), but never crosses into a new index.
 		document.dispatchEvent(
@@ -188,7 +231,7 @@ describe('sortableReorder', () => {
 				clientY: y + 1
 			})
 		);
-		await wait(10);
+		await waitUntil(hasFallbackGhost);
 		document.dispatchEvent(
 			new PointerEvent('pointerup', {
 				bubbles: true,
@@ -200,7 +243,8 @@ describe('sortableReorder', () => {
 				clientY: y + 1
 			})
 		);
-		await wait(200);
+		await waitUntil(() => !hasFallbackGhost());
+		await settle(250);
 
 		expect(onDrop).not.toHaveBeenCalled();
 	});
