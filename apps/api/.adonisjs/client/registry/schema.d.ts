@@ -115,6 +115,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/folders_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'folders.folders.reorder': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/folders/reorder'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/folder').reorderFoldersValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/folder').reorderFoldersValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/folders_controller').default['reorder']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/folders_controller').default['reorder']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'folders.folders.update': {
     methods: ["PATCH"]
     pattern: '/api/v1/folders/:id'

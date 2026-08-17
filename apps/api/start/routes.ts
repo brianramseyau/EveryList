@@ -39,6 +39,7 @@ router
       .group(() => {
         router.get('/', [controllers.Folders, 'index'])
         router.post('/', [controllers.Folders, 'store'])
+        router.patch('/reorder', [controllers.Folders, 'reorder'])
         router.patch(':id', [controllers.Folders, 'update'])
         router.delete(':id', [controllers.Folders, 'destroy'])
       })

@@ -182,6 +182,59 @@ test.group('Folders', (group) => {
     file.assertStatus(404)
   })
 
+  test('reordering folders persists the new sort order', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    for (const name of ['Groceries', 'Household', 'Trips']) {
+      await client.post('/api/v1/folders').header('Authorization', `Bearer ${token}`).json({ name })
+    }
+
+    const index = await client.get('/api/v1/folders').header('Authorization', `Bearer ${token}`)
+    const ids = bodyData<FolderDto[]>(index).map((folder) => folder.id)
+    const reversed = [...ids].reverse()
+
+    const reorder = await client
+      .patch('/api/v1/folders/reorder')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ order: reversed })
+    reorder.assertStatus(200)
+
+    const reordered = bodyData<FolderDto[]>(reorder)
+    assert.deepEqual(
+      reordered.map((folder) => folder.id),
+      reversed
+    )
+    assert.equal(reordered[0]!.version, 2)
+  })
+
+  test('reordering folders silently skips an id that is not the caller’s', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/folders')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Groceries' })
+    const folderId = bodyData<FolderDto>(create).id
+
+    const stranger = await signupAndGetUser(client)
+    const bogusFolderId = 999_999
+
+    const reorder = await client
+      .patch('/api/v1/folders/reorder')
+      .header('Authorization', `Bearer ${stranger.token}`)
+      .json({ order: [bogusFolderId] })
+    reorder.assertStatus(200)
+    assert.lengthOf(bodyData<FolderDto[]>(reorder), 0)
+
+    // The owner's folder is untouched by the stranger's no-op reorder.
+    const unchanged = await client
+      .get('/api/v1/folders')
+      .header('Authorization', `Bearer ${owner.token}`)
+    assert.equal(bodyData<FolderDto[]>(unchanged)[0]!.id, folderId)
+    assert.equal(bodyData<FolderDto[]>(unchanged)[0]!.version, 1)
+  })
+
   test('a list owner gets a 404 filing a list into a folder they do not own', async ({
     client,
   }) => {

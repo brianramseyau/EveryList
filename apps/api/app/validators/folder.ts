@@ -11,3 +11,7 @@ export const updateFolderValidator = vine.create({
   sortOrder: vine.number().optional(),
   expectedVersion: vine.number().optional(),
 })
+
+export const reorderFoldersValidator = vine.create({
+  order: vine.array(vine.number().positive()).minLength(1),
+})

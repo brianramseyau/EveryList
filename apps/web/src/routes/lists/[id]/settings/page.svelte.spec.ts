@@ -12,9 +12,11 @@ vi.mock('$lib/api/lists', () => ({
 	deleteList: vi.fn(),
 	emailExportList: vi.fn()
 }));
+vi.mock('$lib/api/folders', () => ({ fetchFolders: vi.fn() }));
 vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 
 const { fetchList, updateList, deleteList, emailExportList } = await import('$lib/api/lists');
+const { fetchFolders } = await import('$lib/api/folders');
 const { refreshBadgeCount } = await import('$lib/pwa/badge');
 const { goto } = await import('$app/navigation');
 const SettingsPage = (await import('./+page.svelte')).default;
@@ -41,6 +43,7 @@ describe('List settings +page.svelte', () => {
 	beforeEach(() => {
 		setToken('test-token');
 		vi.mocked(fetchList).mockResolvedValue(list);
+		vi.mocked(fetchFolders).mockResolvedValue([]);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
@@ -95,19 +98,25 @@ describe('List settings +page.svelte', () => {
 		await expect.element(page.getByRole('link', { name: 'Categories' })).not.toBeInTheDocument();
 	});
 
-	it('renames the list via the save button, but only when the name actually changed', async () => {
+	it('disables Save until something actually changes, then saves name/icon/color/folder together', async () => {
 		vi.mocked(updateList).mockResolvedValue({ ...list, name: 'Weekly Groceries' });
 
 		render(SettingsPage);
 		await expect.element(page.getByRole('textbox').first()).toHaveValue('Groceries');
 
-		const saveButton = page.getByRole('button', { name: 'Save name' });
+		const saveButton = page.getByRole('button', { name: 'Save changes' });
 		await expect.element(saveButton).toBeDisabled();
 
 		await page.getByRole('textbox').first().fill('Weekly Groceries');
+		await expect.element(saveButton).not.toBeDisabled();
 		await saveButton.click();
 
-		expect(updateList).toHaveBeenCalledWith(1, { name: 'Weekly Groceries' });
+		expect(updateList).toHaveBeenCalledWith(1, {
+			name: 'Weekly Groceries',
+			icon: 'basket',
+			color: '#3b82f6',
+			folderId: null
+		});
 	});
 
 	it('does not save when the name is only whitespace or unchanged', async () => {
@@ -126,8 +135,8 @@ describe('List settings +page.svelte', () => {
 		expect(updateList).not.toHaveBeenCalled();
 	});
 
-	it('changes the icon and color immediately on selection', async () => {
-		vi.mocked(updateList).mockResolvedValue({ ...list, icon: 'fruitCherries' });
+	it('stages icon and color changes locally until Save is clicked', async () => {
+		vi.mocked(updateList).mockResolvedValue({ ...list, icon: 'fruitCherries', color: '#ef4444' });
 
 		render(SettingsPage);
 		await expect.element(page.getByRole('button', { name: 'Basket' })).toBeInTheDocument();
@@ -135,11 +144,85 @@ describe('List settings +page.svelte', () => {
 		await page.getByRole('button', { name: 'Basket' }).click();
 		await page.getByPlaceholder('Search icons…').fill('cherries');
 		await page.getByRole('button', { name: 'Fruit Cherries', exact: true }).click();
-		expect(updateList).toHaveBeenCalledWith(1, { icon: 'fruitCherries' });
+		expect(updateList).not.toHaveBeenCalled();
 
 		await page.getByRole('button', { name: 'Color' }).click();
 		await page.getByRole('button', { name: '#ef4444' }).click();
-		expect(updateList).toHaveBeenCalledWith(1, { color: '#ef4444' });
+		expect(updateList).not.toHaveBeenCalled();
+
+		await page.getByRole('button', { name: 'Save changes' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, {
+			name: 'Groceries',
+			icon: 'fruitCherries',
+			color: '#ef4444',
+			folderId: null
+		});
+	});
+
+	it('hides the folder selector when the account has no folders', async () => {
+		render(SettingsPage);
+		await expect.element(page.getByRole('button', { name: 'Archive list' })).toBeInTheDocument();
+
+		await expect.element(page.getByRole('combobox')).not.toBeInTheDocument();
+	});
+
+	it('stages a folder change locally until Save is clicked', async () => {
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			createdAt: TS,
+			updatedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchFolders).mockResolvedValue([folder]);
+		vi.mocked(updateList).mockResolvedValue({ ...list, folderId: 5 });
+
+		render(SettingsPage);
+		await expect.element(page.getByRole('combobox')).toBeInTheDocument();
+
+		await page.getByRole('combobox').selectOptions('5');
+		expect(updateList).not.toHaveBeenCalled();
+
+		await page.getByRole('button', { name: 'Save changes' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, {
+			name: 'Groceries',
+			icon: 'basket',
+			color: '#3b82f6',
+			folderId: 5
+		});
+	});
+
+	it('stages clearing the folder locally until Save is clicked', async () => {
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			createdAt: TS,
+			updatedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchList).mockResolvedValue({ ...list, folderId: 5 });
+		vi.mocked(fetchFolders).mockResolvedValue([folder]);
+		vi.mocked(updateList).mockResolvedValue({ ...list, folderId: null });
+
+		render(SettingsPage);
+		await expect.element(page.getByRole('combobox')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Close' }).click();
+		expect(updateList).not.toHaveBeenCalled();
+
+		await page.getByRole('button', { name: 'Save changes' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, {
+			name: 'Groceries',
+			icon: 'basket',
+			color: '#3b82f6',
+			folderId: null
+		});
 	});
 
 	it('archives the list, flipping the button label', async () => {

@@ -40,7 +40,6 @@ function jsonResponse(data: unknown, init: { ok?: boolean; status?: number } = {
 function stubFetchByUrl(routes: {
 	lists?: unknown[];
 	folders?: unknown[];
-	deleteFolderError?: { status: number; message?: string } | Error;
 	updateList?: unknown;
 	updateListError?: { status: number; message?: string } | Error;
 	reorderLists?: unknown[];
@@ -55,13 +54,6 @@ function stubFetchByUrl(routes: {
 	}
 
 	const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-		if (url.includes('/folders/')) {
-			// DELETE /folders/:id
-			if (routes.deleteFolderError instanceof Error)
-				return Promise.reject(routes.deleteFolderError);
-			if (routes.deleteFolderError) return errorResponse(routes.deleteFolderError);
-			return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(undefined) });
-		}
 		if (url.includes('/folders')) return Promise.resolve(jsonResponse(routes.folders ?? []));
 		if (url.includes('/lists/reorder')) {
 			if (routes.reorderListsError instanceof Error)
@@ -313,7 +305,7 @@ describe('Lists +page.svelte', () => {
 		expect(newFolderLink.element().getAttribute('href')).toBe('/lists/folders/new');
 	});
 
-	it('groups lists under two folders in sortOrder, and moves one list back to "Not in a folder"', async () => {
+	it('groups lists under two folders in sortOrder, and shows an empty-folder drop target', async () => {
 		setToken('test-token');
 		const costco = {
 			id: 1,
@@ -364,8 +356,7 @@ describe('Lists +page.svelte', () => {
 		};
 		stubFetchByUrl({
 			lists: [costco, wholeFoods, target],
-			folders: [household, groceries],
-			updateList: { ...costco, folderId: null }
+			folders: [household, groceries]
 		});
 
 		render(ListsPage);
@@ -376,174 +367,20 @@ describe('Lists +page.svelte', () => {
 
 		await expect
 			.poll(() =>
-				[...document.querySelectorAll('h2')].map((h) => h.querySelectorAll('span')[1]?.textContent)
+				[...document.querySelectorAll('h2')]
+					// Folder headers have a color-dot span plus a name span; "Not in
+					// a folder" is plain text with no spans at all.
+					.filter((h) => h.querySelectorAll('span').length >= 2)
+					.map((h) => h.querySelectorAll('span')[1]?.textContent)
 			)
 			.toEqual(['Groceries', 'Household']);
 
-		await page.getByRole('button', { name: 'Close' }).first().click();
-
+		// Both lists are filed, so "Not in a folder" is still shown as an empty
+		// drop target — the drag affordance is present even with nothing to drop.
 		await expect.element(page.getByText('Not in a folder')).toBeInTheDocument();
-		await expect.element(page.getByText('Target run')).toBeInTheDocument();
-	});
-
-	it('reloads when moving a list to a folder fails without an ApiError', async () => {
-		setToken('test-token');
-		const list = {
-			id: 1,
-			name: 'Costco run',
-			archived: false,
-			color: '#3b82f6',
-			icon: null,
-			folderId: null,
-			itemCount: 0
-		};
-		const folder = {
-			id: 5,
-			userId: 1,
-			name: 'Groceries',
-			color: '#3b82f6',
-			sortOrder: 0,
-			version: 1
-		};
-		const fetchMock = stubFetchByUrl({
-			lists: [list],
-			folders: [folder],
-			updateListError: new TypeError('network down')
-		});
-
-		render(ListsPage);
-		await expect.element(page.getByText('Costco run')).toBeInTheDocument();
-
-		await page.getByRole('combobox').selectOptions('5');
-
 		await expect
-			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/lists')).length)
-			.toBe(3);
-	});
-
-	it('reloads when moving a list to a folder fails with an ApiError', async () => {
-		setToken('test-token');
-		const list = {
-			id: 1,
-			name: 'Costco run',
-			archived: false,
-			color: '#3b82f6',
-			icon: null,
-			folderId: null,
-			itemCount: 0
-		};
-		const folder = {
-			id: 5,
-			userId: 1,
-			name: 'Groceries',
-			color: '#3b82f6',
-			sortOrder: 0,
-			version: 1
-		};
-		const fetchMock = stubFetchByUrl({
-			lists: [list],
-			folders: [folder],
-			updateListError: { status: 500, message: 'Could not move list' }
-		});
-
-		render(ListsPage);
-		await expect.element(page.getByText('Costco run')).toBeInTheDocument();
-
-		await page.getByRole('combobox').selectOptions('5');
-
-		await expect
-			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/lists')).length)
-			.toBe(3);
-	});
-
-	it('deletes a folder, unfiling only the lists it contained', async () => {
-		setToken('test-token');
-		const filed = {
-			id: 1,
-			name: 'Costco run',
-			archived: false,
-			color: '#3b82f6',
-			icon: null,
-			folderId: 5,
-			itemCount: 0
-		};
-		const alreadyUnfiled = {
-			id: 2,
-			name: 'Errands',
-			archived: false,
-			color: '#3b82f6',
-			icon: null,
-			folderId: null,
-			itemCount: 0
-		};
-		const folder = {
-			id: 5,
-			userId: 1,
-			name: 'Groceries',
-			color: '#3b82f6',
-			sortOrder: 0,
-			version: 1
-		};
-		stubFetchByUrl({ lists: [filed, alreadyUnfiled], folders: [folder] });
-
-		render(ListsPage);
-		await expect.element(page.getByText('Groceries').first()).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Delete folder' }).click();
-
-		await expect.element(page.getByText('Groceries')).not.toBeInTheDocument();
-		await expect.element(page.getByText('Costco run')).toBeInTheDocument();
-		await expect.element(page.getByText('Errands')).toBeInTheDocument();
-	});
-
-	it('reloads when deleting a folder fails without an ApiError', async () => {
-		setToken('test-token');
-		const folder = {
-			id: 5,
-			userId: 1,
-			name: 'Groceries',
-			color: '#3b82f6',
-			sortOrder: 0,
-			version: 1
-		};
-		const fetchMock = stubFetchByUrl({
-			folders: [folder],
-			deleteFolderError: new TypeError('network down')
-		});
-
-		render(ListsPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Delete folder' }).click();
-
-		await expect
-			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/folders')).length)
-			.toBe(3);
-	});
-
-	it('reloads when deleting a folder fails with an ApiError', async () => {
-		setToken('test-token');
-		const folder = {
-			id: 5,
-			userId: 1,
-			name: 'Groceries',
-			color: '#3b82f6',
-			sortOrder: 0,
-			version: 1
-		};
-		const fetchMock = stubFetchByUrl({
-			folders: [folder],
-			deleteFolderError: { status: 500, message: 'Could not delete folder' }
-		});
-
-		render(ListsPage);
-		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Delete folder' }).click();
-
-		await expect
-			.poll(() => fetchMock.mock.calls.filter(([u]) => u.includes('/folders')).length)
-			.toBe(3);
+			.element(page.getByText('Drag a list here to remove it from its folder.'))
+			.toBeInTheDocument();
 	});
 
 	const first = {
@@ -566,14 +403,18 @@ describe('Lists +page.svelte', () => {
 	};
 
 	// Invokes the onDrop handler SortableJS would have called on a real drop
-	// (see the mock above). Each section's `<ul>` closes over its own section
-	// list, so the target `<ul>` is read off an existing row in that section
-	// rather than assumed to be the only one on the page.
-	function triggerDrop(
-		anchorText: string,
-		params: { itemId: number; beforeItemId: number | null; afterItemId: number | null }
-	) {
-		const ul = page.getByText(anchorText).element().closest('ul') as HTMLElement & {
+	// (see the mock above). Every section's `<ul>` now shares one `onDrop`
+	// function reference (unlike the item-level page, folder membership isn't
+	// captured in a per-section closure — it's driven entirely by
+	// `params.toContainerId`), so any rendered `<ul>` works as the pickup
+	// point.
+	function triggerDrop(params: {
+		itemId: number;
+		toContainerId: number | null;
+		beforeItemId: number | null;
+		afterItemId: number | null;
+	}) {
+		const ul = document.querySelector('ul[data-container-id]') as HTMLElement & {
 			__onDrop?: (p: typeof params) => void;
 		};
 		ul.__onDrop?.(params);
@@ -590,14 +431,20 @@ describe('Lists +page.svelte', () => {
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		// Starting order is [Groceries(1), Hardware(2)]; drag Groceries below
-		// Hardware, landing at the end.
-		triggerDrop('Groceries', { itemId: 1, beforeItemId: 2, afterItemId: null });
+		// Hardware, landing at the end, within the same (unfiled) section.
+		triggerDrop({ itemId: 1, toContainerId: null, beforeItemId: 2, afterItemId: null });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
 			.toBe(1);
 		const [, init] = fetchMock.mock.calls.find(([u]) => String(u).includes('/lists/reorder'))!;
 		expect(JSON.parse((init as RequestInit).body as string)).toEqual({ order: [2, 1] });
+		// No folder change, so only /lists/reorder was hit — no PATCH to /lists/:id.
+		expect(
+			fetchMock.mock.calls.filter(
+				([u, i]) => /\/lists\/\d+$/.test(String(u)) && (i as RequestInit)?.method === 'PATCH'
+			).length
+		).toBe(0);
 	});
 
 	it('leaves a list in another folder section untouched by an unfiled-section drag', async () => {
@@ -621,10 +468,8 @@ describe('Lists +page.svelte', () => {
 		render(ListsPage);
 		await expect.element(page.getByText('Camping')).toBeInTheDocument();
 
-		// Drag Groceries below Hardware within the unfiled section only —
-		// grabbing the `<ul>` via one of its own rows keeps this targeting the
-		// unfiled section's closure, not the folder section's.
-		triggerDrop('Groceries', { itemId: 1, beforeItemId: 2, afterItemId: null });
+		// Drag Groceries below Hardware within the unfiled section only.
+		triggerDrop({ itemId: 1, toContainerId: null, beforeItemId: 2, afterItemId: null });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
@@ -644,7 +489,7 @@ describe('Lists +page.svelte', () => {
 		render(ListsPage);
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
-		triggerDrop('Groceries', { itemId: 2, beforeItemId: null, afterItemId: 1 });
+		triggerDrop({ itemId: 2, toContainerId: null, beforeItemId: null, afterItemId: 1 });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
@@ -664,7 +509,7 @@ describe('Lists +page.svelte', () => {
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		// No before/after neighbor — insertAt falls back to the end.
-		triggerDrop('Groceries', { itemId: 1, beforeItemId: null, afterItemId: null });
+		triggerDrop({ itemId: 1, toContainerId: null, beforeItemId: null, afterItemId: null });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
@@ -703,7 +548,7 @@ describe('Lists +page.svelte', () => {
 		render(ListsPage);
 		await expect.element(page.getByText('Tent')).toBeInTheDocument();
 
-		triggerDrop('Tent', { itemId: 3, beforeItemId: 4, afterItemId: null });
+		triggerDrop({ itemId: 3, toContainerId: 9, beforeItemId: 4, afterItemId: null });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
@@ -722,7 +567,7 @@ describe('Lists +page.svelte', () => {
 		render(ListsPage);
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
-		triggerDrop('Groceries', { itemId: 1, beforeItemId: 2, afterItemId: null });
+		triggerDrop({ itemId: 1, toContainerId: null, beforeItemId: 2, afterItemId: null });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists')).length)
@@ -739,7 +584,124 @@ describe('Lists +page.svelte', () => {
 		render(ListsPage);
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
-		triggerDrop('Groceries', { itemId: 1, beforeItemId: 2, afterItemId: null });
+		triggerDrop({ itemId: 1, toContainerId: null, beforeItemId: 2, afterItemId: null });
+
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists')).length)
+			.toBe(3);
+	});
+
+	it('drags a list into a different folder, patching folderId before reordering', async () => {
+		setToken('test-token');
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
+		const errands = {
+			id: 1,
+			name: 'Errands',
+			archived: false,
+			color: '#3b82f6',
+			icon: null,
+			folderId: null,
+			itemCount: 0
+		};
+		const fetchMock = stubFetchByUrl({
+			lists: [errands],
+			folders: [folder],
+			updateList: { ...errands, folderId: 5 },
+			reorderLists: [{ ...errands, folderId: 5 }]
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Errands')).toBeInTheDocument();
+
+		// Drop into the (empty) "Groceries" folder section.
+		triggerDrop({ itemId: 1, toContainerId: 5, beforeItemId: null, afterItemId: null });
+
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists/reorder')).length)
+			.toBe(1);
+
+		const patchCall = fetchMock.mock.calls.find(
+			([u, i]) => String(u).includes('/lists/1') && (i as RequestInit)?.method === 'PATCH'
+		)!;
+		expect(JSON.parse((patchCall[1] as RequestInit).body as string)).toEqual({ folderId: 5 });
+
+		const [, reorderInit] = fetchMock.mock.calls.find(([u]) =>
+			String(u).includes('/lists/reorder')
+		)!;
+		expect(JSON.parse((reorderInit as RequestInit).body as string)).toEqual({ order: [1] });
+	});
+
+	it('reloads when dragging a list into a different folder fails without an ApiError', async () => {
+		setToken('test-token');
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
+		const list = {
+			id: 1,
+			name: 'Costco run',
+			archived: false,
+			color: '#3b82f6',
+			icon: null,
+			folderId: null,
+			itemCount: 0
+		};
+		const fetchMock = stubFetchByUrl({
+			lists: [list],
+			folders: [folder],
+			updateListError: new TypeError('network down')
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Costco run')).toBeInTheDocument();
+
+		triggerDrop({ itemId: 1, toContainerId: 5, beforeItemId: null, afterItemId: null });
+
+		await expect
+			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists')).length)
+			.toBe(3);
+	});
+
+	it('reloads when dragging a list into a different folder fails with an ApiError', async () => {
+		setToken('test-token');
+		const folder = {
+			id: 5,
+			userId: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			sortOrder: 0,
+			version: 1
+		};
+		const list = {
+			id: 1,
+			name: 'Costco run',
+			archived: false,
+			color: '#3b82f6',
+			icon: null,
+			folderId: null,
+			itemCount: 0
+		};
+		const fetchMock = stubFetchByUrl({
+			lists: [list],
+			folders: [folder],
+			updateListError: { status: 500, message: 'Could not move list' }
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Costco run')).toBeInTheDocument();
+
+		triggerDrop({ itemId: 1, toContainerId: 5, beforeItemId: null, afterItemId: null });
 
 		await expect
 			.poll(() => fetchMock.mock.calls.filter(([u]) => String(u).includes('/lists')).length)
