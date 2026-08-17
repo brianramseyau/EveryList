@@ -25,13 +25,19 @@ function wait(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function drag(from: HTMLElement, to: HTMLElement) {
+// `toYFraction` positions the drop within the target row (0 = top edge, 1 =
+// bottom edge). SortableJS's fallback swap decision is threshold-based
+// (swapThreshold: 0.65) — landing near the row's exact center is a genuine
+// toss-up between "before" and "after" and was observed to flip between
+// local runs and CI, so tests needing a specific side pick a point well past
+// the threshold in that direction rather than the row's midpoint.
+async function drag(from: HTMLElement, to: HTMLElement, toYFraction = 0.5) {
 	const fromRect = from.getBoundingClientRect();
 	const toRect = to.getBoundingClientRect();
 	const startX = fromRect.x + fromRect.width / 2;
 	const startY = fromRect.y + fromRect.height / 2;
 	const endX = toRect.x + toRect.width / 2;
-	const endY = toRect.y + toRect.height / 2;
+	const endY = toRect.y + toRect.height * toYFraction;
 
 	// SortableJS listens for PointerEvent, not MouseEvent, whenever the
 	// browser supports it (true in headless Chromium) — see supportPointer in
@@ -107,9 +113,10 @@ describe('sortableReorder', () => {
 		const onDrop = vi.fn();
 		sortableReorder(ul, { group: 'test-same-container', onDrop });
 
-		await drag(a, c);
+		await drag(a, c, 0.9);
 
-		// Dropping on C's row (moving downward) lands A after C, at the end.
+		// Dropping near the bottom of C's row (moving downward) lands A after
+		// C, at the end.
 		expect(onDrop).toHaveBeenCalledTimes(1);
 		expect(onDrop).toHaveBeenCalledWith({
 			itemId: 1,
@@ -133,7 +140,7 @@ describe('sortableReorder', () => {
 		const onDrop = vi.fn();
 		sortableReorder(ul, { group: 'test-null-container', onDrop });
 
-		await drag(a, b);
+		await drag(a, b, 0.9);
 
 		expect(onDrop).toHaveBeenCalledWith({
 			itemId: 1,
@@ -211,7 +218,7 @@ describe('sortableReorder', () => {
 		sortableReorder(ulA, { group: 'test-cross-container', onDrop });
 		sortableReorder(ulB, { group: 'test-cross-container', onDrop });
 
-		await drag(a, b);
+		await drag(a, b, 0.1);
 
 		expect(onDrop).toHaveBeenCalledWith({
 			itemId: 1,
