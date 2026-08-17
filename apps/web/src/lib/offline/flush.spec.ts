@@ -77,6 +77,68 @@ describe('flushQueue', () => {
 		});
 	});
 
+	it('adopts the server response into the cache after a queued update replays successfully, so the next edit is not computed against a stale version', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: true,
+			checkedAt: '2026-08-17T00:00:00.000Z',
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_dirty: true
+		});
+		vi.mocked(apiPatch).mockResolvedValue({
+			id: 5,
+			checked: true,
+			checkedAt: '2026-08-17T00:00:00.000Z',
+			version: 2
+		});
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: { checked: true },
+			url: '/api/v1/lists/1/items/5'
+		});
+
+		await flushQueue();
+
+		// Without this, the row's `version` stays at 1 locally while the server is at 2 — the
+		// very next edit to this item would then send the stale `expectedVersion` and 409
+		// against the sync that had just succeeded.
+		const cached = await db.items.get(5);
+		expect(cached?.version).toBe(2);
+		expect(cached?._dirty).toBe(false);
+	});
+
+	it('does not touch the cache when a queued update succeeds without a response body', async () => {
+		vi.mocked(apiPatch).mockResolvedValue(undefined);
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: { checked: true },
+			url: '/api/v1/lists/1/items/5'
+		});
+
+		await flushQueue();
+
+		expect(await pendingMutations()).toHaveLength(0);
+	});
+
 	it('omits expectedVersion from the body when a queued update never had one', async () => {
 		vi.mocked(apiPatch).mockResolvedValue({ id: 5 });
 		await enqueueMutation({

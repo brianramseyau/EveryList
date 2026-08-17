@@ -41,12 +41,20 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 		await table.delete(mutation.targetId);
 		return;
 	}
+	const table = tableForEntity(mutation.entityType as QueueableEntityType);
 	if (mutation.op === 'update') {
 		const body =
 			mutation.expectedVersion === null
 				? mutation.payload
 				: { ...mutation.payload, expectedVersion: mutation.expectedVersion };
-		await apiPatch(mutation.url, body);
+		const result = await apiPatch<Record<string, unknown>>(mutation.url, body);
+		// Adopt the server's authoritative row — bumped `version` included — the same way the
+		// already-online path's `onSuccess` does (see items.ts et al.). Skipping this left the
+		// cached row's `version` stale after every replayed update, so the *next* edit to that
+		// row (another queued mutation behind it, or the next click once "synced") would send a
+		// now-stale `expectedVersion` and 409 against the sync that had just succeeded — a
+		// self-inflicted conflict, not a real one, but still surfaced via the same toast.
+		if (result) await table.update(mutation.targetId, { ...result, _dirty: false });
 		return;
 	}
 	const url =
@@ -54,6 +62,7 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 			? mutation.url
 			: `${mutation.url}?expectedVersion=${mutation.expectedVersion}`;
 	await apiDelete(url);
+	await table.update(mutation.targetId, { _dirty: false });
 }
 
 /** Entity types the write paths in `$lib/api/{items,categories,favorites,stores}.ts` actually
