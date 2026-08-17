@@ -13,7 +13,8 @@ const { flushQueue, onConflict } = await import('./flush');
 
 afterEach(async () => {
 	vi.resetAllMocks();
-	onConflict(null);
+	// Also exercises the no-op unsubscribe this "clear everything" call returns.
+	onConflict(null)();
 	await resetDbForTesting();
 });
 
@@ -122,6 +123,46 @@ describe('flushQueue', () => {
 		await flushQueue();
 
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/5');
+	});
+
+	it('does not run two overlapping drains — a call while one is already in flight no-ops', async () => {
+		// Resolved once `replay()` actually calls `apiPatch`, so the test can wait for that instead
+		// of racing Dexie's own internal async scheduling — and `resolveApiPatch` is always invoked
+		// before any assertion below, so a failing expectation can never leave `firstFlush` hanging
+		// mid-request into the next test (which would leave the module's `flushing` guard stuck).
+		let resolveApiPatch: ((value: { id: number; version: number }) => void) | undefined;
+		const apiPatchCalled = new Promise<void>((resolveCalled) => {
+			vi.mocked(apiPatch).mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						resolveApiPatch = resolve;
+						resolveCalled();
+					})
+			);
+		});
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: { checked: true },
+			url: '/api/v1/lists/1/items/5'
+		});
+
+		const firstFlush = flushQueue();
+		// Mobile reconnects routinely fire more than one flush trigger in quick succession (the
+		// `online` listener, a backoff retry, "Retry now") — this second call lands while the
+		// first is still awaiting its request and must no-op rather than replaying the same
+		// still-pending mutation a second time (see flush.ts's `flushing` guard).
+		const secondFlush = flushQueue();
+		await secondFlush;
+		await apiPatchCalled;
+
+		resolveApiPatch!({ id: 5, version: 2 });
+		await firstFlush;
+
+		expect(apiPatch).toHaveBeenCalledTimes(1);
+		expect(await pendingMutations()).toHaveLength(0);
 	});
 
 	it('stops draining on a network error, leaving later mutations queued', async () => {
@@ -244,6 +285,36 @@ describe('flushQueue', () => {
 			expectedVersion: 2,
 			payload: { checked: true }
 		});
+	});
+
+	it('stops notifying a listener once its onConflict subscription is unsubscribed', async () => {
+		vi.mocked(apiDelete).mockRejectedValue(new ApiError(409, 'Conflict'));
+		const listener = vi.fn();
+		const unsubscribe = onConflict(listener);
+
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'delete',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5'
+		});
+		await flushQueue();
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		unsubscribe();
+
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'delete',
+			targetId: 6,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/6'
+		});
+		await flushQueue();
+		expect(listener).toHaveBeenCalledTimes(1);
 	});
 
 	it('on a 409 where the winning edit already matches the offline change, adopts the server copy without re-queuing', async () => {

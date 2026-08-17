@@ -83,6 +83,7 @@ describe('SyncStatusBanner.svelte', () => {
 		const captured: { handler: ConflictListener | null } = { handler: null };
 		vi.mocked(onConflict).mockImplementation((listener) => {
 			captured.handler = listener;
+			return vi.fn();
 		});
 
 		render(SyncStatusBanner);
@@ -106,6 +107,7 @@ describe('SyncStatusBanner.svelte', () => {
 		const captured: { handler: ConflictListener | null } = { handler: null };
 		vi.mocked(onConflict).mockImplementation((listener) => {
 			captured.handler = listener;
+			return vi.fn();
 		});
 
 		render(SyncStatusBanner);
