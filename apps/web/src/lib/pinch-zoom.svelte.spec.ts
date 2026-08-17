@@ -3,9 +3,9 @@ import { disablePinchZoom } from './pinch-zoom';
 
 // Runs in the "client" (real Chromium) project so `window` is the genuine
 // browser implementation — see pinch-zoom.spec.ts for the SSR/no-window
-// guard. `gesturestart` is WebKit-only and unrecognized by Chromium, but
-// dispatching it here still exercises the listener the same way a real
-// iOS pinch would trigger it.
+// guard. `gesturestart`/`gesturechange` are WebKit-only and unrecognized by
+// Chromium, but dispatching them here still exercises the listeners the
+// same way a real iOS pinch would trigger them.
 describe('pinch-zoom (browser)', () => {
 	beforeAll(() => {
 		disablePinchZoom();
@@ -13,6 +13,14 @@ describe('pinch-zoom (browser)', () => {
 
 	it('prevents the default on gesturestart (WebKit pinch-zoom start)', () => {
 		const event = new Event('gesturestart', { cancelable: true });
+
+		window.dispatchEvent(event);
+
+		expect(event.defaultPrevented).toBe(true);
+	});
+
+	it('prevents the default on gesturechange (WebKit incremental pinch scaling)', () => {
+		const event = new Event('gesturechange', { cancelable: true });
 
 		window.dispatchEvent(event);
 

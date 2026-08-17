@@ -355,6 +355,7 @@
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
 	<div
 		class="sticky top-0 z-20 flex flex-col gap-4 bg-paper pt-[env(safe-area-inset-top)]"
+		style="touch-action: pan-x pan-y;"
 		bind:clientHeight={stickyHeaderHeight}
 	>
 		<PageHeader title={list?.name} backHref={resolve('/lists')} backLabel="My Lists">
@@ -517,6 +518,7 @@
 										? ''
 										: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
 									use:stickyTop={stickyHeaderHeight}
+									style:touch-action="pan-x pan-y"
 									style:color={group.category ? list.color : undefined}
 									style:border-bottom-color={group.category ? list.color : undefined}
 								>
