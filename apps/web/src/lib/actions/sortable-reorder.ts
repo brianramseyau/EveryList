@@ -10,11 +10,14 @@ import Sortable from 'sortablejs';
 export interface SortableReorderParams {
 	/** Shared across every `<ul>` in the same drag surface — required for
 	 * cross-container dragging (SortableJS only allows drops between lists
-	 * that share a group name). */
+	 * that share a group name). Give every `<ul>` on a page its own unique
+	 * group when drags should never cross containers (e.g. one per
+	 * independent section) — SortableJS containers only accept drops from
+	 * others sharing their exact group name. */
 	group: string;
 	disabled?: boolean;
 	/** Fired once on drop, only if the item actually moved (container or
-	 * position). Everything is read off `data-item-id` / `data-category-id`
+	 * position). Everything is read off `data-item-id` / `data-container-id`
 	 * attributes rather than array indices. `beforeItemId`/`afterItemId` are
 	 * the dragged item's new immediate siblings *within the destination
 	 * list* (null at either end) — enough for the caller to place it
@@ -22,13 +25,13 @@ export interface SortableReorderParams {
 	 * real neighbors, without needing to re-touch the DOM itself. */
 	onDrop: (params: {
 		itemId: number;
-		toCategoryId: number | null;
+		toContainerId: number | null;
 		beforeItemId: number | null;
 		afterItemId: number | null;
 	}) => void;
 }
 
-function parseCategoryId(raw: string | undefined): number | null {
+function parseContainerId(raw: string | undefined): number | null {
 	return raw === undefined || raw === 'null' ? null : Number(raw);
 }
 
@@ -58,7 +61,7 @@ export function sortableReorder(node: HTMLElement, params: SortableReorderParams
 		onEnd(evt) {
 			const unchanged = evt.to === evt.from && evt.newIndex === evt.oldIndex;
 			const itemId = Number(evt.item.dataset.itemId);
-			const toCategoryId = parseCategoryId(evt.to.dataset.categoryId);
+			const toContainerId = parseContainerId(evt.to.dataset.containerId);
 
 			// evt.item is still physically inside evt.to at evt.newIndex here (the
 			// DOM-revert below hasn't happened yet) — its real siblings at this
@@ -78,7 +81,7 @@ export function sortableReorder(node: HTMLElement, params: SortableReorderParams
 			evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex!] ?? null);
 
 			if (unchanged) return;
-			current.onDrop({ itemId, toCategoryId, beforeItemId, afterItemId });
+			current.onDrop({ itemId, toContainerId, beforeItemId, afterItemId });
 		}
 	});
 

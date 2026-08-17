@@ -260,7 +260,7 @@
 	// list on the next load even though nothing else changed.
 	async function handleItemDrop(params: {
 		itemId: number;
-		toCategoryId: number | null;
+		toContainerId: number | null;
 		beforeItemId: number | null;
 		afterItemId: number | null;
 	}) {
@@ -284,7 +284,7 @@
 		// matching AnyList's drag-to-recategorize.
 		const updatedItem: ItemDto = {
 			...draggedItem,
-			categoryId: params.toCategoryId,
+			categoryId: params.toContainerId,
 			sortOrder: newSortOrder
 		};
 
@@ -498,7 +498,7 @@
 							{/if}
 							<ul
 								class="flex flex-col gap-1"
-								data-category-id={group.category?.id ?? 'null'}
+								data-container-id={group.category?.id ?? 'null'}
 								use:sortableReorder={{ group: 'list-items', onDrop: handleItemDrop }}
 							>
 								{#each group.items as item (item.id)}
