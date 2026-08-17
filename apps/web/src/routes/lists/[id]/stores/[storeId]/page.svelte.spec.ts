@@ -3,11 +3,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
-import { HOLD_MS } from '$lib/actions/press-hold-reorder';
+import type { SortableReorderParams } from '$lib/actions/sortable-reorder';
 
-function delay(ms: number) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// See the item-list page's spec for why this is mocked: SortableJS's own
+// drag mechanics aren't something a component test can reliably drive, so
+// this test double lets tests invoke the page's onDrop handler directly.
+vi.mock('$lib/actions/sortable-reorder', () => ({
+	sortableReorder: (
+		node: HTMLElement & { __onDrop?: SortableReorderParams['onDrop'] },
+		params: SortableReorderParams
+	) => {
+		node.__onDrop = params.onDrop;
+		return {
+			update(next: SortableReorderParams) {
+				node.__onDrop = next.onDrop;
+			},
+			destroy() {
+				delete node.__onDrop;
+			}
+		};
+	}
+}));
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1', storeId: '20' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -154,36 +170,17 @@ describe('Store aisle order +page.svelte', () => {
 		expect([...names].map((el) => el.textContent)).toEqual(['Dairy', 'Produce']);
 	});
 
-	function rows() {
-		return page.getByRole('listitem');
-	}
-
-	async function dragFirstBelowSecond() {
-		const items = rows();
-		const first = items.first().element();
-		const second = items.nth(1).element();
-		const secondRect = second.getBoundingClientRect();
-
-		first.dispatchEvent(
-			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-		await delay(HOLD_MS + 50);
-		first.dispatchEvent(
-			new PointerEvent('pointermove', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: secondRect.top + secondRect.height + 1
-			})
-		);
-		first.dispatchEvent(
-			new PointerEvent('pointerup', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: secondRect.top + secondRect.height + 1
-			})
-		);
+	// Invokes the onDrop handler SortableJS would have called on a real drop
+	// (see the mock above) — there's only one `<ul>` on this page.
+	function triggerDrop(params: {
+		itemId: number;
+		beforeItemId: number | null;
+		afterItemId: number | null;
+	}) {
+		const ul = document.querySelector('ul') as HTMLElement & {
+			__onDrop?: (p: typeof params) => void;
+		};
+		ul.__onDrop?.(params);
 	}
 
 	it('moves a category down and persists the new order', async () => {
@@ -195,7 +192,9 @@ describe('Store aisle order +page.svelte', () => {
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		await dragFirstBelowSecond();
+		// Starting order is [Produce(10), Dairy(11)]; drag Produce below Dairy,
+		// landing at the end.
+		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
 		expect(reorderStoreCategories).toHaveBeenCalledWith(20, [
 			{ categoryId: 11, sortOrder: 0 },
@@ -212,31 +211,8 @@ describe('Store aisle order +page.svelte', () => {
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		const items = rows();
-		const first = items.first().element();
-		const second = items.nth(1).element();
-		const firstRect = first.getBoundingClientRect();
-
-		second.dispatchEvent(
-			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-		await delay(HOLD_MS + 50);
-		second.dispatchEvent(
-			new PointerEvent('pointermove', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: firstRect.top
-			})
-		);
-		second.dispatchEvent(
-			new PointerEvent('pointerup', {
-				bubbles: true,
-				pointerId: 1,
-				clientX: 0,
-				clientY: firstRect.top
-			})
-		);
+		// Drag Dairy above Produce, landing at the start.
+		triggerDrop({ itemId: 11, beforeItemId: null, afterItemId: 10 });
 
 		expect(reorderStoreCategories).toHaveBeenCalledWith(20, [
 			{ categoryId: 11, sortOrder: 0 },
@@ -244,23 +220,22 @@ describe('Store aisle order +page.svelte', () => {
 		]);
 	});
 
-	it('does not reorder while a drag never crosses into a new position', async () => {
+	it('keeps a category in its original slot when the drop has no neighbors at all', async () => {
+		vi.mocked(reorderStoreCategories).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 10, sortOrder: 0, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 20, categoryId: 11, sortOrder: 1, deletedAt: null, version: 1 }
+		]);
+
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		const first = rows().first().element();
-		first.dispatchEvent(
-			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-		await delay(HOLD_MS + 50);
-		first.dispatchEvent(
-			new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
-		first.dispatchEvent(
-			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
-		);
+		// No before/after neighbor — insertAt falls back to the end.
+		triggerDrop({ itemId: 10, beforeItemId: null, afterItemId: null });
 
-		expect(reorderStoreCategories).not.toHaveBeenCalled();
+		expect(reorderStoreCategories).toHaveBeenCalledWith(20, [
+			{ categoryId: 11, sortOrder: 0 },
+			{ categoryId: 10, sortOrder: 1 }
+		]);
 	});
 
 	it('shows an error banner over the still-loaded list when a reload after a failure also fails', async () => {
@@ -277,7 +252,7 @@ describe('Store aisle order +page.svelte', () => {
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		await dragFirstBelowSecond();
+		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
 		await expect
 			.element(page.getByText('Failed to load store category order.'))
@@ -295,7 +270,7 @@ describe('Store aisle order +page.svelte', () => {
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		await dragFirstBelowSecond();
+		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
@@ -307,7 +282,7 @@ describe('Store aisle order +page.svelte', () => {
 		render(StoreOrderPage);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 
-		await dragFirstBelowSecond();
+		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
