@@ -5,9 +5,11 @@ import hash from '@adonisjs/core/services/hash'
 import { DateTime } from 'luxon'
 import PasswordResetMail from '#mails/password_reset_mail'
 import PasswordResetToken from '#models/password_reset_token'
+import { appUrl } from '#config/app'
 
 const PASSWORD = 'password123'
 const NEW_PASSWORD = 'newpassword123'
+const ORIGIN = 'https://lists.example.com'
 
 async function signupWithKnownEmail(client: import('@japa/api-client').ApiClient, email: string) {
   const response = await client.post('/api/v1/auth/signup').json({
@@ -20,28 +22,39 @@ async function signupWithKnownEmail(client: import('@japa/api-client').ApiClient
 }
 
 /**
- * Requests a reset link for `email`, returning the plaintext reset token
- * extracted from the faked mail (asserting the mail was sent along the way).
+ * Requests a reset link for `email`, sending an `Origin` header when `origin`
+ * is given, asserting the mail's reset link uses it (or the configured
+ * APP_URL as a fallback) and returning the plaintext reset token.
  */
 async function resetTokenForEmail(
   fakeMailer: ReturnType<typeof mail.fake>,
   client: import('@japa/api-client').ApiClient,
-  email: string
+  email: string,
+  origin: string | null = ORIGIN
 ): Promise<string> {
-  const forgotResponse = await client.post('/api/v1/auth/forgot-password').json({ email })
+  const request = client.post('/api/v1/auth/forgot-password').json({ email })
+  if (origin) request.header('Origin', origin)
+  const forgotResponse = await request
   forgotResponse.assertStatus(204)
 
+  const baseUrl = origin ?? appUrl
   let resetToken = ''
   fakeMailer.mails.assertSent(PasswordResetMail, (sentMail) => {
     const message = sentMail.message
     const text = message.nodeMailerMessage.text
+    const html = message.nodeMailerMessage.html
     const match = typeof text === 'string' ? text.match(/\/reset-password\?token=([^\s]+)/) : null
     resetToken = match ? (match[1] ?? '') : ''
     return (
       message.hasTo(email) &&
       message.hasSubject('Reset your EveryList password') &&
       typeof text === 'string' &&
-      text.includes('/reset-password?token=')
+      text.includes(`${baseUrl}/reset-password?token=`) &&
+      typeof html === 'string' &&
+      html.includes(`href="${baseUrl}/reset-password?token=`) &&
+      html.includes('Reset your password') &&
+      html.includes('Reset password') &&
+      html.includes('&#10003;')
     )
   })
   return resetToken
@@ -80,6 +93,15 @@ test.group('Password reset', (group) => {
 
     assert.isString(resetToken)
     assert.isNotEmpty(resetToken)
+  })
+
+  test('forgot-password falls back to APP_URL when the request sends no Origin', async ({
+    client,
+  }) => {
+    await signupWithKnownEmail(client, 'ada@example.com')
+    const fakeMailer = mail.fake()
+
+    await resetTokenForEmail(fakeMailer, client, 'ada@example.com', null)
   })
 
   test('forgot-password for an unknown email returns 204 and sends no mail', async ({ client }) => {
