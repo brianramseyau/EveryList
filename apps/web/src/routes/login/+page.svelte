@@ -32,6 +32,7 @@
 			? `${resolve('/signup')}?next=${encodeURIComponent(nextPath)}`
 			: resolve('/signup')) as ResolvedPathname
 	);
+	const forgotPasswordHref = $derived(resolve('/forgot-password') as ResolvedPathname);
 
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -79,7 +80,12 @@
 			<Helper class="text-red-600 dark:text-red-400">{error}</Helper>
 		{/if}
 
-		<Button type="submit" disabled={submitting}>{submitting ? 'Logging in…' : 'Log in'}</Button>
+		<div class="flex items-center justify-between">
+			<Button type="submit" disabled={submitting}>{submitting ? 'Logging in…' : 'Log in'}</Button>
+			<a href={forgotPasswordHref} class="text-sm text-primary-700 underline dark:text-primary-400">
+				Forgot password?
+			</a>
+		</div>
 	</form>
 
 	<p class="text-sm text-gray-600 dark:text-gray-300">

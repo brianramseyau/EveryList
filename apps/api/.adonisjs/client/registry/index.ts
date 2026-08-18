@@ -18,6 +18,18 @@ const routes = {
     tokens: [{"old":"/api/v1/auth/login","type":0,"val":"api","end":""},{"old":"/api/v1/auth/login","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/login","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/login","type":0,"val":"login","end":""}],
     types: placeholder as Registry['auth.access_tokens.store']['types'],
   },
+  'auth.password_reset.forgot': {
+    methods: ["POST"],
+    pattern: '/api/v1/auth/forgot-password',
+    tokens: [{"old":"/api/v1/auth/forgot-password","type":0,"val":"api","end":""},{"old":"/api/v1/auth/forgot-password","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/forgot-password","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/forgot-password","type":0,"val":"forgot-password","end":""}],
+    types: placeholder as Registry['auth.password_reset.forgot']['types'],
+  },
+  'auth.password_reset.reset': {
+    methods: ["POST"],
+    pattern: '/api/v1/auth/reset-password',
+    tokens: [{"old":"/api/v1/auth/reset-password","type":0,"val":"api","end":""},{"old":"/api/v1/auth/reset-password","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/reset-password","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/reset-password","type":0,"val":"reset-password","end":""}],
+    types: placeholder as Registry['auth.password_reset.reset']['types'],
+  },
   'profile.profile.show': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/account/profile',

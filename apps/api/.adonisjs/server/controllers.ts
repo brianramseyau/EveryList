@@ -16,6 +16,7 @@ export const controllers = {
   Lists: () => import('#controllers/lists_controller'),
   Metas: () => import('#controllers/metas_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
+  PasswordReset: () => import('#controllers/password_reset_controller'),
   Profile: () => import('#controllers/profile_controller'),
   Stores: () => import('#controllers/stores_controller'),
 }

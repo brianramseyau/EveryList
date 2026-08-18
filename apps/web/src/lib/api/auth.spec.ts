@@ -5,7 +5,8 @@ vi.mock('./token', () => ({ setToken: vi.fn(), clearToken: vi.fn() }));
 
 const { apiPost, apiGet, apiPatch } = await import('./client');
 const { setToken, clearToken } = await import('./token');
-const { fetchProfile, login, logout, signup, updateProfile } = await import('./auth');
+const { fetchProfile, forgotPassword, login, logout, resetPassword, signup, updateProfile } =
+	await import('./auth');
 
 const authResponse = {
 	user: {
@@ -75,6 +76,26 @@ describe('auth', () => {
 		updateProfile({ fullName: 'Grace Hopper' });
 		expect(apiPatch).toHaveBeenCalledWith('/api/v1/account/profile', {
 			fullName: 'Grace Hopper'
+		});
+	});
+
+	it('forgotPassword posts the email address', () => {
+		forgotPassword({ email: 'ada@example.com' });
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/auth/forgot-password', {
+			email: 'ada@example.com'
+		});
+	});
+
+	it('resetPassword posts the token and new password', () => {
+		resetPassword({
+			token: 'tok-123',
+			password: 'newpassword123',
+			passwordConfirmation: 'newpassword123'
+		});
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/auth/reset-password', {
+			token: 'tok-123',
+			password: 'newpassword123',
+			passwordConfirmation: 'newpassword123'
 		});
 	});
 });

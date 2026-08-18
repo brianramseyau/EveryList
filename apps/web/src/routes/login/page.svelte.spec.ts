@@ -80,6 +80,15 @@ describe('Login +page.svelte', () => {
 		expect(link.getAttribute('href')).toBe('/signup?next=%2Fjoin%2Fabc123');
 	});
 
+	it('links to the forgot password page', async () => {
+		render(LoginPage);
+
+		const link = page
+			.getByRole('link', { name: 'Forgot password?' })
+			.element() as HTMLAnchorElement;
+		expect(link.getAttribute('href')).toBe('/forgot-password');
+	});
+
 	it('shows the API error message on failure', async () => {
 		vi.mocked(login).mockRejectedValue(new ApiError(401, 'Invalid credentials'));
 
