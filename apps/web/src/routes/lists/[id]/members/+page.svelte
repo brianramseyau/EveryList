@@ -38,6 +38,24 @@
 	let newInviteRole = $state<Exclude<ListRole, 'owner'>>('editor');
 	let creatingInvite = $state(false);
 	let lastCreatedToken = $state<string | null>(null);
+	let copied = $state(false);
+	let copyTimeout: ReturnType<typeof setTimeout> | undefined;
+
+	// The link is only ever shown once (see the "Invite by link" section) — the
+	// copy helper is how the owner captures it before leaving the page.
+	async function copyLink(url: string) {
+		try {
+			await navigator.clipboard.writeText(url);
+			copied = true;
+			if (copyTimeout) clearTimeout(copyTimeout);
+			copyTimeout = setTimeout(() => {
+				copied = false;
+			}, 2000);
+		} catch {
+			// Clipboard access can be denied by the browser — the link is
+			// still shown on the page, so this is a nice-to-have, not fatal.
+		}
+	}
 
 	let newMemberRole = $state<Exclude<ListRole, 'owner'>>('editor');
 	let addingMember = $state(false);
@@ -114,12 +132,7 @@
 			const invite = await createInvite(listId, newInviteRole);
 			invites = [invite, ...invites];
 			lastCreatedToken = invite.token;
-			try {
-				await navigator.clipboard.writeText(joinUrl(invite.token));
-			} catch {
-				// Clipboard access can be denied by the browser — the link is
-				// still shown on the page, so this is a nice-to-have, not fatal.
-			}
+			await copyLink(joinUrl(invite.token));
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to create invite.';
 		} finally {
@@ -255,9 +268,24 @@
 				</form>
 
 				{#if lastCreatedToken}
-					<p class="text-sm break-all text-gray-600 dark:text-gray-300">
-						{joinUrl(lastCreatedToken)}
-					</p>
+					{@const inviteUrl = joinUrl(lastCreatedToken)}
+					<div
+						class="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/30"
+					>
+						<p class="text-sm font-medium text-amber-900 dark:text-amber-200">
+							Copy this link now — it won't be shown again.
+						</p>
+						<div class="flex items-center gap-2">
+							<code
+								class="min-w-0 flex-1 rounded bg-white px-2 py-1 text-xs break-all text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+							>
+								{inviteUrl}
+							</code>
+							<Button type="button" size="sm" onclick={() => void copyLink(inviteUrl)}>
+								{copied ? 'Copied!' : 'Copy'}
+							</Button>
+						</div>
+					</div>
 				{/if}
 
 				{#if invites.length > 0}
