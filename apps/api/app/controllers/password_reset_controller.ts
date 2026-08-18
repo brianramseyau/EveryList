@@ -5,6 +5,7 @@ import isMailConfigured from '#services/mail_configured'
 import { createPasswordResetToken, findActivePasswordResetToken } from '#services/password_reset'
 import { forgotPasswordValidator, resetPasswordValidator } from '#validators/password_reset'
 import type { HttpContext } from '@adonisjs/core/http'
+import { appUrl } from '#config/app'
 import { DateTime } from 'luxon'
 
 export default class PasswordResetController {
@@ -23,7 +24,11 @@ export default class PasswordResetController {
 
     if (user) {
       const token = await createPasswordResetToken(user)
-      await mail.send(new PasswordResetMail(user.email, token))
+      // The requesting browser's Origin is the public URL the user is actually
+      // on — use it so the emailed link works even when APP_URL wasn't
+      // configured (the container's baked-in default is a loopback address).
+      const baseUrl = request.header('origin') ?? appUrl
+      await mail.send(new PasswordResetMail(user.email, token, baseUrl))
     }
 
     return response.noContent()
