@@ -252,6 +252,18 @@ const routes = {
     tokens: [{"old":"/api/v1/lists/:listId/members","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/members","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/members","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/members","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/members","type":0,"val":"members","end":""}],
     types: placeholder as Registry['lists.list_members.index']['types'],
   },
+  'lists.list_members.candidates': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/lists/:listId/members/candidates',
+    tokens: [{"old":"/api/v1/lists/:listId/members/candidates","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/members/candidates","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/members/candidates","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/members/candidates","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/members/candidates","type":0,"val":"members","end":""},{"old":"/api/v1/lists/:listId/members/candidates","type":0,"val":"candidates","end":""}],
+    types: placeholder as Registry['lists.list_members.candidates']['types'],
+  },
+  'lists.list_members.store': {
+    methods: ["POST"],
+    pattern: '/api/v1/lists/:listId/members',
+    tokens: [{"old":"/api/v1/lists/:listId/members","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/members","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/members","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/members","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/members","type":0,"val":"members","end":""}],
+    types: placeholder as Registry['lists.list_members.store']['types'],
+  },
   'lists.list_members.update': {
     methods: ["PATCH"],
     pattern: '/api/v1/lists/:listId/members/:memberId',

@@ -140,6 +140,16 @@ export interface ListMemberDto {
   user: UserDto
 }
 
+/**
+ * A user the requester could directly add to a list — someone they already
+ * share another list with. `sharedListNames` gives the picker context for
+ * who the person is. Returned by `GET /lists/:listId/members/candidates`.
+ */
+export interface MemberCandidateDto {
+  user: UserDto
+  sharedListNames: string[]
+}
+
 export interface ListInviteDto {
   id: number
   listId: number

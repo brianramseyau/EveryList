@@ -4,11 +4,23 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { Button } from 'flowbite-svelte';
-	import type { ListDto, ListInviteDto, ListMemberDto, ListRole } from '@everylist/shared';
+	import type {
+		ListDto,
+		ListInviteDto,
+		ListMemberDto,
+		ListRole,
+		MemberCandidateDto
+	} from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchProfile } from '$lib/api/auth';
 	import { fetchList } from '$lib/api/lists';
-	import { fetchMembers, removeMember, updateMemberRole } from '$lib/api/members';
+	import {
+		addMember,
+		fetchMemberCandidates,
+		fetchMembers,
+		removeMember,
+		updateMemberRole
+	} from '$lib/api/members';
 	import { createInvite, fetchInvites, revokeInvite } from '$lib/api/invites';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -18,6 +30,7 @@
 	let list = $state<ListDto | null>(null);
 	let members = $state<ListMemberDto[]>([]);
 	let invites = $state<ListInviteDto[]>([]);
+	let candidates = $state<MemberCandidateDto[]>([]);
 	let currentUserId = $state<number | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -26,6 +39,8 @@
 	let creatingInvite = $state(false);
 	let lastCreatedToken = $state<string | null>(null);
 
+	let newMemberRole = $state<Exclude<ListRole, 'owner'>>('editor');
+	let addingMember = $state(false);
 	const isOwner = $derived(
 		members.find((member) => member.userId === currentUserId)?.role === 'owner'
 	);
@@ -44,6 +59,7 @@
 				fetchMembers(listId),
 				fetchInvites(listId)
 			]);
+			candidates = await fetchMemberCandidates(listId);
 			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to load members.';
@@ -75,6 +91,19 @@
 			members = members.filter((current) => current.id !== member.id);
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to remove member.';
+		}
+	}
+
+	async function handleAddMember(candidate: MemberCandidateDto) {
+		addingMember = true;
+		try {
+			const member = await addMember(listId, candidate.user.id, newMemberRole);
+			members = [...members, member];
+			candidates = candidates.filter((current) => current.user.id !== candidate.user.id);
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to add member.';
+		} finally {
+			addingMember = false;
 		}
 	}
 
@@ -170,6 +199,48 @@
 		</section>
 
 		{#if isOwner}
+			<section class="flex flex-col gap-2">
+				<h2 class="text-sm font-semibold">Add someone you already share a list with</h2>
+				{#if candidates.length === 0}
+					<p class="text-sm text-gray-600 dark:text-gray-400">
+						No one yet — people you already share another list with can be added here without a
+						link.
+					</p>
+				{:else}
+					<ul class="flex flex-col gap-2">
+						{#each candidates as candidate (candidate.user.id)}
+							<li
+								class="flex items-center gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700"
+							>
+								<div class="flex flex-col">
+									<span>{candidate.user.fullName ?? candidate.user.email}</span>
+									<span class="text-xs text-gray-600 dark:text-gray-400">
+										Shares {candidate.sharedListNames.join(', ')}
+									</span>
+								</div>
+								<div class="ml-auto flex items-center gap-2">
+									<select
+										class="rounded border border-gray-300 bg-white text-sm dark:border-gray-600 dark:bg-gray-800"
+										bind:value={newMemberRole}
+									>
+										<option value="editor">Editor</option>
+										<option value="viewer">Viewer</option>
+									</select>
+									<Button
+										type="button"
+										size="sm"
+										disabled={addingMember}
+										onclick={() => handleAddMember(candidate)}
+									>
+										Add
+									</Button>
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
+
 			<section class="flex flex-col gap-2">
 				<h2 class="text-sm font-semibold">Invite by link</h2>
 				<form class="flex gap-2" onsubmit={handleCreateInvite}>
