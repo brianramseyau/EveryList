@@ -42,13 +42,19 @@ async function resetTokenForEmail(
   fakeMailer.mails.assertSent(PasswordResetMail, (sentMail) => {
     const message = sentMail.message
     const text = message.nodeMailerMessage.text
+    const html = message.nodeMailerMessage.html
     const match = typeof text === 'string' ? text.match(/\/reset-password\?token=([^\s]+)/) : null
     resetToken = match ? (match[1] ?? '') : ''
     return (
       message.hasTo(email) &&
       message.hasSubject('Reset your EveryList password') &&
       typeof text === 'string' &&
-      text.includes(`${baseUrl}/reset-password?token=`)
+      text.includes(`${baseUrl}/reset-password?token=`) &&
+      typeof html === 'string' &&
+      html.includes(`href="${baseUrl}/reset-password?token=`) &&
+      html.includes('Reset your password') &&
+      html.includes('Reset password') &&
+      html.includes('&#10003;')
     )
   })
   return resetToken
