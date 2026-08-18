@@ -3,7 +3,7 @@ import vine from '@vinejs/vine'
 /**
  * Shared rules for email and password.
  */
-const email = () => vine.string().email().maxLength(254)
+const email = () => vine.string().trim().toLowerCase().email().maxLength(254)
 const password = () => vine.string().minLength(8).maxLength(32)
 
 /**
@@ -11,7 +11,7 @@ const password = () => vine.string().minLength(8).maxLength(32)
  */
 export const signupValidator = vine.create({
   fullName: vine.string().nullable(),
-  email: email().unique({ table: 'users', column: 'email' }),
+  email: email().unique({ table: 'users', column: 'email', caseInsensitive: true }),
   password: password(),
   passwordConfirmation: password().sameAs('password'),
   // Present when signing up via a list join link, so signup can proceed

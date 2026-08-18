@@ -23,6 +23,53 @@ test.group('Auth flow', (group) => {
     assert.isString(response.body().data.token)
   })
 
+  test('signup normalizes a mixed-case email to lowercase', async ({ client, assert }) => {
+    const response = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'Ada@Example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+
+    response.assertStatus(200)
+    assert.equal(response.body().data.user.email, 'ada@example.com')
+  })
+
+  test('signup rejects a duplicate email with different casing', async ({ client }) => {
+    await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+
+    const response = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Two',
+      email: 'ADA@EXAMPLE.COM',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+
+    response.assertStatus(422)
+  })
+
+  test('login works with a differently-cased email', async ({ client, assert }) => {
+    await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+
+    const response = await client.post('/api/v1/auth/login').json({
+      email: 'ADA@Example.com',
+      password: 'password123',
+    })
+
+    response.assertStatus(200)
+    assert.isString(response.body().data.token)
+  })
+
   test('signup rejects a duplicate email', async ({ client }) => {
     await client.post('/api/v1/auth/signup').json({
       fullName: 'Ada Lovelace',
