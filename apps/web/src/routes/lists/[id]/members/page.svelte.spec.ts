@@ -113,6 +113,8 @@ describe('Members +page.svelte', () => {
 
 	afterEach(() => {
 		vi.clearAllMocks();
+		vi.unstubAllGlobals();
+		vi.useRealTimers();
 		clearToken();
 	});
 
@@ -238,7 +240,7 @@ describe('Members +page.svelte', () => {
 		await expect.element(page.getByText('Invite by link')).not.toBeInTheDocument();
 	});
 
-	it('creates an invite link and shows it', async () => {
+	it('creates an invite link and explains it is only shown once', async () => {
 		vi.mocked(createInvite).mockResolvedValue({
 			id: 20,
 			listId: 5,
@@ -258,6 +260,89 @@ describe('Members +page.svelte', () => {
 
 		expect(createInvite).toHaveBeenCalledWith(5, 'viewer');
 		await expect.element(page.getByText('/join/tok-abc')).toBeInTheDocument();
+		await expect
+			.element(page.getByText(/Copy this link now — it won't be shown again/))
+			.toBeInTheDocument();
+	});
+
+	it('copies the created link and confirms with the button', async () => {
+		vi.mocked(createInvite).mockResolvedValue({
+			id: 20,
+			listId: 5,
+			token: 'tok-abc',
+			role: 'editor',
+			createdBy: 1,
+			expiresAt: null,
+			revokedAt: null,
+			createdAt: TS
+		});
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+		render(MembersPage);
+		await expect.element(page.getByText('Invite by link')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Create invite link' }).click();
+		await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
+
+		expect(writeText).toHaveBeenCalledWith(expect.stringContaining('/join/tok-abc'));
+	});
+
+	it('keeps the link visible when copying fails', async () => {
+		vi.mocked(createInvite).mockResolvedValue({
+			id: 20,
+			listId: 5,
+			token: 'tok-abc',
+			role: 'editor',
+			createdBy: 1,
+			expiresAt: null,
+			revokedAt: null,
+			createdAt: TS
+		});
+		vi.stubGlobal('navigator', {
+			...navigator,
+			clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) }
+		});
+
+		render(MembersPage);
+		await expect.element(page.getByText('Invite by link')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Create invite link' }).click();
+
+		await expect.element(page.getByText('/join/tok-abc')).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
+	});
+
+	it('re-copies from the Copy button and resets the confirmation', async () => {
+		vi.useFakeTimers();
+		vi.mocked(createInvite).mockResolvedValue({
+			id: 20,
+			listId: 5,
+			token: 'tok-abc',
+			role: 'editor',
+			createdBy: 1,
+			expiresAt: null,
+			revokedAt: null,
+			createdAt: TS
+		});
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+		render(MembersPage);
+		await expect.element(page.getByText('Invite by link')).toBeInTheDocument();
+
+		// Creating an invite auto-copies and arms the 2s confirmation timer.
+		await page.getByRole('button', { name: 'Create invite link' }).click();
+		await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
+
+		// Copying again before the timer fires clears the old one and re-arms.
+		await page.getByRole('button', { name: 'Copied!' }).click();
+		await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
+
+		// After 2s the confirmation resets back to a plain Copy button.
+		await vi.advanceTimersByTimeAsync(2000);
+		await expect.element(page.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
+		expect(writeText).toHaveBeenCalledTimes(2);
 	});
 
 	it('shows an error message when creating an invite fails', async () => {
