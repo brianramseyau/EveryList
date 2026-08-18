@@ -1,5 +1,4 @@
 import { BaseMail } from '@adonisjs/mail'
-import { appUrl } from '#config/app'
 
 function escapeHtml(value: string): string {
   return value
@@ -15,7 +14,10 @@ export default class PasswordResetMail extends BaseMail {
 
   constructor(
     private recipientEmail: string,
-    private token: string
+    private token: string,
+    /** The public origin the reset link should point at (the requesting
+     *  client's Origin, or the configured APP_URL as a fallback). */
+    private baseUrl: string
   ) {
     super()
     this.subject = 'Reset your EveryList password'
@@ -24,7 +26,7 @@ export default class PasswordResetMail extends BaseMail {
   prepare() {
     this.message.to(this.recipientEmail)
 
-    const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(this.token)}`
+    const resetUrl = `${this.baseUrl}/reset-password?token=${encodeURIComponent(this.token)}`
     this.message.html(
       `<h1>Reset your password</h1>` +
         `<p>Someone asked to reset the password for your EveryList account. ` +
