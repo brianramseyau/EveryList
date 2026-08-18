@@ -73,6 +73,8 @@ export interface ApiDefinition {
     }
     listMembers: {
       index: typeof routes['lists.list_members.index']
+      candidates: typeof routes['lists.list_members.candidates']
+      store: typeof routes['lists.list_members.store']
       update: typeof routes['lists.list_members.update']
       destroy: typeof routes['lists.list_members.destroy']
     }

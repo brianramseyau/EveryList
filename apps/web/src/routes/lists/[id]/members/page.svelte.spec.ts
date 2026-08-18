@@ -10,6 +10,8 @@ vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn() }));
 vi.mock('$lib/api/auth', () => ({ fetchProfile: vi.fn() }));
 vi.mock('$lib/api/members', () => ({
 	fetchMembers: vi.fn(),
+	fetchMemberCandidates: vi.fn(),
+	addMember: vi.fn(),
 	updateMemberRole: vi.fn(),
 	removeMember: vi.fn()
 }));
@@ -21,7 +23,8 @@ vi.mock('$lib/api/invites', () => ({
 
 const { fetchList } = await import('$lib/api/lists');
 const { fetchProfile } = await import('$lib/api/auth');
-const { fetchMembers, updateMemberRole, removeMember } = await import('$lib/api/members');
+const { fetchMembers, fetchMemberCandidates, addMember, updateMemberRole, removeMember } =
+	await import('$lib/api/members');
 const { fetchInvites, createInvite, revokeInvite } = await import('$lib/api/invites');
 const { goto } = await import('$app/navigation');
 const MembersPage = (await import('./+page.svelte')).default;
@@ -103,6 +106,7 @@ describe('Members +page.svelte', () => {
 		vi.mocked(fetchList).mockResolvedValue(groceries);
 		vi.mocked(fetchProfile).mockResolvedValue(ownerUser);
 		vi.mocked(fetchMembers).mockResolvedValue([ownerMember, editorMember]);
+		vi.mocked(fetchMemberCandidates).mockResolvedValue([]);
 		vi.mocked(fetchInvites).mockResolvedValue([]);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
@@ -349,5 +353,131 @@ describe('Members +page.svelte', () => {
 
 		await expect.element(page.getByText('Could not revoke invite')).toBeInTheDocument();
 		resolveReload!([invite]);
+	});
+
+	const sharedUser = {
+		id: 9,
+		fullName: 'Dana Scully',
+		email: 'dana@example.com',
+		createdAt: TS,
+		updatedAt: null,
+		initials: 'DS'
+	};
+	const sharedCandidate = {
+		user: sharedUser,
+		sharedListNames: ['Camping']
+	};
+
+	it('shows the direct-add section with known users to an owner', async () => {
+		vi.mocked(fetchMemberCandidates).mockResolvedValue([
+			sharedCandidate,
+			{
+				user: { ...sharedUser, id: 7, fullName: null, email: 'nameless@example.com' },
+				sharedListNames: ['Groceries']
+			}
+		]);
+
+		render(MembersPage);
+		await expect.element(page.getByText('Dana Scully')).toBeInTheDocument();
+		await expect.element(page.getByText('Shares Camping')).toBeInTheDocument();
+		await expect.element(page.getByText('nameless@example.com')).toBeInTheDocument();
+		await expect.element(page.getByText('Shares Groceries')).toBeInTheDocument();
+	});
+
+	it('shows an empty-state hint when there are no known users', async () => {
+		render(MembersPage);
+		await expect
+			.element(page.getByText(/No one yet — people you already share another list/))
+			.toBeInTheDocument();
+	});
+
+	it('lets an owner directly add a known user', async () => {
+		const otherUser = {
+			id: 8,
+			fullName: 'Melinda May',
+			email: 'melinda@example.com',
+			createdAt: TS,
+			updatedAt: null,
+			initials: 'MM'
+		};
+		vi.mocked(fetchMemberCandidates).mockResolvedValue([
+			sharedCandidate,
+			{ user: otherUser, sharedListNames: ['Groceries'] }
+		]);
+		vi.mocked(addMember).mockResolvedValue({
+			id: 13,
+			listId: 5,
+			userId: 8,
+			role: 'viewer' as const,
+			invitedAt: TS,
+			acceptedAt: TS,
+			user: otherUser
+		});
+
+		render(MembersPage);
+		await expect.element(page.getByText('Melinda May')).toBeInTheDocument();
+
+		await page.getByRole('combobox').nth(2).selectOptions('viewer');
+		await page.getByRole('button', { name: 'Add' }).nth(1).click();
+
+		expect(addMember).toHaveBeenCalledWith(5, 8, 'viewer');
+		await expect.element(page.getByText('melinda@example.com').first()).toBeInTheDocument();
+		await expect.element(page.getByText('Dana Scully')).toBeInTheDocument();
+	});
+
+	it('resets the candidate picker after the last known user is added', async () => {
+		vi.mocked(fetchMemberCandidates).mockResolvedValue([sharedCandidate]);
+		vi.mocked(addMember).mockResolvedValue({
+			id: 13,
+			listId: 5,
+			userId: 9,
+			role: 'editor' as const,
+			invitedAt: TS,
+			acceptedAt: TS,
+			user: sharedUser
+		});
+
+		render(MembersPage);
+		await expect.element(page.getByText('Dana Scully')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Add' }).click();
+
+		expect(addMember).toHaveBeenCalledWith(5, 9, 'editor');
+		await expect.element(page.getByText('dana@example.com').first()).toBeInTheDocument();
+		await expect.element(page.getByText(/No one yet/)).toBeInTheDocument();
+	});
+
+	it('shows the ApiError message when adding a member fails', async () => {
+		vi.mocked(fetchMemberCandidates).mockResolvedValue([sharedCandidate]);
+		vi.mocked(addMember).mockRejectedValue(new ApiError(400, 'Already shares nothing'));
+
+		render(MembersPage);
+		await expect.element(page.getByText('Dana Scully')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Add' }).click();
+
+		await expect.element(page.getByText('Already shares nothing')).toBeInTheDocument();
+	});
+
+	it('shows a generic error message when adding a member fails without an ApiError', async () => {
+		vi.mocked(fetchMemberCandidates).mockResolvedValue([sharedCandidate]);
+		vi.mocked(addMember).mockRejectedValue(new TypeError('network down'));
+
+		render(MembersPage);
+		await expect.element(page.getByText('Dana Scully')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Add' }).click();
+
+		await expect.element(page.getByText('Failed to add member.')).toBeInTheDocument();
+	});
+
+	it('does not show the direct-add section to a non-owner', async () => {
+		vi.mocked(fetchProfile).mockResolvedValue(editorUser);
+		vi.mocked(fetchMemberCandidates).mockResolvedValue([sharedCandidate]);
+
+		render(MembersPage);
+		await expect.element(page.getByText('ed@example.com').first()).toBeInTheDocument();
+
+		await expect.element(page.getByText(/Add someone you already share/)).not.toBeInTheDocument();
 	});
 });

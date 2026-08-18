@@ -13,6 +13,7 @@ import type ListInvitePreviewTransformer from '#transformers/list_invite_preview
 import type ListInviteTransformer from '#transformers/list_invite_transformer'
 import type ListMemberTransformer from '#transformers/list_member_transformer'
 import type ListTransformer from '#transformers/list_transformer'
+import type MemberCandidateTransformer from '#transformers/member_candidate_transformer'
 import type StoreCategoryOrderTransformer from '#transformers/store_category_order_transformer'
 import type StoreTransformer from '#transformers/store_transformer'
 import type UserTransformer from '#transformers/user_transformer'
@@ -49,6 +50,10 @@ export namespace Data {
   export type List = InferData<ListTransformer>
   export namespace List {
     export type Variants = InferVariants<ListTransformer>
+  }
+  export type MemberCandidate = InferData<MemberCandidateTransformer>
+  export namespace MemberCandidate {
+    export type Variants = InferVariants<MemberCandidateTransformer>
   }
   export type StoreCategoryOrder = InferData<StoreCategoryOrderTransformer>
   export namespace StoreCategoryOrder {

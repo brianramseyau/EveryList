@@ -499,6 +499,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['index']>>>
     }
   }
+  'lists.list_members.candidates': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/members/candidates'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['candidates']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['candidates']>>>
+    }
+  }
+  'lists.list_members.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/members'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/list_member').createListMemberValidator)>>
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/list_member').createListMemberValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_members_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'lists.list_members.update': {
     methods: ["PATCH"]
     pattern: '/api/v1/lists/:listId/members/:memberId'

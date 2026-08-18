@@ -83,6 +83,8 @@ router
         router.post(':listId/favorites/:id/add-to-list', [controllers.FavoriteItems, 'addToList'])
 
         router.get(':listId/members', [controllers.ListMembers, 'index'])
+        router.get(':listId/members/candidates', [controllers.ListMembers, 'candidates'])
+        router.post(':listId/members', [controllers.ListMembers, 'store'])
         router.patch(':listId/members/:memberId', [controllers.ListMembers, 'update'])
         router.delete(':listId/members/:memberId', [controllers.ListMembers, 'destroy'])
 
