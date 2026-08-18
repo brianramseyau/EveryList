@@ -110,8 +110,9 @@
 	<li data-item-id={list.id}>
 		<a
 			href={resolve('/lists/[id]', { id: String(list.id) })}
-			class="flex items-center gap-3 rounded-lg border border-l-4 border-gray-200 p-4 hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:hover:border-gray-600"
+			class="list-card flex items-center gap-3 rounded-lg border border-l-4 border-gray-200 p-4 hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:hover:border-gray-600"
 			style:border-left-color={list.color}
+			oncontextmenu={(event) => event.preventDefault()}
 		>
 			<span
 				class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"
@@ -267,3 +268,20 @@
 		</div>
 	{/if}
 </main>
+
+<style>
+	/* The whole card is an <a href> (unlike the item-row drag handle on the
+	   single-list page, which isn't inside a link) — without this, a
+	   press-and-hold anywhere on it to start a SortableJS drag is
+	   indistinguishable from a long-press on a link, so iOS shows its
+	   touch-callout menu (Open/Copy/Share) and Android Chrome shows its
+	   "Open in new tab" context menu instead of the drag ever starting.
+	   -webkit-touch-callout covers iOS Safari; the oncontextmenu handler on
+	   the element (Android Chrome doesn't honor -webkit-touch-callout)
+	   covers Android/Chrome's long-press menu. */
+	.list-card {
+		-webkit-touch-callout: none;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+</style>
