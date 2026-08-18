@@ -6,6 +6,8 @@ export type ScannedRoutes = {
   ALL: {
     'auth.new_account.store': { paramsTuple?: []; params?: {} }
     'auth.access_tokens.store': { paramsTuple?: []; params?: {} }
+    'auth.password_reset.forgot': { paramsTuple?: []; params?: {} }
+    'auth.password_reset.reset': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'profile.profile.update': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
@@ -62,6 +64,8 @@ export type ScannedRoutes = {
   POST: {
     'auth.new_account.store': { paramsTuple?: []; params?: {} }
     'auth.access_tokens.store': { paramsTuple?: []; params?: {} }
+    'auth.password_reset.forgot': { paramsTuple?: []; params?: {} }
+    'auth.password_reset.reset': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.refresh': { paramsTuple?: []; params?: {} }
     'folders.folders.store': { paramsTuple?: []; params?: {} }

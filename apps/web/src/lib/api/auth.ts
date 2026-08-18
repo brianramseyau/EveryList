@@ -40,3 +40,15 @@ export async function logout(): Promise<void> {
 		clearToken();
 	}
 }
+
+export function forgotPassword(input: { email: string }): Promise<void> {
+	return apiPost('/api/v1/auth/forgot-password', input);
+}
+
+export function resetPassword(input: {
+	token: string;
+	password: string;
+	passwordConfirmation: string;
+}): Promise<void> {
+	return apiPost('/api/v1/auth/reset-password', input);
+}

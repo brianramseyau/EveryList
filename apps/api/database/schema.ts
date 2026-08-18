@@ -242,6 +242,25 @@ export class ListSchema extends BaseModel {
   declare version: number
 }
 
+export class PasswordResetTokenSchema extends BaseModel {
+  static $columns = ['createdAt', 'expiresAt', 'id', 'revokedAt', 'tokenHash', 'updatedAt', 'userId'] as const
+  $columns = PasswordResetTokenSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.dateTime()
+  declare expiresAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: number
+  @column.dateTime()
+  declare revokedAt: DateTime | null
+  @column()
+  declare tokenHash: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: number
+}
+
 export class StoreCategoryOrderSchema extends BaseModel {
   static $columns = ['categoryId', 'createdAt', 'deletedAt', 'id', 'sortOrder', 'storeId', 'updatedAt', 'version'] as const
   $columns = StoreCategoryOrderSchema.$columns
