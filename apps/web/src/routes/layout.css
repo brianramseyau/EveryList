@@ -139,6 +139,20 @@ html.dark {
 	background-color: #1b1d1f;
 }
 
+/* iOS Safari lets the document pan horizontally whenever any descendant is a
+   hair wider than the layout viewport (e.g. the 100vw-based popover sizing,
+   rotated hero cards, or the -ml-* back-button offsets) — which reads as
+   "viewport slightly too wide, always x-scrolls" on iPhone, while Chrome on
+   Android simply clips the same overflow. Guarding the root element only
+   (never body — a scroll container on body would swallow the list page's
+   sticky category headings) propagates to the viewport, so the document can
+   no longer scroll sideways. `clip` is the modern form and creates no scroll
+   container at all; `hidden` is the fallback for Safari < 16. */
+html {
+	overflow-x: hidden;
+	overflow-x: clip;
+}
+
 /* App-wide pinch-zoom baseline for Blink (Android Chrome etc.): Blink derives
    the page's pinch-zoom behavior from the touch-action of whatever's under
    each touch point, so without a restrictive default here, any area of the
