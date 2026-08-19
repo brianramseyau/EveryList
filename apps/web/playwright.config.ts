@@ -5,8 +5,12 @@ import { defineConfig } from '@playwright/test';
 // against `vite dev` (which already proxies via VITE_API_PROXY_TARGET, see vite.config.ts)
 // alongside a real AdonisJS dev server, both on dedicated ports against a disposable SQLite file
 // so a normal `pnpm dev` session's data is never touched.
-const API_PORT = 3334;
-const WEB_PORT = 5174;
+//
+// Dev binds the API on 3334 and the web app on 5174 (see apps/api/.env.example and
+// apps/web/vite.config.ts), so E2E steps one further to 3335/5175 to guarantee it never
+// collides with — or gets `reuseExistingServer`-reused by — an in-progress dev session.
+const API_PORT = 3335;
+const WEB_PORT = 5175;
 const DB_FILE = 'tmp/e2e.sqlite3';
 
 export default defineConfig({

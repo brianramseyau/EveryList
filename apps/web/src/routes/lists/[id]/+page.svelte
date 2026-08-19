@@ -10,7 +10,7 @@
 	import { fetchCategories } from '$lib/api/categories';
 	import { createItem, deleteItem, fetchItems, updateItem } from '$lib/api/items';
 	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
-	import { getSelectedStore } from '$lib/api/selected-store';
+	import { getSelectedStoreSettings } from '$lib/api/selected-store';
 	import { isRowDirty } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
@@ -96,13 +96,21 @@
 	let storeCategoryOverrides: Map<number, number> = new SvelteMap();
 
 	const selectedStore = $derived(stores.find((store) => store.id === selectedStoreId) ?? null);
+	let includeUnassigned = $state(false);
 
 	// Only filter once selectedStoreId resolves to a store that's actually still
 	// on this list — a stale/orphaned id (e.g. a store removed outside the normal
 	// flow) must behave like "no store selected" rather than silently hiding
-	// every item with no way to clear it from this screen.
+	// every item with no way to clear it from this screen. When the user opts in
+	// to "also show unassigned items" (see the stores page), items with no store
+	// ride along with the selected store's items instead of being filtered out.
 	const visibleItems = $derived(
-		selectedStore === null ? items : items.filter((item) => item.storeId === selectedStore.id)
+		selectedStore === null
+			? items
+			: items.filter(
+					(item) =>
+						item.storeId === selectedStore.id || (includeUnassigned && item.storeId === null)
+				)
 	);
 
 	const groups = $derived.by(() => {
@@ -169,7 +177,9 @@
 			]);
 			unlocked = isListUnlocked(listId);
 
-			selectedStoreId = await getSelectedStore(listId);
+			const settings = await getSelectedStoreSettings(listId);
+			selectedStoreId = settings.storeId;
+			includeUnassigned = settings.includeUnassigned;
 			const overrideEntries = selectedStoreId ? await fetchStoreCategoryOrder(selectedStoreId) : [];
 			storeCategoryOverrides.clear();
 			for (const entry of overrideEntries) {

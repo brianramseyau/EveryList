@@ -36,6 +36,14 @@ export interface QueuedMutation {
 export interface SelectedStoreRow {
 	listId: number;
 	storeId: number | null;
+	/** When a store is selected, keep showing items that aren't assigned to any store. */
+	includeUnassigned?: boolean;
+}
+
+/** The persisted, per-list "shopping here" settings stored in the `selectedStore` row. */
+export interface SelectedStoreSettings {
+	storeId: number | null;
+	includeUnassigned: boolean;
 }
 
 /**

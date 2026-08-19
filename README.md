@@ -90,7 +90,7 @@ pnpm dev
 
 `pnpm db:setup` creates `apps/api/tmp/db.sqlite3`, runs all migrations, and seeds dev sample data (users, lists, stores, categories, items) — required once per fresh clone (or whenever you wipe `apps/api/tmp/`) before the API has any tables to query. The sample data is idempotent and only seeds when `NODE_ENV=development`, so it's safe to re-run any time the db gets reset. Log in with `dev@example.com` / `password` (or `partner@example.com` / `password` to see the shared-list side) — see [`apps/api/database/seeders/dev_seeder.ts`](apps/api/database/seeders/dev_seeder.ts) for what's included.
 
-This runs both the API (`http://localhost:3333`) and the web app (`http://localhost:5173`) in parallel with hot reload.
+This runs both the API (`http://localhost:3334`) and the web app (`http://localhost:5174`) in parallel with hot reload. Before starting, a pre-flight check (`scripts/dev-preflight.mjs`) verifies both ports are free and aborts with the offending process(es) if something else — e.g. a stale dev server from another project — is already listening.
 
 Other useful scripts, runnable from the repo root across every workspace:
 

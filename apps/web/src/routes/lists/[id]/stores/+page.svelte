@@ -3,12 +3,12 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Input, Radio } from 'flowbite-svelte';
+	import { Button, Checkbox, Input, Radio } from 'flowbite-svelte';
 	import type { ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
 	import { attachStore, detachStore, fetchStores, updateStore } from '$lib/api/stores';
-	import { getSelectedStore, setSelectedStore } from '$lib/api/selected-store';
+	import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
 	import { ApiError } from '$lib/api/client';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -28,6 +28,7 @@
 	let creating = $state(false);
 
 	let selectedStoreId = $state<number | null>(null);
+	let includeUnassigned = $state(false);
 
 	let editingStoreId = $state<number | null>(null);
 	let editName = $state('');
@@ -38,7 +39,9 @@
 		loading = true;
 		try {
 			[list, stores] = await Promise.all([fetchList(listId), fetchStores(listId)]);
-			selectedStoreId = await getSelectedStore(listId);
+			const settings = await getSelectedStoreSettings(listId);
+			selectedStoreId = settings.storeId;
+			includeUnassigned = settings.includeUnassigned;
 			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to load stores.';
@@ -115,9 +118,10 @@
 	}
 
 	// "Currently shopping at" is local-only (see $lib/api/selected-store.ts) — persist
-	// whenever the radio selection changes, including the initial load's restore.
+	// whenever the selection changes, including the initial load's restore.
 	$effect(() => {
-		if (!loading) void setSelectedStore(listId, selectedStoreId);
+		if (!loading)
+			void setSelectedStoreSettings(listId, { storeId: selectedStoreId, includeUnassigned });
 	});
 </script>
 
@@ -223,6 +227,16 @@
 					</li>
 				{/each}
 			</ul>
+		{/if}
+
+		{#if selectedStoreId !== null}
+			<Checkbox bind:checked={includeUnassigned}>
+				Also show items not assigned to any store
+			</Checkbox>
+			<p class="text-sm text-gray-500 dark:text-gray-400">
+				Keeps unassigned items on the list while you shop the selected store. Remembered on this
+				device.
+			</p>
 		{/if}
 	{:else}
 		<!-- Reachable only once loadAll's finally has run: loading is false, and

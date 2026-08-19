@@ -47,8 +47,7 @@ vi.mock('$lib/api/items', () => ({
 vi.mock('$lib/api/favorites', () => ({ fetchFavorites: vi.fn() }));
 vi.mock('$lib/api/stores', () => ({ fetchStoreCategoryOrder: vi.fn(), fetchStores: vi.fn() }));
 vi.mock('$lib/api/selected-store', () => ({
-	getSelectedStore: vi.fn(),
-	setSelectedStore: vi.fn()
+	getSelectedStoreSettings: vi.fn()
 }));
 vi.mock('$lib/realtime', () => ({ subscribeToList: vi.fn(() => vi.fn()) }));
 vi.mock('$lib/offline/flush', () => ({ onConflict: vi.fn(() => vi.fn()) }));
@@ -60,7 +59,7 @@ const { fetchItems, createItem, deleteItem, updateItem, fetchRecentItemNames } =
 	await import('$lib/api/items');
 const { fetchFavorites } = await import('$lib/api/favorites');
 const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores');
-const { getSelectedStore } = await import('$lib/api/selected-store');
+const { getSelectedStoreSettings } = await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
 const { refreshBadgeCount } = await import('$lib/pwa/badge');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
@@ -138,7 +137,10 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchItems).mockResolvedValue([]);
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([]);
 		vi.mocked(fetchStores).mockResolvedValue([]);
-		vi.mocked(getSelectedStore).mockResolvedValue(null);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
+			storeId: null,
+			includeUnassigned: false
+		});
 		vi.mocked(goto).mockResolvedValue(undefined);
 		vi.mocked(fetchRecentItemNames).mockResolvedValue([]);
 		vi.mocked(fetchFavorites).mockResolvedValue([]);
@@ -177,7 +179,10 @@ describe('List detail +page.svelte', () => {
 	});
 
 	it('applies the store-specific category order when a store is selected', async () => {
-		vi.mocked(getSelectedStore).mockResolvedValue(7);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
+			storeId: 7,
+			includeUnassigned: false
+		});
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([
 			{ id: 1, storeId: 7, categoryId: 10, sortOrder: 5, deletedAt: null, version: 1 },
 			{ id: 2, storeId: 7, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 }
@@ -627,7 +632,10 @@ describe('List detail +page.svelte', () => {
 			version: 1
 		};
 		vi.mocked(fetchStores).mockResolvedValue([store]);
-		vi.mocked(getSelectedStore).mockResolvedValue(20);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
+			storeId: 20,
+			includeUnassigned: false
+		});
 
 		render(ListDetailPage);
 		await expect
@@ -685,7 +693,10 @@ describe('List detail +page.svelte', () => {
 			version: 1
 		};
 		vi.mocked(fetchStores).mockResolvedValue([store]);
-		vi.mocked(getSelectedStore).mockResolvedValue(20);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
+			storeId: 20,
+			includeUnassigned: false
+		});
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),
 			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: null })
@@ -695,6 +706,35 @@ describe('List detail +page.svelte', () => {
 
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 		await expect.element(page.getByText('Bread')).not.toBeInTheDocument();
+	});
+
+	it('keeps unassigned items visible alongside the selected store when the "show unassigned" option is on', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
+			storeId: 20,
+			includeUnassigned: true
+		});
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: null }),
+			makeItem({ id: 102, name: 'Milk', categoryId: 10, storeId: 21 })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+		await expect.element(page.getByText('Milk')).not.toBeInTheDocument();
 	});
 
 	it('explains that the store filter is hiding every item, when the list is non-empty but the filter matches nothing', async () => {
@@ -709,7 +749,10 @@ describe('List detail +page.svelte', () => {
 			version: 1
 		};
 		vi.mocked(fetchStores).mockResolvedValue([store]);
-		vi.mocked(getSelectedStore).mockResolvedValue(20);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
+			storeId: 20,
+			includeUnassigned: false
+		});
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null })
 		]);
@@ -731,7 +774,10 @@ describe('List detail +page.svelte', () => {
 		// An id that doesn't resolve to a real, currently-loaded store must be
 		// treated exactly like "no store selected."
 		vi.mocked(fetchStores).mockResolvedValue([]);
-		vi.mocked(getSelectedStore).mockResolvedValue(999);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
+			storeId: 999,
+			includeUnassigned: false
+		});
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null }),
 			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: 5 })
@@ -758,7 +804,10 @@ describe('List detail +page.svelte', () => {
 			version: 1
 		};
 		vi.mocked(fetchStores).mockResolvedValue([store]);
-		vi.mocked(getSelectedStore).mockResolvedValue(null);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
+			storeId: null,
+			includeUnassigned: false
+		});
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),
 			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: null })
