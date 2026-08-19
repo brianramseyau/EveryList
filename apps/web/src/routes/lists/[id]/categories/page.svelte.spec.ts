@@ -30,14 +30,13 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn() }));
 vi.mock('$lib/api/categories', () => ({
 	fetchCategories: vi.fn(),
-	createCategory: vi.fn(),
 	updateCategory: vi.fn(),
 	deleteCategory: vi.fn(),
 	reorderCategories: vi.fn()
 }));
 
 const { fetchList } = await import('$lib/api/lists');
-const { fetchCategories, createCategory, updateCategory, deleteCategory, reorderCategories } =
+const { fetchCategories, updateCategory, deleteCategory, reorderCategories } =
 	await import('$lib/api/categories');
 const { goto } = await import('$app/navigation');
 const CategoriesPage = (await import('./+page.svelte')).default;
@@ -130,6 +129,14 @@ describe('Categories +page.svelte', () => {
 		expect(backLink.element().getAttribute('href')).toBe('/lists/1/settings');
 	});
 
+	it('links the + button to the New Category page', async () => {
+		render(CategoriesPage);
+
+		const newCategoryLink = page.getByRole('link', { name: 'New category' });
+		await expect.element(newCategoryLink).toBeInTheDocument();
+		expect(newCategoryLink.element().getAttribute('href')).toBe('/lists/1/categories/new');
+	});
+
 	it('only shows Delete for list-scoped categories, not global defaults', async () => {
 		render(CategoriesPage);
 
@@ -139,83 +146,14 @@ describe('Categories +page.svelte', () => {
 		await expect.poll(async () => (await deleteButtons.all()).length).toBe(1);
 	});
 
-	it('creates a new category from the form', async () => {
-		vi.mocked(createCategory).mockResolvedValue({
-			id: 12,
-			listId: 1,
-			name: 'Snacks',
-			icon: 'cookie',
-			sortOrder: 2,
-			isDefault: false,
-			createdAt: TS,
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		});
-
-		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New category name').fill('Snacks');
-		await page.getByRole('button', { name: 'Tag' }).click();
-		await page.getByPlaceholder('Search icons…').fill('cookie');
-		await page.getByRole('button', { name: 'Cookie', exact: true }).click();
-		await page.getByRole('button', { name: 'Add' }).click();
-
-		expect(createCategory).toHaveBeenCalledWith(1, { name: 'Snacks', icon: 'cookie' });
-		await expect.element(page.getByRole('textbox').nth(3)).toHaveValue('Snacks');
-	});
-
-	it('does not submit when the new category name is only whitespace', async () => {
-		// The Add button is already disabled in this state, but handleCreate
-		// carries its own guard, reachable via a raw 'submit' event and not
-		// just a click on the (disabled) button.
-		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
-
-		const input = page.getByPlaceholder('New category name');
-		await input.fill('   ');
-		input
-			.element()
-			.closest('form')
-			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-
-		await expect.poll(() => vi.mocked(createCategory).mock.calls.length).toBe(0);
-	});
-
-	it('shows a generic error message when creating a category fails without an ApiError', async () => {
-		vi.mocked(createCategory).mockRejectedValue(new TypeError('network down'));
-
-		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New category name').fill('Snacks');
-		await page.getByRole('button', { name: 'Add' }).click();
-
-		await expect.element(page.getByText('Failed to create category.')).toBeInTheDocument();
-	});
-
-	it('shows the ApiError message when creating a category fails', async () => {
-		vi.mocked(createCategory).mockRejectedValue(new ApiError(422, 'Duplicate category'));
-
-		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New category name').fill('Snacks');
-		await page.getByRole('button', { name: 'Add' }).click();
-
-		await expect.element(page.getByText('Duplicate category')).toBeInTheDocument();
-	});
-
 	it('auto-saves an edited category name when the field loses focus', async () => {
 		vi.mocked(updateCategory).mockResolvedValue({ ...produce, name: 'Fruits & Veg' });
 
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		// Textbox order: the "New category name" input, then one per category
-		// row — Produce is the first row.
-		const nameInput = page.getByRole('textbox').nth(1);
+		// Textbox order: one per category row — Produce is the first row.
+		const nameInput = page.getByRole('textbox').nth(0);
 		await nameInput.fill('Fruits & Veg');
 		nameInput.element().blur();
 
@@ -227,7 +165,7 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		const nameInput = page.getByRole('textbox').nth(1);
+		const nameInput = page.getByRole('textbox').nth(0);
 		nameInput.element().focus();
 		nameInput.element().blur();
 
@@ -240,13 +178,13 @@ describe('Categories +page.svelte', () => {
 		render(CategoriesPage);
 		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
 
-		const nameInput = page.getByRole('textbox').nth(1);
+		const nameInput = page.getByRole('textbox').nth(0);
 		await nameInput.fill('Fruits & Veg');
 		nameInput.element().blur();
 
 		await expect.poll(() => vi.mocked(updateCategory).mock.calls.length).toBe(1);
 		expect(updateCategory).toHaveBeenCalledWith(1, 10, { name: 'Fruits & Veg', icon: 'apple' });
-		await expect.element(page.getByRole('textbox').nth(1)).toHaveValue('Fruits & Veg');
+		await expect.element(page.getByRole('textbox').nth(0)).toHaveValue('Fruits & Veg');
 	});
 
 	it('picks a new icon for an existing category, saving it immediately', async () => {

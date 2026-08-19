@@ -11,13 +11,12 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn() }));
 vi.mock('$lib/api/stores', () => ({
 	fetchStores: vi.fn(),
-	attachStore: vi.fn(),
 	detachStore: vi.fn(),
 	updateStore: vi.fn()
 }));
 
 const { fetchList } = await import('$lib/api/lists');
-const { fetchStores, attachStore, detachStore, updateStore } = await import('$lib/api/stores');
+const { fetchStores, detachStore, updateStore } = await import('$lib/api/stores');
 const { goto } = await import('$app/navigation');
 const StoresPage = (await import('./+page.svelte')).default;
 
@@ -101,98 +100,20 @@ describe('Stores +page.svelte', () => {
 		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
 	});
 
+	it('links the + button to the New Store page', async () => {
+		render(StoresPage);
+
+		const newStoreLink = page.getByRole('link', { name: 'New store' });
+		await expect.element(newStoreLink).toBeInTheDocument();
+		expect(newStoreLink.element().getAttribute('href')).toBe('/lists/1/stores/new');
+	});
+
 	it('restores the previously selected store on load', async () => {
 		await setSelectedStoreSettings(1, { storeId: 20, includeUnassigned: false });
 
 		render(StoresPage);
 
 		await expect.element(page.getByRole('radio', { name: 'Walmart' })).toBeChecked();
-	});
-
-	it('creates a new store from the form', async () => {
-		vi.mocked(attachStore).mockResolvedValue({
-			id: 21,
-			name: 'Costco',
-			color: '#3b82f6',
-			createdBy: 1,
-			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		});
-
-		render(StoresPage);
-		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New store name').fill('Costco');
-		await page.getByRole('button', { name: 'Add' }).click();
-
-		expect(attachStore).toHaveBeenCalledWith(1, { name: 'Costco', color: '#3b82f6' });
-		await expect.element(page.getByText('Costco')).toBeInTheDocument();
-	});
-
-	it('does not submit when the new store name is only whitespace', async () => {
-		// The Add button is already disabled in this state, but
-		// handleCreate carries its own guard, reachable via a raw 'submit'
-		// event and not just a click on the (disabled) button.
-		render(StoresPage);
-		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
-
-		const input = page.getByPlaceholder('New store name');
-		await input.fill('   ');
-		input
-			.element()
-			.closest('form')
-			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-
-		await expect.poll(() => vi.mocked(attachStore).mock.calls.length).toBe(0);
-	});
-
-	it('shows a generic error message when creating a store fails without an ApiError', async () => {
-		vi.mocked(attachStore).mockRejectedValue(new TypeError('network down'));
-
-		render(StoresPage);
-		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New store name').fill('Costco');
-		await page.getByRole('button', { name: 'Add' }).click();
-
-		await expect.element(page.getByText('Failed to create store.')).toBeInTheDocument();
-	});
-
-	it('shows the ApiError message when creating a store fails', async () => {
-		vi.mocked(attachStore).mockRejectedValue(new ApiError(422, 'Duplicate store'));
-
-		render(StoresPage);
-		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
-
-		await page.getByPlaceholder('New store name').fill('Costco');
-		await page.getByRole('button', { name: 'Add' }).click();
-
-		await expect.element(page.getByText('Duplicate store')).toBeInTheDocument();
-	});
-
-	it('picks a color for the new store', async () => {
-		vi.mocked(attachStore).mockResolvedValue({
-			id: 21,
-			name: 'Costco',
-			color: '#22c55e',
-			createdBy: 1,
-			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		});
-
-		render(StoresPage);
-		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Color' }).click();
-		await page.getByRole('button', { name: '#22c55e' }).click();
-		await page.getByPlaceholder('New store name').fill('Costco');
-		await page.getByRole('button', { name: 'Add' }).click();
-
-		expect(attachStore).toHaveBeenCalledWith(1, { name: 'Costco', color: '#22c55e' });
 	});
 
 	it('removes a store', async () => {
@@ -204,7 +125,7 @@ describe('Stores +page.svelte', () => {
 		await page.getByRole('button', { name: 'Remove' }).click();
 
 		expect(detachStore).toHaveBeenCalledWith(1, 20);
-		await expect.element(page.getByText('No stores yet — add one above.')).toBeInTheDocument();
+		await expect.element(page.getByText('No stores yet — tap + to add one.')).toBeInTheDocument();
 	});
 
 	it('clears the current selection when the selected store is removed', async () => {

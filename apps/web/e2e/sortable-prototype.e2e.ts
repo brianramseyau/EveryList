@@ -24,8 +24,9 @@ test('drags an item across category sections with a real mouse gesture', async (
 	const listUrl = page.url();
 
 	await page.goto(`${listUrl}/categories`);
-	await page.getByPlaceholder('New category name').fill('Zzyzx Section');
-	await page.getByRole('button', { name: 'Add' }).click();
+	await page.getByRole('link', { name: 'New category' }).click();
+	await page.getByPlaceholder('Category name').fill('Zzyzx Section');
+	await page.getByRole('button', { name: 'Save' }).click();
 	await expect(page.getByRole('list').getByRole('textbox')).toHaveValue('Zzyzx Section');
 
 	await page.goto(listUrl);
