@@ -1,4 +1,4 @@
-import { getDb } from '$lib/offline/db';
+import { getDb, type SelectedStoreSettings } from '$lib/offline/db';
 
 /**
  * "Currently shopping at" is a local, per-device selection — never synced
@@ -8,17 +8,23 @@ import { getDb } from '$lib/offline/db';
  * alongside the rest of the offline cache — see PHASE5_PLAN.md §3) rather
  * than the sync queue, since it's never sent to the server.
  */
-export async function getSelectedStore(listId: number): Promise<number | null> {
+export async function getSelectedStoreSettings(listId: number): Promise<SelectedStoreSettings> {
 	const db = getDb();
-	if (!db) return null;
+	if (!db) return { storeId: null, includeUnassigned: false };
 
 	const row = await db.selectedStore.get(listId);
-	return row?.storeId ?? null;
+	return {
+		storeId: row?.storeId ?? null,
+		includeUnassigned: row?.includeUnassigned ?? false
+	};
 }
 
-export async function setSelectedStore(listId: number, storeId: number | null): Promise<void> {
+export async function setSelectedStoreSettings(
+	listId: number,
+	settings: SelectedStoreSettings
+): Promise<void> {
 	const db = getDb();
 	if (!db) return;
 
-	await db.selectedStore.put({ listId, storeId });
+	await db.selectedStore.put({ listId, ...settings });
 }

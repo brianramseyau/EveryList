@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
+import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
+import { resetDbForTesting } from '$lib/offline/db';
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -13,14 +15,9 @@ vi.mock('$lib/api/stores', () => ({
 	detachStore: vi.fn(),
 	updateStore: vi.fn()
 }));
-vi.mock('$lib/api/selected-store', () => ({
-	getSelectedStore: vi.fn(),
-	setSelectedStore: vi.fn()
-}));
 
 const { fetchList } = await import('$lib/api/lists');
 const { fetchStores, attachStore, detachStore, updateStore } = await import('$lib/api/stores');
-const { getSelectedStore, setSelectedStore } = await import('$lib/api/selected-store');
 const { goto } = await import('$app/navigation');
 const StoresPage = (await import('./+page.svelte')).default;
 
@@ -65,13 +62,13 @@ describe('Stores +page.svelte', () => {
 		setToken('test-token');
 		vi.mocked(fetchList).mockResolvedValue(list);
 		vi.mocked(fetchStores).mockResolvedValue([walmart]);
-		vi.mocked(getSelectedStore).mockResolvedValue(null);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		vi.clearAllMocks();
 		clearToken();
+		await resetDbForTesting();
 	});
 
 	it('redirects to /login when there is no token', async () => {
@@ -105,7 +102,7 @@ describe('Stores +page.svelte', () => {
 	});
 
 	it('restores the previously selected store on load', async () => {
-		vi.mocked(getSelectedStore).mockResolvedValue(20);
+		await setSelectedStoreSettings(1, { storeId: 20, includeUnassigned: false });
 
 		render(StoresPage);
 
@@ -217,11 +214,11 @@ describe('Stores +page.svelte', () => {
 		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
 
 		await page.getByRole('radio', { name: 'Walmart' }).click();
-		await expect.poll(() => vi.mocked(setSelectedStore).mock.calls.at(-1)).toEqual([1, 20]);
+		await expect.poll(async () => (await getSelectedStoreSettings(1)).storeId).toBe(20);
 
 		await page.getByRole('button', { name: 'Remove' }).click();
 
-		await expect.poll(() => vi.mocked(setSelectedStore).mock.calls.at(-1)).toEqual([1, null]);
+		await expect.poll(async () => (await getSelectedStoreSettings(1)).storeId).toBe(null);
 	});
 
 	it('reloads the list when removing a store fails without an ApiError', async () => {
@@ -253,7 +250,7 @@ describe('Stores +page.svelte', () => {
 	});
 
 	it('selects "no store" (default order)', async () => {
-		vi.mocked(getSelectedStore).mockResolvedValue(20);
+		await setSelectedStoreSettings(1, { storeId: 20, includeUnassigned: false });
 
 		render(StoresPage);
 		await expect.element(page.getByRole('radio', { name: 'Walmart' })).toBeChecked();
@@ -262,11 +259,10 @@ describe('Stores +page.svelte', () => {
 
 		// flowbite-svelte's <Radio> forwards a null `value` through a native
 		// radio input, which round-trips it as '' rather than strictly
-		// `null` — falsy either way, and getSelectedStore() treats both the
+		// `null` — falsy either way, and the settings API treats both the
 		// same (see $lib/api/selected-store.ts), so assert on that instead
 		// of the exact type.
-		await expect.poll(() => vi.mocked(setSelectedStore).mock.calls.at(-1)?.[0]).toBe(1);
-		await expect.poll(() => vi.mocked(setSelectedStore).mock.calls.at(-1)?.[1]).toBeFalsy();
+		await expect.poll(async () => (await getSelectedStoreSettings(1)).storeId).toBeFalsy();
 	});
 
 	it('persists "currently shopping at" when a store is selected', async () => {
@@ -275,7 +271,45 @@ describe('Stores +page.svelte', () => {
 
 		await page.getByRole('radio', { name: 'Walmart' }).click();
 
-		await expect.poll(() => vi.mocked(setSelectedStore).mock.calls.at(-1)).toEqual([1, 20]);
+		await expect.poll(async () => (await getSelectedStoreSettings(1)).storeId).toBe(20);
+	});
+
+	it('toggles "show unassigned items" off by default, and only when a store is selected', async () => {
+		await setSelectedStoreSettings(1, { storeId: null, includeUnassigned: true });
+
+		render(StoresPage);
+		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
+
+		// No store selected → the unassigned-items option is hidden.
+		await expect
+			.element(page.getByText('Also show items not assigned to any store'))
+			.not.toBeInTheDocument();
+
+		// Selecting a store surfaces the checkbox, defaulting to the persisted value.
+		await page.getByRole('radio', { name: 'Walmart' }).click();
+		await expect
+			.element(page.getByText('Also show items not assigned to any store'))
+			.toBeInTheDocument();
+	});
+
+	it('persists the "show unassigned items" toggle', async () => {
+		render(StoresPage);
+		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
+
+		await page.getByRole('radio', { name: 'Walmart' }).click();
+		await page.getByRole('checkbox', { name: 'Also show items not assigned to any store' }).click();
+
+		await expect.poll(async () => (await getSelectedStoreSettings(1)).includeUnassigned).toBe(true);
+	});
+
+	it('restores the "show unassigned items" toggle on load', async () => {
+		await setSelectedStoreSettings(1, { storeId: 20, includeUnassigned: true });
+
+		render(StoresPage);
+
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Also show items not assigned to any store' }))
+			.toBeChecked();
 	});
 
 	it('cancels a rename without saving', async () => {
