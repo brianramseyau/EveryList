@@ -3,32 +3,20 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Button, Input } from 'flowbite-svelte';
+	import { Input } from 'flowbite-svelte';
 	import type { FolderDto } from '@everylist/shared';
 	import Icon from '$lib/components/Icon.svelte';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { getToken } from '$lib/api/token';
-	import {
-		createFolder,
-		deleteFolder,
-		fetchFolders,
-		reorderFolders,
-		updateFolder
-	} from '$lib/api/folders';
+	import { deleteFolder, fetchFolders, reorderFolders, updateFolder } from '$lib/api/folders';
 	import { ApiError } from '$lib/api/client';
-
-	const DEFAULT_COLOR = '#3b82f6';
 
 	let folders = $state<FolderDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let reordering = $state(false);
-
-	let newFolderName = $state('');
-	let newFolderColor = $state(DEFAULT_COLOR);
-	let creating = $state(false);
 
 	// Tracks each row's name at the moment it gained focus, so blur can skip
 	// saving when nothing actually changed — same pattern as the categories
@@ -54,22 +42,6 @@
 		}
 		void loadAll();
 	});
-
-	async function handleCreate(event: SubmitEvent) {
-		event.preventDefault();
-		if (!newFolderName.trim()) return;
-		creating = true;
-		try {
-			const folder = await createFolder({ name: newFolderName.trim(), color: newFolderColor });
-			folders = [...folders, folder];
-			newFolderName = '';
-			newFolderColor = DEFAULT_COLOR;
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to create folder.';
-		} finally {
-			creating = false;
-		}
-	}
 
 	async function saveFolder(folder: FolderDto, input: Partial<{ name: string; color: string }>) {
 		try {
@@ -148,7 +120,17 @@
 </svelte:head>
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
-	<PageHeader title="Manage Folders" backHref={resolve('/lists')} backLabel="Back to lists" />
+	<PageHeader title="Manage Folders" backHref={resolve('/lists')} backLabel="Back to lists">
+		{#snippet actions()}
+			<a
+				href={resolve('/lists/folders/new')}
+				aria-label="New folder"
+				class="flex h-9 w-9 shrink-0 items-center justify-center text-primary-700 dark:text-primary-400"
+			>
+				<Icon name="plus" class="h-6 w-6" />
+			</a>
+		{/snippet}
+	</PageHeader>
 
 	{#if loading}
 		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
@@ -157,20 +139,12 @@
 			Rename, recolor, reorder, or delete folders.
 		</p>
 
-		<form class="flex gap-2" onsubmit={handleCreate}>
-			<div class="flex-1">
-				<Input placeholder="New folder name" bind:value={newFolderName} />
-			</div>
-			<ColorPicker value={newFolderColor} onselect={(color) => (newFolderColor = color)} />
-			<Button type="submit" disabled={creating || !newFolderName.trim()}>Add</Button>
-		</form>
-
 		{#if error}
 			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 		{/if}
 
 		{#if folders.length === 0}
-			<p class="text-gray-600 dark:text-gray-400">No folders yet — add one above.</p>
+			<p class="text-gray-600 dark:text-gray-400">No folders yet — tap + to add one.</p>
 		{:else}
 			<p class="text-xs text-gray-400">Press and hold a folder's handle to drag it into place.</p>
 

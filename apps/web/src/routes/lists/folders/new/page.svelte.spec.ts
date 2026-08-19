@@ -53,7 +53,7 @@ describe('New Folder +page.svelte', () => {
 		await expect.poll(() => vi.mocked(createFolder).mock.calls.length).toBe(0);
 	});
 
-	it('creates a folder with the default color, then navigates back to the lists screen', async () => {
+	it('creates a folder with the default color, then navigates back to the Manage Folders screen', async () => {
 		vi.mocked(createFolder).mockResolvedValue({
 			id: 5,
 			userId: 1,
@@ -72,7 +72,7 @@ describe('New Folder +page.svelte', () => {
 
 		expect(createFolder).toHaveBeenCalledWith({ name: 'Groceries', color: '#3b82f6' });
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
-		expect(vi.mocked(goto).mock.calls[0]?.[0]).toBe('/lists');
+		expect(vi.mocked(goto).mock.calls[0]?.[0]).toBe('/lists/folders');
 	});
 
 	it('picks a color for the new folder', async () => {
@@ -120,11 +120,11 @@ describe('New Folder +page.svelte', () => {
 		await expect.element(page.getByText('Name already exists')).toBeInTheDocument();
 	});
 
-	it('links Cancel back to the lists screen', async () => {
+	it('links Cancel back to the Manage Folders screen', async () => {
 		render(NewFolderPage);
 
 		const cancelLink = page.getByRole('link', { name: 'Cancel' });
 		await expect.element(cancelLink).toBeInTheDocument();
-		expect(cancelLink.element().getAttribute('href')).toBe('/lists');
+		expect(cancelLink.element().getAttribute('href')).toBe('/lists/folders');
 	});
 });

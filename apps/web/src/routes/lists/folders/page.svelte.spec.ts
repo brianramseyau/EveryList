@@ -28,13 +28,12 @@ vi.mock('$lib/actions/sortable-reorder', () => ({
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/folders', () => ({
 	fetchFolders: vi.fn(),
-	createFolder: vi.fn(),
 	updateFolder: vi.fn(),
 	deleteFolder: vi.fn(),
 	reorderFolders: vi.fn()
 }));
 
-const { fetchFolders, createFolder, updateFolder, deleteFolder, reorderFolders } =
+const { fetchFolders, updateFolder, deleteFolder, reorderFolders } =
 	await import('$lib/api/folders');
 const { goto } = await import('$app/navigation');
 const FoldersPage = (await import('./+page.svelte')).default;
@@ -62,10 +61,10 @@ const household = {
 	version: 1
 };
 
-// Textbox order on this page: "New folder name" (index 0), then one per row —
-// Groceries is the first row, so index 1.
+// Textbox order on this page: one per folder row — Groceries is the first
+// row, so index 0.
 async function waitForLoad() {
-	await expect.element(page.getByRole('textbox').nth(1)).toHaveValue('Groceries');
+	await expect.element(page.getByRole('textbox').nth(0)).toHaveValue('Groceries');
 }
 
 describe('Manage Folders +page.svelte', () => {
@@ -109,92 +108,15 @@ describe('Manage Folders +page.svelte', () => {
 
 		render(FoldersPage);
 
-		await expect.element(page.getByText('No folders yet — add one above.')).toBeInTheDocument();
+		await expect.element(page.getByText('No folders yet — tap + to add one.')).toBeInTheDocument();
 	});
 
-	it('creates a new folder with the default color', async () => {
-		vi.mocked(createFolder).mockResolvedValue({
-			id: 7,
-			userId: 1,
-			name: 'Trips',
-			color: '#3b82f6',
-			sortOrder: 2,
-			createdAt: TS,
-			updatedAt: null,
-			version: 1
-		});
-
+	it('links the + button to the New Folder page', async () => {
 		render(FoldersPage);
-		await waitForLoad();
 
-		await page.getByPlaceholder('New folder name').fill('Trips');
-		await page.getByRole('button', { name: 'Add' }).click();
-
-		expect(createFolder).toHaveBeenCalledWith({ name: 'Trips', color: '#3b82f6' });
-		await expect.element(page.getByRole('textbox').nth(3)).toHaveValue('Trips');
-	});
-
-	it('picks a color for the new folder', async () => {
-		vi.mocked(createFolder).mockResolvedValue({
-			id: 7,
-			userId: 1,
-			name: 'Trips',
-			color: '#ef4444',
-			sortOrder: 2,
-			createdAt: TS,
-			updatedAt: null,
-			version: 1
-		});
-
-		render(FoldersPage);
-		await waitForLoad();
-
-		// The create form's own color picker is the first "Color" button.
-		await page.getByRole('button', { name: 'Color' }).first().click();
-		await page.getByRole('button', { name: '#ef4444' }).click();
-
-		await page.getByPlaceholder('New folder name').fill('Trips');
-		await page.getByRole('button', { name: 'Add' }).click();
-
-		expect(createFolder).toHaveBeenCalledWith({ name: 'Trips', color: '#ef4444' });
-	});
-
-	it('does not submit when the new folder name is only whitespace', async () => {
-		render(FoldersPage);
-		await waitForLoad();
-
-		const input = page.getByPlaceholder('New folder name');
-		await input.fill('   ');
-		input
-			.element()
-			.closest('form')
-			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-
-		expect(createFolder).not.toHaveBeenCalled();
-	});
-
-	it('shows a generic error message when creating a folder fails without an ApiError', async () => {
-		vi.mocked(createFolder).mockRejectedValue(new TypeError('network down'));
-
-		render(FoldersPage);
-		await waitForLoad();
-
-		await page.getByPlaceholder('New folder name').fill('Trips');
-		await page.getByRole('button', { name: 'Add' }).click();
-
-		await expect.element(page.getByText('Failed to create folder.')).toBeInTheDocument();
-	});
-
-	it('shows the ApiError message when creating a folder fails', async () => {
-		vi.mocked(createFolder).mockRejectedValue(new ApiError(422, 'Duplicate folder'));
-
-		render(FoldersPage);
-		await waitForLoad();
-
-		await page.getByPlaceholder('New folder name').fill('Trips');
-		await page.getByRole('button', { name: 'Add' }).click();
-
-		await expect.element(page.getByText('Duplicate folder')).toBeInTheDocument();
+		const newFolderLink = page.getByRole('link', { name: 'New folder' });
+		await expect.element(newFolderLink).toBeInTheDocument();
+		expect(newFolderLink.element().getAttribute('href')).toBe('/lists/folders/new');
 	});
 
 	it('auto-saves an edited folder name when the field loses focus', async () => {
@@ -203,7 +125,7 @@ describe('Manage Folders +page.svelte', () => {
 		render(FoldersPage);
 		await waitForLoad();
 
-		const nameInput = page.getByRole('textbox').nth(1);
+		const nameInput = page.getByRole('textbox').nth(0);
 		await nameInput.fill('Grocery Runs');
 		nameInput.element().blur();
 
@@ -215,7 +137,7 @@ describe('Manage Folders +page.svelte', () => {
 		render(FoldersPage);
 		await waitForLoad();
 
-		const nameInput = page.getByRole('textbox').nth(1);
+		const nameInput = page.getByRole('textbox').nth(0);
 		nameInput.element().focus();
 		nameInput.element().blur();
 
@@ -228,7 +150,7 @@ describe('Manage Folders +page.svelte', () => {
 		render(FoldersPage);
 		await waitForLoad();
 
-		const nameInput = page.getByRole('textbox').nth(1);
+		const nameInput = page.getByRole('textbox').nth(0);
 		await nameInput.fill('Grocery Runs');
 		nameInput.element().blur();
 
@@ -241,7 +163,7 @@ describe('Manage Folders +page.svelte', () => {
 		render(FoldersPage);
 		await waitForLoad();
 
-		const nameInput = page.getByRole('textbox').nth(1);
+		const nameInput = page.getByRole('textbox').nth(0);
 		await nameInput.fill('Grocery Runs');
 		nameInput.element().blur();
 
@@ -254,9 +176,8 @@ describe('Manage Folders +page.svelte', () => {
 		render(FoldersPage);
 		await waitForLoad();
 
-		// Color buttons: one in the create form, then one per row — Groceries' is
-		// the first row picker.
-		await page.getByRole('button', { name: 'Color' }).nth(1).click();
+		// Color buttons: one per row — Groceries' is the first row picker.
+		await page.getByRole('button', { name: 'Color' }).nth(0).click();
 		await page.getByRole('button', { name: '#ef4444' }).click();
 
 		await expect.poll(() => vi.mocked(updateFolder).mock.calls.length).toBe(1);
@@ -272,9 +193,9 @@ describe('Manage Folders +page.svelte', () => {
 		await page.getByRole('button', { name: 'Delete' }).first().click();
 
 		expect(deleteFolder).toHaveBeenCalledWith(5);
-		// Only Household's row remains, so it shifts up to index 1.
-		await expect.element(page.getByRole('textbox').nth(1)).toHaveValue('Household');
-		await expect.poll(async () => (await page.getByRole('textbox').all()).length).toBe(2);
+		// Only Household's row remains, so it sits at index 0.
+		await expect.element(page.getByRole('textbox').nth(0)).toHaveValue('Household');
+		await expect.poll(async () => (await page.getByRole('textbox').all()).length).toBe(1);
 	});
 
 	it('reloads when deleting a folder fails without an ApiError', async () => {

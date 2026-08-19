@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Input } from 'flowbite-svelte';
+	import { Input } from 'flowbite-svelte';
 	import type { CategoryDto, ListDto } from '@everylist/shared';
 	import Icon from '$lib/components/Icon.svelte';
 	import IconPicker from '$lib/components/IconPicker.svelte';
@@ -13,7 +13,6 @@
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
 	import {
-		createCategory,
 		deleteCategory,
 		fetchCategories,
 		reorderCategories,
@@ -28,10 +27,6 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let reordering = $state(false);
-
-	let newCategoryName = $state('');
-	let newCategoryIcon = $state('tag');
-	let creating = $state(false);
 
 	// Tracks each row's name at the moment it gained focus, so blur can skip
 	// saving when nothing actually changed (user confirmed onBlur over
@@ -57,25 +52,6 @@
 		}
 		void loadAll();
 	});
-
-	async function handleCreate(event: SubmitEvent) {
-		event.preventDefault();
-		if (!newCategoryName.trim()) return;
-		creating = true;
-		try {
-			const category = await createCategory(listId, {
-				name: newCategoryName.trim(),
-				icon: newCategoryIcon
-			});
-			categories = [...categories, category];
-			newCategoryName = '';
-			newCategoryIcon = 'tag';
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to create category.';
-		} finally {
-			creating = false;
-		}
-	}
 
 	async function saveCategory(category: CategoryDto) {
 		try {
@@ -166,7 +142,17 @@
 		title={list ? `${list.name} — Categories` : undefined}
 		backHref={resolve('/lists/[id]/settings', { id: String(listId) })}
 		backLabel="Back to settings"
-	/>
+	>
+		{#snippet actions()}
+			<a
+				href={resolve('/lists/[id]/categories/new', { id: String(listId) })}
+				aria-label="New category"
+				class="flex h-9 w-9 shrink-0 items-center justify-center text-primary-700 dark:text-primary-400"
+			>
+				<Icon name="plus" class="h-6 w-6" />
+			</a>
+		{/snippet}
+	</PageHeader>
 
 	{#if loading}
 		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
@@ -175,18 +161,6 @@
 			Rename, reorder, or add categories. Renaming a default category creates a copy that's
 			customized just for this list.
 		</p>
-
-		<form class="flex gap-2" onsubmit={handleCreate}>
-			<div class="flex-1">
-				<Input placeholder="New category name" bind:value={newCategoryName} />
-			</div>
-			<IconPicker value={newCategoryIcon} onselect={(name) => (newCategoryIcon = name)} />
-			<Button type="submit" disabled={creating || !newCategoryName.trim()}>Add</Button>
-		</form>
-
-		{#if error}
-			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
-		{/if}
 
 		<p class="text-xs text-gray-400">Press and hold a category's handle to drag it into place.</p>
 

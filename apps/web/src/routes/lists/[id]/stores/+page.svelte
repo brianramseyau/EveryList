@@ -7,7 +7,7 @@
 	import type { ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
-	import { attachStore, detachStore, fetchStores, updateStore } from '$lib/api/stores';
+	import { detachStore, fetchStores, updateStore } from '$lib/api/stores';
 	import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
 	import { ApiError } from '$lib/api/client';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
@@ -22,10 +22,6 @@
 	let stores = $state<StoreDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-
-	let newStoreName = $state('');
-	let newStoreColor = $state(DEFAULT_COLOR);
-	let creating = $state(false);
 
 	let selectedStoreId = $state<number | null>(null);
 	let includeUnassigned = $state(false);
@@ -57,25 +53,6 @@
 		}
 		void loadAll();
 	});
-
-	async function handleCreate(event: SubmitEvent) {
-		event.preventDefault();
-		if (!newStoreName.trim()) return;
-		creating = true;
-		try {
-			const store = await attachStore(listId, {
-				name: newStoreName.trim(),
-				color: newStoreColor
-			});
-			stores = [...stores, store];
-			newStoreName = '';
-			newStoreColor = DEFAULT_COLOR;
-		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to create store.';
-		} finally {
-			creating = false;
-		}
-	}
 
 	function startEdit(store: StoreDto) {
 		editingStoreId = store.id;
@@ -134,7 +111,17 @@
 		title={list ? `${list.name} — Stores` : undefined}
 		backHref={resolve('/lists/[id]', { id: String(listId) })}
 		backLabel="Back to list"
-	/>
+	>
+		{#snippet actions()}
+			<a
+				href={resolve('/lists/[id]/stores/new', { id: String(listId) })}
+				aria-label="New store"
+				class="flex h-9 w-9 shrink-0 items-center justify-center text-primary-700 dark:text-primary-400"
+			>
+				<Icon name="plus" class="h-6 w-6" />
+			</a>
+		{/snippet}
+	</PageHeader>
 
 	{#if loading}
 		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
@@ -144,20 +131,12 @@
 			remembered on this device.
 		</p>
 
-		<form class="flex flex-wrap gap-2" onsubmit={handleCreate}>
-			<div class="min-w-40 flex-1">
-				<Input placeholder="New store name" bind:value={newStoreName} />
-			</div>
-			<ColorPicker value={newStoreColor} onselect={(color) => (newStoreColor = color)} />
-			<Button type="submit" disabled={creating || !newStoreName.trim()}>Add</Button>
-		</form>
-
 		{#if error}
 			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 		{/if}
 
 		{#if stores.length === 0}
-			<p class="text-gray-600 dark:text-gray-400">No stores yet — add one above.</p>
+			<p class="text-gray-600 dark:text-gray-400">No stores yet — tap + to add one.</p>
 		{:else}
 			<ul class="flex flex-col gap-2">
 				<li>
