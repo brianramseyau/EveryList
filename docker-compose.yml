@@ -14,8 +14,9 @@ services:
     command: sh -c "pnpm install --frozen-lockfile && pnpm --filter @everylist/api dev"
     environment:
       HOST: 0.0.0.0
+      PORT: 3334
     ports:
-      - "3333:3333"
+      - "3334:3334"
     volumes:
       - .:/app
       - pnpm-store:/root/.local/share/pnpm
@@ -29,11 +30,11 @@ services:
       context: .
       dockerfile: docker/dev.Dockerfile
     working_dir: /app
-    command: sh -c "pnpm install --frozen-lockfile && pnpm --filter @everylist/web dev -- --host 0.0.0.0 --port 5173"
+    command: sh -c "pnpm install --frozen-lockfile && pnpm --filter @everylist/web dev -- --host 0.0.0.0 --port 5174"
     environment:
-      VITE_API_PROXY_TARGET: http://api:3333
+      VITE_API_PROXY_TARGET: http://api:3334
     ports:
-      - "5173:5173"
+      - "5174:5174"
     depends_on:
       - api
     volumes:

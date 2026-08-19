@@ -75,14 +75,21 @@ export default defineConfig({
 		})
 	],
 	server: {
-		// In production AdonisJS serves both the API and the static build from
-		// one origin (see docker/Dockerfile), so the app fetches relative
-		// "/api/..." paths. Dev runs SvelteKit and AdonisJS as separate
+		// EveryList dev binds fixed ports to avoid silently wedging onto the
+		// wrong one: 5174 here (web) and 3334 for the API (PORT in
+		// apps/api/.env.example). `strictPort` makes Vite fail loudly instead of
+		// silently shifting to the next free port — `pnpm dev` runs a pre-flight
+		// check (scripts/dev-preflight.mjs) that reports any conflict before that
+		// happens. In production AdonisJS serves both the API and the static
+		// build from one origin (see docker/Dockerfile), so the app fetches
+		// relative "/api/..." paths. Dev runs SvelteKit and AdonisJS as separate
 		// processes on separate ports, so proxy the same relative path to the
 		// API dev server — VITE_API_PROXY_TARGET lets docker-compose point
 		// this at the "api" service instead of localhost.
+		port: 5174,
+		strictPort: true,
 		proxy: {
-			'/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3333'
+			'/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'
 		}
 	},
 	test: {
