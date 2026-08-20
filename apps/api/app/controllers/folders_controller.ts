@@ -6,7 +6,11 @@ import {
 } from '#validators/folder'
 import type { HttpContext } from '@adonisjs/core/http'
 import FolderTransformer from '#transformers/folder_transformer'
-import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
+import {
+  hasVersionConflict,
+  parseExpectedVersion,
+  reportVersionConflict,
+} from '#services/version_conflict'
 
 async function nextSortOrder(userId: number): Promise<number> {
   const result = await Folder.query()
@@ -39,7 +43,7 @@ export default class FoldersController {
     return serialize(FolderTransformer.transform(folder))
   }
 
-  async update({ auth, params, request, response, serialize }: HttpContext) {
+  async update({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const folder = await Folder.query()
       .where('id', params.id)
@@ -50,6 +54,13 @@ export default class FoldersController {
     const { expectedVersion, ...rest } = payload
 
     if (hasVersionConflict(folder, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'folder',
+        id: folder.id,
+        expectedVersion,
+        actualVersion: folder.version,
+        userId: user.id,
+      })
       return response
         .status(409)
         .send({ ...(await serialize(FolderTransformer.transform(folder))), conflict: true })
@@ -62,7 +73,7 @@ export default class FoldersController {
     return serialize(FolderTransformer.transform(folder))
   }
 
-  async destroy({ auth, params, request, response }: HttpContext) {
+  async destroy({ auth, params, request, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const folder = await Folder.query()
       .where('id', params.id)
@@ -71,6 +82,13 @@ export default class FoldersController {
 
     const expectedVersion = parseExpectedVersion(request)
     if (hasVersionConflict(folder, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'folder',
+        id: folder.id,
+        expectedVersion,
+        actualVersion: folder.version,
+        userId: user.id,
+      })
       return response.status(409).send({ conflict: true })
     }
 

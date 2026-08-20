@@ -18,6 +18,11 @@ const chromiumLaunchOptions = existsSync(sandboxChromiumPath)
 	? { executablePath: sandboxChromiumPath }
 	: {};
 
+// The dev service worker is opt-in via `pnpm dev:sw` (sets PWA_DEV) — ordinary
+// `vite dev` stays free of the stale-cache headaches a dev SW introduces during
+// hot reload, and production builds never set it.
+const devSW = process.env.PWA_DEV === 'true';
+
 export default defineConfig({
 	plugins: [
 		tailwindcss(),
@@ -67,11 +72,30 @@ export default defineConfig({
 			registerType: 'autoUpdate',
 			injectRegister: null,
 			manifest: pwaManifest,
-			workbox: workboxOptions,
-			kit: {
-				adapterFallback: '200.html',
-				spa: true
-			}
+			// `vite dev` has no static build to precache, and the SvelteKit
+			// `spa`/`adapterFallback` + `navigateFallback` machinery targets
+			// `200.html`, which doesn't exist in dev — it also collides with
+			// vite-plugin-pwa's dev-mode navigateFallback entry (two `200.html`
+			// entries with conflicting revisions). Drop the fallback machinery in
+			// dev so `pnpm dev:sw` registers a worker without errors; it still
+			// runtime-caches /api GETs via the shared runtimeCaching rules.
+			workbox: devSW
+				? {
+						globPatterns: [],
+						navigateFallback: undefined,
+						runtimeCaching: workboxOptions.runtimeCaching
+					}
+				: workboxOptions,
+			devOptions: {
+				enabled: devSW,
+				type: 'module'
+			},
+			kit: devSW
+				? {}
+				: {
+						adapterFallback: '200.html',
+						spa: true
+					}
 		})
 	],
 	server: {
@@ -87,6 +111,17 @@ export default defineConfig({
 		// API dev server — VITE_API_PROXY_TARGET lets docker-compose point
 		// this at the "api" service instead of localhost.
 		port: 5174,
+		strictPort: true,
+		proxy: {
+			'/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'
+		}
+	},
+	// `vite preview` serves the production `build/` (with the real sw.js) — the
+	// correct way to test offline/PWA behavior locally, since `vite dev` serves
+	// modules dynamically and its dev SW can't precache the app shell. Mirror
+	// the dev proxy so the API resolves against a running API dev server.
+	preview: {
+		port: 4173,
 		strictPort: true,
 		proxy: {
 			'/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'

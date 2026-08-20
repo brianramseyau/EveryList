@@ -10,7 +10,11 @@ import { parseBulkImport } from '#services/bulk_import_parser'
 import type { CategorizeSuggestionDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
-import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
+import {
+  hasVersionConflict,
+  parseExpectedVersion,
+  reportVersionConflict,
+} from '#services/version_conflict'
 
 /** Matches common AnyList category headers to an existing @mdi/js icon; unknown headers get the generic 'tag'. */
 const IMPORTED_CATEGORY_ICONS: Record<string, string> = {
@@ -277,7 +281,7 @@ export default class ItemsController {
     return serialize(ItemTransformer.transform(items))
   }
 
-  async update({ auth, params, request, response, serialize }: HttpContext) {
+  async update({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const item = await Item.query()
@@ -290,6 +294,13 @@ export default class ItemsController {
     const { checked, expectedVersion, ...rest } = payload
 
     if (hasVersionConflict(item, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'item',
+        id: item.id,
+        expectedVersion,
+        actualVersion: item.version,
+        userId: user.id,
+      })
       return response
         .status(409)
         .send({ ...(await serialize(ItemTransformer.transform(item))), conflict: true })
@@ -314,7 +325,7 @@ export default class ItemsController {
     return serialize(ItemTransformer.transform(item))
   }
 
-  async destroy({ auth, params, request, response, serialize }: HttpContext) {
+  async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const item = await Item.query()
@@ -325,6 +336,13 @@ export default class ItemsController {
 
     const expectedVersion = parseExpectedVersion(request)
     if (hasVersionConflict(item, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'item',
+        id: item.id,
+        expectedVersion,
+        actualVersion: item.version,
+        userId: user.id,
+      })
       return response
         .status(409)
         .send({ ...(await serialize(ItemTransformer.transform(item))), conflict: true })

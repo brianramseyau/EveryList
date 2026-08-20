@@ -30,6 +30,16 @@ export async function pendingMutations(): Promise<QueuedMutation[]> {
 	return db.syncQueue.where('status').equals('pending').sortBy('createdAt');
 }
 
+/** Mutations the server rejected past `MAX_ATTEMPTS` — the sync-status page's
+ * "failed" list (see PHASE14_PLAN.md). */
+export async function failedMutations(): Promise<QueuedMutation[]> {
+	/* v8 ignore next */
+	const db = getDb();
+	if (!db) return [];
+
+	return db.syncQueue.where('status').equals('failed').sortBy('createdAt');
+}
+
 export async function updateMutation(id: number, changes: Partial<QueuedMutation>): Promise<void> {
 	/* v8 ignore next */
 	const db = getDb();
@@ -52,7 +62,7 @@ export interface QueueCounts {
 	conflict: number;
 }
 
-/** Backs the `SyncStatusBanner` — a non-zero total means the banner should be visible. */
+/** Backs the Settings sync-status page's queued-changes counts (PHASE14_PLAN.md). */
 export async function queueCounts(): Promise<QueueCounts> {
 	/* v8 ignore next */
 	const db = getDb();

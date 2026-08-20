@@ -1,5 +1,6 @@
 export * from './constants.js'
 export * from './assert-never.js'
 export * from './meta.js'
+export * from './ping.js'
 export * from './domain.js'
 export * from './auto-categorize.js'

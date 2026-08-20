@@ -37,6 +37,10 @@ router
 
     router.get('meta', [controllers.Metas, 'show'])
 
+    // Liveness probe for the frontend connectivity check (PHASE14_PLAN.md): no
+    // auth, no cache — the client treats 2xx + application/json as "reachable".
+    router.get('ping', ({ response }) => response.ok({ pong: true }))
+
     router
       .group(() => {
         router.get('/', [controllers.Folders, 'index'])

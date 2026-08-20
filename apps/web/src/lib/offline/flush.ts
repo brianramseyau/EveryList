@@ -14,12 +14,13 @@ const MAX_ATTEMPTS = 8;
 export type ConflictListener = (mutation: QueuedMutation) => void;
 const conflictListeners = new Set<ConflictListener>();
 
-/** Both the SyncStatusBanner (toasts "some changes were reconciled" — see PHASE5_PLAN.md §4's
- * silent-merge-and-toast conflict UX) and the currently-mounted list page (refreshes its stale
- * optimistic view once the server's merge lands) subscribe here, so this supports more than one
- * listener at a time. Returns an unsubscribe function — call it on teardown instead of passing
- * `null`. Passing `null` clears every subscriber; that's a test-only global reset, not meant for
- * component teardown (it would also drop unrelated listeners still mounted). */
+/** The currently-mounted list page (refreshes its stale optimistic view once the server's merged
+ * copy lands, see PHASE14_PLAN.md) subscribes here — the silent-merge-and-toast conflict UX of
+ * PHASE5_PLAN.md §4 is now surfaced via the Settings sync-status page and server logs rather than a
+ * banner/toast. Supports more than one listener at a time. Returns an unsubscribe function — call
+ * it on teardown instead of passing `null`. Passing `null` clears every subscriber; that's a
+ * test-only global reset, not meant for component teardown (it would also drop unrelated listeners
+ * still mounted). */
 export function onConflict(listener: ConflictListener | null): () => void {
 	if (listener === null) {
 		conflictListeners.clear();
@@ -27,6 +28,23 @@ export function onConflict(listener: ConflictListener | null): () => void {
 	}
 	conflictListeners.add(listener);
 	return () => conflictListeners.delete(listener);
+}
+
+export type FlushOutcomeListener = (outcome: { ok: boolean }) => void;
+const flushOutcomeListeners = new Set<FlushOutcomeListener>();
+
+/** Notifies subscribers whenever a drain either reaches the server (`ok: true`
+ * after the queue empties) or is aborted by a network error (`ok: false`) —
+ * backs the connectivity monitor's "server unavailable" signal (see
+ * PHASE14_PLAN.md). Returns an unsubscribe function; passing `null` clears
+ * every subscriber (test-only reset, mirroring `onConflict`). */
+export function onFlushOutcome(listener: FlushOutcomeListener | null): () => void {
+	if (listener === null) {
+		flushOutcomeListeners.clear();
+		return () => {};
+	}
+	flushOutcomeListeners.add(listener);
+	return () => flushOutcomeListeners.delete(listener);
 }
 
 async function replay(mutation: QueuedMutation): Promise<void> {
@@ -53,7 +71,7 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 		// cached row's `version` stale after every replayed update, so the *next* edit to that
 		// row (another queued mutation behind it, or the next click once "synced") would send a
 		// now-stale `expectedVersion` and 409 against the sync that had just succeeded — a
-		// self-inflicted conflict, not a real one, but still surfaced via the same toast.
+		// self-inflicted conflict, not a real one, but still surfaced via the same conflict path.
 		if (result) await table.update(mutation.targetId, { ...result, _dirty: false });
 		return;
 	}
@@ -96,7 +114,8 @@ function tableForEntity(entityType: QueueableEntityType) {
  * with — is re-applied over the fresh copy and re-enqueued as a new mutation carrying the
  * server's `version` as its `expectedVersion`, per PHASE5_PLAN.md §4's "silent merge + toast"
  * conflict UX (the offline edit is reconciled onto the newer edit, not discarded by it).
- * Silent — the caller surfaces a toast via `onConflict`. */
+ * Silent — the mounted list page refreshes via `onConflict`, and the server logs the exact
+ * version delta (see apps/api's `reportVersionConflict`, PHASE14_PLAN.md). */
 async function reconcileConflict(mutation: QueuedMutation, err: ApiError): Promise<void> {
 	const body = err.body as { data?: Record<string, unknown> & { version?: number } } | undefined;
 	if (body?.data) {
@@ -135,11 +154,11 @@ let flushing = false;
  *
  * Guarded against overlapping with itself: this is reachable from several independent triggers
  * (the `online` listener, `startFlushLoop`'s own initial call, a backoff retry timer, and the
- * SyncStatusBanner's "Retry now" button), and mobile connections routinely fire more than one of
+ * sync-status page's "Retry now" button), and mobile connections routinely fire more than one of
  * those in quick succession while reconnecting. Two overlapping drains would both read the same
  * still-pending mutation and replay it twice — the second copy then 409s against the first's own
- * just-applied version bump, producing a spurious "reconciled with a newer edit" toast for an
- * edit nothing actually conflicted with. A later call while one is already in flight simply
+ * just-applied version bump, producing a spurious conflict for an edit nothing actually
+ * conflicted with. A later call while one is already in flight simply
  * no-ops; the caller's own pending-count check (see `attemptFlush`) notices the queue didn't
  * drain and retries.
  */
@@ -160,6 +179,12 @@ export async function flushQueue(): Promise<void> {
 			} catch (err) {
 				if (!(err instanceof ApiError)) {
 					// Network error — stop here, the rest will retry on the next flush attempt.
+					// Record a reason on the stalling mutation (status stays `pending`) so the
+					// sync-status page can show *why* it's stuck, and tell the connectivity
+					// monitor the server is currently unreachable.
+					const message = err instanceof Error ? err.message : 'Network error';
+					await updateMutation(id, { lastError: message });
+					flushOutcomeListeners.forEach((listener) => listener({ ok: false }));
 					return;
 				}
 				if (err.status === 409) {
@@ -208,6 +233,7 @@ async function attemptFlush(): Promise<void> {
 	const after = await pendingMutations();
 	if (after.length === 0) {
 		backoffAttempt = 0;
+		flushOutcomeListeners.forEach((listener) => listener({ ok: true }));
 		return;
 	}
 	// Some mutations are still queued (a network error stopped the drain, or a

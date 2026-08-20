@@ -40,7 +40,9 @@ export const workboxOptions = {
 		{
 			/** @param {{ url: URL; request: Request }} args */
 			urlPattern: ({ url, request }) =>
-				url.pathname.startsWith('/api/v1/') && request.method === 'GET',
+				url.pathname.startsWith('/api/v1/') &&
+				url.pathname !== '/api/v1/ping' &&
+				request.method === 'GET',
 			// NetworkFirst (not StaleWhileRevalidate): a GET made right after a
 			// mutation (e.g. reloading the list screen after editing an item, or
 			// the list index after creating a list) must see the fresh server

@@ -9,12 +9,13 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 const { apiPost, apiPatch, apiDelete, ApiError } = await import('$lib/api/client');
 const { getDb, resetDbForTesting } = await import('./db');
 const { enqueueMutation, pendingMutations } = await import('./sync-queue');
-const { flushQueue, onConflict } = await import('./flush');
+const { flushQueue, onConflict, onFlushOutcome } = await import('./flush');
 
 afterEach(async () => {
 	vi.resetAllMocks();
 	// Also exercises the no-op unsubscribe this "clear everything" call returns.
 	onConflict(null)();
+	onFlushOutcome(null)();
 	await resetDbForTesting();
 });
 
@@ -252,6 +253,73 @@ describe('flushQueue', () => {
 
 		expect(apiPatch).toHaveBeenCalledTimes(1);
 		expect(await pendingMutations()).toHaveLength(2);
+	});
+
+	it('records a reason and notifies flush-outcome listeners on a network error', async () => {
+		vi.mocked(apiPatch).mockRejectedValue(new TypeError('Failed to fetch'));
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5'
+		});
+		const listener = vi.fn();
+		onFlushOutcome(listener);
+
+		await flushQueue();
+
+		expect(listener).toHaveBeenCalledWith({ ok: false });
+		const [mutation] = await pendingMutations();
+		expect(mutation).toMatchObject({ status: 'pending', lastError: 'Failed to fetch' });
+	});
+
+	it('falls back to a generic reason when a network error is not an Error instance', async () => {
+		vi.mocked(apiPatch).mockRejectedValue('offline');
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5'
+		});
+
+		await flushQueue();
+
+		const [mutation] = await pendingMutations();
+		expect(mutation).toMatchObject({ status: 'pending', lastError: 'Network error' });
+	});
+
+	it('stops notifying a listener once its onFlushOutcome subscription is unsubscribed', async () => {
+		vi.mocked(apiPatch).mockRejectedValue(new TypeError('network down'));
+		const listener = vi.fn();
+		const unsubscribe = onFlushOutcome(listener);
+
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5'
+		});
+		await flushQueue();
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		unsubscribe();
+
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 6,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/6'
+		});
+		await flushQueue();
+		expect(listener).toHaveBeenCalledTimes(1);
 	});
 
 	it('increments attempts and records the error on a non-conflict ApiError, without marking failed below the cap', async () => {

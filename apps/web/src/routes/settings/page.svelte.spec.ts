@@ -1,6 +1,10 @@
 import { page } from 'vitest/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import {
+	resetConnectivityForTesting,
+	setServerUnavailableForTesting
+} from '$lib/offline/connectivity.svelte';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/auth', () => ({
@@ -29,6 +33,7 @@ describe('Settings +page.svelte', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		vi.clearAllMocks();
+		resetConnectivityForTesting();
 	});
 
 	it('logs out and navigates to /login', async () => {
@@ -69,6 +74,23 @@ describe('Settings +page.svelte', () => {
 		render(SettingsPage);
 
 		await expect.element(page.getByText('EveryList — build info unavailable')).toBeInTheDocument();
+	});
+
+	it('links to the sync status page', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+		render(SettingsPage);
+
+		await expect.element(page.getByRole('link', { name: 'Sync status' })).toBeInTheDocument();
+	});
+
+	it('surfaces a server-unavailable hint on the sync status link', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		setServerUnavailableForTesting(true);
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Server unavailable')).toBeInTheDocument();
 	});
 
 	it('switches the app theme preference and reflects the choice in the radio group', async () => {

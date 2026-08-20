@@ -10,7 +10,11 @@ import type { HttpContext } from '@adonisjs/core/http'
 import CategoryTransformer from '#transformers/category_transformer'
 import { getEffectiveCategories } from '#services/category_service'
 import { broadcastSync } from '#services/sync_broadcaster'
-import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
+import {
+  hasVersionConflict,
+  parseExpectedVersion,
+  reportVersionConflict,
+} from '#services/version_conflict'
 import { DateTime } from 'luxon'
 
 export default class CategoriesController {
@@ -115,7 +119,7 @@ export default class CategoriesController {
     return serialize(CategoryTransformer.transform(created))
   }
 
-  async update({ auth, params, request, response, serialize }: HttpContext) {
+  async update({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const category = await Category.query()
@@ -128,6 +132,13 @@ export default class CategoriesController {
     const { expectedVersion, ...rest } = payload
 
     if (hasVersionConflict(category, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'category',
+        id: category.id,
+        expectedVersion,
+        actualVersion: category.version,
+        userId: user.id,
+      })
       return response
         .status(409)
         .send({ ...(await serialize(CategoryTransformer.transform(category))), conflict: true })
@@ -148,7 +159,7 @@ export default class CategoriesController {
     return serialize(CategoryTransformer.transform(category))
   }
 
-  async destroy({ auth, params, request, response, serialize }: HttpContext) {
+  async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const category = await Category.query()
@@ -159,6 +170,13 @@ export default class CategoriesController {
 
     const expectedVersion = parseExpectedVersion(request)
     if (hasVersionConflict(category, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'category',
+        id: category.id,
+        expectedVersion,
+        actualVersion: category.version,
+        userId: user.id,
+      })
       return response
         .status(409)
         .send({ ...(await serialize(CategoryTransformer.transform(category))), conflict: true })

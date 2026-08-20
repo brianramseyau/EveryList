@@ -12,6 +12,7 @@
 	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
 	import { getSelectedStoreSettings } from '$lib/api/selected-store';
 	import { isRowDirty, type StoreFilter } from '$lib/offline/db';
+	import { isSelfMutation } from '$lib/offline/self-mutations';
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
 	import { onConflict } from '$lib/offline/flush';
@@ -26,7 +27,6 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PasscodeGate from '$lib/components/PasscodeGate.svelte';
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
-	import SyncToast from '$lib/components/SyncToast.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -88,7 +88,6 @@
 	// via $lib/list-prefs so it survives reload and revisiting the list.
 	let showChecked = $state(true);
 
-	let syncToastVisible = $state(false);
 	let unsubscribeRealtime: (() => void) | null = null;
 	let unsubscribeConflict: (() => void) | null = null;
 
@@ -228,18 +227,25 @@
 		showChecked = getShowChecked(listId);
 		void loadAll();
 		unsubscribeRealtime = subscribeToList(listId, (event) => {
+			// Our own edit's broadcast (sent right after the flush clears `_dirty`)
+			// is suppressed — the optimistic update already reflects it, so
+			// reloading would just churn the DOM mid-gesture (see PHASE14_PLAN.md).
+			if (isSelfMutation(event.entityType, event.entityId)) return;
 			// An unacked local edit on this exact row means the eventual flush response is
 			// authoritative, not this racing broadcast — suppress it (see PHASE5_PLAN.md §4).
 			void isRowDirty(event.entityType, event.entityId).then((dirty) => {
-				if (!dirty) syncToastVisible = true;
+				// Silent auto-refresh: the removed "This list was updated" toast was the only
+				// previous effect, so re-run the load to keep the list fresh (PHASE14_PLAN.md).
+				if (!dirty) void loadAll();
 			});
 		});
 		// The offline flush loop's own conflict reconciliation (offline/flush.ts) can leave this
 		// page's in-memory `items`/etc. stale relative to the server's merged copy — there's no live
-		// broadcast to catch it, since it happened while this client was offline. Same toast/refresh
-		// flow as a realtime event, not suppressed by `_dirty` since the flush already cleared it.
+		// broadcast to catch it, since it happened while this client was offline. Same silent
+		// refresh flow as a realtime event, not suppressed by `_dirty` since the flush already
+		// cleared it.
 		unsubscribeConflict = onConflict(() => {
-			syncToastVisible = true;
+			void loadAll();
 		});
 	});
 
@@ -248,11 +254,6 @@
 		unsubscribeConflict?.();
 		if (highlightTimeout) clearTimeout(highlightTimeout);
 	});
-
-	function refreshFromSync() {
-		syncToastVisible = false;
-		void loadAll();
-	}
 
 	async function addItem(rawName: string) {
 		if (adding) return;
@@ -541,14 +542,6 @@
 				</div>
 			</form>
 		{/if}
-	</div>
-
-	<div class="print:hidden">
-		<SyncToast
-			visible={syncToastVisible}
-			onrefresh={refreshFromSync}
-			ondismiss={() => (syncToastVisible = false)}
-		/>
 	</div>
 
 	{#if loading}

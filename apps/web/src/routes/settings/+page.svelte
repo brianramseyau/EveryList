@@ -17,6 +17,7 @@
 	import { fetchProfile, logout, updateProfile } from '$lib/api/auth';
 	import { ApiError } from '$lib/api/client';
 	import { resetApp } from '$lib/pwa/reset';
+	import { connectivity } from '$lib/offline/connectivity.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -287,6 +288,28 @@
 			{/if}
 		</div>
 		<InstallPrompt />
+	</section>
+
+	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+		<h2
+			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
+		>
+			Sync
+		</h2>
+		<a
+			href={resolve('/settings/sync')}
+			class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+		>
+			<span>Sync status</span>
+			{#if connectivity.serverUnavailable}
+				<span class="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+					<Icon name="cloudOffOutline" class="h-4 w-4" />
+					Server unavailable
+				</span>
+			{:else}
+				<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
+			{/if}
+		</a>
 	</section>
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">

@@ -2,6 +2,7 @@ import type { Table } from 'dexie';
 import { ApiError } from '$lib/api/client';
 import { getDb, type EveryListDB, type SyncEntityType } from './db';
 import { dequeueMutation, enqueueMutation } from './sync-queue';
+import { markSelfMutation } from './self-mutations';
 
 let tempIdCounter = 0;
 
@@ -109,6 +110,10 @@ export interface OfflineMutateOptions<T> {
 export async function offlineMutate<T>(opts: OfflineMutateOptions<T>): Promise<T | void> {
 	const db = getDb();
 	if (!db) return opts.request();
+
+	// Remember we did this so the realtime broadcast of our own edit (arriving
+	// just after the flush clears `_dirty`) doesn't trigger a redundant reload.
+	markSelfMutation(opts.entityType, opts.targetId);
 
 	const expectedVersion = await opts.applyOptimistically(db);
 

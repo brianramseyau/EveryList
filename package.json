@@ -11,6 +11,7 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "dev": "node scripts/dev-preflight.mjs && pnpm -r --parallel dev",
+    "dev:sw": "node scripts/dev-preflight.mjs && PWA_DEV=true pnpm -r --parallel dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "format": "prettier --write .",
