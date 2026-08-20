@@ -19,14 +19,16 @@
 	import { resetApp } from '$lib/pwa/reset';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 
 	let meta = $state<MetaResponse | null>(null);
 	let loadFailed = $state(false);
 	let profile = $state<UserDto | null>(null);
 	let profileError = $state<string | null>(null);
-	// Snapshots the name at focus time so blur can skip saving when nothing
+	// Snapshots the name at edit time so blur can skip saving when nothing
 	// changed — mirrors the categories page's editStartNames pattern.
 	let editStartName: string | null = null;
+	let editingName = $state(false);
 	let themePreference = $state<ThemePreference>('automatic');
 	let accentPreference = $state<AccentPreference>('slate');
 	let orientationPreference = $state<OrientationPreference>('automatic');
@@ -72,14 +74,16 @@
 		await goto(resolve('/login'));
 	}
 
-	function handleNameFocus() {
+	function handleStartEdit() {
 		// Only wired up inside the `{#if profile}` block, so `profile` is
 		// always set here — the `?.` exists solely to satisfy the type.
 		/* v8 ignore next */
 		editStartName = profile?.fullName ?? null;
+		editingName = true;
 	}
 
 	async function handleNameBlur() {
+		editingName = false;
 		if (!profile || profile.fullName === editStartName) return;
 		const fullName = profile.fullName?.trim() ? profile.fullName.trim() : null;
 		try {
@@ -87,6 +91,8 @@
 			profileError = null;
 		} catch (err) {
 			profileError = err instanceof ApiError ? err.message : 'Failed to save name.';
+			// Keep the input open so the unsaved edit isn't lost.
+			editingName = true;
 		}
 	}
 
@@ -138,19 +144,39 @@
 			</div>
 			<div class="flex items-center justify-between gap-4 px-4 py-3">
 				<span class="shrink-0 text-sm font-medium">Name</span>
-				<Input
-					bind:value={
-						() => profile?.fullName ?? '',
-						(value) => {
-							// Only wired up inside the `{#if profile}` block.
-							/* v8 ignore next */
-							if (profile) profile.fullName = value;
+				{#if editingName}
+					<Input
+						bind:value={
+							() => profile?.fullName ?? '',
+							(value) => {
+								// Only wired up inside the `{#if profile}` block.
+								/* v8 ignore next */
+								if (profile) profile.fullName = value;
+							}
 						}
-					}
-					placeholder="Add your name"
-					onfocus={handleNameFocus}
-					onblur={handleNameBlur}
-				/>
+						placeholder="Add your name"
+						autofocus
+						onblur={handleNameBlur}
+					/>
+				{:else}
+					<div class="flex items-center gap-2">
+						<span
+							class="text-sm {profile.fullName
+								? 'text-gray-600 dark:text-gray-400'
+								: 'text-gray-400 dark:text-gray-500'}"
+						>
+							{profile.fullName || 'Add your name'}
+						</span>
+						<button
+							type="button"
+							aria-label="Edit name"
+							onclick={handleStartEdit}
+							class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-primary-400"
+						>
+							<Icon name="pencil" class="h-4 w-4" />
+						</button>
+					</div>
+				{/if}
 			</div>
 		{/if}
 		<div class="flex items-center justify-between px-4 py-3">
