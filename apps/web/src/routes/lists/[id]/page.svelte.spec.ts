@@ -341,7 +341,7 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Dairy')).not.toBeInTheDocument();
 	});
 
-	it('links to Favorites, Recently Deleted, Stores, and List settings from the header', async () => {
+	it('links to Favorites, Recently Deleted, and Stores directly, and List settings from the header menu', async () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
@@ -354,6 +354,8 @@ describe('List detail +page.svelte', () => {
 		const storesLink = page.getByRole('link', { name: 'Stores' });
 		expect(storesLink.element().getAttribute('href')).toBe('/lists/1/stores');
 
+		// The settings link lives inside the header's vertical-ellipsis menu.
+		await page.getByRole('button', { name: 'List menu' }).click();
 		const settingsLink = page.getByRole('link', { name: 'List settings' });
 		expect(settingsLink.element().getAttribute('href')).toBe('/lists/1/settings');
 	});
@@ -957,7 +959,7 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
-	it('hides the "Clear checked items" button until at least one visible item is checked', async () => {
+	it('disables "Clear Checked Off Items" in the menu until at least one item is checked', async () => {
 		vi.mocked(updateItem).mockResolvedValue(undefined);
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
@@ -966,15 +968,18 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
+		await page.getByRole('button', { name: 'List menu' }).click();
 		await expect
-			.element(page.getByRole('button', { name: 'Clear checked items' }))
-			.not.toBeInTheDocument();
+			.element(page.getByRole('button', { name: 'Clear checked off items' }))
+			.toBeDisabled();
+		await page.getByRole('button', { name: 'List menu' }).click();
 
 		await page.getByRole('checkbox', { name: 'Bananas' }).click();
 
+		await page.getByRole('button', { name: 'List menu' }).click();
 		await expect
-			.element(page.getByRole('button', { name: 'Clear checked items' }))
-			.toBeInTheDocument();
+			.element(page.getByRole('button', { name: 'Clear checked off items' }))
+			.toBeEnabled();
 	});
 
 	it('asks for confirmation before clearing checked items, then clears them on confirm', async () => {
@@ -987,7 +992,8 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Clear checked items' }).click();
+		await page.getByRole('button', { name: 'List menu' }).click();
+		await page.getByRole('button', { name: 'Clear checked off items' }).click();
 
 		await expect.element(page.getByText('Clear 2 checked items?')).toBeInTheDocument();
 		expect(deleteItem).not.toHaveBeenCalled();
@@ -1010,13 +1016,151 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Clear checked items' }).click();
+		await page.getByRole('button', { name: 'List menu' }).click();
+		await page.getByRole('button', { name: 'Clear checked off items' }).click();
 		await expect.element(page.getByText('Clear 1 checked item?')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Cancel' }).click();
 
 		await expect.element(page.getByText('Clear 1 checked item?')).not.toBeInTheDocument();
 		expect(deleteItem).not.toHaveBeenCalled();
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+	});
+
+	it('asks for confirmation before unchecking all items, then unchecks every checked item on confirm', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 10, checked: true }),
+			makeItem({ id: 102, name: 'Bread', categoryId: 10, checked: false })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List menu' }).click();
+		await page.getByRole('button', { name: 'Uncheck all items' }).click();
+
+		await expect.element(page.getByText('Uncheck all 2 items?')).toBeInTheDocument();
+		expect(updateItem).not.toHaveBeenCalled();
+
+		await page.getByRole('button', { name: 'Confirm' }).click();
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(2);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, { checked: false });
+		expect(updateItem).toHaveBeenCalledWith(1, 101, { checked: false });
+		await expect.element(page.getByRole('checkbox', { name: 'Bananas' })).not.toBeChecked();
+		await expect.element(page.getByRole('checkbox', { name: 'Milk' })).not.toBeChecked();
+		await expect.element(page.getByRole('checkbox', { name: 'Bread' })).not.toBeChecked();
+		// Already-unchecked items are left untouched by the bulk uncheck.
+		expect(updateItem).not.toHaveBeenCalledWith(1, 102, expect.anything());
+	});
+
+	it('cancels the uncheck-all confirmation without updating anything', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List menu' }).click();
+		await page.getByRole('button', { name: 'Uncheck all items' }).click();
+		await expect.element(page.getByText('Uncheck 1 item?')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		await expect.element(page.getByText('Uncheck 1 item?')).not.toBeInTheDocument();
+		expect(updateItem).not.toHaveBeenCalled();
+		await expect.element(page.getByRole('checkbox', { name: 'Bananas' })).toBeChecked();
+	});
+
+	it('disables "Clear ALL List Items" in the menu when the list has no items', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([]);
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List menu' }).click();
+		await expect.element(page.getByRole('button', { name: 'Clear all list items' })).toBeDisabled();
+	});
+
+	it('asks for confirmation before clearing all list items, then deletes every item on confirm', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 10, checked: false })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List menu' }).click();
+		await page.getByRole('button', { name: 'Clear all list items' }).click();
+
+		await expect.element(page.getByText('Clear all 2 items?')).toBeInTheDocument();
+		expect(deleteItem).not.toHaveBeenCalled();
+
+		await page.getByRole('button', { name: 'Confirm' }).click();
+
+		await expect.poll(() => vi.mocked(deleteItem).mock.calls.length).toBe(2);
+		expect(deleteItem).toHaveBeenCalledWith(1, 100);
+		expect(deleteItem).toHaveBeenCalledWith(1, 101);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+	});
+
+	it('cancels the clear-all confirmation without deleting anything', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List menu' }).click();
+		await page.getByRole('button', { name: 'Clear all list items' }).click();
+		await expect.element(page.getByText('Clear all 1 item?')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		await expect.element(page.getByText('Clear all 1 item?')).not.toBeInTheDocument();
+		expect(deleteItem).not.toHaveBeenCalled();
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+	});
+
+	it('reloads the list when unchecking all items fails', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new TypeError('network down'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List menu' }).click();
+		await page.getByRole('button', { name: 'Uncheck all items' }).click();
+		await page.getByRole('button', { name: 'Confirm' }).click();
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+	});
+
+	it('reloads the list when unchecking all items fails with an ApiError', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true })
+		]);
+		vi.mocked(updateItem).mockRejectedValue(new ApiError(500, 'Could not update'));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List menu' }).click();
+		await page.getByRole('button', { name: 'Uncheck all items' }).click();
+		await page.getByRole('button', { name: 'Confirm' }).click();
+
+		await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 	});
 
@@ -1384,6 +1528,7 @@ describe('List detail +page.svelte', () => {
 			.element(page.getByText('Nothing here yet. Add your first item above.'))
 			.not.toBeInTheDocument();
 		// The header/menu stay reachable even while locked (recovery path).
+		await page.getByRole('button', { name: 'List menu' }).click();
 		await expect.element(page.getByRole('link', { name: 'List settings' })).toBeInTheDocument();
 	});
 
