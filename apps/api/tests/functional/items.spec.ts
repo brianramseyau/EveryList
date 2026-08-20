@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
-import type { CategoryDto, ListDto } from '@everylist/shared'
+import type { CategoryDto, ItemDto, ListDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 async function createList(client: ApiClient, token: string) {
@@ -154,6 +154,135 @@ test.group('Items CRUD', (group) => {
     response.assertStatus(200)
     const names = response.body().data.map((item: { name: string }) => item.name)
     assert.deepEqual(names, ['Milk', 'Bread', 'Chicken breast'])
+  })
+
+  test('bulk import trims whitespace from plain item names', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const response = await client
+      .post(`/api/v1/lists/${listId}/items/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ text: '  Milk \nBread   \n\n\t Eggs ' })
+
+    response.assertStatus(200)
+    const names = response.body().data.map((item: { name: string }) => item.name)
+    assert.deepEqual(names, ['Milk', 'Bread', 'Eggs'])
+  })
+
+  test('bulk import parses an AnyList export, reusing matching categories and creating the rest', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    await seedStarterCategories(client, token, listId)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const text = `Shopping List
+
+CHEMIST
+• Amber Meds
+Prescription
+
+PRODUCE
+• Blueberries
+• Apples
+
+PRODUCE
+• Bananas
+
+COOKING
+• Ground Coriander
+• Cumin Seed
+
+SNACKS
+• Arnott's Country Cheese Crackers
+
+TOILETRIES
+• Toothpaste`
+
+    const response = await auth(client.post(`/api/v1/lists/${listId}/items/import`).json({ text }))
+    response.assertStatus(200)
+    const items = response.body().data as ItemDto[]
+    assert.deepEqual(
+      items.map((item) => item.name),
+      [
+        'Amber Meds',
+        'Blueberries',
+        'Apples',
+        'Bananas',
+        'Ground Coriander',
+        'Cumin Seed',
+        "Arnott's Country Cheese Crackers",
+        'Toothpaste',
+      ]
+    )
+
+    const categories = bodyData<CategoryDto[]>(
+      await auth(client.get(`/api/v1/lists/${listId}/categories`))
+    )
+    const byName = new Map(categories.map((category) => [category.name, category]))
+
+    const chemist = byName.get('Chemist')
+    const produce = byName.get('Produce')
+    const cooking = byName.get('Cooking')
+    const snacks = byName.get('Snacks')
+    const toiletries = byName.get('Toiletries')
+    assert.isDefined(chemist, 'missing AnyList category was created, title-cased')
+    assert.isDefined(cooking, 'missing AnyList category was created, title-cased')
+    assert.isDefined(snacks, 'missing AnyList category was created, title-cased')
+    assert.isDefined(toiletries, 'missing AnyList category was created, title-cased')
+    assert.isDefined(produce, 'existing starter category survived')
+
+    assert.equal(items[0]!.notes, 'Prescription', 'bare line under an item becomes its note')
+    assert.equal(items[0]!.categoryId, chemist!.id)
+    assert.equal(items[1]!.categoryId, produce!.id, 'existing Produce was reused')
+    assert.equal(
+      items[3]!.categoryId,
+      produce!.id,
+      'second PRODUCE header reused the cached category'
+    )
+    assert.equal(items[4]!.categoryId, cooking!.id)
+    assert.equal(items[6]!.categoryId, snacks!.id)
+    assert.equal(items[7]!.categoryId, toiletries!.id)
+
+    // 8 starters + the 4 new AnyList headers (Chemist, Cooking, Snacks,
+    // Toiletries) — the duplicate PRODUCE header and the reused Produce must
+    // not duplicate.
+    assert.equal(categories.length, 12)
+  })
+
+  test('bulk import auto-categorizes bulleted items that precede the first header', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    await seedStarterCategories(client, token, listId)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const response = await auth(
+      client
+        .post(`/api/v1/lists/${listId}/items/import`)
+        .json({ text: '• Milk\n\nPRODUCE\n• Blueberries' })
+    )
+    response.assertStatus(200)
+    const items = response.body().data as ItemDto[]
+
+    const categories = bodyData<CategoryDto[]>(
+      await auth(client.get(`/api/v1/lists/${listId}/categories`))
+    )
+    const dairy = categories.find((category) => category.name === 'Dairy')!
+
+    assert.equal(items[0]!.name, 'Milk')
+    assert.isNotNull(items[0]!.categoryId, 'uncategorized-section item still auto-categorizes')
+    assert.equal(items[0]!.categoryId, dairy.id)
+    assert.equal(
+      items[1]!.categoryId,
+      categories.find((category) => category.name === 'Produce')!.id
+    )
+    assert.equal(categories.length, 8, 'no extra categories created')
   })
 
   test('accepts an explicit categoryId, leaves unmatched names uncategorized, filters checked items, and unchecks', async ({

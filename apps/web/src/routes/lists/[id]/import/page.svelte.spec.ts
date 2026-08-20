@@ -59,7 +59,7 @@ describe('Paste Items +page.svelte', () => {
 
 		await expect.element(page.getByRole('button', { name: 'Save' })).toBeDisabled();
 
-		await page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs').fill('Milk');
+		await page.getByPlaceholder('One item per line, or paste an AnyList list').fill('Milk');
 
 		await expect.element(page.getByRole('button', { name: 'Save' })).not.toBeDisabled();
 	});
@@ -72,7 +72,7 @@ describe('Paste Items +page.svelte', () => {
 
 		render(ImportPage);
 
-		await page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs').fill('Milk\nBread');
+		await page.getByPlaceholder('One item per line, or paste an AnyList list').fill('Milk\nBread');
 		await page.getByRole('button', { name: 'Save' }).click();
 
 		expect(importItems).toHaveBeenCalledWith(1, 'Milk\nBread');
@@ -83,7 +83,7 @@ describe('Paste Items +page.svelte', () => {
 	it('does not submit when the pasted text is only whitespace', async () => {
 		render(ImportPage);
 
-		await page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs').fill('   ');
+		await page.getByPlaceholder('One item per line, or paste an AnyList list').fill('   ');
 		await expect.element(page.getByRole('button', { name: 'Save' })).toBeDisabled();
 
 		expect(importItems).not.toHaveBeenCalled();
@@ -94,7 +94,7 @@ describe('Paste Items +page.svelte', () => {
 
 		render(ImportPage);
 
-		await page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs').fill('Milk');
+		await page.getByPlaceholder('One item per line, or paste an AnyList list').fill('Milk');
 		await page.getByRole('button', { name: 'Save' }).click();
 
 		await expect.element(page.getByText('Failed to import items.')).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('Paste Items +page.svelte', () => {
 
 		render(ImportPage);
 
-		await page.getByPlaceholder('One item per line, e.g. Milk, Bread, Eggs').fill('Milk');
+		await page.getByPlaceholder('One item per line, or paste an AnyList list').fill('Milk');
 		await page.getByRole('button', { name: 'Save' }).click();
 
 		await expect.element(page.getByText('Could not parse items')).toBeInTheDocument();

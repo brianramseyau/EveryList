@@ -1,14 +1,55 @@
 import type List from '#models/list'
 import Item from '#models/item'
+import Category from '#models/category'
 import ListPolicy from '#policies/list_policy'
 import { createItemValidator, updateItemValidator, importItemsValidator } from '#validators/item'
 import type { HttpContext } from '@adonisjs/core/http'
 import ItemTransformer from '#transformers/item_transformer'
 import { suggestCategoryId } from '#services/category_suggestion_service'
+import { parseBulkImport } from '#services/bulk_import_parser'
 import type { CategorizeSuggestionDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
+
+/** Matches common AnyList category headers to an existing @mdi/js icon; unknown headers get the generic 'tag'. */
+const IMPORTED_CATEGORY_ICONS: Record<string, string> = {
+  'produce': 'fruitCherries',
+  'fruit & veg': 'fruitCherries',
+  'meat': 'foodDrumstick',
+  'seafood': 'fish',
+  'fish': 'fish',
+  'bakery': 'breadSlice',
+  'dairy': 'cheese',
+  'cheese': 'cheese',
+  'frozen': 'snowflake',
+  'beverages': 'bottleSoda',
+  'drinks': 'bottleSoda',
+  'snacks': 'foodApple',
+  'breakfast': 'egg',
+  'breakfast & cereal': 'egg',
+  'cooking': 'potSteam',
+  'household': 'spray',
+  'chemist': 'pill',
+  'chemists': 'pill',
+  'pharmacy': 'pill',
+  'medication': 'pill',
+  'specials': 'sale',
+}
+
+function categoryIconFor(header: string): string {
+  return IMPORTED_CATEGORY_ICONS[header.trim().toLowerCase()] ?? 'tag'
+}
+
+/** "BREAKFAST & CEREAL" -> "Breakfast & Cereal", matching EveryList's title-cased category names. */
+function titleCase(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(
+      /(^|[\s&/\\-])([a-z])/g,
+      (_match, separator: string, letter: string) => separator + letter.toUpperCase()
+    )
+}
 
 async function resolveCategoryId(
   list: List,
@@ -157,28 +198,72 @@ export default class ItemsController {
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const { text } = await request.validateUsing(importItemsValidator)
 
-    const lines = text
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
+    const parsed = parseBulkImport(text)
+
+    // Section headers become the item's category — an existing category with
+    // the same name (case-insensitive) is reused, otherwise a new one is
+    // created so the AnyList category structure carries over wholesale.
+    const categoryIdsByHeader = new Map<string, number>()
+    const maxCategorySortOrder = await Category.query()
+      .where('listId', list.id)
+      .max('sort_order as maxSortOrder')
+      .first()
+    let categorySortOrder = Number(maxCategorySortOrder?.$extras.maxSortOrder ?? -1) + 1
+
+    async function resolveSectionCategory(header: string | null): Promise<number | null> {
+      if (!header) return null
+      const key = header.trim().toLowerCase()
+      if (categoryIdsByHeader.has(key)) return categoryIdsByHeader.get(key)!
+
+      const existing = await Category.query()
+        .where('listId', list.id)
+        .whereNull('deletedAt')
+        .whereRaw('LOWER(TRIM(name)) = ?', [key])
+        .first()
+      if (existing) {
+        categoryIdsByHeader.set(key, existing.id)
+        return existing.id
+      }
+
+      const category = await Category.create({
+        listId: list.id,
+        name: titleCase(header),
+        icon: categoryIconFor(header),
+        sortOrder: categorySortOrder++,
+        isDefault: false,
+        version: 1,
+      })
+      await broadcastSync({
+        listId: list.id,
+        entityType: 'category',
+        entityId: category.id,
+        op: 'create',
+        version: category.version,
+      })
+      categoryIdsByHeader.set(key, category.id)
+      return category.id
+    }
 
     let sortOrder = await nextSortOrder(list.id)
     const items: Item[] = []
-    for (const name of lines) {
-      const categoryId = await resolveCategoryId(list, name)
-      items.push(
-        await Item.create({
-          listId: list.id,
-          name,
-          quantity: null,
-          notes: null,
-          categoryId,
-          checked: false,
-          sortOrder: sortOrder++,
-          createdBy: user.id,
-          version: 1,
-        })
-      )
+    for (const section of parsed.sections) {
+      const sectionCategoryId = await resolveSectionCategory(section.header)
+      for (const parsedItem of section.items) {
+        const categoryId = sectionCategoryId ?? (await suggestCategoryId(list, parsedItem.name))
+        items.push(
+          await Item.create({
+            listId: list.id,
+            name: parsedItem.name,
+            quantity: null,
+            notes: parsedItem.notes.length > 0 ? parsedItem.notes.join('\n').slice(0, 1000) : null,
+            categoryId,
+            checked: false,
+            sortOrder: sortOrder++,
+            createdBy: user.id,
+            version: 1,
+          })
+        )
+      }
     }
 
     await broadcastSync({
