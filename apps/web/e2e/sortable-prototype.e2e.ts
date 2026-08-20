@@ -65,6 +65,9 @@ test('drags an item across category sections with a real mouse gesture', async (
 
 	await page.mouse.move(draggedBox.x + draggedBox.width / 2, draggedBox.y + draggedBox.height / 2);
 	await page.mouse.down();
+	// Reorders are press-and-hold (400ms delay) on every pointer, so hold
+	// still long enough for the drag to arm before moving.
+	await page.waitForTimeout(450);
 	// Fine-grained, multi-step moves — SortableJS's fallback drag tracks
 	// position via mousemove, so a single big jump (or too few interpolated
 	// steps) never gives it a chance to register the hover-over-target-list
@@ -108,6 +111,9 @@ test('keeps a multi-step same-category reorder stable across reloads', async ({ 
 		const ontoBox = (await onto.boundingBox())!;
 		await page.mouse.move(fromBox.x + fromBox.width / 2, fromBox.y + fromBox.height / 2);
 		await page.mouse.down();
+		// Reorders are press-and-hold (400ms delay) on every pointer, so hold
+		// still long enough for the drag to arm before moving.
+		await page.waitForTimeout(450);
 		await page.mouse.move(fromBox.x + fromBox.width / 2, (fromBox.y + ontoBox.y) / 2, {
 			steps: 20
 		});

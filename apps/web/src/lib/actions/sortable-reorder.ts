@@ -42,8 +42,12 @@ export function sortableReorder(node: HTMLElement, params: SortableReorderParams
 		group: current.group,
 		disabled: current.disabled,
 		animation: 150,
+		// Not delayOnTouchOnly: a reorder is a deliberate press-and-hold on
+		// every pointer, per the plan's long-press convention. Without the
+		// delay, mouse drags start on the first qualifying move, so a stray
+		// few px of movement during a click on the lists page hijacks the tap
+		// and swallows the navigation.
 		delay: 400,
-		delayOnTouchOnly: true,
 		touchStartThreshold: 10,
 		filter: '[data-reorder-ignore]',
 		preventOnFilter: false,
