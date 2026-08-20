@@ -33,7 +33,7 @@ test('adds an item while offline and syncs it once back online', async ({ page }
 	await page.context().setOffline(true);
 
 	await page.getByPlaceholder('Item name').fill('Milk');
-	await page.getByRole('button', { name: 'Add item' }).click();
+	await page.getByPlaceholder('Item name').press('Enter');
 
 	// Optimistic render happens immediately, entirely from the Dexie-backed write path —
 	// no network request has succeeded yet.

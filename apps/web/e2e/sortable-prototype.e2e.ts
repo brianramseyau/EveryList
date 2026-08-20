@@ -32,10 +32,10 @@ test('drags an item across category sections with a real mouse gesture', async (
 
 	await page.goto(listUrl);
 	await page.getByPlaceholder('Item name').fill('Qwerpo Item');
-	await page.getByRole('button', { name: 'Add item' }).click();
+	await page.getByPlaceholder('Item name').press('Enter');
 	await expect(page.getByText('Qwerpo Item')).toBeVisible();
 	await page.getByPlaceholder('Item name').fill('Vexnal Item');
-	await page.getByRole('button', { name: 'Add item' }).click();
+	await page.getByPlaceholder('Item name').press('Enter');
 	await expect(page.getByText('Vexnal Item')).toBeVisible();
 
 	// A category section with zero items doesn't render at all (existing
@@ -145,7 +145,7 @@ test('keeps a multi-step same-category reorder stable across reloads', async ({ 
 
 	for (const name of ['Alpha Item', 'Bravo Item', 'Charlie Item', 'Delta Item']) {
 		await page.getByPlaceholder('Item name').fill(name);
-		await page.getByRole('button', { name: 'Add item' }).click();
+		await page.getByPlaceholder('Item name').press('Enter');
 		await expect(page.getByText(name, { exact: true })).toBeVisible();
 	}
 
