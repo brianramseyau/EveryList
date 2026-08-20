@@ -11,7 +11,7 @@
 	import { createItem, deleteItem, fetchItems, updateItem } from '$lib/api/items';
 	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
 	import { getSelectedStoreSettings } from '$lib/api/selected-store';
-	import { isRowDirty } from '$lib/offline/db';
+	import { isRowDirty, type StoreFilter } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
 	import { onConflict } from '$lib/offline/flush';
@@ -36,8 +36,10 @@
 	let items = $state<ItemDto[]>([]);
 	let stores = $state<StoreDto[]>([]);
 	// The store currently "shopping at" (PHASE10_PLAN.md #0.5) — local/device-only,
-	// see $lib/api/selected-store.ts. Drives both the item filter and the header
-	// store icon's color, replacing the old separate "All stores" dropdown.
+	// see $lib/api/selected-store.ts. Drives the category aisle order (via
+	// `storeCategoryOverrides`) and the header store icon's color. Which items are
+	// *shown* is a separate, decoupled setting (`storeFilter`) so you can walk the
+	// store's aisle layout while still seeing items tagged to other stores.
 	let selectedStoreId = $state<number | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -100,20 +102,26 @@
 	let storeCategoryOverrides: Map<number, number> = new SvelteMap();
 
 	const selectedStore = $derived(stores.find((store) => store.id === selectedStoreId) ?? null);
-	let includeUnassigned = $state(false);
+
+	// Which items to show, relative to `selectedStore` — decoupled from the store
+	// selection so a store can drive the aisle order without hiding items tagged
+	// to other stores. `'all'` shows every item; `'store'` shows only the selected
+	// store's; `'storeAndUnassigned'` also keeps items with no store.
+	let storeFilter = $state<StoreFilter>('store');
 
 	// Only filter once selectedStoreId resolves to a store that's actually still
 	// on this list — a stale/orphaned id (e.g. a store removed outside the normal
 	// flow) must behave like "no store selected" rather than silently hiding
-	// every item with no way to clear it from this screen. When the user opts in
-	// to "also show unassigned items" (see the stores page), items with no store
-	// ride along with the selected store's items instead of being filtered out.
+	// every item with no way to clear it from this screen. `storeFilter` (see the
+	// stores page) decides whether a selected store hides other stores' items at
+	// all — `'all'` keeps every item on screen regardless of which store it's for.
 	const visibleItems = $derived(
-		selectedStore === null
+		selectedStore === null || storeFilter === 'all'
 			? items
 			: items.filter(
 					(item) =>
-						item.storeId === selectedStore.id || (includeUnassigned && item.storeId === null)
+						item.storeId === selectedStore.id ||
+						(storeFilter === 'storeAndUnassigned' && item.storeId === null)
 				)
 	);
 
@@ -196,7 +204,7 @@
 
 			const settings = await getSelectedStoreSettings(listId);
 			selectedStoreId = settings.storeId;
-			includeUnassigned = settings.includeUnassigned;
+			storeFilter = settings.filter;
 			const overrideEntries = selectedStoreId ? await fetchStoreCategoryOrder(selectedStoreId) : [];
 			storeCategoryOverrides.clear();
 			for (const entry of overrideEntries) {
@@ -592,7 +600,7 @@
 				>
 					<Icon name="filterOutline" class="h-8 w-8" />
 					<p class="text-sm">
-						{`No items are tagged for ${selectedStore!.name}. Change the store you're shopping at from the store icon above to see the rest of this list.`}
+						{`No items are tagged for ${selectedStore!.name}. Change which items are shown from the store icon above to see the rest of this list.`}
 					</p>
 				</div>
 			{:else}

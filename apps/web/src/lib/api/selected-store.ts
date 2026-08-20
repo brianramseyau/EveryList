@@ -10,12 +10,15 @@ import { getDb, type SelectedStoreSettings } from '$lib/offline/db';
  */
 export async function getSelectedStoreSettings(listId: number): Promise<SelectedStoreSettings> {
 	const db = getDb();
-	if (!db) return { storeId: null, includeUnassigned: false };
+	if (!db) return { storeId: null, filter: 'store' };
 
 	const row = await db.selectedStore.get(listId);
 	return {
 		storeId: row?.storeId ?? null,
-		includeUnassigned: row?.includeUnassigned ?? false
+		// Legacy rows persisted `includeUnassigned`; new rows persist `filter`.
+		filter:
+			row?.filter ??
+			(row?.storeId != null && row.includeUnassigned ? 'storeAndUnassigned' : 'store')
 	};
 }
 

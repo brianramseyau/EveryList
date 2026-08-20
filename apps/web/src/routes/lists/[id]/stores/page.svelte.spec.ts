@@ -109,7 +109,7 @@ describe('Stores +page.svelte', () => {
 	});
 
 	it('restores the previously selected store on load', async () => {
-		await setSelectedStoreSettings(1, { storeId: 20, includeUnassigned: false });
+		await setSelectedStoreSettings(1, { storeId: 20, filter: 'store' });
 
 		render(StoresPage);
 
@@ -171,7 +171,7 @@ describe('Stores +page.svelte', () => {
 	});
 
 	it('selects "no store" (default order)', async () => {
-		await setSelectedStoreSettings(1, { storeId: 20, includeUnassigned: false });
+		await setSelectedStoreSettings(1, { storeId: 20, filter: 'store' });
 
 		render(StoresPage);
 		await expect.element(page.getByRole('radio', { name: 'Walmart' })).toBeChecked();
@@ -195,41 +195,48 @@ describe('Stores +page.svelte', () => {
 		await expect.poll(async () => (await getSelectedStoreSettings(1)).storeId).toBe(20);
 	});
 
-	it('toggles "show unassigned items" off by default, and only when a store is selected', async () => {
-		await setSelectedStoreSettings(1, { storeId: null, includeUnassigned: true });
+	it('shows the "Items shown" filter only when a store is selected', async () => {
+		await setSelectedStoreSettings(1, { storeId: null, filter: 'store' });
 
 		render(StoresPage);
 		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
 
-		// No store selected → the unassigned-items option is hidden.
-		await expect
-			.element(page.getByText('Also show items not assigned to any store'))
-			.not.toBeInTheDocument();
+		// No store selected → the filter options are hidden.
+		await expect.element(page.getByText('Items shown')).not.toBeInTheDocument();
 
-		// Selecting a store surfaces the checkbox, defaulting to the persisted value.
+		// Selecting a store surfaces the filter, defaulting to the persisted value.
 		await page.getByRole('radio', { name: 'Walmart' }).click();
+		await expect.element(page.getByText('Items shown')).toBeInTheDocument();
 		await expect
-			.element(page.getByText('Also show items not assigned to any store'))
-			.toBeInTheDocument();
+			.element(page.getByRole('radio', { name: "Only this store's items" }))
+			.toBeChecked();
 	});
 
-	it('persists the "show unassigned items" toggle', async () => {
+	it('persists the chosen "Items shown" filter', async () => {
 		render(StoresPage);
 		await expect.element(page.getByText('Walmart')).toBeInTheDocument();
 
 		await page.getByRole('radio', { name: 'Walmart' }).click();
-		await page.getByRole('checkbox', { name: 'Also show items not assigned to any store' }).click();
 
-		await expect.poll(async () => (await getSelectedStoreSettings(1)).includeUnassigned).toBe(true);
+		await page.getByRole('radio', { name: 'All items' }).click();
+		await expect.poll(async () => (await getSelectedStoreSettings(1)).filter).toBe('all');
+
+		await page.getByRole('radio', { name: 'This store + items with no store' }).click();
+		await expect
+			.poll(async () => (await getSelectedStoreSettings(1)).filter)
+			.toBe('storeAndUnassigned');
+
+		await page.getByRole('radio', { name: "Only this store's items" }).click();
+		await expect.poll(async () => (await getSelectedStoreSettings(1)).filter).toBe('store');
 	});
 
-	it('restores the "show unassigned items" toggle on load', async () => {
-		await setSelectedStoreSettings(1, { storeId: 20, includeUnassigned: true });
+	it('restores the chosen "Items shown" filter on load', async () => {
+		await setSelectedStoreSettings(1, { storeId: 20, filter: 'storeAndUnassigned' });
 
 		render(StoresPage);
 
 		await expect
-			.element(page.getByRole('checkbox', { name: 'Also show items not assigned to any store' }))
+			.element(page.getByRole('radio', { name: 'This store + items with no store' }))
 			.toBeChecked();
 	});
 

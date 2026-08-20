@@ -8,13 +8,13 @@ describe('selected-store (no IndexedDB)', () => {
 	it('getSelectedStoreSettings resolves to defaults without throwing', async () => {
 		await expect(getSelectedStoreSettings(1)).resolves.toEqual({
 			storeId: null,
-			includeUnassigned: false
+			filter: 'store'
 		});
 	});
 
 	it('setSelectedStoreSettings resolves without throwing', async () => {
 		await expect(
-			setSelectedStoreSettings(1, { storeId: 20, includeUnassigned: true })
+			setSelectedStoreSettings(1, { storeId: 20, filter: 'all' })
 		).resolves.toBeUndefined();
 	});
 });

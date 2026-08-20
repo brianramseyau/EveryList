@@ -33,17 +33,25 @@ export interface QueuedMutation {
 	lastError?: string;
 }
 
+/** Which items to show when a store is selected — see PLAN.md §7 (store aisle
+ * order and item filtering are decoupled). */
+export type StoreFilter = 'all' | 'store' | 'storeAndUnassigned';
+
 export interface SelectedStoreRow {
 	listId: number;
 	storeId: number | null;
-	/** When a store is selected, keep showing items that aren't assigned to any store. */
+	/** Which items to show relative to `storeId`. */
+	filter?: StoreFilter;
+	/** Legacy field superseded by `filter` — kept only so old rows migrate on read. */
 	includeUnassigned?: boolean;
 }
 
 /** The persisted, per-list "shopping here" settings stored in the `selectedStore` row. */
 export interface SelectedStoreSettings {
+	/** The store whose aisle order arranges categories (also the header icon's store). */
 	storeId: number | null;
-	includeUnassigned: boolean;
+	/** Which items to show: everything, only the store's, or the store's plus unassigned. */
+	filter: StoreFilter;
 }
 
 /**
