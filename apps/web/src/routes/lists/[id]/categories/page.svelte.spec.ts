@@ -129,12 +129,18 @@ describe('Categories +page.svelte', () => {
 		expect(backLink.element().getAttribute('href')).toBe('/lists/1/settings');
 	});
 
-	it('links the + button to the New Category page', async () => {
+	it('opens the "+" popout to reveal Create / Import links', async () => {
 		render(CategoriesPage);
 
-		const newCategoryLink = page.getByRole('link', { name: 'New category' });
-		await expect.element(newCategoryLink).toBeInTheDocument();
-		expect(newCategoryLink.element().getAttribute('href')).toBe('/lists/1/categories/new');
+		await page.getByRole('button', { name: 'Create' }).click();
+
+		const createLink = page.getByRole('link', { name: 'Create' });
+		await expect.element(createLink).toBeInTheDocument();
+		expect(createLink.element().getAttribute('href')).toBe('/lists/1/categories/new');
+
+		const importLink = page.getByRole('link', { name: 'Import' });
+		await expect.element(importLink).toBeInTheDocument();
+		expect(importLink.element().getAttribute('href')).toBe('/lists/1/categories/import');
 	});
 
 	it('only shows Delete for list-scoped categories, not global defaults', async () => {

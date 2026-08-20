@@ -9,6 +9,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import IconPicker from '$lib/components/IconPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
@@ -144,13 +145,20 @@
 		backLabel="Back to settings"
 	>
 		{#snippet actions()}
-			<a
-				href={resolve('/lists/[id]/categories/new', { id: String(listId) })}
-				aria-label="New category"
-				class="flex h-9 w-9 shrink-0 items-center justify-center text-primary-700 dark:text-primary-400"
-			>
-				<Icon name="plus" class="h-6 w-6" />
-			</a>
+			<PopoutMenu label="Create" iconName="plus">
+				<a
+					href={resolve('/lists/[id]/categories/new', { id: String(listId) })}
+					class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+				>
+					Create
+				</a>
+				<a
+					href={resolve('/lists/[id]/categories/import', { id: String(listId) })}
+					class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+				>
+					Import
+				</a>
+			</PopoutMenu>
 		{/snippet}
 	</PageHeader>
 

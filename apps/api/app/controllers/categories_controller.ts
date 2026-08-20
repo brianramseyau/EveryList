@@ -4,6 +4,7 @@ import {
   createCategoryValidator,
   updateCategoryValidator,
   reorderCategoriesValidator,
+  importCategoriesValidator,
 } from '#validators/category'
 import type { HttpContext } from '@adonisjs/core/http'
 import CategoryTransformer from '#transformers/category_transformer'
@@ -50,6 +51,68 @@ export default class CategoriesController {
     })
 
     return serialize(CategoryTransformer.transform(category))
+  }
+
+  /**
+   * Copies categories from another list into this one — the target list needs
+   * `editor` (it's where categories are written) and the source list needs at
+   * least `viewer` (it's only read from). Categories whose name already exists
+   * on the target (case-insensitive) are skipped, so importing the same source
+   * twice is idempotent. Online-only, like items/import.
+   */
+  async import({ auth, params, request, response, serialize }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const { sourceListId, categoryIds } = await request.validateUsing(importCategoriesValidator)
+
+    if (sourceListId === list.id) {
+      return response.status(422).send({
+        errors: [{ field: 'sourceListId', message: 'Choose a different list to import from.' }],
+      })
+    }
+
+    const sourceList = await ListPolicy.requireList(user.id, sourceListId, 'viewer')
+    const sourceCategories = await getEffectiveCategories(sourceList)
+    const requestedIds = categoryIds ? new Set(categoryIds) : null
+    const candidates = requestedIds
+      ? sourceCategories.filter((category) => requestedIds.has(category.id))
+      : sourceCategories
+
+    const existing = await Category.query().where('listId', list.id).whereNull('deletedAt')
+    const seen = new Set(existing.map((category) => category.name.trim().toLowerCase()))
+
+    const maxSortOrder = await Category.query()
+      .where('listId', list.id)
+      .max('sort_order as maxSortOrder')
+      .first()
+    let sortOrder = Number(maxSortOrder?.$extras.maxSortOrder ?? -1) + 1
+
+    const created: Category[] = []
+    for (const source of candidates) {
+      const key = source.name.trim().toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+
+      const category = await Category.create({
+        listId: list.id,
+        name: source.name,
+        icon: source.icon,
+        sortOrder: sortOrder++,
+        isDefault: false,
+        version: 1,
+      })
+      created.push(category)
+    }
+
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'category',
+      entityId: list.id,
+      op: 'create',
+      payload: { count: created.length },
+    })
+
+    return serialize(CategoryTransformer.transform(created))
   }
 
   async update({ auth, params, request, response, serialize }: HttpContext) {

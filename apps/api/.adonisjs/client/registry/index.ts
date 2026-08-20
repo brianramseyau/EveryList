@@ -138,6 +138,12 @@ const routes = {
     tokens: [{"old":"/api/v1/lists/:listId/categories","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/categories","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/categories","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/categories","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/categories","type":0,"val":"categories","end":""}],
     types: placeholder as Registry['lists.categories.store']['types'],
   },
+  'lists.categories.import': {
+    methods: ["POST"],
+    pattern: '/api/v1/lists/:listId/categories/import',
+    tokens: [{"old":"/api/v1/lists/:listId/categories/import","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/categories/import","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/categories/import","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/categories/import","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/categories/import","type":0,"val":"categories","end":""},{"old":"/api/v1/lists/:listId/categories/import","type":0,"val":"import","end":""}],
+    types: placeholder as Registry['lists.categories.import']['types'],
+  },
   'lists.categories.reorder': {
     methods: ["PATCH"],
     pattern: '/api/v1/lists/:listId/categories/reorder',

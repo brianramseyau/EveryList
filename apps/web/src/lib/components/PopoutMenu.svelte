@@ -55,7 +55,7 @@
 	{#if open && containerEl}
 		<div
 			use:anchorPanel={containerEl}
-			class="fixed z-10 w-56 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+			class="fixed z-10 min-w-44 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800"
 		>
 			{@render children()}
 		</div>
