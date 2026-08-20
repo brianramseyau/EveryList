@@ -6,6 +6,7 @@ import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 import type { SortableReorderParams } from '$lib/actions/sortable-reorder';
 import type { ConflictListener } from '$lib/offline/flush';
+import { markSelfMutation, resetSelfMutationsForTesting } from '$lib/offline/self-mutations';
 
 // SortableJS drives real mouse/touch gestures against real layout, neither of
 // which a component test can reliably reproduce — its own behavior (does it
@@ -151,6 +152,7 @@ describe('List detail +page.svelte', () => {
 		clearToken();
 		window.sessionStorage.clear();
 		window.localStorage.clear();
+		resetSelfMutationsForTesting();
 		await resetDbForTesting();
 	});
 
@@ -1514,6 +1516,25 @@ describe('List detail +page.svelte', () => {
 		// The "This list was updated" toast was removed (PHASE14_PLAN.md) — the
 		// event now drives a silent re-load of the list.
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
+	});
+
+	it('suppresses the refresh for an entity this client just mutated', async () => {
+		let handler: (event: SyncEventDto) => void = () => {};
+		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
+			handler = onEvent;
+			return vi.fn();
+		});
+		markSelfMutation('item', 1);
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		handler({ entityType: 'item', entityId: 1, op: 'update', payload: null, version: 2 });
+		// Give the handler a beat — our own edit's broadcast must not reload.
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(fetchList).toHaveBeenCalledTimes(1);
 	});
 
 	it('silently refreshes when the offline flush loop reconciles a conflict', async () => {

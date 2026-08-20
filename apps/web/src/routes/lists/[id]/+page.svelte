@@ -12,6 +12,7 @@
 	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
 	import { getSelectedStoreSettings } from '$lib/api/selected-store';
 	import { isRowDirty, type StoreFilter } from '$lib/offline/db';
+	import { isSelfMutation } from '$lib/offline/self-mutations';
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
 	import { onConflict } from '$lib/offline/flush';
@@ -226,6 +227,10 @@
 		showChecked = getShowChecked(listId);
 		void loadAll();
 		unsubscribeRealtime = subscribeToList(listId, (event) => {
+			// Our own edit's broadcast (sent right after the flush clears `_dirty`)
+			// is suppressed — the optimistic update already reflects it, so
+			// reloading would just churn the DOM mid-gesture (see PHASE14_PLAN.md).
+			if (isSelfMutation(event.entityType, event.entityId)) return;
 			// An unacked local edit on this exact row means the eventual flush response is
 			// authoritative, not this racing broadcast — suppress it (see PHASE5_PLAN.md §4).
 			void isRowDirty(event.entityType, event.entityId).then((dirty) => {
