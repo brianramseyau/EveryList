@@ -14,3 +14,9 @@ export const updateCategoryValidator = vine.create({
 export const reorderCategoriesValidator = vine.create({
   order: vine.array(vine.number().positive()).minLength(1),
 })
+
+export const importCategoriesValidator = vine.create({
+  sourceListId: vine.number().positive(),
+  /** Omit to import every category on the source list. */
+  categoryIds: vine.array(vine.number().positive()).optional(),
+})

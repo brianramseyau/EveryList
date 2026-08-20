@@ -4,11 +4,11 @@ import type { ApiClient, ApiRequest } from '@japa/api-client'
 import type { CategoryDto, ListDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
-async function createList(client: ApiClient, token: string) {
+async function createList(client: ApiClient, token: string, name = 'Test List') {
   const response = await client
     .post('/api/v1/lists')
     .header('Authorization', `Bearer ${token}`)
-    .json({ name: 'Test List' })
+    .json({ name })
   return bodyData<ListDto>(response).id
 }
 
@@ -294,5 +294,215 @@ test.group('Categories', (group) => {
       .header('Authorization', `Bearer ${stranger.token}`)
       .json({ name: 'Pet Supplies', icon: 'paw' })
     create.assertStatus(404)
+  })
+})
+
+test.group('Categories import', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('imports every category from another list, appended to the target in order', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const targetId = await createList(client, token)
+    const sourceId = await createList(client, token, 'Source List')
+    await createCategory(client, token, sourceId, 'Produce', 'fruitCherries')
+    await createCategory(client, token, sourceId, 'Dairy', 'cheese')
+
+    const importResponse = await client
+      .post(`/api/v1/lists/${targetId}/categories/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ sourceListId: sourceId })
+    importResponse.assertStatus(200)
+    const imported = bodyData<CategoryDto[]>(importResponse)
+    assert.lengthOf(imported, 2)
+    assert.deepEqual(
+      imported.map((c) => c.name),
+      ['Produce', 'Dairy']
+    )
+    assert.deepEqual(
+      imported.map((c) => c.icon),
+      ['fruitCherries', 'cheese']
+    )
+    for (const category of imported) {
+      assert.equal(category.listId, targetId)
+      assert.isFalse(category.isDefault)
+      assert.equal(category.version, 1)
+    }
+    assert.deepEqual(
+      imported.map((c) => c.sortOrder),
+      [0, 1]
+    )
+
+    const index = await client
+      .get(`/api/v1/lists/${targetId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+    assert.deepEqual(
+      index.body().data.map((c: CategoryDto) => c.name),
+      ['Produce', 'Dairy']
+    )
+  })
+
+  test('appends imported categories after the target list existing ones', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const targetId = await createList(client, token)
+    await createCategory(client, token, targetId, 'Existing', 'tag')
+    const sourceId = await createList(client, token, 'Source List')
+    await createCategory(client, token, sourceId, 'Imported', 'paw')
+
+    const importResponse = await client
+      .post(`/api/v1/lists/${targetId}/categories/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ sourceListId: sourceId })
+    const imported = bodyData<CategoryDto[]>(importResponse)
+    assert.equal(imported[0]!.sortOrder, 1)
+
+    const index = await client
+      .get(`/api/v1/lists/${targetId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+    assert.deepEqual(
+      index.body().data.map((c: CategoryDto) => c.name),
+      ['Existing', 'Imported']
+    )
+  })
+
+  test('imports only the requested category ids', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const targetId = await createList(client, token)
+    const sourceId = await createList(client, token, 'Source List')
+    await createCategory(client, token, sourceId, 'Produce')
+    const dairy = await createCategory(client, token, sourceId, 'Dairy')
+    await createCategory(client, token, sourceId, 'Meat')
+
+    const importResponse = await client
+      .post(`/api/v1/lists/${targetId}/categories/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ sourceListId: sourceId, categoryIds: [dairy.id] })
+    importResponse.assertStatus(200)
+    const imported = bodyData<CategoryDto[]>(importResponse)
+    assert.deepEqual(
+      imported.map((c) => c.name),
+      ['Dairy']
+    )
+  })
+
+  test('silently skips ids that are not on the source list', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const targetId = await createList(client, token)
+    const sourceId = await createList(client, token, 'Source List')
+    await createCategory(client, token, sourceId, 'Produce')
+
+    const importResponse = await client
+      .post(`/api/v1/lists/${targetId}/categories/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ sourceListId: sourceId, categoryIds: [999_999] })
+    importResponse.assertStatus(200)
+    assert.lengthOf(bodyData<CategoryDto[]>(importResponse), 0)
+  })
+
+  test('skips categories that already exist on the target, case-insensitively', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const targetId = await createList(client, token)
+    await createCategory(client, token, targetId, 'Produce')
+    const sourceId = await createList(client, token, 'Source List')
+    await createCategory(client, token, sourceId, 'produce')
+    await createCategory(client, token, sourceId, 'Dairy')
+
+    const importResponse = await client
+      .post(`/api/v1/lists/${targetId}/categories/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ sourceListId: sourceId })
+    const imported = bodyData<CategoryDto[]>(importResponse)
+    assert.deepEqual(
+      imported.map((c) => c.name),
+      ['Dairy']
+    )
+  })
+
+  test('rejects importing from the list itself', async ({ client }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const importResponse = await client
+      .post(`/api/v1/lists/${listId}/categories/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ sourceListId: listId })
+    importResponse.assertStatus(422)
+  })
+
+  test('an editor can import into a list they do not own, from a list they can only view', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const targetId = await createList(client, owner.token)
+    const sourceId = await createList(client, owner.token, 'Source List')
+    await createCategory(client, owner.token, sourceId, 'Produce', 'fruitCherries')
+
+    const editor = await signupAndGetUser(client)
+    await addMember(targetId, editor.id, 'editor')
+    await addMember(sourceId, editor.id, 'viewer')
+
+    const importResponse = await client
+      .post(`/api/v1/lists/${targetId}/categories/import`)
+      .header('Authorization', `Bearer ${editor.token}`)
+      .json({ sourceListId: sourceId })
+    importResponse.assertStatus(200)
+    const imported = bodyData<CategoryDto[]>(importResponse)
+    assert.equal(imported[0]!.name, 'Produce')
+    assert.equal(imported[0]!.icon, 'fruitCherries')
+  })
+
+  test('a viewer cannot import categories into a list', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const targetId = await createList(client, owner.token)
+    const sourceId = await createList(client, owner.token, 'Source List')
+    await createCategory(client, owner.token, sourceId, 'Produce')
+
+    const viewer = await signupAndGetUser(client)
+    await addMember(targetId, viewer.id, 'viewer')
+
+    const importResponse = await client
+      .post(`/api/v1/lists/${targetId}/categories/import`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ sourceListId: sourceId })
+    importResponse.assertStatus(403)
+  })
+
+  test('a stranger gets a 404 importing from a list they cannot access', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const targetId = await createList(client, owner.token)
+    const sourceId = await createList(client, owner.token, 'Source List')
+    await createCategory(client, owner.token, sourceId, 'Produce')
+
+    const stranger = await signupAndGetUser(client)
+    const importResponse = await client
+      .post(`/api/v1/lists/${targetId}/categories/import`)
+      .header('Authorization', `Bearer ${stranger.token}`)
+      .json({ sourceListId: sourceId })
+    importResponse.assertStatus(404)
+  })
+
+  test('importing from a source with no categories returns an empty list', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const targetId = await createList(client, token)
+    const sourceId = await createList(client, token, 'Source List')
+
+    const importResponse = await client
+      .post(`/api/v1/lists/${targetId}/categories/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ sourceListId: sourceId })
+    importResponse.assertStatus(200)
+    assert.lengthOf(bodyData<CategoryDto[]>(importResponse), 0)
   })
 })

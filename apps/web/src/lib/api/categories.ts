@@ -86,3 +86,12 @@ export async function deleteCategory(listId: number, categoryId: number): Promis
 export function reorderCategories(listId: number, order: number[]): Promise<CategoryDto[]> {
 	return apiPatch(`/api/v1/lists/${listId}/categories/reorder`, { order });
 }
+
+/** Copies categories from another list into this one. Skips any category whose name already
+ * exists on the target, so it's safe to run twice. Online-only, like `importItems`. */
+export function importCategories(
+	listId: number,
+	input: { sourceListId: number; categoryIds: number[] }
+): Promise<CategoryDto[]> {
+	return apiPost(`/api/v1/lists/${listId}/categories/import`, input);
+}

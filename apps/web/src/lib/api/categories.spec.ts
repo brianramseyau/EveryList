@@ -8,8 +8,14 @@ vi.mock('./client', () => ({
 }));
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
-const { createCategory, deleteCategory, fetchCategories, reorderCategories, updateCategory } =
-	await import('./categories');
+const {
+	createCategory,
+	deleteCategory,
+	fetchCategories,
+	importCategories,
+	reorderCategories,
+	updateCategory
+} = await import('./categories');
 
 describe('categories api', () => {
 	it('fetchCategories GETs the list-scoped collection', () => {
@@ -39,6 +45,14 @@ describe('categories api', () => {
 		reorderCategories(1, [11, 10]);
 		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/categories/reorder', {
 			order: [11, 10]
+		});
+	});
+
+	it('importCategories POSTs the source list and selected category ids', () => {
+		importCategories(1, { sourceListId: 2, categoryIds: [10, 11] });
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/categories/import', {
+			sourceListId: 2,
+			categoryIds: [10, 11]
 		});
 	});
 });

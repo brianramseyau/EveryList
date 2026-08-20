@@ -48,6 +48,7 @@ export interface ApiDefinition {
     categories: {
       index: typeof routes['lists.categories.index']
       store: typeof routes['lists.categories.store']
+      import: typeof routes['lists.categories.import']
       reorder: typeof routes['lists.categories.reorder']
       update: typeof routes['lists.categories.update']
       destroy: typeof routes['lists.categories.destroy']

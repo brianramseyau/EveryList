@@ -271,6 +271,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'lists.categories.import': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/categories/import'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/category').importCategoriesValidator)>>
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/category').importCategoriesValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['import']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['import']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'lists.categories.reorder': {
     methods: ["PATCH"]
     pattern: '/api/v1/lists/:listId/categories/reorder'

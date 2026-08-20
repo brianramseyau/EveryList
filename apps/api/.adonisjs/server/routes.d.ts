@@ -26,6 +26,7 @@ export type ScannedRoutes = {
     'lists.lists.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.categories.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.categories.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.categories.import': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.categories.reorder': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.categories.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'categoryId': ParamValue} }
     'lists.categories.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'categoryId': ParamValue} }
@@ -71,6 +72,7 @@ export type ScannedRoutes = {
     'folders.folders.store': { paramsTuple?: []; params?: {} }
     'lists.lists.store': { paramsTuple?: []; params?: {} }
     'lists.categories.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.categories.import': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.import': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.restore': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
