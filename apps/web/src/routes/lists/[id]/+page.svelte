@@ -487,9 +487,9 @@
 		{#if list && !(list.passcodeHash && !unlocked)}
 			<form class="flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
 				<div
-					class="flex shrink-0 items-center overflow-hidden transition-all duration-200 {itemInputFocused
-						? 'pointer-events-none w-0 gap-0 opacity-0'
-						: 'w-auto gap-2 opacity-100'}"
+					class="flex shrink-0 items-center gap-2 overflow-hidden transition-all duration-200 {itemInputFocused
+						? 'pointer-events-none max-w-0 opacity-0'
+						: 'max-w-28 opacity-100'}"
 				>
 					<a
 						href={resolve('/lists/[id]/favorites', { id: String(listId) })}
@@ -516,8 +516,8 @@
 				/>
 				<div
 					class="flex shrink-0 items-center overflow-hidden transition-all duration-200 {itemInputFocused
-						? 'w-0 gap-0 opacity-0'
-						: 'w-auto gap-2 opacity-100'}"
+						? 'max-w-0 opacity-0'
+						: 'max-w-11 opacity-100'}"
 				>
 					<button
 						type="button"
