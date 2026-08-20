@@ -15,9 +15,9 @@ vi.mock('./client', () => ({
 	}
 }));
 
-const { apiPost, apiPatch } = await import('./client');
+const { apiGet, apiPost, apiPatch } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { attachStore, updateStore } = await import('./stores');
+const { attachStore, updateStore, fetchStores } = await import('./stores');
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -81,5 +81,35 @@ describe('updateStore (Dexie available)', () => {
 
 		const cached = await db.stores.get(20);
 		expect(cached?.name).toBe('Walmart Supercenter');
+	});
+});
+
+describe('fetchStores (cache hydration)', () => {
+	it('caches fetched rows so a later offline edit reads their version', async () => {
+		vi.mocked(apiGet).mockResolvedValue([{ id: 20, name: 'Costco', version: 2 }]);
+
+		await fetchStores(1);
+
+		expect((await getDb()!.stores.get(20))?.version).toBe(2);
+	});
+
+	it('does not clobber a row with an unacked local edit during a re-fetch', async () => {
+		const db = getDb()!;
+		await db.stores.put({
+			id: 20,
+			name: 'Costco (edited)',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 2,
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([{ id: 20, name: 'Costco', version: 2 }]);
+
+		await fetchStores(1);
+
+		expect((await db.stores.get(20))?.name).toBe('Costco (edited)');
 	});
 });
