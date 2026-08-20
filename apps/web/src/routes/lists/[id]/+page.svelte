@@ -418,20 +418,6 @@
 		<PageHeader title={list?.name} backHref={resolve('/lists')} backLabel="My Lists">
 			{#snippet actions()}
 				<a
-					href={resolve('/lists/[id]/favorites', { id: String(listId) })}
-					aria-label="Favorites"
-					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-				>
-					<Icon name="heart" class="h-5 w-5" />
-				</a>
-				<a
-					href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
-					aria-label="Recently deleted"
-					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-				>
-					<Icon name="history" class="h-5 w-5" />
-				</a>
-				<a
 					href={resolve('/lists/[id]/stores', { id: String(listId) })}
 					aria-label="Stores"
 					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
@@ -500,6 +486,26 @@
 
 		{#if list && !(list.passcodeHash && !unlocked)}
 			<form class="flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
+				<div
+					class="flex shrink-0 items-center overflow-hidden transition-all duration-200 {itemInputFocused
+						? 'pointer-events-none w-0 gap-0 opacity-0'
+						: 'w-auto gap-2 opacity-100'}"
+				>
+					<a
+						href={resolve('/lists/[id]/favorites', { id: String(listId) })}
+						aria-label="Favorites"
+						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+					>
+						<Icon name="heart" class="h-5 w-5" />
+					</a>
+					<a
+						href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
+						aria-label="Recently deleted"
+						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+					>
+						<Icon name="history" class="h-5 w-5" />
+					</a>
+				</div>
 				<ItemAutocomplete
 					{listId}
 					bind:value={newItemName}

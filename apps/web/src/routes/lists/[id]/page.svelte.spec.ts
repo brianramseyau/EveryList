@@ -341,7 +341,7 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Dairy')).not.toBeInTheDocument();
 	});
 
-	it('links to Favorites, Recently Deleted, and Stores directly, and List settings from the header menu', async () => {
+	it('links Stores directly and List settings via the header menu, with Favorites and Recently Deleted beside the item input', async () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
@@ -358,6 +358,20 @@ describe('List detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'List menu' }).click();
 		const settingsLink = page.getByRole('link', { name: 'List settings' });
 		expect(settingsLink.element().getAttribute('href')).toBe('/lists/1/settings');
+	});
+
+	it('collapses the Favorites and Recently Deleted links while the item input is focused', async () => {
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		const leftSlot = page.getByRole('link', { name: 'Favorites' }).element()
+			.parentElement as HTMLElement;
+		expect(leftSlot.className).toContain('opacity-100');
+
+		await page.getByPlaceholder('Item name').element().focus();
+
+		await expect.poll(() => leftSlot.className).toContain('opacity-0');
+		expect(leftSlot.className).toContain('pointer-events-none');
 	});
 
 	it('links the clipboard icon to the full-screen paste-import screen when the input is focused', async () => {
