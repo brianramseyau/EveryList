@@ -3,6 +3,7 @@ dist
 build
 .svelte-kit
 apps/web/build
+apps/web/dev-dist
 coverage
 pnpm-lock.yaml
 CHANGELOG.md

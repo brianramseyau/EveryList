@@ -12,7 +12,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import StoreTransformer from '#transformers/store_transformer'
 import StoreCategoryOrderTransformer from '#transformers/store_category_order_transformer'
 import { broadcastSync, broadcastToStoreLists } from '#services/sync_broadcaster'
-import { hasVersionConflict } from '#services/version_conflict'
+import { hasVersionConflict, reportVersionConflict } from '#services/version_conflict'
 
 export default class StoresController {
   async index({ auth, params, serialize }: HttpContext) {
@@ -58,13 +58,20 @@ export default class StoresController {
     return serialize(StoreTransformer.transform(store))
   }
 
-  async update({ auth, params, request, response, serialize }: HttpContext) {
+  async update({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const store = await ListPolicy.requireStoreRole(user.id, params.id, 'editor')
     const payload = await request.validateUsing(updateStoreValidator)
     const { expectedVersion, ...rest } = payload
 
     if (hasVersionConflict(store, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'store',
+        id: store.id,
+        expectedVersion,
+        actualVersion: store.version,
+        userId: user.id,
+      })
       return response
         .status(409)
         .send({ ...(await serialize(StoreTransformer.transform(store))), conflict: true })

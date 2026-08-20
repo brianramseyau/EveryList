@@ -4,6 +4,7 @@ import { getDb, resetDbForTesting } from './db';
 import {
 	dequeueMutation,
 	enqueueMutation,
+	failedMutations,
 	pendingMutations,
 	queueCounts,
 	updateMutation
@@ -61,6 +62,32 @@ describe('pendingMutations', () => {
 		const pending = await pendingMutations();
 		expect(pending).toHaveLength(1);
 		expect(pending[0]!.targetId).toBe(-2);
+	});
+});
+
+describe('failedMutations', () => {
+	it('returns only failed mutations', async () => {
+		const failedId = await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/x'
+		});
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 6,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/x'
+		});
+		await updateMutation(failedId!, { status: 'failed' });
+
+		const failed = await failedMutations();
+		expect(failed).toHaveLength(1);
+		expect(failed[0]!.targetId).toBe(5);
 	});
 });
 

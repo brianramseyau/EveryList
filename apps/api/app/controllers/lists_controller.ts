@@ -8,7 +8,11 @@ import ListTransformer from '#transformers/list_transformer'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { createOwnedList } from '#services/list_creation'
-import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
+import {
+  hasVersionConflict,
+  parseExpectedVersion,
+  reportVersionConflict,
+} from '#services/version_conflict'
 
 /** Lists visible to `userId`, ordered by that user's own `list_members.sort_order`
  * (a per-user view preference — see PHASE12_PLAN.md §A) rather than `createdAt`. */
@@ -113,7 +117,7 @@ export default class ListsController {
     return serialize(ListTransformer.transform(list))
   }
 
-  async update({ auth, params, request, response, serialize }: HttpContext) {
+  async update({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     await ListPolicy.requireList(user.id, params.id, 'owner')
     const list = await List.query()
@@ -126,6 +130,13 @@ export default class ListsController {
     const { expectedVersion, ...rest } = payload
 
     if (hasVersionConflict(list, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'list',
+        id: list.id,
+        expectedVersion,
+        actualVersion: list.version,
+        userId: user.id,
+      })
       return response
         .status(409)
         .send({ ...(await serialize(ListTransformer.transform(list))), conflict: true })
@@ -156,13 +167,20 @@ export default class ListsController {
     return serialize(ListTransformer.transform(list))
   }
 
-  async destroy({ auth, params, request, response, serialize }: HttpContext) {
+  async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     await ListPolicy.requireList(user.id, params.id, 'owner')
     const list = await List.query().where('id', params.id).whereNull('deletedAt').firstOrFail()
 
     const expectedVersion = parseExpectedVersion(request)
     if (hasVersionConflict(list, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'list',
+        id: list.id,
+        expectedVersion,
+        actualVersion: list.version,
+        userId: user.id,
+      })
       return response
         .status(409)
         .send({ ...(await serialize(ListTransformer.transform(list))), conflict: true })

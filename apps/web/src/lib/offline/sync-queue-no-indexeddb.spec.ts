@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	dequeueMutation,
 	enqueueMutation,
+	failedMutations,
 	pendingMutations,
 	queueCounts,
 	updateMutation
@@ -26,6 +27,10 @@ describe('without an IndexedDB implementation', () => {
 
 	it('pendingMutations returns an empty array', async () => {
 		await expect(pendingMutations()).resolves.toEqual([]);
+	});
+
+	it('failedMutations returns an empty array', async () => {
+		await expect(failedMutations()).resolves.toEqual([]);
 	});
 
 	it('updateMutation resolves without throwing', async () => {

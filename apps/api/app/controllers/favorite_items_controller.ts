@@ -6,7 +6,11 @@ import type { HttpContext } from '@adonisjs/core/http'
 import FavoriteItemTransformer from '#transformers/favorite_item_transformer'
 import ItemTransformer from '#transformers/item_transformer'
 import { broadcastSync } from '#services/sync_broadcaster'
-import { hasVersionConflict, parseExpectedVersion } from '#services/version_conflict'
+import {
+  hasVersionConflict,
+  parseExpectedVersion,
+  reportVersionConflict,
+} from '#services/version_conflict'
 import { DateTime } from 'luxon'
 
 export default class FavoriteItemsController {
@@ -84,7 +88,7 @@ export default class FavoriteItemsController {
     return serialize(FavoriteItemTransformer.transform(favorite))
   }
 
-  async update({ auth, params, request, response, serialize }: HttpContext) {
+  async update({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const favorite = await FavoriteItem.query()
@@ -97,6 +101,13 @@ export default class FavoriteItemsController {
     const { expectedVersion, ...rest } = payload
 
     if (hasVersionConflict(favorite, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'favorite_item',
+        id: favorite.id,
+        expectedVersion,
+        actualVersion: favorite.version,
+        userId: user.id,
+      })
       return response.status(409).send({
         ...(await serialize(FavoriteItemTransformer.transform(favorite))),
         conflict: true,
@@ -118,7 +129,7 @@ export default class FavoriteItemsController {
     return serialize(FavoriteItemTransformer.transform(favorite))
   }
 
-  async destroy({ auth, params, request, response, serialize }: HttpContext) {
+  async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
     const favorite = await FavoriteItem.query()
@@ -129,6 +140,13 @@ export default class FavoriteItemsController {
 
     const expectedVersion = parseExpectedVersion(request)
     if (hasVersionConflict(favorite, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'favorite_item',
+        id: favorite.id,
+        expectedVersion,
+        actualVersion: favorite.version,
+        userId: user.id,
+      })
       return response.status(409).send({
         ...(await serialize(FavoriteItemTransformer.transform(favorite))),
         conflict: true,

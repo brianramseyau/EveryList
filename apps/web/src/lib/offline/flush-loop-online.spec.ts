@@ -20,7 +20,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 const { apiPatch } = await import('$lib/api/client');
 const { pendingMutations, dequeueMutation } = await import('./sync-queue');
-const { startFlushLoop, resetFlushLoopForTesting } = await import('./flush');
+const { startFlushLoop, resetFlushLoopForTesting, onFlushOutcome } = await import('./flush');
 
 const MUTATION = {
 	id: 1,
@@ -61,6 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	resetFlushLoopForTesting();
+	onFlushOutcome(null)();
 	delete (globalThis as { window?: unknown }).window;
 	vi.useRealTimers();
 	vi.resetAllMocks();
@@ -112,6 +113,21 @@ describe('startFlushLoop with a window', () => {
 		expect(apiPatch).toHaveBeenCalledTimes(1);
 		await vi.advanceTimersByTimeAsync(60_000);
 		expect(apiPatch).toHaveBeenCalledTimes(1);
+	});
+
+	it('notifies flush-outcome listeners with ok: true once a drain empties the queue', async () => {
+		vi.mocked(apiPatch).mockResolvedValue({ id: 1 });
+		vi.mocked(pendingMutations)
+			.mockResolvedValueOnce([MUTATION])
+			.mockResolvedValueOnce([MUTATION])
+			.mockResolvedValue([]);
+		const listener = vi.fn();
+		onFlushOutcome(listener);
+
+		startFlushLoop();
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(listener).toHaveBeenCalledWith({ ok: true });
 	});
 
 	it('retries with backoff while a network error keeps the queue non-empty', async () => {

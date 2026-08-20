@@ -1497,12 +1497,11 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByRole('link', { name: 'Edit Bananas' })).toBeInTheDocument();
 	});
 
-	it('subscribes to the list channel and shows a toast on a sync event, refreshing on click', async () => {
+	it('subscribes to the list channel and silently refreshes on a non-dirty sync event', async () => {
 		let handler: (event: SyncEventDto) => void = () => {};
-		const unsubscribe = vi.fn();
 		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
 			handler = onEvent;
-			return unsubscribe;
+			return vi.fn();
 		});
 
 		render(ListDetailPage);
@@ -1512,14 +1511,12 @@ describe('List detail +page.svelte', () => {
 		expect(subscribeToList).toHaveBeenCalledWith(1, expect.any(Function));
 
 		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null, version: 1 });
-		await expect.element(page.getByText('This list was updated')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Refresh' }).click();
-		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
-		expect(fetchList).toHaveBeenCalledTimes(2);
+		// The "This list was updated" toast was removed (PHASE14_PLAN.md) — the
+		// event now drives a silent re-load of the list.
+		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
 	});
 
-	it('shows the sync toast when the offline flush loop reconciles a conflict', async () => {
+	it('silently refreshes when the offline flush loop reconciles a conflict', async () => {
 		let handler: ConflictListener = () => {};
 		vi.mocked(onConflict).mockImplementation((listener) => {
 			handler = listener ?? (() => {});
@@ -1532,10 +1529,10 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 
 		handler({} as Parameters<ConflictListener>[0]);
-		await expect.element(page.getByText('This list was updated')).toBeInTheDocument();
+		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
 	});
 
-	it('suppresses the sync toast for a row with an unacked local edit', async () => {
+	it('suppresses the refresh for a row with an unacked local edit', async () => {
 		const db = getDb()!;
 		await db.items.put({
 			...makeItem({ id: 1, name: 'Milk' }),
@@ -1553,26 +1550,8 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 
 		handler({ entityType: 'item', entityId: 1, op: 'update', payload: null, version: 2 });
-		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
-	});
-
-	it('dismisses the sync toast without refreshing', async () => {
-		let handler: (event: SyncEventDto) => void = () => {};
-		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
-			handler = onEvent;
-			return vi.fn();
-		});
-
-		render(ListDetailPage);
-		await expect
-			.element(page.getByText('Nothing here yet. Add your first item above.'))
-			.toBeInTheDocument();
-
-		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null, version: 1 });
-		await expect.element(page.getByText('This list was updated')).toBeInTheDocument();
-
-		await page.getByRole('button', { name: 'Dismiss' }).click();
-		await expect.element(page.getByText('This list was updated')).not.toBeInTheDocument();
+		// Give isRowDirty's async resolution a beat — the unacked edit means no reload.
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(fetchList).toHaveBeenCalledTimes(1);
 	});
 
