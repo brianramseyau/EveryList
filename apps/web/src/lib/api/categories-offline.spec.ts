@@ -15,9 +15,10 @@ vi.mock('./client', () => ({
 	}
 }));
 
-const { apiPost, apiPatch, apiDelete } = await import('./client');
+const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { createCategory, updateCategory, deleteCategory } = await import('./categories');
+const { createCategory, updateCategory, deleteCategory, fetchCategories } =
+	await import('./categories');
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -118,5 +119,37 @@ describe('deleteCategory (Dexie available)', () => {
 	it('is a no-op against Dexie when the row was never cached', async () => {
 		vi.mocked(apiDelete).mockResolvedValue(undefined);
 		await expect(deleteCategory(1, 999)).resolves.toBeUndefined();
+	});
+});
+
+describe('fetchCategories (cache hydration)', () => {
+	it('caches fetched rows so a later offline edit reads their version', async () => {
+		vi.mocked(apiGet).mockResolvedValue([{ id: 9, name: 'Produce', version: 2 }]);
+
+		await fetchCategories(1);
+
+		expect((await getDb()!.categories.get(9))?.version).toBe(2);
+	});
+
+	it('does not clobber a row with an unacked local edit during a re-fetch', async () => {
+		const db = getDb()!;
+		await db.categories.put({
+			id: 9,
+			name: 'Produce (edited)',
+			icon: 'fruit',
+			sortOrder: 0,
+			listId: 1,
+			isDefault: false,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 2,
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([{ id: 9, name: 'Produce', version: 2 }]);
+
+		await fetchCategories(1);
+
+		expect((await db.categories.get(9))?.name).toBe('Produce (edited)');
 	});
 });

@@ -6,8 +6,21 @@ import { getDb, type EveryListDB } from '$lib/offline/db';
 import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';
 /* v8 ignore stop */
 
-export function fetchItems(listId: number): Promise<ItemDto[]> {
-	return apiGet(`/api/v1/lists/${listId}/items`);
+export async function fetchItems(listId: number): Promise<ItemDto[]> {
+	const items = await apiGet<ItemDto[]>(`/api/v1/lists/${listId}/items`);
+	// Cache the server's copies into Dexie so a later offline edit can read the row's
+	// `version` to send as `expectedVersion` — without this the row is never cached and
+	// an offline toggle enqueues `expectedVersion: 0`, guaranteeing a spurious 409 on sync
+	// (see PHASE14_PLAN.md's sync-status page and apps/api's `reportVersionConflict`).
+	const db = getDb();
+	if (db) {
+		const ids = items.map((item) => item.id);
+		const existing = await db.items.bulkGet(ids);
+		// Never clobber a row with an unacked local edit (`_dirty`) with a stale re-fetch.
+		const toPut = items.filter((_item, index) => !existing[index]?._dirty);
+		if (toPut.length > 0) await db.items.bulkPut(toPut);
+	}
+	return items;
 }
 
 /** Soft-deleted items still within their recovery window, most recent first. */

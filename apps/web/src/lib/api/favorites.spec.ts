@@ -13,6 +13,7 @@ const { addFavoriteToList, createFavorite, deleteFavorite, fetchFavorites, updat
 
 describe('favorites api', () => {
 	it('fetchFavorites GETs the list-scoped collection', () => {
+		vi.mocked(apiGet).mockResolvedValue([]);
 		fetchFavorites(5);
 		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists/5/favorites');
 	});

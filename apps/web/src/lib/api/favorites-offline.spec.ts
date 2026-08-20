@@ -15,9 +15,10 @@ vi.mock('./client', () => ({
 	}
 }));
 
-const { apiPost, apiPatch, apiDelete } = await import('./client');
+const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { createFavorite, updateFavorite, deleteFavorite } = await import('./favorites');
+const { createFavorite, updateFavorite, deleteFavorite, fetchFavorites } =
+	await import('./favorites');
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -143,5 +144,40 @@ describe('deleteFavorite (Dexie available)', () => {
 	it('is a no-op against Dexie when the row was never cached', async () => {
 		vi.mocked(apiDelete).mockResolvedValue(undefined);
 		await expect(deleteFavorite(1, 999)).resolves.toBeUndefined();
+	});
+});
+
+describe('fetchFavorites (cache hydration)', () => {
+	it('caches fetched rows so a later offline edit reads their version', async () => {
+		vi.mocked(apiGet).mockResolvedValue([{ id: 5, name: 'Bananas', version: 2 }]);
+
+		await fetchFavorites(1);
+
+		expect((await getDb()!.favoriteItems.get(5))?.version).toBe(2);
+	});
+
+	it('does not clobber a row with an unacked local edit during a re-fetch', async () => {
+		const db = getDb()!;
+		await db.favoriteItems.put({
+			id: 5,
+			userId: 1,
+			listId: 1,
+			name: 'Bananas (edited)',
+			defaultCategoryId: null,
+			defaultQuantity: null,
+			storeId: null,
+			notes: null,
+			price: null,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 2,
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([{ id: 5, name: 'Bananas', version: 2 }]);
+
+		await fetchFavorites(1);
+
+		expect((await db.favoriteItems.get(5))?.name).toBe('Bananas (edited)');
 	});
 });

@@ -17,10 +17,13 @@ vi.mock('./client', () => ({
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { createItem, updateItem, deleteItem, fetchRecentItemNames } = await import('./items');
+const { pendingMutations } = await import('$lib/offline/sync-queue');
+const { createItem, updateItem, deleteItem, fetchItems, fetchRecentItemNames } =
+	await import('./items');
 
 afterEach(async () => {
 	vi.clearAllMocks();
+	vi.unstubAllGlobals();
 	await resetDbForTesting();
 });
 
@@ -402,5 +405,56 @@ describe('fetchRecentItemNames', () => {
 
 		const names = await fetchRecentItemNames(1);
 		expect(names).toHaveLength(50);
+	});
+});
+
+describe('fetchItems (cache hydration)', () => {
+	it('caches fetched rows so a later offline edit reads their version', async () => {
+		vi.mocked(apiGet).mockResolvedValue([{ id: 8, name: 'Milk', version: 7 }]);
+
+		await fetchItems(1);
+
+		expect((await getDb()!.items.get(8))?.version).toBe(7);
+	});
+
+	it('does not clobber a row with an unacked local edit during a re-fetch', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 8,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: true,
+			checkedAt: '2026-08-17T00:00:00.000Z',
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 7,
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([{ id: 8, name: 'Milk', checked: false, version: 7 }]);
+
+		await fetchItems(1);
+
+		const cached = await db.items.get(8);
+		expect(cached?.checked).toBe(true);
+		expect(cached?._dirty).toBe(true);
+	});
+
+	it('records the cached version as expectedVersion when toggling offline', async () => {
+		vi.mocked(apiGet).mockResolvedValue([{ id: 8, name: 'Milk', version: 7 }]);
+		await fetchItems(1);
+		vi.stubGlobal('navigator', { onLine: false });
+
+		await updateItem(1, 8, { checked: true });
+
+		const [mutation] = await pendingMutations();
+		expect(mutation.expectedVersion).toBe(7);
 	});
 });

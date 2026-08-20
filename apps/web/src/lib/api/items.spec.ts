@@ -21,6 +21,7 @@ const {
 
 describe('items api', () => {
 	it('fetchItems GETs the list-scoped collection', () => {
+		vi.mocked(apiGet).mockResolvedValue([]);
 		fetchItems(1);
 		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists/1/items');
 	});

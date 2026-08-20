@@ -19,6 +19,7 @@ const {
 
 describe('stores api', () => {
 	it('fetchStores GETs the list-scoped collection', () => {
+		vi.mocked(apiGet).mockResolvedValue([]);
 		fetchStores(1);
 		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists/1/stores');
 	});
