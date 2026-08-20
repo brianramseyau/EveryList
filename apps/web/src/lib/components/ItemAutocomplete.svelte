@@ -9,12 +9,14 @@
 		mergeSuggestions,
 		type AutocompleteSuggestion
 	} from '$lib/autocomplete';
+	import type { Snippet } from 'svelte';
 
 	let {
 		listId,
 		value = $bindable(''),
 		existingNames,
 		disabled = false,
+		right,
 		onselect,
 		onfocuschange
 	}: {
@@ -23,6 +25,8 @@
 		/** Names already on the list (any state) — used to badge a suggestion that's already there. */
 		existingNames: string[];
 		disabled?: boolean;
+		/** Rendered inside the input's right edge, so it reads as part of the field. */
+		right?: Snippet;
 		onselect?: (name: string) => void;
 		onfocuschange?: (focused: boolean) => void;
 	} = $props();
@@ -76,7 +80,15 @@
 </script>
 
 <div class="flex-1" bind:this={containerEl}>
-	<Input placeholder="Item name" bind:value {disabled} onfocus={handleFocus} onblur={handleBlur} />
+	<Input
+		placeholder="Item name"
+		bind:value
+		{disabled}
+		{right}
+		onfocus={handleFocus}
+		onblur={handleBlur}
+		class={right ? 'pr-11' : undefined}
+	/>
 </div>
 
 {#if matches.length > 0 && containerEl}

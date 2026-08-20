@@ -358,10 +358,11 @@ describe('List detail +page.svelte', () => {
 		expect(settingsLink.element().getAttribute('href')).toBe('/lists/1/settings');
 	});
 
-	it('links the clipboard icon to the full-screen paste-import screen', async () => {
+	it('links the clipboard icon to the full-screen paste-import screen when the input is focused', async () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
+		await page.getByPlaceholder('Item name').element().focus();
 		const pasteLink = page.getByRole('link', { name: 'Paste in a list' });
 		expect(pasteLink.element().getAttribute('href')).toBe('/lists/1/import');
 	});
@@ -375,7 +376,11 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 
 		await page.getByPlaceholder('Item name').fill('Bread');
-		await page.getByRole('button', { name: 'Add item' }).click();
+		page
+			.getByPlaceholder('Item name')
+			.element()
+			.closest('form')
+			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread' });
@@ -402,7 +407,11 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 
 		await page.getByPlaceholder('Item name').fill('Bread');
-		await page.getByRole('button', { name: 'Add item' }).click();
+		page
+			.getByPlaceholder('Item name')
+			.element()
+			.closest('form')
+			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
@@ -418,7 +427,11 @@ describe('List detail +page.svelte', () => {
 
 		const input = page.getByPlaceholder('Item name');
 		await input.fill('  BANANAS  ');
-		await page.getByRole('button', { name: 'Add item' }).click();
+		page
+			.getByPlaceholder('Item name')
+			.element()
+			.closest('form')
+			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
 		expect(createItem).not.toHaveBeenCalled();
 		await expect.element(input).toHaveValue('  BANANAS  ');
@@ -438,14 +451,22 @@ describe('List detail +page.svelte', () => {
 		const input = page.getByPlaceholder('Item name');
 
 		await input.fill('bananas');
-		await page.getByRole('button', { name: 'Add item' }).click();
-		expect(row().className).toContain('item-row-highlight');
+		page
+			.getByPlaceholder('Item name')
+			.element()
+			.closest('form')
+			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+		await expect.poll(() => row().className.includes('item-row-highlight')).toBe(true);
 
 		// Re-matching before the first highlight fades restarts the timer
 		// rather than leaving two competing timeouts.
 		await input.fill('bananas');
-		await page.getByRole('button', { name: 'Add item' }).click();
-		expect(row().className).toContain('item-row-highlight');
+		page
+			.getByPlaceholder('Item name')
+			.element()
+			.closest('form')
+			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+		await expect.poll(() => row().className.includes('item-row-highlight')).toBe(true);
 
 		await expect
 			.poll(() => row().className.includes('item-row-highlight'), { timeout: 2000 })
@@ -468,7 +489,11 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByRole('checkbox', { name: 'Milk' })).toBeChecked();
 
 		await page.getByPlaceholder('Item name').fill('milk');
-		await page.getByRole('button', { name: 'Add item' }).click();
+		page
+			.getByPlaceholder('Item name')
+			.element()
+			.closest('form')
+			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
 		await expect.element(page.getByRole('checkbox', { name: 'Milk' })).not.toBeChecked();
 		expect(page.getByText('Milk', { exact: true }).elements()).toHaveLength(1);
@@ -535,9 +560,8 @@ describe('List detail +page.svelte', () => {
 	});
 
 	it('does not submit when the new item name is only whitespace', async () => {
-		// The Add button is already disabled in this state, but handleAddItem
-		// carries its own guard, reachable via a raw 'submit' event and not
-		// just a click on the (disabled) button.
+		// handleAddItem carries its own guard, reachable via a raw 'submit'
+		// event and not just Enter on the input.
 		render(ListDetailPage);
 		await expect
 			.element(page.getByText('Nothing here yet. Add your first item above.'))
@@ -553,6 +577,28 @@ describe('List detail +page.svelte', () => {
 		await expect.poll(() => vi.mocked(createItem).mock.calls.length).toBe(0);
 	});
 
+	it('ignores a second submit while an add is still in flight', async () => {
+		vi.mocked(createItem).mockReturnValue(new Promise<ItemDto>(() => {}));
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		const submit = () =>
+			page
+				.getByPlaceholder('Item name')
+				.element()
+				.closest('form')
+				?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+		await page.getByPlaceholder('Item name').fill('Bread');
+		submit();
+		submit();
+
+		expect(createItem).toHaveBeenCalledTimes(1);
+	});
+
 	it('shows a generic error message when adding an item fails without an ApiError', async () => {
 		vi.mocked(createItem).mockRejectedValue(new TypeError('network down'));
 
@@ -562,7 +608,11 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 
 		await page.getByPlaceholder('Item name').fill('Bread');
-		await page.getByRole('button', { name: 'Add item' }).click();
+		page
+			.getByPlaceholder('Item name')
+			.element()
+			.closest('form')
+			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
 		await expect.element(page.getByText('Failed to add item.')).toBeInTheDocument();
 	});
@@ -576,7 +626,11 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 
 		await page.getByPlaceholder('Item name').fill('Bread');
-		await page.getByRole('button', { name: 'Add item' }).click();
+		page
+			.getByPlaceholder('Item name')
+			.element()
+			.closest('form')
+			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
 		await expect.element(page.getByText('Duplicate item')).toBeInTheDocument();
 	});

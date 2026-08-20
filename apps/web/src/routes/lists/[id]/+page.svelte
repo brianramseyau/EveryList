@@ -230,6 +230,7 @@
 	}
 
 	async function addItem(rawName: string) {
+		if (adding) return;
 		const name = rawName.trim();
 		if (!name) return;
 
@@ -403,6 +404,18 @@
 			{/snippet}
 		</PageHeader>
 
+		{#snippet pasteIcon()}
+			<a
+				href={resolve('/lists/[id]/import', { id: String(listId) })}
+				aria-label="Paste in a list"
+				class="pointer-events-auto flex h-6 w-6 items-center justify-center transition-opacity {itemInputFocused
+					? 'opacity-100'
+					: 'pointer-events-none opacity-0'}"
+			>
+				<Icon name="clipboardText" class="h-5 w-5" />
+			</a>
+		{/snippet}
+
 		{#if list && !(list.passcodeHash && !unlocked)}
 			<form class="flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
 				<div
@@ -410,24 +423,6 @@
 						? 'w-0 gap-0 opacity-0'
 						: 'w-auto gap-2 opacity-100'}"
 				>
-					<a
-						href={resolve('/lists/[id]/import', { id: String(listId) })}
-						aria-label="Paste in a list"
-						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
-					>
-						<Icon name="clipboardText" class="h-5 w-5" />
-					</a>
-					<button
-						type="button"
-						aria-label={showChecked ? 'Hide checked items' : 'Show checked items'}
-						onclick={() => {
-							showChecked = !showChecked;
-							setShowChecked(listId, showChecked);
-						}}
-						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
-					>
-						<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
-					</button>
 					{#if checkedItems.length > 0}
 						<button
 							type="button"
@@ -445,15 +440,25 @@
 					existingNames={items.map((item) => item.name)}
 					onselect={(name) => void addItem(name)}
 					onfocuschange={(focused) => (itemInputFocused = focused)}
+					right={pasteIcon}
 				/>
-				<button
-					type="submit"
-					aria-label="Add item"
-					disabled={adding || !newItemName.trim()}
-					class="flex h-11 w-11 shrink-0 items-center justify-center text-primary-600 disabled:opacity-30 dark:text-primary-400"
+				<div
+					class="flex shrink-0 items-center overflow-hidden transition-all duration-200 {itemInputFocused
+						? 'w-0 gap-0 opacity-0'
+						: 'w-auto gap-2 opacity-100'}"
 				>
-					<Icon name="plusCircle" class="h-7 w-7" />
-				</button>
+					<button
+						type="button"
+						aria-label={showChecked ? 'Hide checked items' : 'Show checked items'}
+						onclick={() => {
+							showChecked = !showChecked;
+							setShowChecked(listId, showChecked);
+						}}
+						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+					>
+						<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
+					</button>
+				</div>
 			</form>
 		{/if}
 	</div>
