@@ -139,7 +139,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchStores).mockResolvedValue([]);
 		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
 			storeId: null,
-			includeUnassigned: false
+			filter: 'store'
 		});
 		vi.mocked(goto).mockResolvedValue(undefined);
 		vi.mocked(fetchRecentItemNames).mockResolvedValue([]);
@@ -181,7 +181,7 @@ describe('List detail +page.svelte', () => {
 	it('applies the store-specific category order when a store is selected', async () => {
 		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
 			storeId: 7,
-			includeUnassigned: false
+			filter: 'store'
 		});
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([
 			{ id: 1, storeId: 7, categoryId: 10, sortOrder: 5, deletedAt: null, version: 1 },
@@ -704,7 +704,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchStores).mockResolvedValue([store]);
 		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
 			storeId: 20,
-			includeUnassigned: false
+			filter: 'store'
 		});
 
 		render(ListDetailPage);
@@ -765,7 +765,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchStores).mockResolvedValue([store]);
 		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
 			storeId: 20,
-			includeUnassigned: false
+			filter: 'store'
 		});
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),
@@ -792,7 +792,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchStores).mockResolvedValue([store]);
 		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
 			storeId: 20,
-			includeUnassigned: true
+			filter: 'storeAndUnassigned'
 		});
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),
@@ -805,6 +805,50 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 		await expect.element(page.getByText('Milk')).not.toBeInTheDocument();
+	});
+
+	it('shows every item, in the selected store\'s aisle order, when the filter is "all"', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
+			storeId: 20,
+			filter: 'all'
+		});
+		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 10, sortOrder: 5, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 20, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 }
+		]);
+		// Three items tagged three different ways (the selected store, no store,
+		// and a different store) — all must remain visible under "all".
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, storeId: null }),
+			makeItem({ id: 102, name: 'Milk', categoryId: 11, storeId: 21 })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+
+		// The selected store's aisle order still applies: Dairy (override 0)
+		// precedes Produce (override 5), the reverse of their default order.
+		const headings = document.querySelectorAll('h2');
+		const headingTexts = [...headings].map((h) => h.textContent?.trim());
+		const dairyIndex = headingTexts.findIndex((t) => t === 'Dairy');
+		const produceIndex = headingTexts.findIndex((t) => t === 'Produce');
+		expect(dairyIndex).toBeGreaterThanOrEqual(0);
+		expect(produceIndex).toBeGreaterThan(dairyIndex);
 	});
 
 	it('explains that the store filter is hiding every item, when the list is non-empty but the filter matches nothing', async () => {
@@ -821,7 +865,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchStores).mockResolvedValue([store]);
 		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
 			storeId: 20,
-			includeUnassigned: false
+			filter: 'store'
 		});
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null })
@@ -846,7 +890,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchStores).mockResolvedValue([]);
 		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
 			storeId: 999,
-			includeUnassigned: false
+			filter: 'store'
 		});
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: null }),
@@ -876,7 +920,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchStores).mockResolvedValue([store]);
 		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
 			storeId: null,
-			includeUnassigned: false
+			filter: 'store'
 		});
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 20 }),

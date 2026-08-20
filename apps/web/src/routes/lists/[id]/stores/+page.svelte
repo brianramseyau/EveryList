@@ -3,12 +3,13 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Checkbox, Input, Radio } from 'flowbite-svelte';
+	import { Button, Input, Radio } from 'flowbite-svelte';
 	import type { ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
 	import { detachStore, fetchStores, updateStore } from '$lib/api/stores';
 	import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
+	import type { StoreFilter } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -24,7 +25,7 @@
 	let error = $state<string | null>(null);
 
 	let selectedStoreId = $state<number | null>(null);
-	let includeUnassigned = $state(false);
+	let storeFilter = $state<StoreFilter>('store');
 
 	let editingStoreId = $state<number | null>(null);
 	let editName = $state('');
@@ -37,7 +38,7 @@
 			[list, stores] = await Promise.all([fetchList(listId), fetchStores(listId)]);
 			const settings = await getSelectedStoreSettings(listId);
 			selectedStoreId = settings.storeId;
-			includeUnassigned = settings.includeUnassigned;
+			storeFilter = settings.filter;
 			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to load stores.';
@@ -98,7 +99,7 @@
 	// whenever the selection changes, including the initial load's restore.
 	$effect(() => {
 		if (!loading)
-			void setSelectedStoreSettings(listId, { storeId: selectedStoreId, includeUnassigned });
+			void setSelectedStoreSettings(listId, { storeId: selectedStoreId, filter: storeFilter });
 	});
 </script>
 
@@ -127,8 +128,8 @@
 		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if list}
 		<p class="text-sm text-gray-600 dark:text-gray-300">
-			Pick the store you're shopping at so categories match its aisle layout. This choice is only
-			remembered on this device.
+			Pick the store you're shopping at so categories match its aisle layout, then choose which
+			items to show. This choice is only remembered on this device.
 		</p>
 
 		{#if error}
@@ -209,13 +210,18 @@
 		{/if}
 
 		{#if selectedStoreId !== null}
-			<Checkbox bind:checked={includeUnassigned}>
-				Also show items not assigned to any store
-			</Checkbox>
-			<p class="text-sm text-gray-500 dark:text-gray-400">
-				Keeps unassigned items on the list while you shop the selected store. Remembered on this
-				device.
-			</p>
+			<div class="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+				<h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">Items shown</h2>
+				<Radio bind:group={storeFilter} value="store">Only this store's items</Radio>
+				<Radio bind:group={storeFilter} value="storeAndUnassigned">
+					This store + items with no store
+				</Radio>
+				<Radio bind:group={storeFilter} value="all">All items</Radio>
+				<p class="text-sm text-gray-500 dark:text-gray-400">
+					Categories stay in this store's aisle order no matter which items are shown. Remembered on
+					this device.
+				</p>
+			</div>
 		{/if}
 	{:else}
 		<!-- Reachable only once loadAll's finally has run: loading is false, and
