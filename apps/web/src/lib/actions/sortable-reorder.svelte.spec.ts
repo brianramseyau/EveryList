@@ -82,8 +82,12 @@ async function drag(from: HTMLElement, to: HTMLElement, toYFraction = 0.5) {
 	);
 	// A tiny first move is what actually starts the drag (SortableJS creates
 	// its fallback ghost element on the first qualifying pointermove, not on
-	// pointerdown) — wait for that ghost to exist rather than guessing a
-	// fixed delay, so this doesn't race a slower browser.
+	// pointerdown). The move is well under touchStartThreshold, so it never
+	// cancels the press-and-hold delay — but the delay itself must elapse
+	// before the drag arms (the choose event adds sortable-chosen), and only
+	// then does the next pointermove spawn the ghost. Wait for that arm
+	// rather than guessing a fixed delay, so this doesn't race a slower
+	// browser.
 	document.dispatchEvent(
 		new PointerEvent('pointermove', {
 			bubbles: true,
@@ -95,7 +99,7 @@ async function drag(from: HTMLElement, to: HTMLElement, toYFraction = 0.5) {
 			clientY: startY + 1
 		})
 	);
-	await waitUntil(hasFallbackGhost);
+	await waitUntil(() => from.classList.contains('sortable-chosen'));
 
 	// Fine-grained, multi-step moves — SortableJS's fallback drag tracks
 	// position via pointermove, and needs enough steps (each settled to a
@@ -218,7 +222,23 @@ describe('sortableReorder', () => {
 				clientY: y
 			})
 		);
-		// A tiny move at the same slot still starts the drag (and still
+		// A tiny move at the same slot is under touchStartThreshold, so it
+		// doesn't cancel the press-and-hold delay; once the delay elapses the
+		// drag is armed (chosenClass added), but the fallback ghost still
+		// only appears on the next qualifying pointermove.
+		document.dispatchEvent(
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				cancelable: true,
+				pointerId: 1,
+				pointerType: 'mouse',
+				button: 0,
+				clientX: x + 1,
+				clientY: y + 1
+			})
+		);
+		await waitUntil(() => a.classList.contains('sortable-chosen'));
+		// A second tiny move at the same slot starts the drag (and still
 		// exercises onEnd), but never crosses into a new index.
 		document.dispatchEvent(
 			new PointerEvent('pointermove', {
