@@ -58,7 +58,10 @@
 		{/snippet}
 	</PageHeader>
 
-	<p class="text-sm text-gray-600 dark:text-gray-300">Enter one item per line.</p>
+	<p class="text-sm text-gray-600 dark:text-gray-300">
+		One item per line, or paste an AnyList export — category headers in caps with bulleted items
+		underneath.
+	</p>
 
 	{#if error}
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -67,8 +70,8 @@
 	<Textarea
 		bind:value={importText}
 		autofocus
-		placeholder="One item per line, e.g. Milk, Bread, Eggs"
+		placeholder="One item per line, or paste an AnyList list"
 		classes={{ div: 'flex flex-1 flex-col' }}
-		class="flex-1 resize-none"
+		class="h-[calc(100dvh-16rem)] resize-none"
 	/>
 </main>
