@@ -25,6 +25,7 @@
 	import ItemAutocomplete from '$lib/components/ItemAutocomplete.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PasscodeGate from '$lib/components/PasscodeGate.svelte';
+	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
 	import SyncToast from '$lib/components/SyncToast.svelte';
 
 	const listId = $derived(Number(page.params.id));
@@ -44,7 +45,10 @@
 	let newItemName = $state('');
 	let adding = $state(false);
 	let itemInputFocused = $state(false);
-	let confirmingClear = $state(false);
+	// Which bulk-action the inline confirmation banner is asking about — the
+	// menu's destructive options (clear checked, uncheck all, clear all) all
+	// route through one banner, distinguished by this value.
+	let confirmAction = $state<'clearChecked' | 'uncheckAll' | 'clearAll' | null>(null);
 
 	// Measured height of the pinned header (title bar + item entry field), so
 	// category headings can stick just beneath it instead of overlapping it.
@@ -147,11 +151,24 @@
 
 	const checkedItems = $derived(visibleItems.filter((item) => item.checked));
 
-	const clearConfirmMessage = $derived(
-		checkedItems.length === 1
-			? 'Clear 1 checked item?'
-			: `Clear ${checkedItems.length} checked items?`
-	);
+	const confirmMessage = $derived.by(() => {
+		switch (confirmAction) {
+			case 'clearChecked': {
+				const n = checkedItems.length;
+				return n === 1 ? 'Clear 1 checked item?' : `Clear ${n} checked items?`;
+			}
+			case 'uncheckAll': {
+				const n = checkedItems.length;
+				return n === 1 ? 'Uncheck 1 item?' : `Uncheck all ${n} items?`;
+			}
+			case 'clearAll': {
+				const n = items.length;
+				return n === 1 ? 'Clear all 1 item?' : `Clear all ${n} items?`;
+			}
+			default:
+				return '';
+		}
+	});
 
 	const totalCents = $derived(visibleItems.reduce((sum, item) => sum + (item.price ?? 0), 0));
 
@@ -230,6 +247,7 @@
 	}
 
 	async function addItem(rawName: string) {
+		if (adding) return;
 		const name = rawName.trim();
 		if (!name) return;
 
@@ -353,8 +371,37 @@
 	// call targets a different id, so there's no version-conflict risk running
 	// them concurrently, and it inherits the offline-queue behavior for free.
 	async function clearChecked() {
-		confirmingClear = false;
+		confirmAction = null;
 		await Promise.all(checkedItems.map((item) => removeItem(item)));
+	}
+
+	// Bulk-unchecks every checked item, optimistic in-memory first then one
+	// update request per item — same shape as `clearChecked`, but reusing the
+	// single-item update path (and its offline queue) instead of deleting.
+	async function uncheckAllItems() {
+		confirmAction = null;
+		const toUncheck = items.filter((item) => item.checked);
+		items = items.map((item) => (item.checked ? { ...item, checked: false } : item));
+		try {
+			await Promise.all(toUncheck.map((item) => updateItem(listId, item.id, { checked: false })));
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to update item.';
+			void loadAll();
+		}
+	}
+
+	// Bulk-deletes every item on the list, checked or not — deliberately NOT
+	// scoped to the currently-selected store's visible items (unlike the
+	// checked-item actions); "ALL" means all.
+	async function clearAllItems() {
+		confirmAction = null;
+		await Promise.all(items.map((item) => removeItem(item)));
+	}
+
+	function handleConfirm() {
+		if (confirmAction === 'clearChecked') void clearChecked();
+		if (confirmAction === 'uncheckAll') void uncheckAllItems();
+		if (confirmAction === 'clearAll') void clearAllItems();
 	}
 </script>
 
@@ -371,20 +418,6 @@
 		<PageHeader title={list?.name} backHref={resolve('/lists')} backLabel="My Lists">
 			{#snippet actions()}
 				<a
-					href={resolve('/lists/[id]/favorites', { id: String(listId) })}
-					aria-label="Favorites"
-					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-				>
-					<Icon name="heart" class="h-5 w-5" />
-				</a>
-				<a
-					href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
-					aria-label="Recently deleted"
-					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-				>
-					<Icon name="history" class="h-5 w-5" />
-				</a>
-				<a
 					href={resolve('/lists/[id]/stores', { id: String(listId) })}
 					aria-label="Stores"
 					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
@@ -393,30 +426,99 @@
 						<Icon name="store" class="h-5 w-5" />
 					</span>
 				</a>
-				<a
-					href={resolve('/lists/[id]/settings', { id: String(listId) })}
-					aria-label="List settings"
-					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-				>
-					<Icon name="cog" class="h-5 w-5" />
-				</a>
+				<PopoutMenu label="List menu" iconName="dotsVertical">
+					{#snippet children(close)}
+						<button
+							type="button"
+							disabled={checkedItems.length === 0}
+							onclick={() => {
+								confirmAction = 'clearChecked';
+								close();
+							}}
+							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
+						>
+							Clear Checked Off Items
+						</button>
+						<button
+							type="button"
+							disabled={checkedItems.length === 0}
+							onclick={() => {
+								confirmAction = 'uncheckAll';
+								close();
+							}}
+							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
+						>
+							Uncheck All Items
+						</button>
+						<button
+							type="button"
+							disabled={items.length === 0}
+							onclick={() => {
+								confirmAction = 'clearAll';
+								close();
+							}}
+							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
+						>
+							Clear ALL List Items
+						</button>
+						<a
+							href={resolve('/lists/[id]/settings', { id: String(listId) })}
+							class="mt-1 block rounded border-t border-gray-200 px-2 pt-2 text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:border-gray-700 dark:text-primary-400 dark:hover:bg-gray-700"
+						>
+							List Settings
+						</a>
+					{/snippet}
+				</PopoutMenu>
 			{/snippet}
 		</PageHeader>
+
+		{#snippet pasteIcon()}
+			<a
+				href={resolve('/lists/[id]/import', { id: String(listId) })}
+				aria-label="Paste in a list"
+				class="pointer-events-auto flex h-6 w-6 items-center justify-center transition-opacity {itemInputFocused
+					? 'opacity-100'
+					: 'pointer-events-none opacity-0'}"
+			>
+				<Icon name="clipboardText" class="h-5 w-5" />
+			</a>
+		{/snippet}
 
 		{#if list && !(list.passcodeHash && !unlocked)}
 			<form class="flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
 				<div
-					class="flex shrink-0 items-center overflow-hidden transition-all duration-200 {itemInputFocused
-						? 'w-0 gap-0 opacity-0'
-						: 'w-auto gap-2 opacity-100'}"
+					class="flex shrink-0 items-center gap-2 overflow-hidden transition-all duration-200 {itemInputFocused
+						? 'pointer-events-none max-w-0 opacity-0'
+						: 'max-w-28 opacity-100'}"
 				>
 					<a
-						href={resolve('/lists/[id]/import', { id: String(listId) })}
-						aria-label="Paste in a list"
+						href={resolve('/lists/[id]/favorites', { id: String(listId) })}
+						aria-label="Favorites"
 						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
 					>
-						<Icon name="clipboardText" class="h-5 w-5" />
+						<Icon name="heart" class="h-5 w-5" />
 					</a>
+					<a
+						href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
+						aria-label="Recently deleted"
+						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+					>
+						<Icon name="history" class="h-5 w-5" />
+					</a>
+				</div>
+				<ItemAutocomplete
+					{listId}
+					bind:value={newItemName}
+					existingNames={items.map((item) => item.name)}
+					onselect={(name) => void addItem(name)}
+					onfocuschange={(focused) => (itemInputFocused = focused)}
+					right={pasteIcon}
+				/>
+				<div
+					class="flex shrink-0 items-center overflow-hidden transition-all duration-200 {itemInputFocused
+						? 'max-w-0 opacity-0'
+						: 'max-w-11 opacity-100'}"
+				>
 					<button
 						type="button"
 						aria-label={showChecked ? 'Hide checked items' : 'Show checked items'}
@@ -428,32 +530,7 @@
 					>
 						<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
 					</button>
-					{#if checkedItems.length > 0}
-						<button
-							type="button"
-							aria-label="Clear checked items"
-							onclick={() => (confirmingClear = true)}
-							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
-						>
-							<Icon name="deleteSweep" class="h-5 w-5" />
-						</button>
-					{/if}
 				</div>
-				<ItemAutocomplete
-					{listId}
-					bind:value={newItemName}
-					existingNames={items.map((item) => item.name)}
-					onselect={(name) => void addItem(name)}
-					onfocuschange={(focused) => (itemInputFocused = focused)}
-				/>
-				<button
-					type="submit"
-					aria-label="Add item"
-					disabled={adding || !newItemName.trim()}
-					class="flex h-11 w-11 shrink-0 items-center justify-center text-primary-600 disabled:opacity-30 dark:text-primary-400"
-				>
-					<Icon name="plusCircle" class="h-7 w-7" />
-				</button>
 			</form>
 		{/if}
 	</div>
@@ -472,23 +549,23 @@
 		{#if list.passcodeHash && !unlocked}
 			<PasscodeGate {list} onunlock={() => (unlocked = true)} />
 		{:else}
-			{#if confirmingClear}
+			{#if confirmMessage}
 				<div
 					class="flex items-center justify-between gap-2 rounded-lg border border-red-200 p-3 text-sm dark:border-red-900 print:hidden"
 				>
-					<p class="text-red-600 dark:text-red-400">{clearConfirmMessage}</p>
+					<p class="text-red-600 dark:text-red-400">{confirmMessage}</p>
 					<div class="flex shrink-0 gap-2">
 						<button
 							type="button"
 							class="rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700"
-							onclick={() => void clearChecked()}
+							onclick={handleConfirm}
 						>
 							Confirm
 						</button>
 						<button
 							type="button"
 							class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-							onclick={() => (confirmingClear = false)}
+							onclick={() => (confirmAction = null)}
 						>
 							Cancel
 						</button>

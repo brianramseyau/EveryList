@@ -4,10 +4,11 @@
 	import Icon from './Icon.svelte';
 
 	// Shared popout-menu primitive (PHASE9_PLAN.md #1/#10): a trigger icon
-	// button plus an anchor-panel-positioned list of links, with click-outside
-	// and Escape-to-close — the behavior ListMenu.svelte used to hand-roll for
-	// itself with no viewport clamping. Only real caller left after the cog
-	// menu became its own routed screen is the Lists-screen "+" icon.
+	// button plus an anchor-panel-positioned list of links or action buttons,
+	// with click-outside and Escape-to-close — the behavior ListMenu.svelte
+	// used to hand-roll for itself with no viewport clamping. `children`
+	// receives a `close` function so an item that performs an action (rather
+	// than navigating) can dismiss the panel itself.
 	let {
 		label,
 		iconName,
@@ -15,7 +16,7 @@
 	}: {
 		label: string;
 		iconName: string;
-		children: Snippet;
+		children: Snippet<[close: () => void]>;
 	} = $props();
 
 	let open = $state(false);
@@ -57,7 +58,7 @@
 			use:anchorPanel={containerEl}
 			class="fixed z-10 min-w-44 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800"
 		>
-			{@render children()}
+			{@render children(close)}
 		</div>
 	{/if}
 </div>

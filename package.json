@@ -17,6 +17,7 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "check": "node scripts/check.mjs",
     "db:migrate": "pnpm --filter @everylist/api db:migrate",
     "db:migrate:rollback": "pnpm --filter @everylist/api db:migrate:rollback",
     "db:migrate:status": "pnpm --filter @everylist/api db:migrate:status",

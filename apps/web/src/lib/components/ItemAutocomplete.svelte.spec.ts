@@ -109,4 +109,27 @@ describe('ItemAutocomplete.svelte', () => {
 
 		await expect.element(page.getByRole('button', { name: 'Bananas' })).not.toBeInTheDocument();
 	});
+
+	it('does not refetch suggestions when the input is focused again', async () => {
+		vi.mocked(fetchFavorites).mockResolvedValue([favorite('Bananas')]);
+		vi.mocked(fetchRecentItemNames).mockResolvedValue(['Bread']);
+
+		render(ItemAutocomplete, { listId: 1, value: '', existingNames: [] });
+		const input = page.getByPlaceholder('Item name');
+
+		await input.click();
+		await input.fill('ban');
+		await expect.element(page.getByRole('button', { name: 'Bananas' })).toBeInTheDocument();
+		expect(fetchFavorites).toHaveBeenCalledTimes(1);
+
+		// Blur, wait out the delayed panel-close, then focus again — the
+		// suggestions were loaded on the first focus, so no second fetch.
+		input.element().blur();
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		await input.click();
+		await input.fill('ban');
+
+		expect(fetchFavorites).toHaveBeenCalledTimes(1);
+		await expect.element(page.getByRole('button', { name: 'Bananas' })).toBeInTheDocument();
+	});
 });
