@@ -180,13 +180,36 @@ describe('Settings +page.svelte', () => {
 		resolveReset();
 	});
 
-	it('shows the signed-in account email and current name once the profile loads', async () => {
+	it('shows the signed-in account email and current name as text with an edit button', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(fetchProfile).mockResolvedValue(profile);
 
 		render(SettingsPage);
 
 		await expect.element(page.getByText('ada@example.com')).toBeInTheDocument();
+		await expect.element(page.getByText('Ada Lovelace')).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Edit name' })).toBeInTheDocument();
+	});
+
+	it('shows a placeholder when the account has no name', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(fetchProfile).mockResolvedValue({ ...profile, fullName: null });
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Add your name')).toBeInTheDocument();
+		await page.getByRole('button', { name: 'Edit name' }).click();
+		await expect.element(page.getByRole('textbox')).toHaveValue('');
+	});
+
+	it('swaps the name text for an input when the edit button is clicked', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(fetchProfile).mockResolvedValue(profile);
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Edit name' }).click();
+
 		await expect.element(page.getByRole('textbox')).toHaveValue('Ada Lovelace');
 	});
 
@@ -197,6 +220,7 @@ describe('Settings +page.svelte', () => {
 
 		render(SettingsPage);
 
+		await page.getByRole('button', { name: 'Edit name' }).click();
 		const nameInput = page.getByRole('textbox');
 		await expect.element(nameInput).toHaveValue('Ada Lovelace');
 		await nameInput.fill('Ada King');
@@ -206,12 +230,29 @@ describe('Settings +page.svelte', () => {
 		expect(updateProfile).toHaveBeenCalledWith({ fullName: 'Ada King' });
 	});
 
+	it('shows the updated name as text once editing completes', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(fetchProfile).mockResolvedValue(profile);
+		vi.mocked(updateProfile).mockResolvedValue({ ...profile, fullName: 'Ada King' });
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Edit name' }).click();
+		const nameInput = page.getByRole('textbox');
+		await nameInput.fill('Ada King');
+		nameInput.element().blur();
+
+		await expect.element(page.getByText('Ada King')).toBeInTheDocument();
+		await expect.element(page.getByRole('textbox')).not.toBeInTheDocument();
+	});
+
 	it('does not save on blur when the name was not changed', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(fetchProfile).mockResolvedValue(profile);
 
 		render(SettingsPage);
 
+		await page.getByRole('button', { name: 'Edit name' }).click();
 		const nameInput = page.getByRole('textbox');
 		await expect.element(nameInput).toHaveValue('Ada Lovelace');
 		nameInput.element().focus();
@@ -227,6 +268,7 @@ describe('Settings +page.svelte', () => {
 
 		render(SettingsPage);
 
+		await page.getByRole('button', { name: 'Edit name' }).click();
 		const nameInput = page.getByRole('textbox');
 		await expect.element(nameInput).toHaveValue('Ada Lovelace');
 		await nameInput.fill('');
@@ -243,12 +285,14 @@ describe('Settings +page.svelte', () => {
 
 		render(SettingsPage);
 
+		await page.getByRole('button', { name: 'Edit name' }).click();
 		const nameInput = page.getByRole('textbox');
 		await expect.element(nameInput).toHaveValue('Ada Lovelace');
 		await nameInput.fill('Ada King');
 		nameInput.element().blur();
 
 		await expect.element(page.getByText('Failed to save name.')).toBeInTheDocument();
+		await expect.element(page.getByRole('textbox')).toBeInTheDocument();
 	});
 
 	it('shows a fallback message when the profile fails to load', async () => {
@@ -276,6 +320,7 @@ describe('Settings +page.svelte', () => {
 
 		render(SettingsPage);
 
+		await page.getByRole('button', { name: 'Edit name' }).click();
 		const nameInput = page.getByRole('textbox');
 		await expect.element(nameInput).toHaveValue('Ada Lovelace');
 		await nameInput.fill('Ada King');
