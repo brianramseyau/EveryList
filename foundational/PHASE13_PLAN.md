@@ -50,10 +50,48 @@ Implemented in two passes — the first baked the URL in at build time via `VITE
 - `apps/web/src/lib/realtime.ts`: `subscribeToList` now registers an `@capacitor/app` `appStateChange` listener when `Capacitor.isNativePlatform()`. On resume (`isActive: true`), it tears down and recreates the subscription against the shared Transmit client, rather than relying on the browser's implicit EventSource retry timing surviving an OS-level socket teardown during backgrounding. Encapsulated entirely inside `subscribeToList` (its only call site, `lists/[id]/+page.svelte`, needed no changes) rather than pushed onto callers.
 - `apps/web/src/lib/pwa/badge.ts`: `@capawesome/capacitor-badge` — not `@capacitor/badge`, which doesn't exist as a package; the actual community-maintained plugin under the Capawesome org — provides the native counterpart when `Capacitor.isNativePlatform()`, requesting notification permission lazily on first badge-set rather than at launch. Falls back to the existing Web Badging API path otherwise, same feature-detection pattern as `beforeinstallprompt`.
 
-### 4. Native build tooling & local verification
+### 4. Native build tooling & local verification — **in progress, needs the maintainer**
 
 - Local prerequisites: Xcode + iOS Simulator for iOS builds, Android Studio + JDK for Android builds/emulator — dev-time-only, no store account requirements.
-- Local build loop: `pnpm --filter web build` → `npx cap sync` → open/run via Xcode (`npx cap open ios`) and Android Studio (`npx cap open android`). No build-time server URL to set (§1) — the app prompts for one via `/server-setup` on first launch.
+- Local build loop: `pnpm --filter web run cap:sync` (build + `cap sync`) → open/run via Xcode (`pnpm --filter web run cap:ios`) and Android Studio (`pnpm --filter web run cap:android`). No build-time server URL to set (§1) — the app prompts for one via `/server-setup` on first launch.
+
+#### Android walkthrough (Android Studio)
+
+1. **One-time setup wizard.** Open Android Studio. On first launch it runs the Setup Wizard —
+   accept the defaults. This downloads the Android SDK, platform-tools, and a build-tools version
+   to `~/Library/Android/sdk` (macOS default) and bundles its own JDK
+   (`Android Studio.app/Contents/jbr`), so no separate system JDK install is needed.
+2. **Confirm an SDK platform + emulator image are installed** — Setup Wizard installs these by
+   default, but if skipped: **More Actions → SDK Manager** (or, with a project open,
+   **Settings/Preferences → Languages & Frameworks → Android SDK**). Need at least one SDK
+   Platform (e.g. Android 14 / API 34) under the "SDK Platforms" tab.
+3. **Create a virtual device**: **Tools → Device Manager → Create device** — pick a phone profile
+   and a system image (the wizard prompts to download the image if needed), finish.
+4. **Build and sync**: from `apps/web`, `pnpm run cap:sync`.
+5. **Open the project**: `pnpm run cap:android` (equivalent to `npx cap open android`) — opens
+   `apps/android` in Android Studio.
+6. **Run it**: let Gradle sync finish (first time downloads dependencies, can take a few minutes —
+   watch the status bar), pick the AVD created in step 3 from the device dropdown, click **Run**
+   (▶). Once the SDK exists, `apps/android`'s `./gradlew assembleDebug` also works standalone from
+   the CLI (with `JAVA_HOME` pointed at Android Studio's bundled JDK) — useful for a build-only
+   sanity check without opening the IDE or a device/emulator.
+
+#### iOS walkthrough (Xcode) — for later, once Xcode itself finishes installing
+
+1. Install Xcode from the App Store (or Apple Developer site), open it once to accept the license
+   and let it install additional components. Xcode Command Line Tools alone (`xcode-select -p`)
+   are not sufficient — the full Xcode.app + iOS Simulator are required.
+2. `pnpm run cap:ios` (equivalent to `npx cap open ios`) opens `apps/ios/App/App.xcworkspace`.
+3. Pick a Simulator target from the scheme dropdown, click Run (▶). First build resolves Swift
+   Package dependencies — can take a few minutes.
+
+#### What "done" looks like for this section
+
+Manual verification per the plan's top-level Verification section: fresh install → `/server-setup`
+gate → enter a real URL → ping succeeds → lands on `/login` → log in → list CRUD against the real
+API → airplane mode → offline edits → reconnect → sync confirms → background the app ~1 minute →
+foreground → SSE reconnects (realtime updates resume without a manual refresh) → Settings → Server
+→ Change → back to `/server-setup`.
 
 ### 5. Close the remaining online-only mutations — **done**
 
