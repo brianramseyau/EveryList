@@ -22,7 +22,8 @@ describe('fetchPing', () => {
 		await expect(fetchPing()).resolves.toBe(true);
 		expect(fetch).toHaveBeenCalledWith('/api/v1/ping', {
 			cache: 'no-store',
-			headers: { Accept: 'application/json' }
+			headers: { Accept: 'application/json' },
+			signal: expect.any(AbortSignal)
 		});
 	});
 
@@ -65,7 +66,17 @@ describe('fetchPing', () => {
 		await expect(fetchPing('https://everylist.example.com')).resolves.toBe(true);
 		expect(fetch).toHaveBeenCalledWith('https://everylist.example.com/api/v1/ping', {
 			cache: 'no-store',
-			headers: { Accept: 'application/json' }
+			headers: { Accept: 'application/json' },
+			signal: expect.any(AbortSignal)
 		});
+	});
+
+	it('returns false when the request is aborted for taking too long', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockRejectedValue(new DOMException('Signal timed out', 'TimeoutError'))
+		);
+
+		await expect(fetchPing()).resolves.toBe(false);
 	});
 });

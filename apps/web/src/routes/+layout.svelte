@@ -15,6 +15,7 @@
 	import { consumeNavDirection, consumeSkipTransition } from '$lib/nav-direction';
 	import { startFlushLoop } from '$lib/offline/flush';
 	import { startConnectivityMonitor } from '$lib/offline/connectivity.svelte';
+	import { startBackgroundSync } from '$lib/offline/background-sync';
 	import { initInstallPrompt } from '$lib/pwa/install-prompt';
 	import { clearBadge, refreshBadgeCount } from '$lib/pwa/badge';
 	import BottomNav from '$lib/components/BottomNav.svelte';
@@ -49,6 +50,7 @@
 		syncBadge();
 		startFlushLoop();
 		startConnectivityMonitor();
+		startBackgroundSync();
 		initInstallPrompt();
 		// The Workbox service worker is meaningful for the browser/PWA build (offline caching,
 		// update prompts) but Capacitor's WebView already loads the bundle from local files —

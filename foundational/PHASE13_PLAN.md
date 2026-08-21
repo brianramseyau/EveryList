@@ -410,6 +410,54 @@ Verified: `pnpm --filter web run check`, `pnpm --filter web run lint`, `pnpm --f
 test` (100% statements/branches/functions/lines), and `pnpm exec playwright test
 e2e/offline-sync.e2e.ts` (both scenarios) all pass.
 
+### 9. iOS device pass on §8, plus three follow-ups — **done**
+
+§8's cache-fallback fix, along with the pull-to-refresh and SPA-fallback fixes from §4, were
+manually verified on the iOS Simulator: nested-route reload no longer bounces to the marketing
+splash, pull-to-refresh works, and a previously-opened list renders from cache with the API dev
+server stopped. That pass surfaced three follow-ups, all done:
+
+- **Stray `Splash.imageset` files.** Xcode flagged "The image set 'Splash' has 3 unassigned
+  children." The imageset folder held both the correctly-generated `Default@1x/2x/3x~universal~
+  anyany(-dark).png` set (which `Contents.json` actually references) and three leftover
+  `splash-2732x2732*.png` files from the original Capacitor template, committed in §2 and never
+  cleaned up. Deleted — nothing referenced them.
+- **`fetchPing` had no request timeout** (`apps/web/src/lib/api/ping.ts`). The connectivity
+  monitor (§6) relies on `navigator.onLine`'s `offline` event for a real network drop, but that
+  event never fires when only the *server process* dies with the network interface still up (e.g.
+  stopping the local dev API to simulate an outage) — detection then depends entirely on the 30s
+  ping interval. On the Android emulator, a bare `fetch()` to a closed port routed through its
+  virtual network layer (`10.0.2.2`) was observed taking far longer than 30s to fail, unlike the
+  iOS Simulator (shares the Mac's real network stack, gets a near-instant refusal) — a single
+  stalled ping could block detection indefinitely. Fixed with `signal: AbortSignal.timeout(5_000)`
+  on the ping's `fetch` call, bounding every attempt to 5s regardless of platform.
+- **New: periodic background sync**, keeping every list's offline cache warm, not just ones
+  already opened — the natural follow-up to §8, which only helps a list that's been fetched at
+  least once. New `apps/web/src/lib/offline/background-sync.ts`: an immediate sync on start, then
+  every 5 minutes while the app is open, plus once on every native resume-from-background
+  (`@capacitor/app`'s `appStateChange`, the same event `realtime.ts` already uses to rebuild its
+  SSE subscription on resume). For each non-archived list, sequentially (not all at once — avoids
+  spiking request count/battery for an unbounded list count), runs the same parallel fetch set as
+  `routes/lists/[id]/+page.svelte`'s own `loadAll()` (`fetchList`/`fetchCategories`/`fetchItems`/
+  `fetchStores`, plus `fetchStoreCategoryOrder` when a store is selected for that list), so the
+  cache ends up in the same state a real visit would leave it in. Skips the whole run when
+  `connectivity.serverUnavailable` (§6) is already true, and swallows any one list's failure
+  without aborting the rest — a silent background operation with no UI of its own. Wired into
+  `+layout.svelte`'s root `onMount` alongside `startFlushLoop()`/`startConnectivityMonitor()`.
+  - **Deliberately not a true OS-level background task** (iOS `BGTaskScheduler` / Android
+    `WorkManager`, which is what AnyList's non-hybrid native app uses) — this app's Dexie/
+    IndexedDB cache lives inside the WKWebView/WebView's own storage, which native Swift/Kotlin
+    code can't reach while the app is fully closed. Scoped, with the user's explicit sign-off, to
+    the achievable tier: sync while the app is open or resuming, not while fully closed.
+  - Tested in the plain-node Vitest project (not `.svelte.spec.ts`/browser, since this module has
+    no reactive `$state`) — following `flush-loop-online.spec.ts`'s established convention of
+    stubbing `globalThis.window = new EventTarget()` in `beforeEach` to satisfy the module's own
+    `typeof window === 'undefined'` SSR guard, since the "server" Vitest project has no real
+    `window`.
+
+Verified: `pnpm --filter web run check`, `pnpm --filter web run lint`, `pnpm --filter web run
+test` (100% statements/branches/functions/lines) all pass.
+
 ## Execution order
 
 The sections above are scoped, not sequenced — here's the actual build order and why, reviewed 2026-08-21:
@@ -447,6 +495,10 @@ Open decisions to pin down at the relevant stage (not blocking the order above):
 - `apps/web/src/lib/api/categories.ts`, `apps/web/src/lib/api/items.ts`, `apps/web/src/lib/api/stores.ts` (`fetchStores` + `fetchStoreCategoryOrder`), `apps/web/src/lib/api/favorites.ts` — cache-fallback added to their existing fetchers. **Done.**
 - `apps/web/src/routes/lists/+page.svelte.spec.ts` — `resetDbForTesting()` cleanup added, one test repurposed to match the new fallback-to-empty-state behavior, one new test added for the Dexie-truly-unavailable case. **Done.**
 - `apps/web/e2e/offline-sync.e2e.ts` — new offline-read scenario. **Done.**
+- `apps/web/src/lib/api/ping.ts` — `AbortSignal.timeout(5_000)` added to the ping's `fetch` call. **Done.**
+- `apps/web/src/lib/offline/background-sync.ts` — new, the periodic all-lists cache warmer. **Done.**
+- `apps/web/src/routes/+layout.svelte` — `startBackgroundSync()` added alongside the other two `start*` calls in `onMount`. **Done.**
+- `apps/ios/App/App/Assets.xcassets/Splash.imageset/` — three orphaned template files deleted. **Done.**
 - `.github/workflows/native-build.yml` — new.
 
 ## Verification
