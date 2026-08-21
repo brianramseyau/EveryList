@@ -190,9 +190,32 @@ function pathParameters(pattern: string): OpenAPIV3_1.ParameterObject[] {
   }))
 }
 
+function prettify(segment: string): string {
+  return segment.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+/**
+ * Route names follow `<group>.<action>` or, for nested resources,
+ * `<group>.<resource>.<action>` (e.g. `lists.items.store`). Tagging by the
+ * segment immediately before the action — rather than always the leading
+ * group — keeps sibling resources nested under a shared prefix (lists,
+ * items, categories, favorites, members, ...) from all collapsing into one
+ * flat, indistinguishable tag in the docs UI.
+ */
 function tagForRoute(routeName: string): string {
-  const dot = routeName.indexOf('.')
-  return dot === -1 ? routeName : routeName.slice(0, dot)
+  const parts = routeName.split('.')
+  const resource = parts.length > 1 ? parts[parts.length - 2] : parts[0]
+  return prettify(resource ?? routeName)
+}
+
+/**
+ * The leading segment of the route name (e.g. `lists` in `lists.items.store`)
+ * — used to nest per-resource tags under a shared `x-tagGroups` section in
+ * the Scalar UI, so `Items`/`Categories`/`Favorite Items`/... all collapse
+ * under a single "Lists" heading instead of sitting as top-level siblings.
+ */
+function tagGroupForRoute(routeName: string): string {
+  return prettify(routeName.split('.')[0] ?? routeName)
 }
 
 function summaryForRoute(routeName: string): string {
@@ -264,6 +287,16 @@ export function generateOpenApiDocument(options: {
   const registry = registrySourceFile.getInterfaceOrThrow('Registry')
 
   const pathItems: Record<string, Record<HttpVerb, OpenAPIV3_1.OperationObject>> = {}
+  // A tag name (e.g. "Access Tokens", "Stores") can be shared by routes under
+  // different top-level groups (auth vs. profile; lists vs. stores). Scalar
+  // renders every tag listed in an `x-tagGroups` entry's `tags`, resolved
+  // against *all* operations carrying that tag — so if the same tag were
+  // added to two group entries, its operations would render twice, once per
+  // group. Assigning each tag to a single group on first sight (in
+  // route-registration order) keeps every tag — and its operations — nested
+  // in exactly one place.
+  const tagGroupOf = new Map<string, string>()
+  const tagsByGroup = new Map<string, Set<string>>()
 
   for (const route of registry.getProperties()) {
     const routeName = stripQuotes(route.getName())
@@ -322,11 +355,25 @@ export function generateOpenApiDocument(options: {
       }
 
       const override = metaStore.get(routeName)
+      const finalOperation = override ? { ...operation, ...override } : operation
       const item =
         pathItems[path] ?? (pathItems[path] = {} as Record<HttpVerb, OpenAPIV3_1.OperationObject>)
-      item[verb] = override ? { ...operation, ...override } : operation
+      item[verb] = finalOperation
+
+      const routeGroup = tagGroupForRoute(routeName)
+      for (const tag of finalOperation.tags ?? []) {
+        const group = tagGroupOf.get(tag) ?? routeGroup
+        tagGroupOf.set(tag, group)
+        const groupTags = tagsByGroup.get(group) ?? tagsByGroup.set(group, new Set()).get(group)!
+        groupTags.add(tag)
+      }
     }
   }
+
+  const xTagGroups = [...tagsByGroup.entries()].map(([name, tags]) => ({
+    name,
+    tags: [...tags],
+  }))
 
   return {
     openapi: '3.1.0',
@@ -335,7 +382,11 @@ export function generateOpenApiDocument(options: {
     paths: pathItems as unknown as OpenAPIV3_1.PathsObject,
     components: { securitySchemes: config.securitySchemes },
     security: [{ bearerAuth: [] }],
-  }
+    // Scalar-specific (Redoc-style) extension: nests each resource's tag
+    // under its route-group heading in the sidebar instead of listing every
+    // tag as a flat top-level sibling. See tagGroupForRoute() above.
+    'x-tagGroups': xTagGroups,
+  } as OpenAPIV3_1.Document
 }
 
 /**
