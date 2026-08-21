@@ -35,12 +35,13 @@ Implemented in two passes — the first baked the URL in at build time via `VITE
 - `apps/web/src/routes/settings/+page.svelte`: a "Server" row, shown only when `Capacitor.isNativePlatform()`, displaying the current URL with a "Change" action (clears the token and server URL, returns to `/server-setup` — no confirm step, matching the existing "Log out" button's directness).
 - Updated the AdonisJS API's CORS config (`apps/api/config/cors.ts`): production `origin` is `['capacitor://localhost', 'https://localhost']` (was `[]` — the PWA is same-origin and never needed a CORS allowlist entry, so there was nothing to preserve "in addition to"). Unaffected by the runtime-URL rework above — CORS is about the Capacitor app's own origin, not which server it's configured to call.
 
-### 2. Add Capacitor to `apps/web`
+### 2. Add Capacitor to `apps/web` — **done**
 
-- Add `@capacitor/cli`, `@capacitor/ios`, `@capacitor/android` as dependencies of `apps/web` (`@capacitor/core` already added in §1, for `Capacitor.isNativePlatform()`).
-- `apps/web/capacitor.config.ts`: `appId` (reverse-DNS, e.g. `au.brianramsey.everylist`), `appName`, `webDir` pointing at the static build output directory, plus `ios.path`/`android.path` set to `../ios` and `../android` — matching this repo's existing top-level `apps/<platform>` separation (`apps/web`, `apps/api`) rather than nesting native projects inside `apps/web`.
-- `npx cap add ios` / `npx cap add android` (run from `apps/web`, where `capacitor.config.ts` lives) generate the native projects at `apps/ios/` and `apps/android/` per that path config — committed to the repo, consistent with how `docker/` already commits deployment-shape config rather than treating it as generated/ignored output.
-- `@capacitor/assets` (dev dependency) to generate the icon/splash set for both platforms from the existing `branding/icon.svg` source (already used for the PWA manifest per §9 of the foundational plan) — no new artwork needed, one generation pass.
+- Added `@capacitor/cli`, `@capacitor/ios`, `@capacitor/android` as dependencies of `apps/web` (`@capacitor/core` already added in §1, for `Capacitor.isNativePlatform()`).
+- `apps/web/capacitor.config.ts`: `appId: 'au.brianramsey.everylist'`, `appName: 'EveryList'`, `webDir: 'build'` (matches `adapter-static`'s default output dir), plus `ios.path`/`android.path` set to `../ios` and `../android` — matching this repo's existing top-level `apps/<platform>` separation (`apps/web`, `apps/api`) rather than nesting native projects inside `apps/web`.
+- `npx cap add ios` / `npx cap add android` generated the native projects at `apps/ios/` and `apps/android/` per that path config — committed to the repo (each with Capacitor's own generated `.gitignore` excluding `Pods/`, `.gradle/`, `build/`, etc.), consistent with how `docker/` already commits deployment-shape config rather than treating it as generated/ignored output.
+- `apps/web/assets/icon.svg` (copied from `branding/icon.svg`) + `@capacitor/assets` (dev dependency) generated the icon/splash set for both platforms — `pnpm --filter web run cap:assets` (background colors matched to the app's `--color-paper` light/dark tokens, `layout.css`). No new artwork needed, one generation pass; visually verified both platforms' launcher icon, adaptive-icon layers, and splash screen render correctly.
+- `pnpm --filter web run cap:sync` (`build` + `cap sync`) added as the local sync loop; `cap:ios`/`cap:android` open each IDE. `sharp` (a `@capacitor/assets` dependency) added to `pnpm-workspace.yaml`'s `onlyBuiltDependencies`, matching the existing allowlist pattern there.
 
 ### 3. Reconcile the PWA/offline layer with the Capacitor WebView
 
@@ -82,7 +83,7 @@ The sections above are scoped, not sequenced — here's the actual build order a
 
 1. **§1 (base URL + CORS) — done.** The acknowledged load-bearing decision — §2/§3/§4/§7 all assume it's done, since nothing native can reach the real API or pass CORS without it. Small and mechanical; fully unit-testable without any native tooling.
 2. **§5 (offline reorder/attach/favorite-add gaps) — done.** No dependency on Capacitor — touches only the sync engine (`db.ts`, `sync-engine.ts`, `sync-queue.ts`, `flush.ts`, `categories.ts`/`stores.ts`/`favorites.ts`) and is testable today via the existing Vitest/Playwright suite. Sequenced early (rather than right before §4) so the native app is offline-complete from the point it exists, not patched right before the device pass. It does need to be *done* before §4, since §4's manual verification re-tests these paths on-device.
-3. **§2 (add Capacitor).** Needs §1 done first — no point wiring the native shell before it has anywhere real to point.
+3. **§2 (add Capacitor) — done.** Needed §1 done first — no point wiring the native shell before it has anywhere real to point.
 4. **§3 (PWA/WebView reconciliation — SW gating, badge, SSE reconnect).** Needs §2's native projects to exist, since it's reconciling PWA behavior *against* the Capacitor WebView.
 5. **§4 (local build + manual device verification).** The integration checkpoint for §1–§3 and §5 together. **Needs the maintainer directly** — Xcode/iOS Simulator and Android Studio/emulator require a local GUI that isn't drivable from an agent session; native projects/configs/CLI builds can be prepared ahead of time, but the simulator/device walkthrough itself is a manual handoff.
 6. **§7 (CI signed builds).** Automates a build recipe, so it needs a working, manually-verified local build (§4) to codify first. **Needs secrets/account setup from the maintainer** (Android signing keystore; optionally an Apple Developer Program enrollment for a signed iOS build) — the workflow can be wired to consume them, but a legitimate signing identity can't be generated on its own.
@@ -92,9 +93,11 @@ Open decisions to pin down at the relevant stage (not blocking the order above):
 ## Files to add/change (representative, not exhaustive)
 
 - `apps/web/src/lib/api/server-url.ts` (new), `apps/web/src/lib/api/base-url.ts` (new), `apps/web/src/lib/api/client.ts`, `apps/web/src/lib/realtime.ts`, `apps/web/src/lib/api/ping.ts`, `apps/web/src/routes/server-setup/+page.svelte` (new), `apps/web/src/routes/+layout.svelte`, `apps/web/src/routes/settings/+page.svelte` — runtime-configurable server URL. **Done.**
-- `apps/web/capacitor.config.ts` — new, with `ios.path`/`android.path` pointed out to the top-level `apps/` siblings.
-- `apps/ios/`, `apps/android/` — new, generated + committed (native projects, top-level siblings of `apps/web`/`apps/api`, not nested under `apps/web`).
-- `apps/web/package.json` — `@capacitor/core` already added (§1, for `Capacitor.isNativePlatform()`); `@capacitor/cli`/`ios`/`android` + `cap:*` scripts still needed here.
+- `apps/web/capacitor.config.ts` — new, with `ios.path`/`android.path` pointed out to the top-level `apps/` siblings. **Done.**
+- `apps/ios/`, `apps/android/` — new, generated + committed (native projects, top-level siblings of `apps/web`/`apps/api`, not nested under `apps/web`). **Done.**
+- `apps/web/assets/icon.svg` — new (copy of `branding/icon.svg`, the `@capacitor/assets` generation source). **Done.**
+- `apps/web/package.json` — `@capacitor/cli`/`ios`/`android` + `cap:sync`/`cap:assets`/`cap:ios`/`cap:android` scripts. **Done.**
+- `pnpm-workspace.yaml` — `sharp` added to `onlyBuiltDependencies`. **Done.**
 - `apps/api/config/cors.ts` — allow Capacitor origins. **Done.**
 - `apps/web/src/lib/pwa/badge.ts` — native badge branch.
 - `apps/web/src/lib/offline/db.ts` — `QueuedMutation.op` gains `'reorder'`/`'attach'`; `isRowDirty()` extended. **Done.**
