@@ -61,9 +61,10 @@ export default class FoldersController {
         actualVersion: folder.version,
         userId: user.id,
       })
-      return response
-        .status(409)
-        .send({ ...(await serialize(FolderTransformer.transform(folder))), conflict: true })
+      return response.conflict({
+        ...(await serialize(FolderTransformer.transform(folder))),
+        conflict: true,
+      })
     }
 
     folder.merge(rest)
@@ -89,7 +90,7 @@ export default class FoldersController {
         actualVersion: folder.version,
         userId: user.id,
       })
-      return response.status(409).send({ conflict: true })
+      return response.conflict({ conflict: true })
     }
 
     await folder.delete()

@@ -72,9 +72,10 @@ export default class StoresController {
         actualVersion: store.version,
         userId: user.id,
       })
-      return response
-        .status(409)
-        .send({ ...(await serialize(StoreTransformer.transform(store))), conflict: true })
+      return response.conflict({
+        ...(await serialize(StoreTransformer.transform(store))),
+        conflict: true,
+      })
     }
 
     store.merge(rest)

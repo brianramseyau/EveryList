@@ -301,9 +301,10 @@ export default class ItemsController {
         actualVersion: item.version,
         userId: user.id,
       })
-      return response
-        .status(409)
-        .send({ ...(await serialize(ItemTransformer.transform(item))), conflict: true })
+      return response.conflict({
+        ...(await serialize(ItemTransformer.transform(item))),
+        conflict: true,
+      })
     }
 
     item.merge(rest)
@@ -343,9 +344,10 @@ export default class ItemsController {
         actualVersion: item.version,
         userId: user.id,
       })
-      return response
-        .status(409)
-        .send({ ...(await serialize(ItemTransformer.transform(item))), conflict: true })
+      return response.conflict({
+        ...(await serialize(ItemTransformer.transform(item))),
+        conflict: true,
+      })
     }
 
     item.deletedAt = DateTime.now()
