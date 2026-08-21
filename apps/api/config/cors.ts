@@ -15,10 +15,11 @@ const corsConfig = defineConfig({
 
   /**
    * In development, allow every origin to simplify local front/backend setup.
-   * In production, keep an explicit allowlist (empty by default, so no
-   * cross-origin browser access is allowed until configured).
+   * In production, the PWA/browser build is same-origin (no CORS needed), so the only
+   * production entries are the Capacitor native app's WebView origins — `capacitor://localhost`
+   * on iOS, `https://localhost` on Android (see foundational/PHASE13_PLAN.md §1).
    */
-  origin: app.inDev ? true : [],
+  origin: app.inDev ? true : ['capacitor://localhost', 'https://localhost'],
 
   /**
    * HTTP methods accepted for cross-origin requests.

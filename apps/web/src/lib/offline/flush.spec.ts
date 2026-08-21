@@ -588,4 +588,114 @@ describe('flushQueue', () => {
 		expect(listener).toHaveBeenCalled();
 		expect(await pendingMutations()).toHaveLength(0);
 	});
+
+	it('replays a queued attach the same way as a create — POSTs and deletes the placeholder', async () => {
+		vi.mocked(apiPost).mockResolvedValue({ id: 42 });
+		const db = getDb()!;
+		await db.items.put({
+			id: -1,
+			listId: 1,
+			name: 'Bananas',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 0,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_localId: '-1',
+			_dirty: true
+		});
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'attach',
+			targetId: -1,
+			expectedVersion: null,
+			payload: {},
+			url: '/api/v1/lists/1/favorites/5/add-to-list'
+		});
+
+		await flushQueue();
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/favorites/5/add-to-list', {});
+		expect(await pendingMutations()).toHaveLength(0);
+		expect(await db.items.get(-1)).toBeUndefined();
+	});
+
+	it('replays a queued category reorder, adopting the server order and clearing dirty', async () => {
+		vi.mocked(apiPatch).mockResolvedValue([
+			{ id: 1, name: 'Produce', sortOrder: 0, version: 2 },
+			{ id: 2, name: 'Dairy', sortOrder: 1, version: 2 }
+		]);
+		const db = getDb()!;
+		await db.categories.put({
+			id: 1,
+			name: 'Produce',
+			icon: 'fruit',
+			sortOrder: 1,
+			listId: 1,
+			isDefault: false,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_dirty: true
+		});
+		await enqueueMutation({
+			entityType: 'category',
+			op: 'reorder',
+			targetId: 1,
+			expectedVersion: null,
+			payload: { order: [1, 2] },
+			url: '/api/v1/lists/1/categories/reorder'
+		});
+
+		await flushQueue();
+
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/categories/reorder', { order: [1, 2] });
+		expect(await pendingMutations()).toHaveLength(0);
+		const cached = await db.categories.get(1);
+		expect(cached?.sortOrder).toBe(0);
+		expect(cached?._dirty).toBe(false);
+	});
+
+	it('replays a queued store-category-order reorder, adopting the server order and clearing dirty', async () => {
+		vi.mocked(apiPatch).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 5, sortOrder: 0, deletedAt: null, version: 2 }
+		]);
+		const db = getDb()!;
+		await db.storeCategoryOrders.put({
+			id: 1,
+			storeId: 20,
+			categoryId: 5,
+			sortOrder: 3,
+			deletedAt: null,
+			version: 1,
+			_dirty: true
+		});
+		await enqueueMutation({
+			entityType: 'store_category_order',
+			op: 'reorder',
+			targetId: 20,
+			expectedVersion: null,
+			payload: { categories: [{ categoryId: 5, sortOrder: 0 }] },
+			url: '/api/v1/stores/20/categories'
+		});
+
+		await flushQueue();
+
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/stores/20/categories', {
+			categories: [{ categoryId: 5, sortOrder: 0 }]
+		});
+		expect(await pendingMutations()).toHaveLength(0);
+		const cached = await db.storeCategoryOrders.get([20, 5]);
+		expect(cached?.sortOrder).toBe(0);
+		expect(cached?._dirty).toBe(false);
+	});
 });

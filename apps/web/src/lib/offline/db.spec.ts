@@ -29,6 +29,7 @@ describe('getDb', () => {
 			[
 				'categories',
 				'favoriteItems',
+				'folders',
 				'items',
 				'lists',
 				'selectedStore',
@@ -54,11 +55,30 @@ describe('getDb', () => {
 			itemCount: 0,
 			createdAt: '2026-08-01T00:00:00.000Z',
 			updatedAt: null,
-			version: 1
+			version: 1,
+			_localSortOrder: 0
 		});
 
 		const stored = await db.lists.get(1);
 		expect(stored?.name).toBe('Groceries');
+		expect(stored?._localSortOrder).toBe(0);
+	});
+
+	it('round-trips a row through the folders table', async () => {
+		const db = getDb()!;
+		await db.folders.put({
+			id: 1,
+			userId: 1,
+			name: 'Home',
+			color: '#3b82f6',
+			sortOrder: 0,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			version: 1
+		});
+
+		const stored = await db.folders.get(1);
+		expect(stored?.name).toBe('Home');
 	});
 
 	it('resetDbForTesting closes the database and clears the singleton', async () => {
@@ -83,9 +103,47 @@ describe('isRowDirty', () => {
 		await expect(isRowDirty('item', 1)).resolves.toBe(false);
 	});
 
-	it('is false when a store_category_order or list event fires — neither is ever queued client-side', async () => {
-		await expect(isRowDirty('store_category_order', 1)).resolves.toBe(false);
+	it('is false for a list event — never queued client-side', async () => {
 		await expect(isRowDirty('list', 1)).resolves.toBe(false);
+	});
+
+	it('is false for store_category_order when the store has no dirty rows', async () => {
+		const db = getDb()!;
+		await db.storeCategoryOrders.put({
+			id: 1,
+			storeId: 20,
+			categoryId: 5,
+			sortOrder: 0,
+			deletedAt: null,
+			version: 1,
+			_dirty: false
+		});
+
+		await expect(isRowDirty('store_category_order', 20)).resolves.toBe(false);
+	});
+
+	it("is true for store_category_order when any of the store's rows are dirty", async () => {
+		const db = getDb()!;
+		await db.storeCategoryOrders.put({
+			id: 1,
+			storeId: 20,
+			categoryId: 5,
+			sortOrder: 0,
+			deletedAt: null,
+			version: 1,
+			_dirty: false
+		});
+		await db.storeCategoryOrders.put({
+			id: 2,
+			storeId: 20,
+			categoryId: 6,
+			sortOrder: 1,
+			deletedAt: null,
+			version: 1,
+			_dirty: true
+		});
+
+		await expect(isRowDirty('store_category_order', 20)).resolves.toBe(true);
 	});
 
 	it.each([

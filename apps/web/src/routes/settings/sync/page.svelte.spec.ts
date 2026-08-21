@@ -14,9 +14,11 @@ vi.mock('$lib/offline/sync-queue', () => ({
 	failedMutations: vi.fn()
 }));
 vi.mock('$lib/offline/flush', () => ({ flushQueue: vi.fn(), onFlushOutcome: vi.fn() }));
+vi.mock('$lib/reload', () => ({ refreshApp: vi.fn() }));
 
 const { queueCounts, pendingMutations, failedMutations } = await import('$lib/offline/sync-queue');
 const { flushQueue } = await import('$lib/offline/flush');
+const { refreshApp } = await import('$lib/reload');
 const SyncStatusPage = (await import('./+page.svelte')).default;
 
 function mutation(overrides: Partial<QueuedMutation> & { id: number }): QueuedMutation {
@@ -151,6 +153,20 @@ describe('Sync status +page.svelte', () => {
 		await page.getByRole('button', { name: 'Retry now' }).click();
 
 		await expect.element(page.getByRole('button', { name: 'Retry now' })).not.toBeDisabled();
+	});
+
+	it('forces a full refresh from the Refresh now button', async () => {
+		vi.mocked(queueCounts).mockResolvedValue({ pending: 0, failed: 0, conflict: 0 });
+		vi.mocked(pendingMutations).mockResolvedValue([]);
+		vi.mocked(failedMutations).mockResolvedValue([]);
+
+		render(SyncStatusPage);
+		await expect.element(page.getByRole('button', { name: 'Refresh now' })).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Refresh now' }).click();
+
+		expect(refreshApp).toHaveBeenCalled();
+		await expect.element(page.getByRole('button', { name: 'Refreshing…' })).toBeDisabled();
 	});
 
 	it('polls for updated counts on an interval while mounted', async () => {

@@ -16,10 +16,19 @@
 		"test:unit": "vitest",
 		"test": "vitest run --coverage",
 		"test:e2e": "playwright test",
-		"test:lighthouse": "node scripts/lighthouse-check.mjs"
+		"test:lighthouse": "node scripts/lighthouse-check.mjs",
+		"cap:sync": "pnpm run build && cap sync",
+		"cap:assets": "capacitor-assets generate --ios --android --iosProject ../ios/App --androidProject ../android --iconBackgroundColor '#f6f5f1' --iconBackgroundColorDark '#1b1d1f' --splashBackgroundColor '#f6f5f1' --splashBackgroundColorDark '#1b1d1f'",
+		"cap:ios": "cap open ios",
+		"cap:android": "cap open android"
 	},
 	"dependencies": {
 		"@adonisjs/transmit-client": "^1.1.0",
+		"@capacitor/android": "^8.5.0",
+		"@capacitor/app": "^8.1.1",
+		"@capacitor/core": "^8.5.0",
+		"@capacitor/ios": "^8.5.0",
+		"@capawesome/capacitor-badge": "^8.0.2",
 		"@everylist/shared": "workspace:*",
 		"@fontsource-variable/public-sans": "^5.3.0",
 		"@fontsource-variable/space-grotesk": "^5.3.0",
@@ -32,6 +41,8 @@
 	},
 	"devDependencies": {
 		"@axe-core/playwright": "^4.13.0",
+		"@capacitor/assets": "^3.0.5",
+		"@capacitor/cli": "^8.5.0",
 		"@eslint/js": "^10.0.1",
 		"@playwright/test": "^1.60.0",
 		"@sveltejs/adapter-static": "^3.0.10",

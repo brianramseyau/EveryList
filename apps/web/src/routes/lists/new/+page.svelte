@@ -48,7 +48,9 @@
 	<title>New List — EveryList</title>
 </svelte:head>
 
-<main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
+<main
+	class="mx-auto flex max-w-lg flex-col gap-4 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
+>
 	<PageHeader title="New List" backHref={resolve('/lists')} backLabel="Cancel">
 		{#snippet actions()}
 			<Button type="button" size="sm" disabled={saving || !name.trim()} onclick={save}>

@@ -2,6 +2,7 @@ import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { setToken, clearToken } from '$lib/api/token';
+import { resetDbForTesting } from '$lib/offline/db';
 import type { SortableReorderParams } from '$lib/actions/sortable-reorder';
 
 // See the item-list page's spec for why this is mocked: SortableJS's own
@@ -77,10 +78,15 @@ describe('Lists +page.svelte', () => {
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		vi.unstubAllGlobals();
 		vi.clearAllMocks();
 		clearToken();
+		// This suite exercises the real fetchLists/fetchFolders (only the underlying `fetch` is
+		// stubbed, not $lib/api/lists), so — unlike most page specs — it writes into the browser's
+		// real IndexedDB via Dexie. Without resetting, a row cached by one test's successful fetch
+		// leaks into a later test's network-failure fallback assertion.
+		await resetDbForTesting();
 	});
 
 	it('redirects to /login when there is no token', async () => {
@@ -241,8 +247,21 @@ describe('Lists +page.svelte', () => {
 		await expect.element(page.getByText('No lists yet — tap + to create one.')).toBeInTheDocument();
 	});
 
-	it('shows a generic error message when loading fails without an ApiError', async () => {
+	it('falls back to the empty state, not an error, when the network fails and nothing is cached', async () => {
 		setToken('test-token');
+		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network down')));
+
+		render(ListsPage);
+
+		await expect.element(page.getByText('No lists yet — tap + to create one.')).toBeInTheDocument();
+	});
+
+	it('shows a generic error message when the network fails and Dexie is unavailable', async () => {
+		setToken('test-token');
+		// fetchLists/fetchFolders only fall back to cached data when Dexie is available (see
+		// $lib/api/cache-fallback.ts) — with no IndexedDB at all, there's truly nothing to show,
+		// and the original non-ApiError network failure reaches the page's catch block unchanged.
+		vi.stubGlobal('indexedDB', undefined);
 		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network down')));
 
 		render(ListsPage);

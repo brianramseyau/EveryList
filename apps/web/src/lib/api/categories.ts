@@ -1,24 +1,37 @@
 import type { CategoryDto } from '@everylist/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
-import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';
+import { offlineCreate, offlineMutate, offlineReorder } from '$lib/offline/sync-engine';
 // `vi.mock('$lib/offline/db', …)` in the item-detail page spec corrupts this import's V8
 // attribution once merged into the full suite (see $lib/offline/flush.ts and sync-queue.ts).
 /* v8 ignore start */
 import { getDb } from '$lib/offline/db';
+import { withCacheFallback } from './cache-fallback';
 /* v8 ignore stop */
 
 export async function fetchCategories(listId: number): Promise<CategoryDto[]> {
-	const categories = await apiGet<CategoryDto[]>(`/api/v1/lists/${listId}/categories`);
-	// Cache the server's copies into Dexie so a later offline edit can read the row's
-	// `version` for its `expectedVersion` — see fetchItems in items.ts for the full rationale.
-	const db = getDb();
-	if (db) {
-		const ids = categories.map((category) => category.id);
-		const existing = await db.categories.bulkGet(ids);
-		const toPut = categories.filter((_category, index) => !existing[index]?._dirty);
-		if (toPut.length > 0) await db.categories.bulkPut(toPut);
-	}
-	return categories;
+	return withCacheFallback(
+		async () => {
+			const categories = await apiGet<CategoryDto[]>(`/api/v1/lists/${listId}/categories`);
+			// Cache the server's copies into Dexie so a later offline edit can read the row's
+			// `version` for its `expectedVersion` — see fetchItems in items.ts for the full rationale.
+			const db = getDb();
+			if (db) {
+				const ids = categories.map((category) => category.id);
+				const existing = await db.categories.bulkGet(ids);
+				const toPut = categories.filter((_category, index) => !existing[index]?._dirty);
+				if (toPut.length > 0) await db.categories.bulkPut(toPut);
+			}
+			return categories;
+		},
+		async () => {
+			const db = getDb();
+			if (!db) return undefined;
+			const rows = await db.categories
+				.filter((category) => category.listId === listId && !category.deletedAt)
+				.toArray();
+			return rows.sort((a, b) => a.sortOrder - b.sortOrder);
+		}
+	);
 }
 
 export async function createCategory(
@@ -96,10 +109,32 @@ export async function deleteCategory(listId: number, categoryId: number): Promis
 	});
 }
 
-/** `order` is the full desired list of category ids, in the new order. Bulk reorders touch
- * every row in one request and aren't queued individually — this stays online-only. */
+/** `order` is the full desired list of category ids, in the new order (see PHASE13_PLAN.md §5). */
 export function reorderCategories(listId: number, order: number[]): Promise<CategoryDto[]> {
-	return apiPatch(`/api/v1/lists/${listId}/categories/reorder`, { order });
+	return offlineReorder<CategoryDto[]>({
+		entityType: 'category',
+		scopeId: listId,
+		payload: { order },
+		url: `/api/v1/lists/${listId}/categories/reorder`,
+		// Mirrors the backend's own indexing (categories_controller.ts's `reorder`): each id's
+		// position in `order` becomes its new `sortOrder`. Skips an id that isn't a cached local
+		// row (deleted/never-fetched) the same way the backend skips one that doesn't resolve.
+		applyOptimistically: async (db) => {
+			const rows: CategoryDto[] = [];
+			for (const [index, id] of order.entries()) {
+				const existing = await db.categories.get(id);
+				if (!existing) continue;
+				const updated = { ...existing, sortOrder: index, _dirty: true };
+				await db.categories.put(updated);
+				rows.push(updated);
+			}
+			return rows;
+		},
+		onSuccess: async (db, result) => {
+			await db.categories.bulkPut(result.map((row) => ({ ...row, _dirty: false })));
+		},
+		request: () => apiPatch(`/api/v1/lists/${listId}/categories/reorder`, { order })
+	});
 }
 
 /** Copies categories from another list into this one. Skips any category whose name already

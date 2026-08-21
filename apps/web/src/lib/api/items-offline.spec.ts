@@ -15,7 +15,7 @@ vi.mock('./client', () => ({
 	}
 }));
 
-const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
+const { apiGet, apiPost, apiPatch, apiDelete, ApiError } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { pendingMutations } = await import('$lib/offline/sync-queue');
 const { createItem, updateItem, deleteItem, fetchItems, fetchRecentItemNames } =
@@ -415,6 +415,43 @@ describe('fetchItems (cache hydration)', () => {
 		await fetchItems(1);
 
 		expect((await getDb()!.items.get(8))?.version).toBe(7);
+	});
+
+	it('falls back to cached rows, sorted by sortOrder, when the network fails', async () => {
+		vi.mocked(apiGet).mockResolvedValue([
+			{ id: 9, listId: 1, name: 'Bread', sortOrder: 1 },
+			{ id: 8, listId: 1, name: 'Milk', sortOrder: 0 }
+		]);
+		await fetchItems(1);
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+
+		const result = await fetchItems(1);
+
+		expect(result.map((item) => item.id)).toEqual([8, 9]);
+	});
+
+	it('rethrows an ApiError without falling back to cache', async () => {
+		await getDb()!.items.put({
+			id: 8,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		vi.mocked(apiGet).mockRejectedValue(new ApiError(403, 'Forbidden'));
+
+		await expect(fetchItems(1)).rejects.toThrow('Forbidden');
 	});
 
 	it('does not clobber a row with an unacked local edit during a re-fetch', async () => {

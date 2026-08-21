@@ -38,7 +38,21 @@ export default defineConfig({
 			// Named 200.html (not the default index.html) so it doesn't collide
 			// with the prerendered "/" page — AdonisJS serves it explicitly as
 			// the catch-all for unmatched routes (see docker/Dockerfile).
-			adapter: adapter({ fallback: '200.html' })
+			adapter: adapter({ fallback: '200.html' }),
+			// Capacitor's native local server (Android's WebViewLocalServer, iOS's Router — both
+			// hard-code their own SPA-fallback filename to `index.html`, with no way to point them
+			// at this project's `200.html` instead) serves the prerendered "/" page's index.html
+			// for *any* unmatched deep route — e.g. reloading on /settings/sync. SvelteKit's
+			// default relative asset paths (`./_app/...`) are only correct when a page is served
+			// from its own exact URL; served from a different path instead, the browser resolves
+			// them against the wrong base and 404s every chunk (PHASE13_PLAN.md §4, found via the
+			// "Refresh now" button). Absolute paths (`/_app/...`) — already what adapter-static
+			// forces for the 200.html fallback specifically — resolve correctly regardless of
+			// which URL the file is served from, so apply that globally rather than fixing just
+			// one of the two files Capacitor's fallback can serve.
+			paths: {
+				relative: false
+			}
 		}),
 		// `generateSW` (not `injectManifest`) — every caching rule this app needs
 		// (precache the app shell, stale-while-revalidate on API GETs, an offline

@@ -1,15 +1,7 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { Button } from 'flowbite-svelte';
 	import { resolve } from '$app/paths';
-	import { getToken } from '$lib/api/token';
 	import Icon from '$lib/components/Icon.svelte';
-
-	let signedIn = $state(false);
-
-	onMount(() => {
-		signedIn = Boolean(getToken());
-	});
 
 	// Decorative only — echoes the real list-card spine/icon language from
 	// /lists (see PHASE8_PLAN.md "The Index") to show the app's range of use
@@ -26,7 +18,9 @@
 	<title>EveryList</title>
 </svelte:head>
 
-<main class="mx-auto flex max-w-lg flex-col items-center gap-6 p-8 text-center">
+<main
+	class="mx-auto flex max-w-lg flex-col items-center gap-6 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8 text-center"
+>
 	<div class="flex flex-col items-center gap-2">
 		<h1 class="font-display text-4xl font-bold">EveryList</h1>
 		<p class="text-gray-600 dark:text-gray-300">
@@ -52,12 +46,8 @@
 		{/each}
 	</ul>
 
-	<Button href={resolve('/lists')}>{signedIn ? 'My Lists' : 'Get started'}</Button>
+	<Button href={resolve('/login')}>Log in</Button>
 	<div class="flex gap-4 text-sm">
-		{#if !signedIn}
-			<a href={resolve('/login')} class="text-primary-700 underline dark:text-primary-400">Log in</a
-			>
-		{/if}
 		<a href={resolve('/settings')} class="text-primary-700 underline dark:text-primary-400"
 			>Settings</a
 		>

@@ -4,22 +4,46 @@ vi.mock('./client', () => ({
 	apiGet: vi.fn(),
 	apiPost: vi.fn(),
 	apiPatch: vi.fn(),
-	apiDelete: vi.fn()
+	apiDelete: vi.fn(),
+	ApiError: class ApiError extends Error {
+		status: number;
+		constructor(status: number, message: string) {
+			super(message);
+			this.status = status;
+		}
+	}
 }));
 
-const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
+const { apiGet, apiPost, apiPatch, apiDelete, ApiError } = await import('./client');
 const { createList, deleteList, emailExportList, fetchList, fetchLists, updateList, reorderLists } =
 	await import('./lists');
 
 describe('lists api', () => {
 	it('fetchLists GETs the collection', () => {
+		vi.mocked(apiGet).mockResolvedValue([]);
 		fetchLists();
 		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists');
 	});
 
 	it('fetchList GETs a single list by id', () => {
+		vi.mocked(apiGet).mockResolvedValue({ id: 1 });
 		fetchList(1);
 		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists/1');
+	});
+
+	it('fetchLists rethrows the network error when Dexie is not available', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+		await expect(fetchLists()).rejects.toThrow('network down');
+	});
+
+	it('fetchList rethrows the network error when Dexie is not available', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+		await expect(fetchList(1)).rejects.toThrow('network down');
+	});
+
+	it('fetchLists rethrows an ApiError without falling back', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new ApiError(403, 'Forbidden'));
+		await expect(fetchLists()).rejects.toThrow('Forbidden');
 	});
 
 	it('createList POSTs the input', () => {

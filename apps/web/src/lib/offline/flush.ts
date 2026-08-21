@@ -1,3 +1,4 @@
+import type { CategoryDto, StoreCategoryOrderDto } from '@everylist/shared';
 import { ApiError, apiDelete, apiPatch, apiPost } from '$lib/api/client';
 import { getDb, type QueuedMutation } from './db';
 // V8's coverage instrumentation attributes a phantom, permanently-uninvoked function entry to
@@ -48,15 +49,19 @@ export function onFlushOutcome(listener: FlushOutcomeListener | null): () => voi
 }
 
 async function replay(mutation: QueuedMutation): Promise<void> {
-	if (mutation.op === 'create') {
+	if (mutation.op === 'create' || mutation.op === 'attach') {
 		await apiPost(mutation.url, mutation.payload);
 		// The already-online path (sync-engine.ts's offlineCreate) deletes the optimistic
-		// temp row on success; replaying a queued create from here needs the same cleanup,
-		// or the temp row lingers in Dexie forever alongside whatever the server actually
-		// created/matched (full reconciliation with the server's response is a known gap —
-		// see PHASE10_PLAN.md §0.2).
+		// temp row on success; replaying a queued create/attach from here needs the same
+		// cleanup, or the temp row lingers in Dexie forever alongside whatever the server
+		// actually created/matched (full reconciliation with the server's response is a
+		// known gap — see PHASE10_PLAN.md §0.2).
 		const table = tableForEntity(mutation.entityType as QueueableEntityType);
 		await table.delete(mutation.targetId);
+		return;
+	}
+	if (mutation.op === 'reorder') {
+		await replayReorder(mutation);
 		return;
 	}
 	const table = tableForEntity(mutation.entityType as QueueableEntityType);
@@ -83,9 +88,29 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 	await table.update(mutation.targetId, { _dirty: false });
 }
 
+/** Replays a queued bulk reorder (PHASE13_PLAN.md §5) — `offlineReorder`'s only two callers,
+ * category reorder and store-category-order reorder, so a two-way branch on `entityType` rather
+ * than the generic `tableForEntity` dispatch (which is keyed to single-numeric-id tables;
+ * `storeCategoryOrders` is compound-keyed and has no row of its own to look up by `targetId`).
+ * Reorder mutations carry `expectedVersion: null` and structurally can't 409 (see
+ * `offlineReorder`), so — unlike `update`/`delete` above — there's no conflict branch to handle. */
+async function replayReorder(mutation: QueuedMutation): Promise<void> {
+	const db = getDb()!;
+	if (mutation.entityType === 'category') {
+		const result = await apiPatch<CategoryDto[]>(mutation.url, mutation.payload);
+		await db.categories.bulkPut(result.map((row) => ({ ...row, _dirty: false })));
+		return;
+	}
+	// The only other entity type `offlineReorder` is ever called with — see stores.ts's
+	// `reorderStoreCategories`.
+	const result = await apiPatch<StoreCategoryOrderDto[]>(mutation.url, mutation.payload);
+	await db.storeCategoryOrders.bulkPut(result.map((row) => ({ ...row, _dirty: false })));
+}
+
 /** Entity types the write paths in `$lib/api/{items,categories,favorites,stores}.ts` actually
- * enqueue — a narrower slice of `SyncEntityType` (which also covers `list`/`store_category_order`
- * for the backend's broadcast contract, neither ever queued client-side, see PHASE5_PLAN.md §1). */
+ * enqueue through `tableForEntity` — a narrower slice of `SyncEntityType` (which also covers
+ * `list`, never queued client-side, and `store_category_order`, queued only via `reorder` and
+ * replayed by `replayReorder` above instead of this generic dispatch, see PHASE5_PLAN.md §1). */
 type QueueableEntityType = 'category' | 'item' | 'favorite_item' | 'store';
 
 function tableForEntity(entityType: QueueableEntityType) {

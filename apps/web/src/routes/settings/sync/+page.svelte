@@ -6,6 +6,7 @@
 	import { failedMutations, pendingMutations, queueCounts } from '$lib/offline/sync-queue';
 	import { flushQueue } from '$lib/offline/flush';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
+	import { refreshApp } from '$lib/reload';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 
@@ -15,6 +16,7 @@
 	let pending = $state<QueuedMutation[]>([]);
 	let failed = $state<QueuedMutation[]>([]);
 	let retrying = $state(false);
+	let refreshing = $state(false);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 	async function refresh() {
@@ -38,6 +40,11 @@
 		}
 	}
 
+	function refreshNow() {
+		refreshing = true;
+		refreshApp();
+	}
+
 	onMount(() => {
 		void refresh();
 		pollInterval = setInterval(() => void refresh(), POLL_INTERVAL_MS);
@@ -57,11 +64,17 @@
 		store_category_order: 'store category order'
 	};
 
+	const verbByOp: Record<QueuedMutation['op'], string> = {
+		create: 'Create',
+		update: 'Update',
+		delete: 'Delete',
+		reorder: 'Reorder',
+		attach: 'Attach'
+	};
+
 	function describeMutation(mutation: QueuedMutation): string {
-		const verb =
-			mutation.op === 'create' ? 'Create' : mutation.op === 'update' ? 'Update' : 'Delete';
 		const name = typeof mutation.payload?.name === 'string' ? ` "${mutation.payload.name}"` : '';
-		return `${verb} ${entityLabel[mutation.entityType]}${name}`;
+		return `${verbByOp[mutation.op]} ${entityLabel[mutation.entityType]}${name}`;
 	}
 
 	const total = $derived(counts.pending + counts.failed + counts.conflict);
@@ -76,14 +89,19 @@
 	<title>Sync Status — EveryList</title>
 </svelte:head>
 
-<main class="mx-auto flex max-w-lg flex-col gap-6 p-8">
+<main
+	class="mx-auto flex max-w-lg flex-col gap-6 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
+>
 	<PageHeader title="Sync Status" backHref={resolve('/settings')} backLabel="Settings" />
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 		<h2
-			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
+			class="flex items-center justify-between border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
 		>
-			Connection
+			<span>Connection</span>
+			<Button type="button" size="xs" disabled={refreshing} onclick={refreshNow}>
+				{refreshing ? 'Refreshing…' : 'Refresh now'}
+			</Button>
 		</h2>
 		<div class="flex items-center justify-between px-4 py-3">
 			<span class="text-sm font-medium">Server</span>

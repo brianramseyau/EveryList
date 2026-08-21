@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { Capacitor } from '@capacitor/core';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Input } from 'flowbite-svelte';
 	import type { MetaResponse, UserDto } from '@everylist/shared';
 	import { fetchMeta } from '$lib/api/meta';
 	import { formatBuildDate } from '$lib/api/format-build-date';
+	import { clearToken } from '$lib/api/token';
+	import { clearServerUrl, getServerUrl } from '$lib/api/server-url';
 	import { getThemePreference, setThemePreference, type ThemePreference } from '$lib/theme';
 	import { getAccentPreference, setAccentPreference, type AccentPreference } from '$lib/accent';
 	import {
@@ -34,6 +37,8 @@
 	let accentPreference = $state<AccentPreference>('slate');
 	let orientationPreference = $state<OrientationPreference>('automatic');
 	let canLockOrientationNow = $state(false);
+	let isNative = $state(false);
+	let serverUrl = $state('');
 
 	const themeOptions: { value: ThemePreference; label: string }[] = [
 		{ value: 'automatic', label: 'Automatic' },
@@ -104,11 +109,22 @@
 		await resetApp();
 	}
 
+	/** Changing servers invalidates the current session (a token from one server means nothing to
+	 * another), so this clears both and sends the user back through /server-setup — mirrors
+	 * handleLogout's directness, no confirmation step. */
+	async function handleChangeServer() {
+		clearToken();
+		clearServerUrl();
+		await goto(resolve('/server-setup'));
+	}
+
 	onMount(async () => {
 		themePreference = getThemePreference();
 		accentPreference = getAccentPreference();
 		orientationPreference = getOrientationPreference();
 		canLockOrientationNow = canLockOrientation();
+		isNative = Capacitor.isNativePlatform();
+		serverUrl = getServerUrl();
 		try {
 			meta = await fetchMeta();
 		} catch {
@@ -126,7 +142,9 @@
 	<title>Settings — EveryList</title>
 </svelte:head>
 
-<main class="mx-auto flex max-w-lg flex-col gap-6 p-8">
+<main
+	class="mx-auto flex max-w-lg flex-col gap-6 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
+>
 	<PageHeader title="Settings" />
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
@@ -289,6 +307,26 @@
 		</div>
 		<InstallPrompt />
 	</section>
+
+	{#if isNative}
+		<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+			<h2
+				class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
+			>
+				Server
+			</h2>
+			<div class="flex items-center justify-between gap-4 px-4 py-3">
+				<span class="truncate text-sm text-gray-600 dark:text-gray-400">{serverUrl}</span>
+				<button
+					type="button"
+					onclick={handleChangeServer}
+					class="shrink-0 text-sm text-gray-600 hover:underline dark:text-gray-400"
+				>
+					Change
+				</button>
+			</div>
+		</section>
+	{/if}
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 		<h2

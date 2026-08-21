@@ -428,9 +428,9 @@
 	<title>{list ? `${list.name} — EveryList` : 'List — EveryList'}</title>
 </svelte:head>
 
-<main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
+<main class="mx-auto flex max-w-lg flex-col gap-4 px-8 pb-8">
 	<div
-		class="sticky top-0 z-20 flex flex-col gap-4 bg-paper pt-[env(safe-area-inset-top)]"
+		class="sticky top-0 z-20 flex flex-col gap-4 bg-paper pt-[max(env(safe-area-inset-top),2rem)]"
 		style="touch-action: pan-x pan-y;"
 		bind:clientHeight={stickyHeaderHeight}
 	>

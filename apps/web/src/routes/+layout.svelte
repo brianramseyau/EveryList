@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { afterNavigate, onNavigate } from '$app/navigation';
+	import { Capacitor } from '@capacitor/core';
+	import { afterNavigate, goto, onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { getToken } from '$lib/api/token';
+	import { getServerUrl } from '$lib/api/server-url';
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
 	import { initOrientation } from '$lib/orientation';
@@ -12,6 +15,7 @@
 	import { consumeNavDirection, consumeSkipTransition } from '$lib/nav-direction';
 	import { startFlushLoop } from '$lib/offline/flush';
 	import { startConnectivityMonitor } from '$lib/offline/connectivity.svelte';
+	import { startBackgroundSync } from '$lib/offline/background-sync';
 	import { initInstallPrompt } from '$lib/pwa/install-prompt';
 	import { clearBadge, refreshBadgeCount } from '$lib/pwa/badge';
 	import BottomNav from '$lib/components/BottomNav.svelte';
@@ -31,6 +35,13 @@
 	}
 
 	onMount(() => {
+		// Native builds have no baked-in server address (PHASE13_PLAN.md §1) — gate here rather
+		// than on /login itself, since a fresh native install also has no token, and every other
+		// API call (including login) needs somewhere real to point before it can work at all.
+		const serverSetupPath = resolve('/server-setup');
+		if (Capacitor.isNativePlatform() && !getServerUrl() && page.url.pathname !== serverSetupPath) {
+			void goto(serverSetupPath);
+		}
 		initTheme();
 		initAccent();
 		void initOrientation();
@@ -39,25 +50,34 @@
 		syncBadge();
 		startFlushLoop();
 		startConnectivityMonitor();
+		startBackgroundSync();
 		initInstallPrompt();
-		// vite-plugin-pwa's virtual module only exists in a built/dev-served app, never under
-		// Vitest — dynamic-imported so test runs never need to resolve it.
-		void import('virtual:pwa-register').then(({ registerSW }) =>
-			registerSW({
-				immediate: true,
-				// Without this, autoUpdate's default reload fires the instant the new SW
-				// activates — which can land mid-hydration on a cold PWA launch right after
-				// a deploy (skipWaiting/clientsClaim let the new SW claim the page before its
-				// first load finishes), interrupting that load and leaving the app stuck on
-				// the OS splash screen. Deferring until the page's own load has settled keeps
-				// the reload from racing the app's first paint.
-				onNeedReload() {
-					const reload = () => window.location.reload();
-					if (document.readyState === 'complete') reload();
-					else window.addEventListener('load', reload, { once: true });
-				}
-			})
-		);
+		// The Workbox service worker is meaningful for the browser/PWA build (offline caching,
+		// update prompts) but Capacitor's WebView already loads the bundle from local files —
+		// there's no real network layer for it to usefully intercept there, and registering one
+		// against a `capacitor://`/local `https://` origin is unsupported/unreliable in practice
+		// (PHASE13_PLAN.md §3). Skip it entirely on native rather than relying on it merely
+		// no-oping harmlessly.
+		if (!Capacitor.isNativePlatform()) {
+			// vite-plugin-pwa's virtual module only exists in a built/dev-served app, never under
+			// Vitest — dynamic-imported so test runs never need to resolve it.
+			void import('virtual:pwa-register').then(({ registerSW }) =>
+				registerSW({
+					immediate: true,
+					// Without this, autoUpdate's default reload fires the instant the new SW
+					// activates — which can land mid-hydration on a cold PWA launch right after
+					// a deploy (skipWaiting/clientsClaim let the new SW claim the page before its
+					// first load finishes), interrupting that load and leaving the app stuck on
+					// the OS splash screen. Deferring until the page's own load has settled keeps
+					// the reload from racing the app's first paint.
+					onNeedReload() {
+						const reload = () => window.location.reload();
+						if (document.readyState === 'complete') reload();
+						else window.addEventListener('load', reload, { once: true });
+					}
+				})
+			);
+		}
 	});
 	afterNavigate(() => {
 		refreshAuth();

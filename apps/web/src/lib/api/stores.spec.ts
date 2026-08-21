@@ -4,7 +4,14 @@ vi.mock('./client', () => ({
 	apiGet: vi.fn(),
 	apiPost: vi.fn(),
 	apiPatch: vi.fn(),
-	apiDelete: vi.fn()
+	apiDelete: vi.fn(),
+	ApiError: class ApiError extends Error {
+		status: number;
+		constructor(status: number, message: string) {
+			super(message);
+			this.status = status;
+		}
+	}
 }));
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
@@ -22,6 +29,11 @@ describe('stores api', () => {
 		vi.mocked(apiGet).mockResolvedValue([]);
 		fetchStores(1);
 		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists/1/stores');
+	});
+
+	it('fetchStores rethrows the network error when Dexie is not available', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+		await expect(fetchStores(1)).rejects.toThrow('network down');
 	});
 
 	it('attachStore POSTs an existing storeId', () => {
@@ -45,8 +57,14 @@ describe('stores api', () => {
 	});
 
 	it('fetchStoreCategoryOrder GETs the store-scoped order', () => {
+		vi.mocked(apiGet).mockResolvedValue([]);
 		fetchStoreCategoryOrder(20);
 		expect(apiGet).toHaveBeenCalledWith('/api/v1/stores/20/categories');
+	});
+
+	it('fetchStoreCategoryOrder rethrows the network error when Dexie is not available', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+		await expect(fetchStoreCategoryOrder(20)).rejects.toThrow('network down');
 	});
 
 	it('reorderStoreCategories PATCHes the new order', () => {

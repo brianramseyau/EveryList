@@ -15,10 +15,17 @@ vi.mock('./client', () => ({
 	}
 }));
 
-const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
+const { apiGet, apiPost, apiPatch, apiDelete, ApiError } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { createFavorite, updateFavorite, deleteFavorite, fetchFavorites } =
+const { createFavorite, updateFavorite, deleteFavorite, fetchFavorites, addFavoriteToList } =
 	await import('./favorites');
+
+function setOnline(online: boolean) {
+	Object.defineProperty(globalThis, 'navigator', {
+		value: { onLine: online },
+		configurable: true
+	});
+}
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -179,5 +186,99 @@ describe('fetchFavorites (cache hydration)', () => {
 		await fetchFavorites(1);
 
 		expect((await db.favoriteItems.get(5))?.name).toBe('Bananas (edited)');
+	});
+
+	it('falls back to cached, non-deleted rows for this list when the network fails', async () => {
+		vi.mocked(apiGet).mockResolvedValue([
+			{ id: 5, listId: 1, name: 'Bananas', deletedAt: null, version: 1 }
+		]);
+		await fetchFavorites(1);
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+
+		const result = await fetchFavorites(1);
+
+		expect(result).toEqual([expect.objectContaining({ id: 5, name: 'Bananas' })]);
+	});
+
+	it('rethrows an ApiError without falling back to cache', async () => {
+		await getDb()!.favoriteItems.put({
+			id: 5,
+			userId: 1,
+			listId: 1,
+			name: 'Bananas',
+			defaultCategoryId: null,
+			defaultQuantity: null,
+			storeId: null,
+			notes: null,
+			price: null,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		vi.mocked(apiGet).mockRejectedValue(new ApiError(403, 'Forbidden'));
+
+		await expect(fetchFavorites(1)).rejects.toThrow('Forbidden');
+	});
+});
+
+describe('addFavoriteToList (Dexie available)', () => {
+	it('builds the optimistic item from an already-cached favorite and resolves the server response', async () => {
+		const db = getDb()!;
+		await db.favoriteItems.put({
+			id: 5,
+			userId: 1,
+			listId: 1,
+			name: 'Bananas',
+			defaultCategoryId: 3,
+			defaultQuantity: '1 bunch',
+			storeId: 7,
+			notes: 'ripe',
+			price: 199,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		vi.mocked(apiPost).mockResolvedValue({ id: 42, listId: 1, name: 'Bananas', version: 1 });
+
+		const result = await addFavoriteToList(1, 5);
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/favorites/5/add-to-list');
+		expect(result).toEqual({ id: 42, listId: 1, name: 'Bananas', version: 1 });
+	});
+
+	it('falls back to a generic placeholder when the favorite was never cached locally', async () => {
+		vi.mocked(apiPost).mockResolvedValue({ id: 43, listId: 1, name: 'Milk', version: 1 });
+
+		const result = await addFavoriteToList(1, 999);
+
+		expect(result).toEqual({ id: 43, listId: 1, name: 'Milk', version: 1 });
+	});
+
+	it('queues an attach mutation and returns the optimistic item when offline', async () => {
+		const db = getDb()!;
+		await db.favoriteItems.put({
+			id: 5,
+			userId: 1,
+			listId: 1,
+			name: 'Bananas',
+			defaultCategoryId: null,
+			defaultQuantity: null,
+			storeId: null,
+			notes: null,
+			price: null,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		setOnline(false);
+
+		const result = await addFavoriteToList(1, 5);
+
+		expect(result).toMatchObject({ name: 'Bananas', listId: 1 });
+		expect(result.id).toBeLessThan(0);
+		setOnline(true);
 	});
 });

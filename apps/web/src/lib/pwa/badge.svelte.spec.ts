@@ -1,8 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/api/lists', () => ({ fetchLists: vi.fn() }));
+vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: vi.fn() } }));
+vi.mock('@capawesome/capacitor-badge', () => ({
+	Badge: {
+		isSupported: vi.fn(),
+		checkPermissions: vi.fn(),
+		requestPermissions: vi.fn(),
+		set: vi.fn(),
+		clear: vi.fn()
+	}
+}));
 
 const { fetchLists } = await import('$lib/api/lists');
+const { Capacitor } = await import('@capacitor/core');
+const isNativePlatform = Capacitor.isNativePlatform;
+const { Badge } = await import('@capawesome/capacitor-badge');
 const {
 	clearBadge,
 	getBadgeCount,
@@ -30,6 +43,7 @@ afterEach(() => {
 	resetBadgeForTesting();
 	onBadgeCountChange(null);
 	vi.clearAllMocks();
+	vi.mocked(isNativePlatform).mockReturnValue(false);
 	Reflect.deleteProperty(window.navigator, 'setAppBadge');
 	Reflect.deleteProperty(window.navigator, 'clearAppBadge');
 });
@@ -130,5 +144,85 @@ describe('clearBadge', () => {
 
 		expect(listener).toHaveBeenCalledWith(0);
 		expect(clearAppBadge).toHaveBeenCalled();
+	});
+});
+
+describe('native badge (Capacitor)', () => {
+	it('sets the native badge count when supported and permitted', async () => {
+		vi.mocked(isNativePlatform).mockReturnValue(true);
+		vi.mocked(Badge.isSupported).mockResolvedValue({ isSupported: true });
+		vi.mocked(Badge.checkPermissions).mockResolvedValue({ display: 'granted' });
+		vi.mocked(fetchLists).mockResolvedValue([
+			{ id: 1, itemCount: 3, archived: false, badgeExcluded: false }
+		] as never);
+
+		await refreshBadgeCount();
+
+		expect(Badge.set).toHaveBeenCalledWith({ count: 3 });
+		expect(getBadgeCount()).toBe(3);
+	});
+
+	it('clears the native badge when the eligible total is zero', async () => {
+		vi.mocked(isNativePlatform).mockReturnValue(true);
+		vi.mocked(Badge.isSupported).mockResolvedValue({ isSupported: true });
+		vi.mocked(Badge.checkPermissions).mockResolvedValue({ display: 'granted' });
+		vi.mocked(fetchLists).mockResolvedValue([]);
+
+		await refreshBadgeCount();
+
+		expect(Badge.clear).toHaveBeenCalled();
+	});
+
+	it('requests permission lazily on first use when not yet granted', async () => {
+		vi.mocked(isNativePlatform).mockReturnValue(true);
+		vi.mocked(Badge.isSupported).mockResolvedValue({ isSupported: true });
+		vi.mocked(Badge.checkPermissions).mockResolvedValue({ display: 'prompt' });
+		vi.mocked(Badge.requestPermissions).mockResolvedValue({ display: 'granted' });
+		vi.mocked(fetchLists).mockResolvedValue([
+			{ id: 1, itemCount: 2, archived: false, badgeExcluded: false }
+		] as never);
+
+		await refreshBadgeCount();
+
+		expect(Badge.requestPermissions).toHaveBeenCalled();
+		expect(Badge.set).toHaveBeenCalledWith({ count: 2 });
+	});
+
+	it('does not set the badge when permission is denied', async () => {
+		vi.mocked(isNativePlatform).mockReturnValue(true);
+		vi.mocked(Badge.isSupported).mockResolvedValue({ isSupported: true });
+		vi.mocked(Badge.checkPermissions).mockResolvedValue({ display: 'prompt' });
+		vi.mocked(Badge.requestPermissions).mockResolvedValue({ display: 'denied' });
+		vi.mocked(fetchLists).mockResolvedValue([
+			{ id: 1, itemCount: 2, archived: false, badgeExcluded: false }
+		] as never);
+
+		await refreshBadgeCount();
+
+		expect(Badge.set).not.toHaveBeenCalled();
+	});
+
+	it('does nothing when the native badge API is unsupported on this device', async () => {
+		vi.mocked(isNativePlatform).mockReturnValue(true);
+		vi.mocked(Badge.isSupported).mockResolvedValue({ isSupported: false });
+		vi.mocked(fetchLists).mockResolvedValue([
+			{ id: 1, itemCount: 2, archived: false, badgeExcluded: false }
+		] as never);
+
+		await refreshBadgeCount();
+
+		expect(Badge.set).not.toHaveBeenCalled();
+		expect(Badge.checkPermissions).not.toHaveBeenCalled();
+	});
+
+	it('swallows a native Badge API rejection', async () => {
+		vi.mocked(isNativePlatform).mockReturnValue(true);
+		vi.mocked(Badge.isSupported).mockRejectedValue(new Error('plugin not available'));
+		vi.mocked(fetchLists).mockResolvedValue([
+			{ id: 1, itemCount: 2, archived: false, badgeExcluded: false }
+		] as never);
+
+		await expect(refreshBadgeCount()).resolves.toBeUndefined();
+		expect(getBadgeCount()).toBe(2);
 	});
 });

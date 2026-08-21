@@ -4,7 +4,14 @@ vi.mock('./client', () => ({
 	apiGet: vi.fn(),
 	apiPost: vi.fn(),
 	apiPatch: vi.fn(),
-	apiDelete: vi.fn()
+	apiDelete: vi.fn(),
+	ApiError: class ApiError extends Error {
+		status: number;
+		constructor(status: number, message: string) {
+			super(message);
+			this.status = status;
+		}
+	}
 }));
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
@@ -22,6 +29,11 @@ describe('categories api', () => {
 		vi.mocked(apiGet).mockResolvedValue([]);
 		fetchCategories(1);
 		expect(apiGet).toHaveBeenCalledWith('/api/v1/lists/1/categories');
+	});
+
+	it('fetchCategories rethrows the network error when Dexie is not available', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+		await expect(fetchCategories(1)).rejects.toThrow('network down');
 	});
 
 	it('createCategory POSTs the input', () => {

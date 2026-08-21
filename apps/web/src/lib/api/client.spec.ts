@@ -15,6 +15,11 @@ vi.mock('./token', () => ({
 	}
 }));
 
+let fakeServerUrl = '';
+vi.mock('./server-url', () => ({
+	getServerUrl: () => fakeServerUrl
+}));
+
 const { apiDelete, apiFetch, apiGet, apiPatch, apiPost, ApiError } = await import('./client');
 const { clearToken, getToken, setToken } = await import('./token');
 
@@ -155,6 +160,32 @@ describe('apiFetch', () => {
 
 		await expect(apiFetch('/x')).rejects.toBeInstanceOf(ApiError);
 		expect(getToken()).toBeNull();
+	});
+});
+
+describe('apiFetch base URL prefixing', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		fakeServerUrl = '';
+	});
+
+	it('requests a bare relative path when no server URL is configured', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { data: {} }));
+		vi.stubGlobal('fetch', fetchMock);
+
+		await apiFetch('/api/v1/lists');
+
+		expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/lists');
+	});
+
+	it('prefixes the request with the configured server URL', async () => {
+		fakeServerUrl = 'https://api.example.com';
+		const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { data: {} }));
+		vi.stubGlobal('fetch', fetchMock);
+
+		await apiFetch('/api/v1/lists');
+
+		expect(fetchMock.mock.calls[0][0]).toBe('https://api.example.com/api/v1/lists');
 	});
 });
 
