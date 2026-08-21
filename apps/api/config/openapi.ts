@@ -1,4 +1,17 @@
+import { readFileSync } from 'node:fs'
 import type { OpenApiConfig } from '#services/openapi/generator'
+
+/**
+ * `node ace build` writes a standalone package.json (with the source
+ * package's version) next to this file's compiled output, so this resolves
+ * correctly both in dev (`apps/api/package.json`) and in the production
+ * build (`build/package.json`) — see docker/Dockerfile's build-api stage.
+ */
+const { version } = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf-8')
+) as {
+  version: string
+}
 
 /**
  * OpenAPI documentation configuration. The document is generated from the
@@ -8,7 +21,7 @@ import type { OpenApiConfig } from '#services/openapi/generator'
 const openapiConfig: OpenApiConfig = {
   info: {
     title: 'EveryList API',
-    version: '1.0.0',
+    version,
     description:
       'Self-hosted shopping list API. Endpoints are bearer-token protected except where noted.',
   },
