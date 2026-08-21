@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">EveryList</string>
+    <string name="title_activity_main">EveryList</string>
+    <string name="package_name">au.brianramsey.everylist</string>
+    <string name="custom_url_scheme">au.brianramsey.everylist</string>
+</resources>
