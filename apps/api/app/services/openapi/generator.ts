@@ -205,7 +205,7 @@ function prettify(segment: string): string {
 function tagForRoute(routeName: string): string {
   const parts = routeName.split('.')
   const resource = parts.length > 1 ? parts[parts.length - 2] : parts[0]
-  return prettify(resource ?? routeName)
+  return prettify(resource as string)
 }
 
 /**
@@ -215,7 +215,7 @@ function tagForRoute(routeName: string): string {
  * under a single "Lists" heading instead of sitting as top-level siblings.
  */
 function tagGroupForRoute(routeName: string): string {
-  return prettify(routeName.split('.')[0] ?? routeName)
+  return prettify(routeName.split('.')[0] as string)
 }
 
 function summaryForRoute(routeName: string): string {
@@ -361,7 +361,7 @@ export function generateOpenApiDocument(options: {
       item[verb] = finalOperation
 
       const routeGroup = tagGroupForRoute(routeName)
-      for (const tag of finalOperation.tags ?? []) {
+      for (const tag of finalOperation.tags as string[]) {
         const group = tagGroupOf.get(tag) ?? routeGroup
         tagGroupOf.set(tag, group)
         const groupTags = tagsByGroup.get(group) ?? tagsByGroup.set(group, new Set()).get(group)!
@@ -376,12 +376,12 @@ export function generateOpenApiDocument(options: {
   }))
 
   return {
-    openapi: '3.1.0',
-    info: config.info,
-    servers: config.servers,
-    paths: pathItems as unknown as OpenAPIV3_1.PathsObject,
-    components: { securitySchemes: config.securitySchemes },
-    security: [{ bearerAuth: [] }],
+    'openapi': '3.1.0',
+    'info': config.info,
+    'servers': config.servers,
+    'paths': pathItems as unknown as OpenAPIV3_1.PathsObject,
+    'components': { securitySchemes: config.securitySchemes },
+    'security': [{ bearerAuth: [] }],
     // Scalar-specific (Redoc-style) extension: nests each resource's tag
     // under its route-group heading in the sidebar instead of listing every
     // tag as a flat top-level sibling. See tagGroupForRoute() above.
