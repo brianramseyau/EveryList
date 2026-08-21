@@ -70,7 +70,7 @@ export default class CategoriesController {
     const { sourceListId, categoryIds } = await request.validateUsing(importCategoriesValidator)
 
     if (sourceListId === list.id) {
-      return response.status(422).send({
+      return response.unprocessableEntity({
         errors: [{ field: 'sourceListId', message: 'Choose a different list to import from.' }],
       })
     }
@@ -139,9 +139,10 @@ export default class CategoriesController {
         actualVersion: category.version,
         userId: user.id,
       })
-      return response
-        .status(409)
-        .send({ ...(await serialize(CategoryTransformer.transform(category))), conflict: true })
+      return response.conflict({
+        ...(await serialize(CategoryTransformer.transform(category))),
+        conflict: true,
+      })
     }
 
     category.merge(rest)
@@ -177,9 +178,10 @@ export default class CategoriesController {
         actualVersion: category.version,
         userId: user.id,
       })
-      return response
-        .status(409)
-        .send({ ...(await serialize(CategoryTransformer.transform(category))), conflict: true })
+      return response.conflict({
+        ...(await serialize(CategoryTransformer.transform(category))),
+        conflict: true,
+      })
     }
 
     category.deletedAt = DateTime.now()

@@ -108,7 +108,7 @@ export default class FavoriteItemsController {
         actualVersion: favorite.version,
         userId: user.id,
       })
-      return response.status(409).send({
+      return response.conflict({
         ...(await serialize(FavoriteItemTransformer.transform(favorite))),
         conflict: true,
       })
@@ -147,7 +147,7 @@ export default class FavoriteItemsController {
         actualVersion: favorite.version,
         userId: user.id,
       })
-      return response.status(409).send({
+      return response.conflict({
         ...(await serialize(FavoriteItemTransformer.transform(favorite))),
         conflict: true,
       })

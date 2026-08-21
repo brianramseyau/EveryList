@@ -18,9 +18,9 @@ export default class ListExportController {
     await ListPolicy.requireList(user.id, params.listId, 'viewer')
 
     if (!isMailConfigured()) {
-      return response
-        .status(503)
-        .send({ message: 'Email export is not configured on this server.' })
+      return response.serviceUnavailable({
+        message: 'Email export is not configured on this server.',
+      })
     }
 
     const payload = await request.validateUsing(emailExportValidator)

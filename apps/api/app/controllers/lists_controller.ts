@@ -86,7 +86,7 @@ export default class ListsController {
     const payload = await request.validateUsing(createListValidator)
 
     if (await findDuplicateNamedList(user.id, payload.name)) {
-      return response.status(422).send({
+      return response.unprocessableEntity({
         errors: [{ field: 'name', message: 'You already have a list with this name.' }],
       })
     }
@@ -137,9 +137,10 @@ export default class ListsController {
         actualVersion: list.version,
         userId: user.id,
       })
-      return response
-        .status(409)
-        .send({ ...(await serialize(ListTransformer.transform(list))), conflict: true })
+      return response.conflict({
+        ...(await serialize(ListTransformer.transform(list))),
+        conflict: true,
+      })
     }
 
     if (rest.folderId !== null && rest.folderId !== undefined) {
@@ -147,7 +148,7 @@ export default class ListsController {
     }
 
     if (rest.name !== undefined && (await findDuplicateNamedList(user.id, rest.name, list.id))) {
-      return response.status(422).send({
+      return response.unprocessableEntity({
         errors: [{ field: 'name', message: 'You already have a list with this name.' }],
       })
     }
@@ -181,9 +182,10 @@ export default class ListsController {
         actualVersion: list.version,
         userId: user.id,
       })
-      return response
-        .status(409)
-        .send({ ...(await serialize(ListTransformer.transform(list))), conflict: true })
+      return response.conflict({
+        ...(await serialize(ListTransformer.transform(list))),
+        conflict: true,
+      })
     }
 
     list.deletedAt = DateTime.now()

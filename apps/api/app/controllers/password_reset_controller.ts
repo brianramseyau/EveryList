@@ -16,7 +16,7 @@ export default class PasswordResetController {
    */
   async forgot({ request, response }: HttpContext) {
     if (!isMailConfigured()) {
-      return response.status(503).send({ message: 'Email is not configured on this server.' })
+      return response.serviceUnavailable({ message: 'Email is not configured on this server.' })
     }
 
     const { email } = await request.validateUsing(forgotPasswordValidator)
