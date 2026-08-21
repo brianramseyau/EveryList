@@ -57,11 +57,17 @@
 		store_category_order: 'store category order'
 	};
 
+	const verbByOp: Record<QueuedMutation['op'], string> = {
+		create: 'Create',
+		update: 'Update',
+		delete: 'Delete',
+		reorder: 'Reorder',
+		attach: 'Attach'
+	};
+
 	function describeMutation(mutation: QueuedMutation): string {
-		const verb =
-			mutation.op === 'create' ? 'Create' : mutation.op === 'update' ? 'Update' : 'Delete';
 		const name = typeof mutation.payload?.name === 'string' ? ` "${mutation.payload.name}"` : '';
-		return `${verb} ${entityLabel[mutation.entityType]}${name}`;
+		return `${verbByOp[mutation.op]} ${entityLabel[mutation.entityType]}${name}`;
 	}
 
 	const total = $derived(counts.pending + counts.failed + counts.conflict);

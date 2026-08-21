@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api/client';
 import { getDb, resetDbForTesting } from './db';
 import { pendingMutations } from './sync-queue';
-import { offlineCreate, offlineMutate } from './sync-engine';
+import { offlineCreate, offlineMutate, offlineReorder } from './sync-engine';
 
 function setOnline(online: boolean) {
 	Object.defineProperty(globalThis, 'navigator', {
@@ -298,6 +298,100 @@ describe('offlineMutate', () => {
 				payload: {},
 				url: '/api/v1/x',
 				applyOptimistically: async () => 1,
+				request: async () => ({ ok: true })
+			});
+			expect(result).toEqual({ ok: true });
+		} finally {
+			globalThis.indexedDB = originalIndexedDb;
+		}
+	});
+});
+
+describe('offlineReorder', () => {
+	it('applies optimistically, flushes immediately when online, and dequeues via onSuccess', async () => {
+		const onSuccess = vi.fn().mockResolvedValue(undefined);
+		const result = await offlineReorder<{ ids: number[] }>({
+			entityType: 'category',
+			scopeId: 1,
+			payload: { order: [3, 1, 2] },
+			url: '/api/v1/x',
+			applyOptimistically: async () => ({ ids: [3, 1, 2] }),
+			onSuccess,
+			request: async () => ({ ids: [3, 1, 2] })
+		});
+
+		expect(result).toEqual({ ids: [3, 1, 2] });
+		expect(onSuccess).toHaveBeenCalledWith(expect.anything(), { ids: [3, 1, 2] });
+		expect(await pendingMutations()).toHaveLength(0);
+	});
+
+	it('leaves the optimistic result and a queued mutation when offline', async () => {
+		setOnline(false);
+		const onSuccess = vi.fn();
+		const result = await offlineReorder<{ ids: number[] }>({
+			entityType: 'category',
+			scopeId: 1,
+			payload: { order: [3, 1, 2] },
+			url: '/api/v1/x',
+			applyOptimistically: async () => ({ ids: [3, 1, 2] }),
+			onSuccess,
+			request: async () => ({ ids: [3, 1, 2] })
+		});
+
+		expect(result).toEqual({ ids: [3, 1, 2] });
+		expect(onSuccess).not.toHaveBeenCalled();
+		const pending = await pendingMutations();
+		expect(pending).toMatchObject([{ op: 'reorder', targetId: 1, expectedVersion: null }]);
+	});
+
+	it('keeps the queued mutation on a network error while online', async () => {
+		const result = await offlineReorder<{ ids: number[] }>({
+			entityType: 'store_category_order',
+			scopeId: 20,
+			payload: { categories: [] },
+			url: '/api/v1/x',
+			applyOptimistically: async () => ({ ids: [] }),
+			onSuccess: vi.fn(),
+			request: async () => {
+				throw new TypeError('network error');
+			}
+		});
+
+		expect(result).toEqual({ ids: [] });
+		expect(await pendingMutations()).toHaveLength(1);
+	});
+
+	it('dequeues and rethrows on a real ApiError', async () => {
+		await expect(
+			offlineReorder<{ ids: number[] }>({
+				entityType: 'category',
+				scopeId: 1,
+				payload: { order: [] },
+				url: '/api/v1/x',
+				applyOptimistically: async () => ({ ids: [] }),
+				onSuccess: vi.fn(),
+				request: async () => {
+					throw new ApiError(422, 'Invalid order');
+				}
+			})
+		).rejects.toThrow('Invalid order');
+
+		expect(await pendingMutations()).toHaveLength(0);
+	});
+
+	it('degrades to a direct request when Dexie is unavailable', async () => {
+		await resetDbForTesting();
+		const originalIndexedDb = globalThis.indexedDB;
+		// @ts-expect-error simulating no IndexedDB implementation
+		delete globalThis.indexedDB;
+		try {
+			const result = await offlineReorder<{ ok: true }>({
+				entityType: 'category',
+				scopeId: 1,
+				payload: {},
+				url: '/api/v1/x',
+				applyOptimistically: async () => ({ ok: true }),
+				onSuccess: vi.fn(),
 				request: async () => ({ ok: true })
 			});
 			expect(result).toEqual({ ok: true });

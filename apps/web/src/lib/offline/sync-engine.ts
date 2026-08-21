@@ -23,6 +23,11 @@ function isOnline(): boolean {
 
 export interface OfflineCreateOptions<T> {
 	entityType: SyncEntityType;
+	/** `'attach'` for a join/create-by-reference operation (attaching an existing store, adding a
+	 * favorite to a list) — same optimistic-temp-id-then-replace mechanics as a plain `'create'`,
+	 * just a distinct queue label so the sync-status page describes it accurately. Defaults to
+	 * `'create'`. */
+	op?: 'create' | 'attach';
 	/** Only called once Dexie is confirmed available. */
 	table: (db: EveryListDB) => Table<T, number>;
 	/** Builds the optimistic row under the given temp (negative) id. */
@@ -52,7 +57,7 @@ export async function offlineCreate<T>(opts: OfflineCreateOptions<T>): Promise<T
 
 	const queueId = await enqueueMutation({
 		entityType: opts.entityType,
-		op: 'create',
+		op: opts.op ?? 'create',
 		targetId: tempId,
 		expectedVersion: null,
 		payload: opts.payload,
@@ -145,5 +150,73 @@ export async function offlineMutate<T>(opts: OfflineMutateOptions<T>): Promise<T
 		}
 		// Network error, or a 409 the flush loop will reconcile — stays queued.
 		return undefined;
+	}
+}
+
+export interface OfflineReorderOptions<T> {
+	entityType: SyncEntityType;
+	/** The bulk operation's scope id — a list id for a category reorder, a store id for a store's
+	 * category order — not a single row's id (there isn't one for a bulk operation). Matches the
+	 * `entityId` the corresponding realtime broadcast uses (categories_controller.ts's `reorder`,
+	 * stores_controller.ts's `reorderCategories`), so `markSelfMutation` correctly suppresses the
+	 * echo of this client's own reorder. */
+	scopeId: number;
+	/** Applies the new order to every affected local Dexie row immediately (optimistic) and marks
+	 * each dirty — so a realtime event for any of those rows racing the queued flush doesn't
+	 * clobber the optimistic order first (see `isRowDirty`, db.ts). Returns the affected rows,
+	 * mirroring the server's response shape, so the caller can update its own UI state the same
+	 * way it does today for the online path. Only called once Dexie is confirmed available. */
+	applyOptimistically: (db: EveryListDB) => Promise<T>;
+	/** Called after a successful immediate (online) request to clear the dirty flags set by
+	 * `applyOptimistically`, adopting the server's authoritative rows — mirrors `offlineMutate`'s
+	 * `onSuccess`. The queued-and-later-flushed path does the equivalent via
+	 * `offline/flush.ts`'s `replayReorder`. */
+	onSuccess: (db: EveryListDB, result: T) => Promise<void>;
+	/** The full desired-order payload to replay from the flush loop if this doesn't resolve
+	 * immediately (PHASE13_PLAN.md §5). */
+	payload: Record<string, unknown>;
+	url: string;
+	request: () => Promise<T>;
+}
+
+/**
+ * Write path for bulk reorders (PHASE13_PLAN.md §5: category reorder, store aisle order).
+ * Unlike `offlineMutate`, there's no single row's version to guard: the reorder endpoints bump
+ * every touched row's version unconditionally, with no `expectedVersion` check (see
+ * categories_controller.ts's `reorder` / stores_controller.ts's `reorderCategories`) — so the
+ * queued mutation carries `expectedVersion: null` and can't 409. Degrades to direct online-only
+ * behavior when Dexie isn't available, same as `offlineCreate`/`offlineMutate`.
+ */
+export async function offlineReorder<T>(opts: OfflineReorderOptions<T>): Promise<T> {
+	const db = getDb();
+	if (!db) return opts.request();
+
+	markSelfMutation(opts.entityType, opts.scopeId);
+	const optimisticResult = await opts.applyOptimistically(db);
+
+	const queueId = await enqueueMutation({
+		entityType: opts.entityType,
+		op: 'reorder',
+		targetId: opts.scopeId,
+		expectedVersion: null,
+		payload: opts.payload,
+		url: opts.url
+	});
+
+	if (!isOnline()) return optimisticResult;
+
+	try {
+		const result = await opts.request();
+		await opts.onSuccess(db, result);
+		if (queueId !== undefined) await dequeueMutation(queueId);
+		return result;
+	} catch (err) {
+		if (err instanceof ApiError) {
+			// A real server rejection can't be resolved by retrying the same payload later.
+			if (queueId !== undefined) await dequeueMutation(queueId);
+			throw err;
+		}
+		// Network error — stays queued for the flush loop; caller sees the optimistic rows.
+		return optimisticResult;
 	}
 }

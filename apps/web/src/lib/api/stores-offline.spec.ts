@@ -17,7 +17,7 @@ vi.mock('./client', () => ({
 
 const { apiGet, apiPost, apiPatch } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { attachStore, updateStore, fetchStores } = await import('./stores');
+const { attachStore, updateStore, fetchStores, reorderStoreCategories } = await import('./stores');
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -111,5 +111,116 @@ describe('fetchStores (cache hydration)', () => {
 		await fetchStores(1);
 
 		expect((await db.stores.get(20))?.name).toBe('Costco (edited)');
+	});
+});
+
+function setOnline(online: boolean) {
+	Object.defineProperty(globalThis, 'navigator', {
+		value: { onLine: online },
+		configurable: true
+	});
+}
+
+describe('attachStore (Dexie available, attaching an existing store by id)', () => {
+	it('builds the optimistic placeholder from an already-cached store and resolves the server response', async () => {
+		const db = getDb()!;
+		await db.stores.put({
+			id: 20,
+			name: 'Costco',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		vi.mocked(apiPost).mockResolvedValue({ id: 20, name: 'Costco', version: 1 });
+
+		const result = await attachStore(1, { storeId: 20 });
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/stores', { storeId: 20 });
+		expect(result).toEqual({ id: 20, name: 'Costco', version: 1 });
+	});
+
+	it('falls back to a generic placeholder when the store was never cached locally', async () => {
+		vi.mocked(apiPost).mockResolvedValue({ id: 30, name: 'Aldi', version: 1 });
+
+		const result = await attachStore(1, { storeId: 30 });
+
+		expect(result).toEqual({ id: 30, name: 'Aldi', version: 1 });
+	});
+
+	it('queues an attach mutation and returns the placeholder when offline', async () => {
+		setOnline(true);
+		const db = getDb()!;
+		await db.stores.put({
+			id: 20,
+			name: 'Costco',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		setOnline(false);
+
+		const result = await attachStore(1, { storeId: 20 });
+
+		expect(result).toMatchObject({ name: 'Costco' });
+		expect(result.id).toBeLessThan(0);
+		setOnline(true);
+	});
+});
+
+describe('reorderStoreCategories (Dexie available)', () => {
+	it('applies the new sortOrder optimistically and clears dirty on the server response', async () => {
+		const db = getDb()!;
+		vi.mocked(apiPatch).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 5, sortOrder: 0, deletedAt: null, version: 2 }
+		]);
+
+		const result = await reorderStoreCategories(20, [{ categoryId: 5, sortOrder: 0 }]);
+
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/stores/20/categories', {
+			categories: [{ categoryId: 5, sortOrder: 0 }]
+		});
+		expect(result).toEqual([
+			{ id: 1, storeId: 20, categoryId: 5, sortOrder: 0, deletedAt: null, version: 2 }
+		]);
+		expect((await db.storeCategoryOrders.get([20, 5]))?._dirty).toBe(false);
+	});
+
+	it('preserves the existing row id and version when one is already cached', async () => {
+		const db = getDb()!;
+		await db.storeCategoryOrders.put({
+			id: 7,
+			storeId: 20,
+			categoryId: 5,
+			sortOrder: 3,
+			deletedAt: null,
+			version: 2
+		});
+		vi.mocked(apiPatch).mockResolvedValue([
+			{ id: 7, storeId: 20, categoryId: 5, sortOrder: 0, deletedAt: null, version: 3 }
+		]);
+
+		await reorderStoreCategories(20, [{ categoryId: 5, sortOrder: 0 }]);
+
+		expect(apiPatch).toHaveBeenCalled();
+	});
+
+	it('marks every touched row dirty and queues while offline', async () => {
+		setOnline(false);
+
+		const result = await reorderStoreCategories(20, [{ categoryId: 5, sortOrder: 0 }]);
+
+		expect(result).toEqual([
+			expect.objectContaining({ storeId: 20, categoryId: 5, sortOrder: 0, _dirty: true })
+		]);
+		const db = getDb()!;
+		expect((await db.storeCategoryOrders.get([20, 5]))?._dirty).toBe(true);
+		expect(apiPatch).not.toHaveBeenCalled();
+		setOnline(true);
 	});
 });

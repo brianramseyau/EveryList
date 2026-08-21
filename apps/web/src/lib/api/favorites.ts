@@ -113,8 +113,40 @@ export async function deleteFavorite(listId: number, id: number): Promise<void> 
 	});
 }
 
-/** Creates a new item from a favorite's defaults — requires the server round trip to know the
- * resulting item's id and sort order, so this stays online-only. */
-export function addFavoriteToList(listId: number, favoriteId: number): Promise<ItemDto> {
-	return apiPost(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`);
+/** Creates a new item from a favorite's defaults. The server computes the resulting item's id,
+ * sort order, and dedup-with-an-existing-checked-item behavior — so (per PHASE13_PLAN.md §5) this
+ * gets the same offline treatment as a create, queued as `'attach'`: a temp-id `Item` placeholder
+ * built from the favorite's already-known local fields stands in until the server's authoritative
+ * item replaces it on flush. */
+export async function addFavoriteToList(listId: number, favoriteId: number): Promise<ItemDto> {
+	const db = getDb();
+	const favorite = db ? await db.favoriteItems.get(favoriteId) : undefined;
+	return offlineCreate<ItemDto>({
+		entityType: 'item',
+		op: 'attach',
+		table: (database) => database.items,
+		payload: {},
+		url: `/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`,
+		buildOptimisticRow: (tempId) => ({
+			id: tempId,
+			listId,
+			name: favorite?.name ?? 'Item',
+			quantity: favorite?.defaultQuantity ?? null,
+			notes: favorite?.notes ?? null,
+			categoryId: favorite?.defaultCategoryId ?? null,
+			storeId: favorite?.storeId ?? null,
+			price: favorite?.price ?? null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: Date.now(),
+			createdBy: 0,
+			createdAt: new Date().toISOString(),
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_localId: String(tempId),
+			_dirty: true
+		}),
+		request: () => apiPost<ItemDto>(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+	});
 }

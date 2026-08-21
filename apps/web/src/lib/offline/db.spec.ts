@@ -83,9 +83,47 @@ describe('isRowDirty', () => {
 		await expect(isRowDirty('item', 1)).resolves.toBe(false);
 	});
 
-	it('is false when a store_category_order or list event fires — neither is ever queued client-side', async () => {
-		await expect(isRowDirty('store_category_order', 1)).resolves.toBe(false);
+	it('is false for a list event — never queued client-side', async () => {
 		await expect(isRowDirty('list', 1)).resolves.toBe(false);
+	});
+
+	it('is false for store_category_order when the store has no dirty rows', async () => {
+		const db = getDb()!;
+		await db.storeCategoryOrders.put({
+			id: 1,
+			storeId: 20,
+			categoryId: 5,
+			sortOrder: 0,
+			deletedAt: null,
+			version: 1,
+			_dirty: false
+		});
+
+		await expect(isRowDirty('store_category_order', 20)).resolves.toBe(false);
+	});
+
+	it("is true for store_category_order when any of the store's rows are dirty", async () => {
+		const db = getDb()!;
+		await db.storeCategoryOrders.put({
+			id: 1,
+			storeId: 20,
+			categoryId: 5,
+			sortOrder: 0,
+			deletedAt: null,
+			version: 1,
+			_dirty: false
+		});
+		await db.storeCategoryOrders.put({
+			id: 2,
+			storeId: 20,
+			categoryId: 6,
+			sortOrder: 1,
+			deletedAt: null,
+			version: 1,
+			_dirty: true
+		});
+
+		await expect(isRowDirty('store_category_order', 20)).resolves.toBe(true);
 	});
 
 	it.each([

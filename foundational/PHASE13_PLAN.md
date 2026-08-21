@@ -48,18 +48,16 @@ The codebase is a favorable base for wrapping with **Capacitor**:
 - Local prerequisites: Xcode + iOS Simulator for iOS builds, Android Studio + JDK for Android builds/emulator — dev-time-only, no store account requirements.
 - Local build loop: `pnpm --filter web build` (with `PUBLIC_API_BASE_URL` set) → `npx cap sync` → open/run via Xcode (`npx cap open ios`) and Android Studio (`npx cap open android`).
 
-### 5. Close the remaining online-only mutations
+### 5. Close the remaining online-only mutations — **done**
 
-Phase 5 (`foundational/PLAN.md`, Phase 5 status note) shipped offline-first writes for per-row create/update/delete, but explicitly left three call sites online-only because they didn't fit the single-row temp-id/`expectedVersion` model `offlineCreate`/`offlineMutate` (`apps/web/src/lib/offline/sync-engine.ts`) were built around:
-- `reorderCategories` (`apps/web/src/lib/api/categories.ts:86`) — bulk reorder, one request touching every category row.
-- `reorderStoreCategories` (`apps/web/src/lib/api/stores.ts:73`) — same shape, for a store's aisle order.
-- `attachStore`'s by-id path and `addFavoriteToList` (`apps/web/src/lib/api/favorites.ts` ~line 102) — join-table operations where the server computes the resulting row/sort order, so there's nothing to optimistically construct client-side today.
+Phase 5 (`foundational/PLAN.md`, Phase 5 status note) shipped offline-first writes for per-row create/update/delete, but explicitly left three call sites online-only because they didn't fit the single-row temp-id/`expectedVersion` model `offlineCreate`/`offlineMutate` (`apps/web/src/lib/offline/sync-engine.ts`) were built around: `reorderCategories`, `reorderStoreCategories`, and `attachStore`'s by-id path plus `addFavoriteToList`.
 
-A native app used standing in a store with no signal needs all of these to work offline too — reordering categories or grabbing a favorite mid-shop are exactly the moments connectivity is worst. This phase extends the sync-queue model rather than leaving them as a known gap:
-- `QueuedMutation.op` (`apps/web/src/lib/offline/db.ts`) gains `'reorder'` and `'attach'` variants alongside the existing `create`/`update`/`delete`.
-- Reorder: apply the new `sortOrder` to every affected local Dexie row immediately (optimistic), queue one mutation carrying the full `order` payload, and mark every touched row dirty (extending `isRowDirty()`, `apps/web/src/lib/offline/db.ts:108`) so an incoming realtime event for any of those rows doesn't clobber the optimistic order before the queued reorder flushes.
-- Attach/join operations: since the server computes the resulting row, the optimistic local row is a best-effort placeholder (e.g. a temp-id `Item`/`Store` row built from the favorite's/store's already-known local fields) that gets replaced by the server's authoritative response on flush — same reconciliation pattern `offlineCreate` already uses.
-- `apps/web/src/lib/offline/flush.ts`'s existing generic replay (stored `url`/`payload`/`expectedVersion`, replayed as-is) needs no structural change — it already doesn't dispatch per entity type — but its 409/conflict handling gets exercised by a new case (a reorder or attach queued while offline, replayed after another device already changed the same order) and needs test coverage for that path specifically.
+Implemented as designed, with two discovered refinements to the original plan:
+
+- `QueuedMutation.op` (`apps/web/src/lib/offline/db.ts`) gained `'reorder'` and `'attach'` variants. Reorder applies the new `sortOrder` to every affected local Dexie row immediately, queues one mutation via a new `offlineReorder` helper (`sync-engine.ts`, parallel to `offlineCreate`/`offlineMutate`), and marks every touched row dirty (`isRowDirty()` extended for the compound-keyed `storeCategoryOrders` table). Attach reuses `offlineCreate` outright (`op?: 'create' | 'attach'`, defaulting to `'create'`) rather than a separate helper — the mechanics are identical, `'attach'` exists purely so the sync-status page can describe it accurately instead of mislabeling it "Create".
+- **No conflict-handling path was added for reorder/attach, by design, not oversight**: the original plan expected 409s might occur ("replayed after another device already changed the same order"), but the actual reorder/attach endpoints (`categories_controller.ts`'s `reorder`, `stores_controller.ts`'s `reorderCategories`, the attach-by-id and add-to-list POSTs) never call `hasVersionConflict` — they bump versions or create rows unconditionally, with no `expectedVersion` check. A 409 is structurally impossible from these endpoints today, so `offlineReorder` queues with `expectedVersion: null` and `flush.ts`'s new `replayReorder` has no conflict branch. Redesigning those endpoints to support optimistic-concurrency checking on a bulk payload would be a real backend change outside this plan's scope.
+- `attachStore`'s by-id path has no live UI call site today (only `stores.spec.ts` exercises it directly) — its offline placeholder is exactly as best-effort as the original plan described, with no visible-regression risk either way.
+- Out of scope, deliberately: making `fetchCategories`/`fetchStoreCategoryOrder` merge locally-dirty rows on read (mirroring the `fetchItems` fix in the `2026-08-21` "offline sync DOM visibility" commit) — that would keep an offline reorder visible across a page navigation/reload during the offline window, but wasn't part of this section's ask, which was the write-side queue/dirty-flag/self-mutation-suppression mechanics. The calling components' own optimistic array updates (`categories/+page.svelte`, `stores/[storeId]/+page.svelte`) already keep the reorder visible for the in-memory session.
 
 ### 6. Settings sync-status page + banner — **done, superseded by Phase 14**
 
@@ -77,7 +75,7 @@ A native app used standing in a store with no signal needs all of these to work 
 The sections above are scoped, not sequenced — here's the actual build order and why, reviewed 2026-08-21:
 
 1. **§1 (base URL + CORS) — done.** The acknowledged load-bearing decision — §2/§3/§4/§7 all assume it's done, since nothing native can reach the real API or pass CORS without it. Small and mechanical; fully unit-testable without any native tooling.
-2. **§5 (offline reorder/attach/favorite-add gaps).** No dependency on Capacitor — touches only the sync engine (`db.ts`, `sync-engine.ts`, `sync-queue.ts`, `flush.ts`, `categories.ts`/`stores.ts`/`favorites.ts`) and is testable today via the existing Vitest/Playwright suite. Sequenced early (rather than right before §4) so the native app is offline-complete from the point it exists, not patched right before the device pass. It does need to be *done* before §4, since §4's manual verification re-tests these paths on-device.
+2. **§5 (offline reorder/attach/favorite-add gaps) — done.** No dependency on Capacitor — touches only the sync engine (`db.ts`, `sync-engine.ts`, `sync-queue.ts`, `flush.ts`, `categories.ts`/`stores.ts`/`favorites.ts`) and is testable today via the existing Vitest/Playwright suite. Sequenced early (rather than right before §4) so the native app is offline-complete from the point it exists, not patched right before the device pass. It does need to be *done* before §4, since §4's manual verification re-tests these paths on-device.
 3. **§2 (add Capacitor).** Needs §1 done first — no point wiring the native shell before it has anywhere real to point.
 4. **§3 (PWA/WebView reconciliation — SW gating, badge, SSE reconnect).** Needs §2's native projects to exist, since it's reconciling PWA behavior *against* the Capacitor WebView.
 5. **§4 (local build + manual device verification).** The integration checkpoint for §1–§3 and §5 together. **Needs the maintainer directly** — Xcode/iOS Simulator and Android Studio/emulator require a local GUI that isn't drivable from an agent session; native projects/configs/CLI builds can be prepared ahead of time, but the simulator/device walkthrough itself is a manual handoff.
@@ -91,13 +89,14 @@ Open decisions to pin down at the relevant stage (not blocking the order above):
 - `apps/web/capacitor.config.ts` — new, with `ios.path`/`android.path` pointed out to the top-level `apps/` siblings.
 - `apps/ios/`, `apps/android/` — new, generated + committed (native projects, top-level siblings of `apps/web`/`apps/api`, not nested under `apps/web`).
 - `apps/web/package.json` — new Capacitor dependencies + `cap:*` scripts.
-- `apps/web/.env.native` (or similar) — `PUBLIC_API_BASE_URL` for native builds.
-- `apps/api/config/cors.ts` — allow Capacitor origins.
+- `apps/web/.env.native` (or similar) — `VITE_API_BASE_URL` for native builds.
+- `apps/api/config/cors.ts` — allow Capacitor origins. **Done.**
 - `apps/web/src/lib/pwa/badge.ts` — native badge branch.
-- `apps/web/src/lib/offline/db.ts` — `QueuedMutation.op` gains `'reorder'`/`'attach'`; `isRowDirty()` extended.
-- `apps/web/src/lib/offline/sync-engine.ts` — new offline-aware helper(s) for bulk-reorder/attach mutations, alongside the existing `offlineCreate`/`offlineMutate`.
-- `apps/web/src/lib/offline/flush.ts` — new conflict-handling test coverage for reorder/attach replay (retry/failure-streak state is already exposed via `onFlushOutcome`, per Phase 14).
-- `apps/web/src/lib/api/categories.ts`, `apps/web/src/lib/api/stores.ts`, `apps/web/src/lib/api/favorites.ts` — route the three currently-online-only calls through the offline queue.
+- `apps/web/src/lib/offline/db.ts` — `QueuedMutation.op` gains `'reorder'`/`'attach'`; `isRowDirty()` extended. **Done.**
+- `apps/web/src/lib/offline/sync-engine.ts` — new `offlineReorder` helper for bulk reorders; `offlineCreate` gained an `op?: 'create' | 'attach'` option, reused for attach. **Done.**
+- `apps/web/src/lib/offline/flush.ts` — new `replayReorder` for queued reorder replay; no conflict-handling addition needed (see §5 — the endpoints involved can't 409). **Done.**
+- `apps/web/src/lib/api/categories.ts`, `apps/web/src/lib/api/stores.ts`, `apps/web/src/lib/api/favorites.ts` — route the three currently-online-only calls through the offline queue. **Done.**
+- `apps/web/src/routes/settings/sync/+page.svelte` — `describeMutation`'s op-to-verb mapping extended for `reorder`/`attach`. **Done.**
 - `.github/workflows/native-build.yml` — new.
 
 ## Verification

@@ -18,8 +18,15 @@ export type SyncEntityType =
 export interface QueuedMutation {
 	id?: number;
 	entityType: SyncEntityType;
-	op: 'create' | 'update' | 'delete';
-	/** The real server id, or a negative client-generated temp id for a queued create. */
+	/** `reorder`: a bulk operation touching every row in the scope (a list's categories, a
+	 * store's category order) — see PHASE13_PLAN.md §5. `attach`: a join/create-by-reference
+	 * operation (attaching an existing store, adding a favorite to a list) where the server
+	 * computes the resulting row — same optimistic-temp-id-then-replace shape as `create`,
+	 * kept as a distinct label only so the sync-status page can describe it accurately. */
+	op: 'create' | 'update' | 'delete' | 'reorder' | 'attach';
+	/** The real server id, or a negative client-generated temp id for a queued create/attach — or,
+	 * for `reorder`, the scope id (a list id for a category reorder, a store id for a store's
+	 * category order), since there's no single row to key a bulk operation on. */
 	targetId: number;
 	/** `null` for a queued create — there's nothing to conflict against yet. */
 	expectedVersion: number | null;
@@ -118,9 +125,12 @@ export function getDb(): EveryListDB | null {
 	return instance;
 }
 
-/** Entity types with a cached table that tracks a `_dirty` flag — `list` and
- * `store_category_order` are never written by the offline sync engine (see
- * offline/flush.ts's `QueueableEntityType`), so they never have an unacked local edit. */
+/** Entity types with a cached table that tracks a `_dirty` flag — `list` is never written by the
+ * offline sync engine (see offline/flush.ts's `QueueableEntityType`), so it never has an unacked
+ * local edit. `store_category_order` is compound-keyed ([storeId+categoryId], no single row per
+ * `entityId`), so its dirty check is "does *any* row for this store have an unacked edit" —
+ * `entityId` here is the store id, matching the `entityId` the backend broadcasts for a store's
+ * category-reorder event (stores_controller.ts's `reorderCategories`). */
 export async function isRowDirty(entityType: SyncEntityType, entityId: number): Promise<boolean> {
 	const db = getDb();
 	if (!db) return false;
@@ -133,8 +143,15 @@ export async function isRowDirty(entityType: SyncEntityType, entityId: number): 
 			return Boolean((await db.favoriteItems.get(entityId))?._dirty);
 		case 'store':
 			return Boolean((await db.stores.get(entityId))?._dirty);
+		case 'store_category_order': {
+			const dirtyCount = await db.storeCategoryOrders
+				.where('storeId')
+				.equals(entityId)
+				.filter((row) => row._dirty === true)
+				.count();
+			return dirtyCount > 0;
+		}
 		case 'list':
-		case 'store_category_order':
 			return false;
 	}
 }

@@ -18,7 +18,7 @@ vi.mock('./sync-queue', async (importOriginal) => {
 
 const { resetDbForTesting } = await import('./db');
 const { dequeueMutation } = await import('./sync-queue');
-const { offlineCreate, offlineMutate } = await import('./sync-engine');
+const { offlineCreate, offlineMutate, offlineReorder } = await import('./sync-engine');
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -74,6 +74,42 @@ describe('offlineMutate with an unresolvable queue id', () => {
 
 		expect(result).toBeUndefined();
 		expect(request).not.toHaveBeenCalled();
+		expect(dequeueMutation).not.toHaveBeenCalled();
+	});
+});
+
+describe('offlineReorder with an unresolvable queue id', () => {
+	it('still resolves normally on success without calling dequeueMutation', async () => {
+		const result = await offlineReorder<{ ok: true }>({
+			entityType: 'category',
+			scopeId: 1,
+			payload: {},
+			url: '/api/v1/x',
+			applyOptimistically: async () => ({ ok: true }),
+			onSuccess: vi.fn(),
+			request: async () => ({ ok: true })
+		});
+
+		expect(result).toEqual({ ok: true });
+		expect(dequeueMutation).not.toHaveBeenCalled();
+	});
+
+	it('still resolves normally after a real ApiError without calling dequeueMutation', async () => {
+		const { ApiError } = await import('$lib/api/client');
+		await expect(
+			offlineReorder<{ ok: true }>({
+				entityType: 'category',
+				scopeId: 1,
+				payload: {},
+				url: '/api/v1/x',
+				applyOptimistically: async () => ({ ok: true }),
+				onSuccess: vi.fn(),
+				request: async () => {
+					throw new ApiError(422, 'bad');
+				}
+			})
+		).rejects.toThrow('bad');
+
 		expect(dequeueMutation).not.toHaveBeenCalled();
 	});
 });

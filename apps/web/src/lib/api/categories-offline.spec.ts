@@ -17,13 +17,36 @@ vi.mock('./client', () => ({
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { createCategory, updateCategory, deleteCategory, fetchCategories } =
+const { createCategory, updateCategory, deleteCategory, fetchCategories, reorderCategories } =
 	await import('./categories');
+
+function setOnline(online: boolean) {
+	Object.defineProperty(globalThis, 'navigator', {
+		value: { onLine: online },
+		configurable: true
+	});
+}
 
 afterEach(async () => {
 	vi.clearAllMocks();
+	setOnline(true);
 	await resetDbForTesting();
 });
+
+async function seedCategory(db: ReturnType<typeof getDb>, id: number, sortOrder: number) {
+	await db!.categories.put({
+		id,
+		name: `Category ${id}`,
+		icon: 'cookie',
+		sortOrder,
+		listId: 1,
+		isDefault: false,
+		createdAt: '2026-08-01T00:00:00.000Z',
+		updatedAt: null,
+		deletedAt: null,
+		version: 1
+	});
+}
 
 describe('createCategory (Dexie available)', () => {
 	it('writes an optimistic row and resolves the server response', async () => {
@@ -151,5 +174,55 @@ describe('fetchCategories (cache hydration)', () => {
 		await fetchCategories(1);
 
 		expect((await db.categories.get(9))?.name).toBe('Produce (edited)');
+	});
+});
+
+describe('reorderCategories (Dexie available)', () => {
+	it('applies the new sortOrder optimistically and clears dirty on the server response', async () => {
+		const db = getDb();
+		await seedCategory(db, 1, 0);
+		await seedCategory(db, 2, 1);
+		vi.mocked(apiPatch).mockResolvedValue([
+			{ id: 2, name: 'Category 2', sortOrder: 0, version: 2 },
+			{ id: 1, name: 'Category 1', sortOrder: 1, version: 2 }
+		]);
+
+		const result = await reorderCategories(1, [2, 1]);
+
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/categories/reorder', {
+			order: [2, 1]
+		});
+		expect(result).toEqual([
+			{ id: 2, name: 'Category 2', sortOrder: 0, version: 2 },
+			{ id: 1, name: 'Category 1', sortOrder: 1, version: 2 }
+		]);
+		expect((await db!.categories.get(2))?._dirty).toBe(false);
+		expect((await db!.categories.get(1))?._dirty).toBe(false);
+	});
+
+	it('skips an id with no cached local row', async () => {
+		const db = getDb();
+		await seedCategory(db, 1, 0);
+		vi.mocked(apiPatch).mockResolvedValue([{ id: 1, sortOrder: 1, version: 2 }]);
+
+		await reorderCategories(1, [999, 1]);
+
+		expect((await db!.categories.get(1))?.sortOrder).toBe(1);
+	});
+
+	it('marks every touched row dirty and queues while offline', async () => {
+		const db = getDb();
+		await seedCategory(db, 1, 0);
+		await seedCategory(db, 2, 1);
+		setOnline(false);
+
+		const result = await reorderCategories(1, [2, 1]);
+
+		expect(result).toEqual([
+			expect.objectContaining({ id: 2, sortOrder: 0, _dirty: true }),
+			expect.objectContaining({ id: 1, sortOrder: 1, _dirty: true })
+		]);
+		expect((await db!.categories.get(2))?._dirty).toBe(true);
+		expect(apiPatch).not.toHaveBeenCalled();
 	});
 });

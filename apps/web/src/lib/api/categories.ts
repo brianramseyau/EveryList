@@ -1,6 +1,6 @@
 import type { CategoryDto } from '@everylist/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
-import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';
+import { offlineCreate, offlineMutate, offlineReorder } from '$lib/offline/sync-engine';
 // `vi.mock('$lib/offline/db', …)` in the item-detail page spec corrupts this import's V8
 // attribution once merged into the full suite (see $lib/offline/flush.ts and sync-queue.ts).
 /* v8 ignore start */
@@ -96,10 +96,32 @@ export async function deleteCategory(listId: number, categoryId: number): Promis
 	});
 }
 
-/** `order` is the full desired list of category ids, in the new order. Bulk reorders touch
- * every row in one request and aren't queued individually — this stays online-only. */
+/** `order` is the full desired list of category ids, in the new order (see PHASE13_PLAN.md §5). */
 export function reorderCategories(listId: number, order: number[]): Promise<CategoryDto[]> {
-	return apiPatch(`/api/v1/lists/${listId}/categories/reorder`, { order });
+	return offlineReorder<CategoryDto[]>({
+		entityType: 'category',
+		scopeId: listId,
+		payload: { order },
+		url: `/api/v1/lists/${listId}/categories/reorder`,
+		// Mirrors the backend's own indexing (categories_controller.ts's `reorder`): each id's
+		// position in `order` becomes its new `sortOrder`. Skips an id that isn't a cached local
+		// row (deleted/never-fetched) the same way the backend skips one that doesn't resolve.
+		applyOptimistically: async (db) => {
+			const rows: CategoryDto[] = [];
+			for (const [index, id] of order.entries()) {
+				const existing = await db.categories.get(id);
+				if (!existing) continue;
+				const updated = { ...existing, sortOrder: index, _dirty: true };
+				await db.categories.put(updated);
+				rows.push(updated);
+			}
+			return rows;
+		},
+		onSuccess: async (db, result) => {
+			await db.categories.bulkPut(result.map((row) => ({ ...row, _dirty: false })));
+		},
+		request: () => apiPatch(`/api/v1/lists/${listId}/categories/reorder`, { order })
+	});
 }
 
 /** Copies categories from another list into this one. Skips any category whose name already
