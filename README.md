@@ -149,6 +149,10 @@ CI (GitHub Actions) runs lint → typecheck → tests/coverage → Docker build 
 
 Full architecture, scope decisions, and the AnyList feature-by-feature decision matrix live in [`foundational/PLAN.md`](foundational/PLAN.md).
 
+## API docs
+
+Every instance — including your own self-hosted one — serves its full API reference at `/docs` (a [Scalar](https://scalar.com) UI, vendored so it works offline with no CDN calls), backed by the raw OpenAPI 3.1 document at `/openapi`. Both are unauthenticated. Generated from the Tuyau route registry, so it's always in sync with the actual API.
+
 ## Contributing
 
 This is a personal project built against [`foundational/PLAN.md`](foundational/PLAN.md) as the single source of truth — any deviation during implementation should be reflected back into that document first. Issues and PRs are welcome.

@@ -21,6 +21,12 @@ export const pwaManifest = {
 /** @type {Partial<import('workbox-build').GenerateSWOptions>} */
 export const workboxOptions = {
 	navigateFallback: '/200.html',
+	// Workbox's own default denylist only excludes URLs whose last path segment
+	// contains a dot (so it doesn't hijack requests for actual files) — `/docs`
+	// and `/openapi` don't match that, so without this they get swept into the
+	// SPA fallback and served the app shell instead of reaching AdonisJS, which
+	// renders as a client-side 404 until a hard reload bypasses the SW.
+	navigateFallbackDenylist: [/^\/docs/, /^\/openapi/],
 	// `@vite-pwa/sveltekit` globs `.svelte-kit/output/` (client build + SvelteKit's
 	// own prerendered output), not the final flat `build/` directory adapter-static
 	// produces later — hence the `client/`/`prerendered/` prefixes. It auto-adds its

@@ -127,7 +127,12 @@ export default defineConfig({
 		port: 5174,
 		strictPort: true,
 		proxy: {
-			'/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'
+			'/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334',
+			'/docs': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334',
+			'/openapi': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334',
+			// The Scalar UI served at /docs pulls its renderer from this path
+			// (config/openapi.ts's `uiAssetPath`, served from the API's public/).
+			'/scalar.js': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'
 		}
 	},
 	// `vite preview` serves the production `build/` (with the real sw.js) — the
@@ -138,7 +143,12 @@ export default defineConfig({
 		port: 4173,
 		strictPort: true,
 		proxy: {
-			'/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'
+			'/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334',
+			'/docs': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334',
+			'/openapi': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334',
+			// The Scalar UI served at /docs pulls its renderer from this path
+			// (config/openapi.ts's `uiAssetPath`, served from the API's public/).
+			'/scalar.js': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'
 		}
 	},
 	test: {
