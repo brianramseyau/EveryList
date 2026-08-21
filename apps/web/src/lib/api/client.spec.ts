@@ -158,6 +158,32 @@ describe('apiFetch', () => {
 	});
 });
 
+describe('apiFetch base URL prefixing', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.unstubAllEnvs();
+	});
+
+	it('requests a bare relative path when no base URL is configured', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { data: {} }));
+		vi.stubGlobal('fetch', fetchMock);
+
+		await apiFetch('/api/v1/lists');
+
+		expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/lists');
+	});
+
+	it('prefixes the request with the configured absolute base URL', async () => {
+		vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.com');
+		const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { data: {} }));
+		vi.stubGlobal('fetch', fetchMock);
+
+		await apiFetch('/api/v1/lists');
+
+		expect(fetchMock.mock.calls[0][0]).toBe('https://api.example.com/api/v1/lists');
+	});
+});
+
 describe('apiGet/apiPost/apiPatch/apiDelete', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();

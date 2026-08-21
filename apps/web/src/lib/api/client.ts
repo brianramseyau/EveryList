@@ -1,3 +1,4 @@
+import { apiBaseUrl } from './base-url';
 import { clearToken, getToken } from './token';
 
 export class ApiError extends Error {
@@ -53,7 +54,7 @@ export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}
 	if (init.body !== undefined) headers.set('Content-Type', 'application/json');
 	if (token) headers.set('Authorization', `Bearer ${token}`);
 
-	const response = await fetch(path, { ...init, headers });
+	const response = await fetch(`${apiBaseUrl()}${path}`, { ...init, headers });
 
 	if (!response.ok) {
 		if (response.status === 401) clearToken();

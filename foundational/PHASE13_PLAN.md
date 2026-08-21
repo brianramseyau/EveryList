@@ -21,12 +21,13 @@ The codebase is a favorable base for wrapping with **Capacitor**:
 
 ## Scope
 
-### 1. Make the API/realtime base URL configurable (prerequisite for everything else)
+### 1. Make the API/realtime base URL configurable (prerequisite for everything else) — **done**
 
-- `apps/web/src/lib/api/client.ts`: introduce a resolved `API_BASE_URL` (empty string for same-origin web/PWA builds — today's behavior, unchanged — or an absolute URL injected at build time for the native build) and prefix `apiFetch`'s request path with it instead of calling `fetch(path, ...)` directly against a bare relative path.
-- `apps/web/src/lib/realtime.ts`: same source of truth drives `Transmit`'s `baseUrl` instead of hard-coding `window.location.origin`.
-- Source the value via a Vite env var (`PUBLIC_API_BASE_URL`, SvelteKit's `$env/static/public` convention), defaulted to `''` so the existing web/PWA/Docker build is byte-for-byte unaffected when the var is unset. The Capacitor build supplies it via a `.env` consumed at `pnpm --filter web build` time before `npx cap sync`.
-- Update the AdonisJS API's CORS config (`apps/api/config/cors.ts`) to allow the Capacitor origins (`capacitor://localhost`, `https://localhost` for Android) in addition to whatever's already allowed for the PWA.
+- `apps/web/src/lib/api/base-url.ts` (new): `apiBaseUrl()`, empty string for same-origin web/PWA builds (today's behavior, unchanged) or an absolute URL injected at build time for the native build. Shared by `client.ts` and `realtime.ts` rather than living on `client.ts` itself, so importing it doesn't pull `client.ts`'s other dependencies (`token.ts`, `ApiError`) into `realtime.ts`.
+- `apps/web/src/lib/api/client.ts`: `apiFetch` now prefixes its request path with `apiBaseUrl()` instead of calling `fetch(path, ...)` directly against a bare relative path.
+- `apps/web/src/lib/realtime.ts`: same source of truth drives `Transmit`'s `baseUrl` (`apiBaseUrl() || window.location.origin`) instead of hard-coding `window.location.origin`.
+- Source the value via `import.meta.env.VITE_API_BASE_URL` — **not** `PUBLIC_API_BASE_URL`/SvelteKit's `$env/static/public` as originally planned. `$env/static/public` throws a hard build error for a named import with no matching env var, which would break every dev/CI/Docker build that never sets it (the default, required-unaffected case) — an unacceptable regression, discovered while implementing. `VITE_API_BASE_URL` is Vite's own always-safe (`undefined` when unset, no throw) mechanism, and matches the existing `VITE_API_PROXY_TARGET` convention already used in `vite.config.ts`. Defaults to `''` via `?? ''`, so the existing web/PWA/Docker build is byte-for-byte unaffected. The Capacitor build supplies it via a `.env` consumed at `pnpm --filter web build` time before `npx cap sync`.
+- Updated the AdonisJS API's CORS config (`apps/api/config/cors.ts`): production `origin` is `['capacitor://localhost', 'https://localhost']` (was `[]` — the PWA is same-origin and never needed a CORS allowlist entry, so there was nothing to preserve "in addition to").
 
 ### 2. Add Capacitor to `apps/web`
 
@@ -75,18 +76,18 @@ A native app used standing in a store with no signal needs all of these to work 
 
 The sections above are scoped, not sequenced — here's the actual build order and why, reviewed 2026-08-21:
 
-1. **§1 (base URL + CORS).** The acknowledged load-bearing decision — §2/§3/§4/§7 all assume it's done, since nothing native can reach the real API or pass CORS without it. Small and mechanical; fully unit-testable without any native tooling.
+1. **§1 (base URL + CORS) — done.** The acknowledged load-bearing decision — §2/§3/§4/§7 all assume it's done, since nothing native can reach the real API or pass CORS without it. Small and mechanical; fully unit-testable without any native tooling.
 2. **§5 (offline reorder/attach/favorite-add gaps).** No dependency on Capacitor — touches only the sync engine (`db.ts`, `sync-engine.ts`, `sync-queue.ts`, `flush.ts`, `categories.ts`/`stores.ts`/`favorites.ts`) and is testable today via the existing Vitest/Playwright suite. Sequenced early (rather than right before §4) so the native app is offline-complete from the point it exists, not patched right before the device pass. It does need to be *done* before §4, since §4's manual verification re-tests these paths on-device.
 3. **§2 (add Capacitor).** Needs §1 done first — no point wiring the native shell before it has anywhere real to point.
 4. **§3 (PWA/WebView reconciliation — SW gating, badge, SSE reconnect).** Needs §2's native projects to exist, since it's reconciling PWA behavior *against* the Capacitor WebView.
 5. **§4 (local build + manual device verification).** The integration checkpoint for §1–§3 and §5 together. **Needs the maintainer directly** — Xcode/iOS Simulator and Android Studio/emulator require a local GUI that isn't drivable from an agent session; native projects/configs/CLI builds can be prepared ahead of time, but the simulator/device walkthrough itself is a manual handoff.
 6. **§7 (CI signed builds).** Automates a build recipe, so it needs a working, manually-verified local build (§4) to codify first. **Needs secrets/account setup from the maintainer** (Android signing keystore; optionally an Apple Developer Program enrollment for a signed iOS build) — the workflow can be wired to consume them, but a legitimate signing identity can't be generated on its own.
 
-Open decisions to pin down at the relevant stage (not blocking the order above): the bundle ID for `capacitor.config.ts` (placeholder so far: `au.brianramsey.everylist`, confirm before §2), the real `PUBLIC_API_BASE_URL` for native builds (needed at §2/§4), and whether an Android signing keystore already exists or needs generating (needed at §7).
+Open decisions to pin down at the relevant stage (not blocking the order above): the bundle ID for `capacitor.config.ts` (placeholder so far: `au.brianramsey.everylist`, confirm before §2), the real `VITE_API_BASE_URL` for native builds (needed at §2/§4), and whether an Android signing keystore already exists or needs generating (needed at §7).
 
 ## Files to add/change (representative, not exhaustive)
 
-- `apps/web/src/lib/api/client.ts`, `apps/web/src/lib/realtime.ts` — configurable base URL.
+- `apps/web/src/lib/api/base-url.ts` (new), `apps/web/src/lib/api/client.ts`, `apps/web/src/lib/realtime.ts` — configurable base URL. **Done.**
 - `apps/web/capacitor.config.ts` — new, with `ios.path`/`android.path` pointed out to the top-level `apps/` siblings.
 - `apps/ios/`, `apps/android/` — new, generated + committed (native projects, top-level siblings of `apps/web`/`apps/api`, not nested under `apps/web`).
 - `apps/web/package.json` — new Capacitor dependencies + `cap:*` scripts.

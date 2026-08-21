@@ -1,5 +1,6 @@
 import { Transmit } from '@adonisjs/transmit-client';
 import type { SyncEventDto } from '@everylist/shared';
+import { apiBaseUrl } from './api/base-url';
 import { getToken } from './api/token';
 
 let client: Transmit | null = null;
@@ -19,7 +20,7 @@ function getClient(): Transmit | null {
 		// documented on `lib/api/selected-store.ts`, not missing coverage.
 		/* v8 ignore next 7 */
 		client = new Transmit({
-			baseUrl: window.location.origin,
+			baseUrl: apiBaseUrl() || window.location.origin,
 			beforeSubscribe: (request) => {
 				const token = getToken();
 				if (token) request.headers.set('Authorization', `Bearer ${token}`);

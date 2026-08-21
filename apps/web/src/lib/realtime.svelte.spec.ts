@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { Transmit } from '@adonisjs/transmit-client';
 
 const onMessage = vi.fn().mockReturnValue(vi.fn());
 const create = vi.fn().mockResolvedValue(undefined);
@@ -29,6 +30,7 @@ describe('realtime', () => {
 
 	afterEach(() => {
 		resetRealtimeClientForTesting();
+		vi.unstubAllEnvs();
 	});
 
 	it('subscribes to the given list channel and forwards messages', () => {
@@ -56,6 +58,22 @@ describe('realtime', () => {
 		const setHeader = vi.fn();
 		capturedOptions?.beforeSubscribe({ headers: { set: setHeader } });
 		expect(setHeader).not.toHaveBeenCalled();
+	});
+
+	it('connects to same-origin when no absolute base URL is configured', () => {
+		subscribeToList(1, vi.fn());
+		expect(capturedOptions).toBeDefined();
+		expect(vi.mocked(Transmit).mock.calls[0][0]).toMatchObject({
+			baseUrl: window.location.origin
+		});
+	});
+
+	it('connects to the configured absolute base URL for the native build', () => {
+		vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.com');
+		subscribeToList(1, vi.fn());
+		expect(vi.mocked(Transmit).mock.calls[0][0]).toMatchObject({
+			baseUrl: 'https://api.example.com'
+		});
 	});
 
 	it('reuses the same client across multiple subscriptions', () => {
