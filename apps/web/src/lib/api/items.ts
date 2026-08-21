@@ -4,38 +4,51 @@ import { suggestCategoryName } from '@everylist/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 import { getDb, type EveryListDB } from '$lib/offline/db';
 import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';
+import { withCacheFallback } from './cache-fallback';
 /* v8 ignore stop */
 
 export async function fetchItems(listId: number): Promise<ItemDto[]> {
-	const items = await apiGet<ItemDto[]>(`/api/v1/lists/${listId}/items`);
-	// Cache the server's copies into Dexie so a later offline edit can read the row's
-	// `version` to send as `expectedVersion` — without this the row is never cached and
-	// an offline toggle enqueues `expectedVersion: 0`, guaranteeing a spurious 409 on sync
-	// (see PHASE14_PLAN.md's sync-status page and apps/api's `reportVersionConflict`).
-	const db = getDb();
-	if (!db) return items;
+	return withCacheFallback(
+		async () => {
+			const items = await apiGet<ItemDto[]>(`/api/v1/lists/${listId}/items`);
+			// Cache the server's copies into Dexie so a later offline edit can read the row's
+			// `version` to send as `expectedVersion` — without this the row is never cached and
+			// an offline toggle enqueues `expectedVersion: 0`, guaranteeing a spurious 409 on sync
+			// (see PHASE14_PLAN.md's sync-status page and apps/api's `reportVersionConflict`).
+			const db = getDb();
+			if (!db) return items;
 
-	const ids = items.map((item) => item.id);
-	const existing = await db.items.bulkGet(ids);
-	// Never clobber a row with an unacked local edit (`_dirty`) with a stale re-fetch.
-	const toPut = items.filter((_item, index) => !existing[index]?._dirty);
-	if (toPut.length > 0) await db.items.bulkPut(toPut);
+			const ids = items.map((item) => item.id);
+			const existing = await db.items.bulkGet(ids);
+			// Never clobber a row with an unacked local edit (`_dirty`) with a stale re-fetch.
+			const toPut = items.filter((_item, index) => !existing[index]?._dirty);
+			if (toPut.length > 0) await db.items.bulkPut(toPut);
 
-	// Merge local optimistic edits into the result so they survive a re-fetch (e.g. navigating
-	// back to the list while still offline, where the network/cache response predates the edit).
-	// A dirty local row overrides the server's copy, a locally-created (temp-id) row is appended,
-	// and a soft-deleted row is dropped. Map insertion order keeps the server's `sortOrder` order
-	// for existing rows while appending offline-created rows at the end.
-	const dirtyRows = await db.items
-		.filter((item) => item.listId === listId && item._dirty === true)
-		.toArray();
-	const byId = new Map<number, ItemDto>();
-	for (const item of items) byId.set(item.id, item);
-	for (const row of dirtyRows) {
-		if (row.deletedAt) byId.delete(row.id);
-		else byId.set(row.id, row);
-	}
-	return [...byId.values()];
+			// Merge local optimistic edits into the result so they survive a re-fetch (e.g. navigating
+			// back to the list while still offline, where the network/cache response predates the edit).
+			// A dirty local row overrides the server's copy, a locally-created (temp-id) row is appended,
+			// and a soft-deleted row is dropped. Map insertion order keeps the server's `sortOrder` order
+			// for existing rows while appending offline-created rows at the end.
+			const dirtyRows = await db.items
+				.filter((item) => item.listId === listId && item._dirty === true)
+				.toArray();
+			const byId = new Map<number, ItemDto>();
+			for (const item of items) byId.set(item.id, item);
+			for (const row of dirtyRows) {
+				if (row.deletedAt) byId.delete(row.id);
+				else byId.set(row.id, row);
+			}
+			return [...byId.values()];
+		},
+		async () => {
+			const db = getDb();
+			if (!db) return undefined;
+			const rows = await db.items
+				.filter((item) => item.listId === listId && !item.deletedAt)
+				.toArray();
+			return rows.sort((a, b) => a.sortOrder - b.sortOrder);
+		}
+	);
 }
 
 /** Soft-deleted items still within their recovery window, most recent first. */

@@ -15,7 +15,7 @@ vi.mock('./client', () => ({
 	}
 }));
 
-const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
+const { apiGet, apiPost, apiPatch, apiDelete, ApiError } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { createCategory, updateCategory, deleteCategory, fetchCategories, reorderCategories } =
 	await import('./categories');
@@ -174,6 +174,38 @@ describe('fetchCategories (cache hydration)', () => {
 		await fetchCategories(1);
 
 		expect((await db.categories.get(9))?.name).toBe('Produce (edited)');
+	});
+
+	it('falls back to cached rows, sorted by sortOrder, when the network fails', async () => {
+		vi.mocked(apiGet).mockResolvedValue([
+			{ id: 9, name: 'Produce', listId: 1, sortOrder: 1 },
+			{ id: 8, name: 'Dairy', listId: 1, sortOrder: 0 }
+		]);
+		await fetchCategories(1);
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+
+		const result = await fetchCategories(1);
+
+		expect(result.map((category) => category.id)).toEqual([8, 9]);
+	});
+
+	it('rethrows an ApiError without falling back to cache', async () => {
+		const db = getDb()!;
+		await db.categories.put({
+			id: 9,
+			name: 'Produce',
+			icon: 'fruit',
+			sortOrder: 0,
+			listId: 1,
+			isDefault: false,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		vi.mocked(apiGet).mockRejectedValue(new ApiError(403, 'Forbidden'));
+
+		await expect(fetchCategories(1)).rejects.toThrow('Forbidden');
 	});
 });
 

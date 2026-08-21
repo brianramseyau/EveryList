@@ -317,6 +317,99 @@ Implemented as designed, with two discovered refinements to the original plan:
   - **iOS:** an unsigned/simulator build at minimum; a signed device/TestFlight-capable build additionally requires an Apple Developer Program enrollment and certificates/provisioning profiles as CI secrets (account-level setup, outside this plan's engineering scope).
 - Artifacts uploaded as workflow build artifacts (not published to a store, matching the "sideload for now" decision) so a signed build is always one Actions run away without needing a local machine.
 
+### 8. Native offline reads: cache-fallback for GET fetchers — **done**
+
+Found via a real device pass, not code review: on native, `/lists` showed "Failed to load
+lists." with an empty state when the API server was down — even though Dexie already had cached
+list data from earlier in the same session. Root cause: the PWA/browser build gets a `NetworkFirst`
+Workbox cache on every `/api/v1/*` GET (`apps/web/pwa.config.mjs`), falling back to the last
+successful Cache Storage response on a network failure — but native never registers that service
+worker at all (§3's deliberate SW gating: unsupported/unreliable against Capacitor's local
+`https://localhost` origin), and nothing had ever been put in its place. The write side (offline
+mutation queue, `sync-engine.ts`, `flush.ts`) was already genuinely offline-first; only reads were
+broken, and only on native.
+
+- New `apps/web/src/lib/api/cache-fallback.ts`: a single shared `withCacheFallback(request,
+  fallback)` helper rather than duplicating the same `err instanceof ApiError` check at every call
+  site (which `sync-engine.ts`'s `offlineCreate`/`offlineMutate` already do individually for
+  writes). Falls back to cached data only on a genuine network failure — never on a real `ApiError`
+  (404/403/401), since masking a real 403 with stale cache could show a list the user was just
+  removed from. `fallback` returning `undefined` means "nothing cached," and rethrows the original
+  error; a collection-shaped fallback returns `[]` for "cached but empty," which is a legitimate
+  result, not a rethrow trigger.
+- `apps/web/src/lib/offline/db.ts`, `version(3)`: new `folders` table (`FolderDto`, no `_dirty`
+  bookkeeping — folders have no offline write path) and `OfflineList._localSortOrder` — `ListDto`
+  has no server-exposed position field of its own (unlike `CategoryDto`/`ItemDto`/`FolderDto`,
+  which all have `sortOrder`), so this is the only way an offline `fetchLists` fallback can
+  reproduce the user's chosen order. Set from array index in `fetchLists`; preserved (not reset)
+  when a single-row `fetchList` re-puts that row.
+- `fetchList`/`fetchLists` (`lists.ts`) and `fetchFolders` (`folders.ts`) get their first-ever
+  Dexie caching, using the `lists` table (previously declared but fully dead code — nothing had
+  ever written or read it) and the new `folders` table. `fetchStoreCategoryOrder` (`stores.ts`)
+  gets the same treatment using the already-existing `storeCategoryOrders` table (already written
+  by the offline *write* path's `offlineReorder`/`replayReorder`, just never read back). This was
+  the highest-leverage part of the fix — nearly every page's first parallel fetch is
+  `fetchList(listId)`.
+- `fetchCategories`, `fetchItems`, `fetchStores`, `fetchFavorites` already cached their responses
+  into Dexie on success (`bulkGet`/skip-`_dirty`/`bulkPut`) — only the fallback half was missing;
+  their existing bodies are unchanged, just wrapped as `withCacheFallback`'s `request` closure.
+- **Pages needed zero changes.** Every page's `loadAll()` already had the shape
+  `try { […] = await Promise.all([fetchX(), …]) } catch { error = … }` — since the fallback now
+  lives inside the `fetch*` functions, `Promise.all` resolves normally whenever cached data was
+  found, and the existing catch only fires when there's truly nothing (no cache and no network),
+  which is already correct. No new offline banner needed either — a page populated from cache is
+  already covered by the existing global `SyncStatusIcon`/`connectivity.svelte.ts` indicator (§6).
+- **Explicitly out of scope**: `members`/`invites`, `recently-deleted` (`fetchRecentItems` — not
+  to be confused with `fetchRecentItemNames`, the *autocomplete* suggestions function, which
+  already had its own offline fallback before this work and was untouched), `fetchProfile`,
+  `fetchMeta` stay network-only. Membership/invite data reflects who currently has access — a
+  stale cache could show someone as still having access after removal (or the reverse), a worse
+  failure mode than an honest error, unlike a list's own name/color staying stale.
+  `recently-deleted` is a time-boxed recovery workflow where a stale cache could misrepresent
+  what's actually still recoverable. None of the four have a Dexie table today, and unlike the six
+  entities above (all simple `id`-keyed rows), members/invites have accept/decline state machines
+  with no natural single-row versioning to build a cheap cache-fallback around.
+- **Found only by running the full suite, not by review**: `routes/lists/+page.svelte.spec.ts` is
+  the one page spec that stubs the global `fetch` directly instead of mocking `$lib/api/lists`/
+  `$lib/api/folders` — every sibling page spec does mock the API module and was correctly
+  unaffected. Since this spec runs in a real browser (vitest-browser-svelte) with real IndexedDB,
+  it now exercises the genuine Dexie fallback, and surfaced two real things: (1) Dexie state was
+  leaking between tests in that file with nothing resetting it (fixed with a `resetDbForTesting()`
+  in `afterEach`, following the offline-spec convention used elsewhere); (2) its "generic error on
+  a non-ApiError failure" test was testing behavior that's no longer reachable by design — a plain
+  network failure with nothing cached now resolves to the empty state, not an error — so it was
+  repurposed to assert exactly that, with a new adjacent test (stubbing `indexedDB` itself as
+  `undefined`) covering the one way "Failed to load lists." *is* still reachable: Dexie truly
+  unavailable, not just the network being down.
+- Two genuine coverage gaps (not the cross-file artifact below) needed real tests, not
+  suppression: `lists.ts`'s fallback sort comparator (`(a._localSortOrder ?? 0) - (b…)`) needs a
+  row with no `_localSortOrder` — reachable in practice via a list cached only through `fetchList`,
+  never through `fetchLists` — to exercise its `?? 0` branches; `items.ts`'s fallback sort
+  comparator needs *two* cached rows, since `Array.prototype.sort` never invokes its comparator at
+  all for a zero/one-element array.
+- The now-familiar Vitest browser-mode cross-file coverage artifact (documented repeatedly
+  elsewhere in this codebase, e.g. `lib/api/selected-store.ts`) showed up twice more here: the new
+  `if (db) { … }` branch in `lists.ts`/`folders.ts`'s success path, and the new
+  `withCacheFallback` import itself in `categories.ts`/`items.ts`/`stores.ts`/`favorites.ts` (each
+  provably 100% in isolation, degrading only once merged with every other spec mocking those same
+  modules) — both bracketed with `/* v8 ignore start/stop */` following the established
+  convention, the import case by folding it into each file's existing `getDb` ignore block rather
+  than adding a second one.
+- Recommended e2e addition, added: `apps/web/e2e/offline-sync.e2e.ts` gained a second test
+  alongside the existing offline-write scenario — creates a list, adds an item, reloads once
+  online (warming Dexie via a real `fetchList`/`fetchItems`), then blocks only `/api/v1/**` via
+  `page.route(...).abort()` (not `page.context().setOffline(true)`, which also blocks the dev
+  server's own page/JS delivery — inaccurate here, since a native app's shell always loads
+  instantly from local files regardless of network state, only its API calls fail) and hard-reloads
+  to confirm the list still renders instead of "Failed to load list." This is the one test that
+  actually exercises the bug as found, the same way this phase's own history (the iOS
+  `SceneDelegate` bug in §4, the SPA-fallback bug in §4) has repeatedly shown code review alone
+  missing real defects.
+
+Verified: `pnpm --filter web run check`, `pnpm --filter web run lint`, `pnpm --filter web run
+test` (100% statements/branches/functions/lines), and `pnpm exec playwright test
+e2e/offline-sync.e2e.ts` (both scenarios) all pass.
+
 ## Execution order
 
 The sections above are scoped, not sequenced — here's the actual build order and why, reviewed 2026-08-21:
@@ -348,6 +441,12 @@ Open decisions to pin down at the relevant stage (not blocking the order above):
 - `apps/web/src/lib/offline/flush.ts` — new `replayReorder` for queued reorder replay; no conflict-handling addition needed (see §5 — the endpoints involved can't 409). **Done.**
 - `apps/web/src/lib/api/categories.ts`, `apps/web/src/lib/api/stores.ts`, `apps/web/src/lib/api/favorites.ts` — route the three currently-online-only calls through the offline queue. **Done.**
 - `apps/web/src/routes/settings/sync/+page.svelte` — `describeMutation`'s op-to-verb mapping extended for `reorder`/`attach`. **Done.**
+- `apps/web/src/lib/api/cache-fallback.ts` — new, the shared network-first/Dexie-fallback helper. **Done.**
+- `apps/web/src/lib/offline/db.ts` — `folders` table (`version(3)`), `OfflineList._localSortOrder`. **Done.**
+- `apps/web/src/lib/api/lists.ts`, `apps/web/src/lib/api/folders.ts` — `fetchList`/`fetchLists`/`fetchFolders` gain their first Dexie caching + fallback. **Done.**
+- `apps/web/src/lib/api/categories.ts`, `apps/web/src/lib/api/items.ts`, `apps/web/src/lib/api/stores.ts` (`fetchStores` + `fetchStoreCategoryOrder`), `apps/web/src/lib/api/favorites.ts` — cache-fallback added to their existing fetchers. **Done.**
+- `apps/web/src/routes/lists/+page.svelte.spec.ts` — `resetDbForTesting()` cleanup added, one test repurposed to match the new fallback-to-empty-state behavior, one new test added for the Dexie-truly-unavailable case. **Done.**
+- `apps/web/e2e/offline-sync.e2e.ts` — new offline-read scenario. **Done.**
 - `.github/workflows/native-build.yml` — new.
 
 ## Verification

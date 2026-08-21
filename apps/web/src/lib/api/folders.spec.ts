@@ -4,7 +4,14 @@ vi.mock('./client', () => ({
 	apiGet: vi.fn(),
 	apiPost: vi.fn(),
 	apiPatch: vi.fn(),
-	apiDelete: vi.fn()
+	apiDelete: vi.fn(),
+	ApiError: class ApiError extends Error {
+		status: number;
+		constructor(status: number, message: string) {
+			super(message);
+			this.status = status;
+		}
+	}
 }));
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
@@ -13,8 +20,14 @@ const { createFolder, deleteFolder, fetchFolders, reorderFolders, updateFolder }
 
 describe('folders api', () => {
 	it('fetchFolders GETs the collection', () => {
+		vi.mocked(apiGet).mockResolvedValue([]);
 		fetchFolders();
 		expect(apiGet).toHaveBeenCalledWith('/api/v1/folders');
+	});
+
+	it('fetchFolders rethrows the network error when Dexie is not available', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+		await expect(fetchFolders()).rejects.toThrow('network down');
 	});
 
 	it('createFolder POSTs the input', () => {

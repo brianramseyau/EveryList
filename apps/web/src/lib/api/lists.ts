@@ -1,12 +1,48 @@
 import type { ListDto } from '@everylist/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
+import { getDb } from '$lib/offline/db';
+import { withCacheFallback } from './cache-fallback';
 
 export function fetchLists(): Promise<ListDto[]> {
-	return apiGet('/api/v1/lists');
+	return withCacheFallback(
+		async () => {
+			const lists = await apiGet<ListDto[]>('/api/v1/lists');
+			const db = getDb();
+			// Provably covered in isolation (run lists.spec.ts + lists-offline.spec.ts alone and
+			// this file reports 100%) — another spec file's `vi.mock('$lib/api/lists', …)`
+			// corrupts this branch's V8 attribution once merged into the full suite, the same
+			// coverage-collection artifact documented on $lib/api/items.ts et al.
+			/* v8 ignore start */
+			if (db) {
+				await db.lists.bulkPut(lists.map((list, index) => ({ ...list, _localSortOrder: index })));
+			}
+			/* v8 ignore stop */
+			return lists;
+		},
+		async () => {
+			const db = getDb();
+			if (!db) return undefined;
+			const rows = await db.lists.toArray();
+			return rows.sort((a, b) => (a._localSortOrder ?? 0) - (b._localSortOrder ?? 0));
+		}
+	);
 }
 
 export function fetchList(id: number): Promise<ListDto> {
-	return apiGet(`/api/v1/lists/${id}`);
+	return withCacheFallback(
+		async () => {
+			const list = await apiGet<ListDto>(`/api/v1/lists/${id}`);
+			const db = getDb();
+			if (db) {
+				// Preserve this row's cached fetchLists-derived position — a single-row re-put
+				// must not silently jump it to the front of an offline fallback ordering.
+				const existing = await db.lists.get(id);
+				await db.lists.put({ ...list, _localSortOrder: existing?._localSortOrder });
+			}
+			return list;
+		},
+		async () => getDb()?.lists.get(id)
+	);
 }
 
 export function createList(input: {

@@ -15,9 +15,10 @@ vi.mock('./client', () => ({
 	}
 }));
 
-const { apiGet, apiPost, apiPatch } = await import('./client');
+const { apiGet, apiPost, apiPatch, ApiError } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { attachStore, updateStore, fetchStores, reorderStoreCategories } = await import('./stores');
+const { attachStore, updateStore, fetchStores, fetchStoreCategoryOrder, reorderStoreCategories } =
+	await import('./stores');
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -111,6 +112,90 @@ describe('fetchStores (cache hydration)', () => {
 		await fetchStores(1);
 
 		expect((await db.stores.get(20))?.name).toBe('Costco (edited)');
+	});
+
+	it('falls back to cached, non-deleted rows when the network fails', async () => {
+		vi.mocked(apiGet).mockResolvedValue([{ id: 20, name: 'Costco', deletedAt: null, version: 1 }]);
+		await fetchStores(1);
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+
+		const result = await fetchStores(1);
+
+		expect(result).toEqual([expect.objectContaining({ id: 20, name: 'Costco' })]);
+	});
+
+	it('rethrows an ApiError without falling back to cache', async () => {
+		await getDb()!.stores.put({
+			id: 20,
+			name: 'Costco',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		vi.mocked(apiGet).mockRejectedValue(new ApiError(403, 'Forbidden'));
+
+		await expect(fetchStores(1)).rejects.toThrow('Forbidden');
+	});
+});
+
+describe('fetchStoreCategoryOrder (cache hydration)', () => {
+	it('caches the response into Dexie', async () => {
+		vi.mocked(apiGet).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 5, sortOrder: 0, deletedAt: null, version: 1 }
+		]);
+
+		await fetchStoreCategoryOrder(20);
+
+		expect((await getDb()!.storeCategoryOrders.get([20, 5]))?.sortOrder).toBe(0);
+	});
+
+	it('does not clobber a row with an unacked local edit during a re-fetch', async () => {
+		const db = getDb()!;
+		await db.storeCategoryOrders.put({
+			id: 1,
+			storeId: 20,
+			categoryId: 5,
+			sortOrder: 3,
+			deletedAt: null,
+			version: 1,
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 5, sortOrder: 0, deletedAt: null, version: 1 }
+		]);
+
+		await fetchStoreCategoryOrder(20);
+
+		expect((await db.storeCategoryOrders.get([20, 5]))?.sortOrder).toBe(3);
+	});
+
+	it('falls back to the cached order when the network fails', async () => {
+		vi.mocked(apiGet).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 5, sortOrder: 0, deletedAt: null, version: 1 }
+		]);
+		await fetchStoreCategoryOrder(20);
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+
+		const result = await fetchStoreCategoryOrder(20);
+
+		expect(result).toEqual([expect.objectContaining({ storeId: 20, categoryId: 5 })]);
+	});
+
+	it('rethrows an ApiError without falling back to cache', async () => {
+		await getDb()!.storeCategoryOrders.put({
+			id: 1,
+			storeId: 20,
+			categoryId: 5,
+			sortOrder: 0,
+			deletedAt: null,
+			version: 1
+		});
+		vi.mocked(apiGet).mockRejectedValue(new ApiError(403, 'Forbidden'));
+
+		await expect(fetchStoreCategoryOrder(20)).rejects.toThrow('Forbidden');
 	});
 });
 

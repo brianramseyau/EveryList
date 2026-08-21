@@ -5,22 +5,34 @@ import { offlineCreate, offlineMutate, offlineReorder } from '$lib/offline/sync-
 // attribution once merged into the full suite (see $lib/offline/flush.ts and sync-queue.ts).
 /* v8 ignore start */
 import { getDb } from '$lib/offline/db';
+import { withCacheFallback } from './cache-fallback';
 /* v8 ignore stop */
 
 export type { StoreCategoryOrderDto };
 
 export async function fetchStores(listId: number): Promise<StoreDto[]> {
-	const stores = await apiGet<StoreDto[]>(`/api/v1/lists/${listId}/stores`);
-	// Cache the server's copies into Dexie so a later offline edit can read the row's
-	// `version` for its `expectedVersion` — see fetchItems in items.ts for the full rationale.
-	const db = getDb();
-	if (db) {
-		const ids = stores.map((store) => store.id);
-		const existing = await db.stores.bulkGet(ids);
-		const toPut = stores.filter((_store, index) => !existing[index]?._dirty);
-		if (toPut.length > 0) await db.stores.bulkPut(toPut);
-	}
-	return stores;
+	return withCacheFallback(
+		async () => {
+			const stores = await apiGet<StoreDto[]>(`/api/v1/lists/${listId}/stores`);
+			// Cache the server's copies into Dexie so a later offline edit can read the row's
+			// `version` for its `expectedVersion` — see fetchItems in items.ts for the full rationale.
+			const db = getDb();
+			if (db) {
+				const ids = stores.map((store) => store.id);
+				const existing = await db.stores.bulkGet(ids);
+				const toPut = stores.filter((_store, index) => !existing[index]?._dirty);
+				if (toPut.length > 0) await db.stores.bulkPut(toPut);
+			}
+			return stores;
+		},
+		async () => {
+			const db = getDb();
+			if (!db) return undefined;
+			// Stores aren't list-scoped in Dexie (`StoreDto` has no `listId`) — the cache holds
+			// every store this client has ever fetched across any list.
+			return db.stores.filter((store) => !store.deletedAt).toArray();
+		}
+	);
 }
 
 /** Attaches an existing store (storeId) or creates + attaches a new one (name). Attaching by id
@@ -108,7 +120,29 @@ export async function updateStore(
 }
 
 export function fetchStoreCategoryOrder(storeId: number): Promise<StoreCategoryOrderDto[]> {
-	return apiGet(`/api/v1/stores/${storeId}/categories`);
+	return withCacheFallback(
+		async () => {
+			const rows = await apiGet<StoreCategoryOrderDto[]>(`/api/v1/stores/${storeId}/categories`);
+			const db = getDb();
+			if (db) {
+				const existing = await db.storeCategoryOrders.bulkGet(
+					rows.map((row) => [row.storeId, row.categoryId] as [number, number])
+				);
+				const toPut = rows.filter((_row, index) => !existing[index]?._dirty);
+				if (toPut.length > 0) await db.storeCategoryOrders.bulkPut(toPut);
+			}
+			return rows;
+		},
+		async () => {
+			const db = getDb();
+			if (!db) return undefined;
+			return db.storeCategoryOrders
+				.where('storeId')
+				.equals(storeId)
+				.filter((row) => !row.deletedAt)
+				.toArray();
+		}
+	);
 }
 
 export function reorderStoreCategories(

@@ -5,20 +5,33 @@ import { offlineCreate, offlineMutate, offlineReorder } from '$lib/offline/sync-
 // attribution once merged into the full suite (see $lib/offline/flush.ts and sync-queue.ts).
 /* v8 ignore start */
 import { getDb } from '$lib/offline/db';
+import { withCacheFallback } from './cache-fallback';
 /* v8 ignore stop */
 
 export async function fetchCategories(listId: number): Promise<CategoryDto[]> {
-	const categories = await apiGet<CategoryDto[]>(`/api/v1/lists/${listId}/categories`);
-	// Cache the server's copies into Dexie so a later offline edit can read the row's
-	// `version` for its `expectedVersion` — see fetchItems in items.ts for the full rationale.
-	const db = getDb();
-	if (db) {
-		const ids = categories.map((category) => category.id);
-		const existing = await db.categories.bulkGet(ids);
-		const toPut = categories.filter((_category, index) => !existing[index]?._dirty);
-		if (toPut.length > 0) await db.categories.bulkPut(toPut);
-	}
-	return categories;
+	return withCacheFallback(
+		async () => {
+			const categories = await apiGet<CategoryDto[]>(`/api/v1/lists/${listId}/categories`);
+			// Cache the server's copies into Dexie so a later offline edit can read the row's
+			// `version` for its `expectedVersion` — see fetchItems in items.ts for the full rationale.
+			const db = getDb();
+			if (db) {
+				const ids = categories.map((category) => category.id);
+				const existing = await db.categories.bulkGet(ids);
+				const toPut = categories.filter((_category, index) => !existing[index]?._dirty);
+				if (toPut.length > 0) await db.categories.bulkPut(toPut);
+			}
+			return categories;
+		},
+		async () => {
+			const db = getDb();
+			if (!db) return undefined;
+			const rows = await db.categories
+				.filter((category) => category.listId === listId && !category.deletedAt)
+				.toArray();
+			return rows.sort((a, b) => a.sortOrder - b.sortOrder);
+		}
+	);
 }
 
 export async function createCategory(

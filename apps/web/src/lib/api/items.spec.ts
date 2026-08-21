@@ -4,7 +4,14 @@ vi.mock('./client', () => ({
 	apiGet: vi.fn(),
 	apiPost: vi.fn(),
 	apiPatch: vi.fn(),
-	apiDelete: vi.fn()
+	apiDelete: vi.fn(),
+	ApiError: class ApiError extends Error {
+		status: number;
+		constructor(status: number, message: string) {
+			super(message);
+			this.status = status;
+		}
+	}
 }));
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
@@ -78,5 +85,10 @@ describe('items api', () => {
 	it('fetchRecentItemNames falls back to an empty list when the request fails and Dexie is unavailable', async () => {
 		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
 		await expect(fetchRecentItemNames(1)).resolves.toEqual([]);
+	});
+
+	it('fetchItems rethrows the network error when Dexie is not available', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+		await expect(fetchItems(1)).rejects.toThrow('network down');
 	});
 });

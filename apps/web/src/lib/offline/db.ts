@@ -5,7 +5,8 @@ import type {
 	ItemDto,
 	FavoriteItemDto,
 	StoreDto,
-	StoreCategoryOrderDto
+	StoreCategoryOrderDto,
+	FolderDto
 } from '@everylist/shared';
 
 /**
@@ -72,12 +73,26 @@ interface OfflineBookkeeping {
 	_dirty?: boolean;
 }
 
-export type OfflineList = ListDto & OfflineBookkeeping;
+export type OfflineList = ListDto &
+	OfflineBookkeeping & {
+		/** Position in the most recent successful `fetchLists` response. `ListDto` carries no
+		 * server-exposed sort field of its own (unlike `CategoryDto`/`ItemDto`/`FolderDto`, which
+		 * all have `sortOrder` — `reorderLists` reorders per-user server state that never round-trips
+		 * back onto the DTO), so this is the only way the offline fallback in `lists.ts`'s
+		 * `fetchLists` can reproduce the user's chosen order while the network is down. Not set by
+		 * `fetchList`, which must not disturb a row's already-known position when it re-puts just
+		 * that one row. */
+		_localSortOrder?: number;
+	};
 export type OfflineCategory = CategoryDto & OfflineBookkeeping;
 export type OfflineItem = ItemDto & OfflineBookkeeping;
 export type OfflineFavoriteItem = FavoriteItemDto & OfflineBookkeeping;
 export type OfflineStore = StoreDto & OfflineBookkeeping;
 export type OfflineStoreCategoryOrder = StoreCategoryOrderDto & OfflineBookkeeping;
+/** Folders are never written by the offline sync engine — there's no `'folder'` `SyncEntityType`,
+ * folder writes stay online-only (see PHASE13_PLAN.md §8's scope note) — so there's no `_dirty`
+ * bookkeeping to carry, unlike the other cached entities above. */
+export type OfflineFolder = FolderDto;
 
 export class EveryListDB extends Dexie {
 	lists!: Table<OfflineList, number>;
@@ -89,6 +104,7 @@ export class EveryListDB extends Dexie {
 	/** The local-only "currently shopping at" selection — never touches syncQueue, see PLAN.md §7/§9. */
 	selectedStore!: Table<SelectedStoreRow, number>;
 	syncQueue!: Table<QueuedMutation, number>;
+	folders!: Table<OfflineFolder, number>;
 
 	constructor() {
 		super('everylist');
@@ -104,6 +120,9 @@ export class EveryListDB extends Dexie {
 		});
 		this.version(2).stores({
 			items: 'id, [listId+deletedAt], categoryId, storeId'
+		});
+		this.version(3).stores({
+			folders: 'id'
 		});
 	}
 }

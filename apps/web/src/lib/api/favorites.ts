@@ -5,20 +5,32 @@ import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';
 // attribution once merged into the full suite (see $lib/offline/flush.ts and sync-queue.ts).
 /* v8 ignore start */
 import { getDb } from '$lib/offline/db';
+import { withCacheFallback } from './cache-fallback';
 /* v8 ignore stop */
 
 export async function fetchFavorites(listId: number): Promise<FavoriteItemDto[]> {
-	const favorites = await apiGet<FavoriteItemDto[]>(`/api/v1/lists/${listId}/favorites`);
-	// Cache the server's copies into Dexie so a later offline edit can read the row's
-	// `version` for its `expectedVersion` — see fetchItems in items.ts for the full rationale.
-	const db = getDb();
-	if (db) {
-		const ids = favorites.map((favorite) => favorite.id);
-		const existing = await db.favoriteItems.bulkGet(ids);
-		const toPut = favorites.filter((_favorite, index) => !existing[index]?._dirty);
-		if (toPut.length > 0) await db.favoriteItems.bulkPut(toPut);
-	}
-	return favorites;
+	return withCacheFallback(
+		async () => {
+			const favorites = await apiGet<FavoriteItemDto[]>(`/api/v1/lists/${listId}/favorites`);
+			// Cache the server's copies into Dexie so a later offline edit can read the row's
+			// `version` for its `expectedVersion` — see fetchItems in items.ts for the full rationale.
+			const db = getDb();
+			if (db) {
+				const ids = favorites.map((favorite) => favorite.id);
+				const existing = await db.favoriteItems.bulkGet(ids);
+				const toPut = favorites.filter((_favorite, index) => !existing[index]?._dirty);
+				if (toPut.length > 0) await db.favoriteItems.bulkPut(toPut);
+			}
+			return favorites;
+		},
+		async () => {
+			const db = getDb();
+			if (!db) return undefined;
+			return db.favoriteItems
+				.filter((favorite) => favorite.listId === listId && !favorite.deletedAt)
+				.toArray();
+		}
+	);
 }
 
 export async function createFavorite(
