@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { getDb, resetDbForTesting } from './db';
 import {
 	dequeueMutation,
+	enqueueConsolidated,
 	enqueueMutation,
 	failedMutations,
 	pendingMutations,
@@ -36,6 +37,121 @@ describe('enqueueMutation', () => {
 			attempts: 0
 		});
 		expect(mutation!.createdAt).toBeTypeOf('number');
+	});
+});
+
+describe('enqueueConsolidated', () => {
+	it('folds a second update into the first, keeping the original expectedVersion', async () => {
+		const firstId = await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 5,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x/5'
+		});
+
+		const result = await enqueueConsolidated({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 5,
+			payload: { checked: true },
+			url: '/api/v1/x/5'
+		});
+
+		expect(result).toEqual({ id: firstId, alreadyPending: true });
+		const pending = await pendingMutations();
+		expect(pending).toHaveLength(1);
+		expect(pending[0]).toMatchObject({
+			id: firstId,
+			payload: { name: 'Milk', checked: true },
+			expectedVersion: 5
+		});
+	});
+
+	it('advances the expectedVersion of a delete queued after an update', async () => {
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 5,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x/5'
+		});
+
+		await enqueueConsolidated({
+			entityType: 'item',
+			op: 'delete',
+			targetId: 5,
+			expectedVersion: 5,
+			payload: {},
+			url: '/api/v1/x/5'
+		});
+
+		const pending = await pendingMutations();
+		expect(pending).toHaveLength(2);
+		expect(pending[0]).toMatchObject({ op: 'update', expectedVersion: 5 });
+		expect(pending[1]).toMatchObject({ op: 'delete', expectedVersion: 6 });
+	});
+
+	it('reports alreadyPending false for a row with no queued work', async () => {
+		const result = await enqueueConsolidated({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 5,
+			payload: { checked: true },
+			url: '/api/v1/x/5'
+		});
+
+		expect(result?.alreadyPending).toBe(false);
+		expect(await pendingMutations()).toHaveLength(1);
+	});
+
+	it('keeps updates to different rows as separate mutations', async () => {
+		await enqueueConsolidated({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 5,
+			payload: { checked: true },
+			url: '/api/v1/x/5'
+		});
+		await enqueueConsolidated({
+			entityType: 'item',
+			op: 'update',
+			targetId: 6,
+			expectedVersion: 2,
+			payload: { checked: true },
+			url: '/api/v1/x/6'
+		});
+
+		expect(await pendingMutations()).toHaveLength(2);
+	});
+
+	it('leaves expectedVersion alone when the new mutation never had one', async () => {
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: null,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x/5'
+		});
+
+		await enqueueConsolidated({
+			entityType: 'item',
+			op: 'delete',
+			targetId: 5,
+			expectedVersion: null,
+			payload: {},
+			url: '/api/v1/x/5'
+		});
+
+		const pending = await pendingMutations();
+		expect(pending).toHaveLength(2);
+		expect(pending[1]).toMatchObject({ op: 'delete', expectedVersion: null });
 	});
 });
 

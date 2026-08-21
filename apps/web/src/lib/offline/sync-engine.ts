@@ -1,7 +1,7 @@
 import type { Table } from 'dexie';
 import { ApiError } from '$lib/api/client';
 import { getDb, type EveryListDB, type SyncEntityType } from './db';
-import { dequeueMutation, enqueueMutation } from './sync-queue';
+import { dequeueMutation, enqueueConsolidated, enqueueMutation } from './sync-queue';
 import { markSelfMutation } from './self-mutations';
 
 let tempIdCounter = 0;
@@ -117,7 +117,7 @@ export async function offlineMutate<T>(opts: OfflineMutateOptions<T>): Promise<T
 
 	const expectedVersion = await opts.applyOptimistically(db);
 
-	const queueId = await enqueueMutation({
+	const enqueued = await enqueueConsolidated({
 		entityType: opts.entityType,
 		op: opts.op,
 		targetId: opts.targetId,
@@ -126,17 +126,21 @@ export async function offlineMutate<T>(opts: OfflineMutateOptions<T>): Promise<T
 		url: opts.url
 	});
 
-	if (!isOnline()) return undefined;
+	// Offline, or the row already had queued work (this edit was coalesced into /
+	// queued behind it) — leave it for the flush loop, which replays the *merged*
+	// state. Firing an immediate request here would send only this edit's fields
+	// and dequeue the merged mutation, dropping the earlier queued changes.
+	if (!isOnline() || !enqueued || enqueued.alreadyPending) return undefined;
 
 	try {
 		const result = await opts.request();
 		if (opts.onSuccess) await opts.onSuccess(db, result);
-		if (queueId !== undefined) await dequeueMutation(queueId);
+		await dequeueMutation(enqueued.id);
 		return result;
 	} catch (err) {
 		if (err instanceof ApiError && err.status !== 409) {
 			// A non-conflict server rejection can't be resolved by retrying later.
-			if (queueId !== undefined) await dequeueMutation(queueId);
+			await dequeueMutation(enqueued.id);
 			throw err;
 		}
 		// Network error, or a 409 the flush loop will reconcile — stays queued.

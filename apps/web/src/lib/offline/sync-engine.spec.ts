@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api/client';
 import { getDb, resetDbForTesting } from './db';
 import { pendingMutations } from './sync-queue';
@@ -195,6 +195,93 @@ describe('offlineMutate', () => {
 		});
 
 		expect(result).toBeUndefined();
+		expect(await pendingMutations()).toHaveLength(1);
+	});
+
+	it('coalesces consecutive offline updates to the same row into one merged mutation', async () => {
+		setOnline(false);
+		await offlineMutate({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x',
+			applyOptimistically: async () => 5,
+			request: async () => ({})
+		});
+		await offlineMutate({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			payload: { checked: true },
+			url: '/api/v1/x',
+			applyOptimistically: async () => 5,
+			request: async () => ({})
+		});
+
+		const pending = await pendingMutations();
+		expect(pending).toHaveLength(1);
+		expect(pending[0]).toMatchObject({
+			op: 'update',
+			payload: { name: 'Milk', checked: true },
+			expectedVersion: 5
+		});
+	});
+
+	it('keeps a delete queued after an update as a separate mutation with an advanced version', async () => {
+		setOnline(false);
+		await offlineMutate({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x',
+			applyOptimistically: async () => 5,
+			request: async () => ({})
+		});
+		await offlineMutate({
+			entityType: 'item',
+			op: 'delete',
+			targetId: 5,
+			payload: {},
+			url: '/api/v1/x',
+			applyOptimistically: async () => 5,
+			request: async () => ({})
+		});
+
+		const pending = await pendingMutations();
+		expect(pending).toHaveLength(2);
+		expect(pending[0]).toMatchObject({ op: 'update', expectedVersion: 5 });
+		expect(pending[1]).toMatchObject({ op: 'delete', expectedVersion: 6 });
+	});
+
+	it('defers to the flush loop instead of firing an immediate request when the row is already queued', async () => {
+		const db = getDb()!;
+		await db.syncQueue.add({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 5,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x',
+			status: 'pending',
+			attempts: 0,
+			createdAt: Date.now()
+		});
+		const request = vi.fn().mockResolvedValue({ version: 6 });
+
+		const result = await offlineMutate<{ version: number }>({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			payload: { checked: true },
+			url: '/api/v1/x',
+			applyOptimistically: async () => 5,
+			request
+		});
+
+		expect(result).toBeUndefined();
+		expect(request).not.toHaveBeenCalled();
 		expect(await pendingMutations()).toHaveLength(1);
 	});
 
