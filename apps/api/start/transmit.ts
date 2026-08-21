@@ -21,4 +21,10 @@ export async function authorizeListChannel(
   }
 }
 
+// Registers the actual __transmit/events (SSE), __transmit/subscribe, and
+// __transmit/unsubscribe HTTP routes — without this call the routes never
+// exist, so GET __transmit/events falls through to the SPA catch-all route
+// in start/routes.ts and returns the HTML shell instead of an event stream.
+transmit.registerRoutes()
+
 transmit.authorize<{ id: string }>('list/:id', authorizeListChannel)

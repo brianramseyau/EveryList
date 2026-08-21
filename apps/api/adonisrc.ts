@@ -68,10 +68,11 @@ export default defineConfig({
   |
   */
   preloads: [
-    () => import('#start/routes'),
     () => import('#start/kernel'),
     () => import('#start/validator'),
-    () => import('#start/transmit'),
+    // #start/transmit is intentionally NOT listed here — see the import at the
+    // top of #start/routes for why.
+    () => import('#start/routes'),
   ],
 
   /*

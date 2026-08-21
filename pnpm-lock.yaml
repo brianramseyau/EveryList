@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@poppinss/utils': ^7.0.1
+
 importers:
 
   .:
@@ -1977,10 +1980,6 @@ packages:
 
   '@poppinss/types@1.2.1':
     resolution: {integrity: sha512-qUYnzl0m9HJTWsXtr8Xo7CwDx6wcjrvo14bOVbIMIlKJCzKrm3LX55dRTDr1/x4PpSvKVgmxvC6Ly2YiqXKOvQ==}
-
-  '@poppinss/utils@6.10.1':
-    resolution: {integrity: sha512-da+MMyeXhBaKtxQiWPfy7+056wk3lVIhioJnXHXkJ2/OHDaZfFcyKHNl1R06sdYO8lIRXcXdoZ6LO2ARmkAREA==}
-    engines: {node: '>=18.16.0'}
 
   '@poppinss/utils@7.0.1':
     resolution: {integrity: sha512-mveSvLI2YPC114mK5HCuSYfUtjpClf1wHG1VCqZJCp4U2ypPhIt62Iku5urh0kPAFvnvCVHx2bXBSH14qMTOlQ==}
@@ -8653,7 +8652,7 @@ snapshots:
   '@boringnode/transmit@0.4.0':
     dependencies:
       '@boringnode/bus': 0.9.1
-      '@poppinss/utils': 6.10.1
+      '@poppinss/utils': 7.0.1
       emittery: 1.2.1
       matchit: 1.1.0
     transitivePeerDependencies:
@@ -9532,15 +9531,6 @@ snapshots:
       - '@swc/helpers'
 
   '@poppinss/types@1.2.1': {}
-
-  '@poppinss/utils@6.10.1':
-    dependencies:
-      '@poppinss/exception': 1.2.3
-      '@poppinss/object-builder': 1.1.0
-      '@poppinss/string': 1.7.2
-      flattie: 1.1.1
-      safe-stable-stringify: 2.5.0
-      secure-json-parse: 4.1.0
 
   '@poppinss/utils@7.0.1':
     dependencies:
