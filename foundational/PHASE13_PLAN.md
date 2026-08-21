@@ -458,6 +458,26 @@ server stopped. That pass surfaced three follow-ups, all done:
 Verified: `pnpm --filter web run check`, `pnpm --filter web run lint`, `pnpm --filter web run
 test` (100% statements/branches/functions/lines) all pass.
 
+### 10. Uniform top padding under the notch/Dynamic Island — **done**
+
+Every top-level `<main>` used a flat `p-8` (2rem) top padding, with no `env(safe-area-inset-top)`
+at all — fine on Android's small punch-hole-camera inset, but on notched/Dynamic-Island iPhones the
+page heading (`PageHeader`'s `<h1>`) sat close enough to clip under it. The one exception,
+`routes/lists/[id]/+page.svelte`'s sticky header, *did* add `pt-[env(safe-area-inset-top)]` — but
+on top of the surrounding `<main>`'s own `p-8`, stacking to `2rem + inset` and looking noticeably
+over-padded by comparison.
+
+Fixed by replacing every `<main>`'s top padding with `pt-[max(env(safe-area-inset-top),2rem)]`
+(`px-8 pb-8` for the rest) — the existing 2rem on non-notched devices where the inset is smaller,
+the real inset on notched ones, never both stacked. `[id]/+page.svelte` needed the value on its
+sticky inner header instead of `<main>` (dropped to `px-8 pb-8`, no top padding of its own) so the
+sticky header's edge is what actually clears the notch as the page scrolls underneath it. Purely a
+class-level change, one line touched per route — no `.svelte` markup restructuring, no logic.
+
+Verified: `pnpm --filter web run check`, `pnpm --filter web run lint`, `pnpm --filter web run
+test` (100% statements/branches/functions/lines) all pass. Visual re-check on-device is the
+maintainer's to do (Simulator/emulator can't be driven from here).
+
 ## Execution order
 
 The sections above are scoped, not sequenced — here's the actual build order and why, reviewed 2026-08-21:
@@ -499,6 +519,9 @@ Open decisions to pin down at the relevant stage (not blocking the order above):
 - `apps/web/src/lib/offline/background-sync.ts` — new, the periodic all-lists cache warmer. **Done.**
 - `apps/web/src/routes/+layout.svelte` — `startBackgroundSync()` added alongside the other two `start*` calls in `onMount`. **Done.**
 - `apps/ios/App/App/Assets.xcassets/Splash.imageset/` — three orphaned template files deleted. **Done.**
+- Every top-level `<main>` under `apps/web/src/routes/**/+page.svelte` (28 files) — top padding
+  changed to `pt-[max(env(safe-area-inset-top),2rem)]`; `lists/[id]/+page.svelte`'s sticky header
+  carries it instead of its `<main>`. **Done.**
 - `.github/workflows/native-build.yml` — new.
 
 ## Verification

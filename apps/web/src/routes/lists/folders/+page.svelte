@@ -119,7 +119,9 @@
 	<title>Manage Folders — EveryList</title>
 </svelte:head>
 
-<main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
+<main
+	class="mx-auto flex max-w-lg flex-col gap-4 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
+>
 	<PageHeader title="Manage Folders" backHref={resolve('/lists')} backLabel="Back to lists">
 		{#snippet actions()}
 			<a

@@ -66,7 +66,9 @@
 	<title>Server — EveryList</title>
 </svelte:head>
 
-<main class="mx-auto flex max-w-sm flex-col gap-4 p-8">
+<main
+	class="mx-auto flex max-w-sm flex-col gap-4 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
+>
 	<h1 class="text-2xl font-bold">Connect to your server</h1>
 	<p class="text-sm text-gray-600 dark:text-gray-300">
 		Enter the address of your self-hosted EveryList server.

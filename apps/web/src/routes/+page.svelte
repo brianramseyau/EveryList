@@ -26,7 +26,9 @@
 	<title>EveryList</title>
 </svelte:head>
 
-<main class="mx-auto flex max-w-lg flex-col items-center gap-6 p-8 text-center">
+<main
+	class="mx-auto flex max-w-lg flex-col items-center gap-6 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8 text-center"
+>
 	<div class="flex flex-col items-center gap-2">
 		<h1 class="font-display text-4xl font-bold">EveryList</h1>
 		<p class="text-gray-600 dark:text-gray-300">

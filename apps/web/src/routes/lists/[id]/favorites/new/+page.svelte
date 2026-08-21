@@ -87,7 +87,9 @@
 	<title>New Favorite — EveryList</title>
 </svelte:head>
 
-<main class="mx-auto flex max-w-lg flex-col gap-4 p-8">
+<main
+	class="mx-auto flex max-w-lg flex-col gap-4 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
+>
 	<PageHeader
 		title="New Favorite"
 		backHref={resolve('/lists/[id]/favorites', { id: String(listId) })}

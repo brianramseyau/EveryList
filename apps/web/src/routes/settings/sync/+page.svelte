@@ -89,7 +89,9 @@
 	<title>Sync Status — EveryList</title>
 </svelte:head>
 
-<main class="mx-auto flex max-w-lg flex-col gap-6 p-8">
+<main
+	class="mx-auto flex max-w-lg flex-col gap-6 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
+>
 	<PageHeader title="Sync Status" backHref={resolve('/settings')} backLabel="Settings" />
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
