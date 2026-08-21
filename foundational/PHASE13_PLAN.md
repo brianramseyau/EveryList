@@ -43,12 +43,12 @@ Implemented in two passes — the first baked the URL in at build time via `VITE
 - `apps/web/assets/icon.svg` (copied from `branding/icon.svg`) + `@capacitor/assets` (dev dependency) generated the icon/splash set for both platforms — `pnpm --filter web run cap:assets` (background colors matched to the app's `--color-paper` light/dark tokens, `layout.css`). No new artwork needed, one generation pass; visually verified both platforms' launcher icon, adaptive-icon layers, and splash screen render correctly.
 - `pnpm --filter web run cap:sync` (`build` + `cap sync`) added as the local sync loop; `cap:ios`/`cap:android` open each IDE. `sharp` (a `@capacitor/assets` dependency) added to `pnpm-workspace.yaml`'s `onlyBuiltDependencies`, matching the existing allowlist pattern there.
 
-### 3. Reconcile the PWA/offline layer with the Capacitor WebView
+### 3. Reconcile the PWA/offline layer with the Capacitor WebView — **done**
 
-- The Workbox service worker (`vite-plugin-pwa`/`@vite-pwa/sveltekit`) is meaningful for the browser/PWA build but not for Capacitor's local-scheme WebView; confirm it no-ops harmlessly there (or gate its registration behind a `Capacitor.isNativePlatform()` check in the SW-registration code path if it doesn't) so it isn't fighting Capacitor for control of asset loading.
-- Dexie/IndexedDB (the actual offline source of truth per §9/§7 of the foundational plan) works unchanged inside a Capacitor WebView — no changes needed there, this is the layer doing the real work either way.
-- `@capacitor/app` plugin: listen for `appStateChange` and re-subscribe/reconnect the Transmit SSE client (`apps/web/src/lib/realtime.ts`) on foreground, since iOS/Android suspend background network activity and a stale SSE connection won't silently recover on its own.
-- `navigator.setAppBadge` (existing `apps/web/src/lib/pwa/badge.ts` per Phase 6) gets a native counterpart via `@capacitor/badge` (or equivalent) when `Capacitor.isNativePlatform()`, falling back to the existing Web Badging API path otherwise — same feature-detection pattern already used for `beforeinstallprompt`.
+- The Workbox service worker registration in `apps/web/src/routes/+layout.svelte` is now gated behind `!Capacitor.isNativePlatform()` — skipped entirely on native rather than assumed to no-op harmlessly, since service-worker support in Capacitor's WebView (a local-scheme/`WebViewAssetLoader`-served origin, not a real network layer) is unreliable in practice on both platforms. `initInstallPrompt()` needed no change: it only listens for `beforeinstallprompt`/`appinstalled`, which simply never fire in a Capacitor WebView, so it already degrades to a no-op there.
+- Dexie/IndexedDB confirmed unchanged, per plan — no code touched here.
+- `apps/web/src/lib/realtime.ts`: `subscribeToList` now registers an `@capacitor/app` `appStateChange` listener when `Capacitor.isNativePlatform()`. On resume (`isActive: true`), it tears down and recreates the subscription against the shared Transmit client, rather than relying on the browser's implicit EventSource retry timing surviving an OS-level socket teardown during backgrounding. Encapsulated entirely inside `subscribeToList` (its only call site, `lists/[id]/+page.svelte`, needed no changes) rather than pushed onto callers.
+- `apps/web/src/lib/pwa/badge.ts`: `@capawesome/capacitor-badge` — not `@capacitor/badge`, which doesn't exist as a package; the actual community-maintained plugin under the Capawesome org — provides the native counterpart when `Capacitor.isNativePlatform()`, requesting notification permission lazily on first badge-set rather than at launch. Falls back to the existing Web Badging API path otherwise, same feature-detection pattern as `beforeinstallprompt`.
 
 ### 4. Native build tooling & local verification
 
@@ -84,7 +84,7 @@ The sections above are scoped, not sequenced — here's the actual build order a
 1. **§1 (base URL + CORS) — done.** The acknowledged load-bearing decision — §2/§3/§4/§7 all assume it's done, since nothing native can reach the real API or pass CORS without it. Small and mechanical; fully unit-testable without any native tooling.
 2. **§5 (offline reorder/attach/favorite-add gaps) — done.** No dependency on Capacitor — touches only the sync engine (`db.ts`, `sync-engine.ts`, `sync-queue.ts`, `flush.ts`, `categories.ts`/`stores.ts`/`favorites.ts`) and is testable today via the existing Vitest/Playwright suite. Sequenced early (rather than right before §4) so the native app is offline-complete from the point it exists, not patched right before the device pass. It does need to be *done* before §4, since §4's manual verification re-tests these paths on-device.
 3. **§2 (add Capacitor) — done.** Needed §1 done first — no point wiring the native shell before it has anywhere real to point.
-4. **§3 (PWA/WebView reconciliation — SW gating, badge, SSE reconnect).** Needs §2's native projects to exist, since it's reconciling PWA behavior *against* the Capacitor WebView.
+4. **§3 (PWA/WebView reconciliation — SW gating, badge, SSE reconnect) — done.** Needed §2's native projects to exist, since it's reconciling PWA behavior *against* the Capacitor WebView.
 5. **§4 (local build + manual device verification).** The integration checkpoint for §1–§3 and §5 together. **Needs the maintainer directly** — Xcode/iOS Simulator and Android Studio/emulator require a local GUI that isn't drivable from an agent session; native projects/configs/CLI builds can be prepared ahead of time, but the simulator/device walkthrough itself is a manual handoff.
 6. **§7 (CI signed builds).** Automates a build recipe, so it needs a working, manually-verified local build (§4) to codify first. **Needs secrets/account setup from the maintainer** (Android signing keystore; optionally an Apple Developer Program enrollment for a signed iOS build) — the workflow can be wired to consume them, but a legitimate signing identity can't be generated on its own.
 
@@ -99,7 +99,10 @@ Open decisions to pin down at the relevant stage (not blocking the order above):
 - `apps/web/package.json` — `@capacitor/cli`/`ios`/`android` + `cap:sync`/`cap:assets`/`cap:ios`/`cap:android` scripts. **Done.**
 - `pnpm-workspace.yaml` — `sharp` added to `onlyBuiltDependencies`. **Done.**
 - `apps/api/config/cors.ts` — allow Capacitor origins. **Done.**
-- `apps/web/src/lib/pwa/badge.ts` — native badge branch.
+- `apps/web/src/lib/pwa/badge.ts` — native badge branch (`@capawesome/capacitor-badge`). **Done.**
+- `apps/web/src/lib/realtime.ts` — `appStateChange`-driven resubscribe on native. **Done.**
+- `apps/web/src/routes/+layout.svelte` — service worker registration gated off on native. **Done.**
+- `apps/web/package.json` — `@capacitor/app`, `@capawesome/capacitor-badge` added. **Done.**
 - `apps/web/src/lib/offline/db.ts` — `QueuedMutation.op` gains `'reorder'`/`'attach'`; `isRowDirty()` extended. **Done.**
 - `apps/web/src/lib/offline/sync-engine.ts` — new `offlineReorder` helper for bulk reorders; `offlineCreate` gained an `op?: 'create' | 'attach'` option, reused for attach. **Done.**
 - `apps/web/src/lib/offline/flush.ts` — new `replayReorder` for queued reorder replay; no conflict-handling addition needed (see §5 — the endpoints involved can't 409). **Done.**

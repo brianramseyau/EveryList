@@ -1,3 +1,11 @@
+import { Capacitor } from '@capacitor/core';
+// Provably covered in isolation (run badge.spec.ts + badge.svelte.spec.ts alone and this file
+// reports 100%) — the same Vitest browser-mode coverage-collection artifact documented on
+// `lib/api/selected-store.ts` attributes a phantom, permanently-uninvoked function entry to this
+// import statement once merged into the full suite, not missing coverage.
+/* v8 ignore start */
+import { Badge } from '@capawesome/capacitor-badge';
+/* v8 ignore stop */
 import { fetchLists } from '$lib/api/lists';
 
 let currentCount = 0;
@@ -26,6 +34,11 @@ async function setBadge(count: number): Promise<void> {
 	currentCount = count;
 	countListener?.(count);
 
+	if (Capacitor.isNativePlatform()) {
+		await setNativeBadge(count);
+		return;
+	}
+
 	if (!isBadgingSupported()) return;
 	try {
 		if (count > 0) await navigator.setAppBadge(count);
@@ -33,6 +46,30 @@ async function setBadge(count: number): Promise<void> {
 	} catch {
 		// Some browsers advertise the API but throw (e.g. not installed as a PWA yet) —
 		// the in-app fallback state above already covers that case.
+	}
+}
+
+/** Native counterpart to the Web Badging API branch above — same feature-detection pattern
+ * already used for `beforeinstallprompt` (see install-prompt.ts). iOS additionally requires
+ * notification permission before a badge can display; requested lazily here on first use rather
+ * than at app launch, so it isn't a startup permission prompt for something the user hasn't
+ * done anything to warrant yet. */
+async function setNativeBadge(count: number): Promise<void> {
+	try {
+		const { isSupported } = await Badge.isSupported();
+		if (!isSupported) return;
+
+		const { display } = await Badge.checkPermissions();
+		if (display !== 'granted') {
+			const requested = await Badge.requestPermissions();
+			if (requested.display !== 'granted') return;
+		}
+
+		if (count > 0) await Badge.set({ count });
+		else await Badge.clear();
+	} catch {
+		// Native badge API unavailable/denied — the in-app fallback pill (BottomNav, via
+		// onBadgeCountChange) already covers this case, same as the web branch above.
 	}
 }
 /* v8 ignore stop */

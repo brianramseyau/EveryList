@@ -19,9 +19,15 @@ vi.mock('@adonisjs/transmit-client', () => ({
 
 vi.mock('./api/token', () => ({ getToken: vi.fn() }));
 vi.mock('./api/base-url', () => ({ apiBaseUrl: vi.fn().mockReturnValue('') }));
+vi.mock('@capacitor/core', () => ({
+	Capacitor: { isNativePlatform: vi.fn().mockReturnValue(false) }
+}));
+vi.mock('@capacitor/app', () => ({ App: { addListener: vi.fn() } }));
 
 const { getToken } = await import('./api/token');
 const { apiBaseUrl } = await import('./api/base-url');
+const { Capacitor } = await import('@capacitor/core');
+const { App } = await import('@capacitor/app');
 const { subscribeToList, resetRealtimeClientForTesting } = await import('./realtime');
 
 describe('realtime', () => {
@@ -33,6 +39,7 @@ describe('realtime', () => {
 	afterEach(() => {
 		resetRealtimeClientForTesting();
 		vi.mocked(apiBaseUrl).mockReturnValue('');
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
 	});
 
 	it('subscribes to the given list channel and forwards messages', () => {
@@ -110,5 +117,77 @@ describe('realtime', () => {
 		const unsubscribe = subscribeToList(1, vi.fn());
 		expect(() => unsubscribe()).not.toThrow();
 		await Promise.resolve();
+	});
+
+	it('registers an appStateChange listener on native and recreates the subscription on resume', async () => {
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+		let stateHandler: ((state: { isActive: boolean }) => void) | undefined;
+		vi.mocked(App.addListener).mockImplementation((_event, handler) => {
+			stateHandler = handler as unknown as (state: { isActive: boolean }) => void;
+			return Promise.resolve({ remove: vi.fn() });
+		});
+
+		subscribeToList(1, vi.fn());
+		expect(subscription).toHaveBeenCalledTimes(1);
+		expect(create).toHaveBeenCalledTimes(1);
+
+		stateHandler?.({ isActive: true });
+
+		expect(del).toHaveBeenCalledTimes(1);
+		expect(subscription).toHaveBeenCalledTimes(2);
+		expect(create).toHaveBeenCalledTimes(2);
+	});
+
+	it('swallows a delete/create failure during the appStateChange resubscribe', async () => {
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+		let stateHandler: ((state: { isActive: boolean }) => void) | undefined;
+		vi.mocked(App.addListener).mockImplementation((_event, handler) => {
+			stateHandler = handler as unknown as (state: { isActive: boolean }) => void;
+			return Promise.resolve({ remove: vi.fn() });
+		});
+
+		subscribeToList(1, vi.fn());
+		del.mockRejectedValueOnce(new Error('delete failed'));
+		create.mockRejectedValueOnce(new Error('create failed'));
+
+		expect(() => stateHandler?.({ isActive: true })).not.toThrow();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(subscription).toHaveBeenCalledTimes(2);
+	});
+
+	it('does not recreate the subscription when appStateChange fires with isActive false', () => {
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+		let stateHandler: ((state: { isActive: boolean }) => void) | undefined;
+		vi.mocked(App.addListener).mockImplementation((_event, handler) => {
+			stateHandler = handler as unknown as (state: { isActive: boolean }) => void;
+			return Promise.resolve({ remove: vi.fn() });
+		});
+
+		subscribeToList(1, vi.fn());
+		stateHandler?.({ isActive: false });
+
+		expect(subscription).toHaveBeenCalledTimes(1);
+	});
+
+	it('removes the appStateChange listener on unsubscribe (native)', async () => {
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+		const remove = vi.fn();
+		vi.mocked(App.addListener).mockResolvedValue({ remove });
+
+		const unsubscribe = subscribeToList(1, vi.fn());
+		unsubscribe();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(remove).toHaveBeenCalled();
+	});
+
+	it('does not register an appStateChange listener on the web build', () => {
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+		subscribeToList(1, vi.fn());
+
+		expect(App.addListener).not.toHaveBeenCalled();
 	});
 });
