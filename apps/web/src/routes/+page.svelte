@@ -1,15 +1,7 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { Button } from 'flowbite-svelte';
 	import { resolve } from '$app/paths';
-	import { getToken } from '$lib/api/token';
 	import Icon from '$lib/components/Icon.svelte';
-
-	let signedIn = $state(false);
-
-	onMount(() => {
-		signedIn = Boolean(getToken());
-	});
 
 	// Decorative only — echoes the real list-card spine/icon language from
 	// /lists (see PHASE8_PLAN.md "The Index") to show the app's range of use
@@ -54,12 +46,8 @@
 		{/each}
 	</ul>
 
-	<Button href={resolve('/lists')}>{signedIn ? 'My Lists' : 'Get started'}</Button>
+	<Button href={resolve('/login')}>Log in</Button>
 	<div class="flex gap-4 text-sm">
-		{#if !signedIn}
-			<a href={resolve('/login')} class="text-primary-700 underline dark:text-primary-400">Log in</a
-			>
-		{/if}
 		<a href={resolve('/settings')} class="text-primary-700 underline dark:text-primary-400"
 			>Settings</a
 		>

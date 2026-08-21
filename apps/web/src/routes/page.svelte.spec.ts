@@ -1,7 +1,9 @@
 import { page } from 'vitest/browser';
 import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { isRedirect } from '@sveltejs/kit';
 import { setToken, clearToken } from '$lib/api/token';
+import { load } from './+page';
 import HomePage from './+page.svelte';
 
 describe('Home +page.svelte', () => {
@@ -9,19 +11,33 @@ describe('Home +page.svelte', () => {
 		clearToken();
 	});
 
-	it('shows "Get started" and a login link when signed out', async () => {
+	it('shows a login link and a settings link', async () => {
 		render(HomePage);
 
-		await expect.element(page.getByText('Get started')).toBeInTheDocument();
 		await expect.element(page.getByRole('link', { name: 'Log in' })).toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
+	});
+});
+
+describe('Home +page.ts load', () => {
+	afterEach(() => {
+		clearToken();
 	});
 
-	it('shows "My Lists" and hides the login link when signed in', async () => {
+	it('does not redirect when signed out', () => {
+		expect(() => load()).not.toThrow();
+	});
+
+	it('redirects to /lists when signed in', () => {
 		setToken('test-token');
 
-		render(HomePage);
-
-		await expect.element(page.getByText('My Lists')).toBeInTheDocument();
-		await expect.element(page.getByRole('link', { name: 'Log in' })).not.toBeInTheDocument();
+		try {
+			load();
+			expect.unreachable('load() should have redirected');
+		} catch (error) {
+			if (!isRedirect(error)) throw error;
+			expect(error.status).toBe(307);
+			expect(error.location).toBe('/lists');
+		}
 	});
 });
