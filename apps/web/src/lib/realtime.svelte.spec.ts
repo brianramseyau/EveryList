@@ -18,8 +18,10 @@ vi.mock('@adonisjs/transmit-client', () => ({
 }));
 
 vi.mock('./api/token', () => ({ getToken: vi.fn() }));
+vi.mock('./api/base-url', () => ({ apiBaseUrl: vi.fn().mockReturnValue('') }));
 
 const { getToken } = await import('./api/token');
+const { apiBaseUrl } = await import('./api/base-url');
 const { subscribeToList, resetRealtimeClientForTesting } = await import('./realtime');
 
 describe('realtime', () => {
@@ -30,7 +32,7 @@ describe('realtime', () => {
 
 	afterEach(() => {
 		resetRealtimeClientForTesting();
-		vi.unstubAllEnvs();
+		vi.mocked(apiBaseUrl).mockReturnValue('');
 	});
 
 	it('subscribes to the given list channel and forwards messages', () => {
@@ -69,7 +71,7 @@ describe('realtime', () => {
 	});
 
 	it('connects to the configured absolute base URL for the native build', () => {
-		vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.com');
+		vi.mocked(apiBaseUrl).mockReturnValue('https://api.example.com');
 		subscribeToList(1, vi.fn());
 		expect(vi.mocked(Transmit).mock.calls[0][0]).toMatchObject({
 			baseUrl: 'https://api.example.com'

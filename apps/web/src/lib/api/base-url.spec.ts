@@ -1,17 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiBaseUrl } from './base-url';
+
+vi.mock('./server-url', () => ({ getServerUrl: vi.fn() }));
+
+const { getServerUrl } = await import('./server-url');
+const { apiBaseUrl } = await import('./base-url');
 
 describe('apiBaseUrl', () => {
 	afterEach(() => {
-		vi.unstubAllEnvs();
+		vi.clearAllMocks();
 	});
 
-	it('defaults to an empty string (same-origin) when unset', () => {
+	it('delegates to the persisted, user-configured server URL', () => {
+		vi.mocked(getServerUrl).mockReturnValue('https://everylist.example.com');
+		expect(apiBaseUrl()).toBe('https://everylist.example.com');
+	});
+
+	it('is an empty string (same-origin) when no server URL is configured', () => {
+		vi.mocked(getServerUrl).mockReturnValue('');
 		expect(apiBaseUrl()).toBe('');
-	});
-
-	it('returns the configured absolute URL when set, for the native build', () => {
-		vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.com');
-		expect(apiBaseUrl()).toBe('https://api.example.com');
 	});
 });

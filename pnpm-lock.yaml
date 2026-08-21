@@ -135,6 +135,9 @@ importers:
       '@adonisjs/transmit-client':
         specifier: ^1.1.0
         version: 1.1.0
+      '@capacitor/core':
+        specifier: ^8.5.0
+        version: 8.5.0
       '@everylist/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -1219,6 +1222,9 @@ packages:
   '@boringnode/transmit@0.4.0':
     resolution: {integrity: sha512-pDOktrYglOLC7z8Nc5N6QAxSXHw/GSffwbr0Kzd0aDV62bNO85ZNOzZFiKG/VImnq4rU1nnXmrnLbtkRpmPhSQ==}
     engines: {node: '>=20.6'}
+
+  '@capacitor/core@8.5.0':
+    resolution: {integrity: sha512-Ca4krtqH1hothjtBIwf2J2TW7IhYq1ujp8QeItTiJohNsqij8ja2DYYH3DU0l8RmxCWaBAFTGA2TgOgOMCSNsQ==}
 
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
@@ -7109,6 +7115,10 @@ snapshots:
       matchit: 1.1.0
     transitivePeerDependencies:
       - ioredis
+
+  '@capacitor/core@8.5.0':
+    dependencies:
+      tslib: 2.8.1
 
   '@colors/colors@1.5.0':
     optional: true

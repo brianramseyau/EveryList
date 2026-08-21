@@ -15,6 +15,11 @@ vi.mock('./token', () => ({
 	}
 }));
 
+let fakeServerUrl = '';
+vi.mock('./server-url', () => ({
+	getServerUrl: () => fakeServerUrl
+}));
+
 const { apiDelete, apiFetch, apiGet, apiPatch, apiPost, ApiError } = await import('./client');
 const { clearToken, getToken, setToken } = await import('./token');
 
@@ -161,10 +166,10 @@ describe('apiFetch', () => {
 describe('apiFetch base URL prefixing', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
-		vi.unstubAllEnvs();
+		fakeServerUrl = '';
 	});
 
-	it('requests a bare relative path when no base URL is configured', async () => {
+	it('requests a bare relative path when no server URL is configured', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { data: {} }));
 		vi.stubGlobal('fetch', fetchMock);
 
@@ -173,8 +178,8 @@ describe('apiFetch base URL prefixing', () => {
 		expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/lists');
 	});
 
-	it('prefixes the request with the configured absolute base URL', async () => {
-		vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.com');
+	it('prefixes the request with the configured server URL', async () => {
+		fakeServerUrl = 'https://api.example.com';
 		const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { data: {} }));
 		vi.stubGlobal('fetch', fetchMock);
 

@@ -55,4 +55,17 @@ describe('fetchPing', () => {
 
 		await expect(fetchPing()).resolves.toBe(false);
 	});
+
+	it('prefixes the ping with an explicitly-given base URL, e.g. a /server-setup candidate', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(response({ ok: true, contentType: 'application/json' }))
+		);
+
+		await expect(fetchPing('https://everylist.example.com')).resolves.toBe(true);
+		expect(fetch).toHaveBeenCalledWith('https://everylist.example.com/api/v1/ping', {
+			cache: 'no-store',
+			headers: { Accept: 'application/json' }
+		});
+	});
 });

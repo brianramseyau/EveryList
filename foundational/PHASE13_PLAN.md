@@ -16,22 +16,28 @@ The codebase is a favorable base for wrapping with **Capacitor**:
 
 - **Platforms:** iOS and Android together in this phase, not staged.
 - **Distribution:** sideload/personal-use builds for now (no App Store/Play Store listing work in this phase) — but the technical setup (bundle IDs, versioning, signing config shape) should not foreclose a future store submission.
-- **API reachability:** the production API already has a public HTTPS endpoint; the native build points at it directly via a build-time env var. No reverse-proxy or dynamic-DNS work needed here.
+- **API reachability:** the server URL is **runtime-configurable, not baked into the build** — revised from the original plan (see §1). A self-hosted client app shouldn't hard-code one server's address into the binary; the app asks the user for their server's address on first launch instead, the same way Nextcloud/Audiobookshelf/Donetick's native apps do. One APK/IPA works against anyone's instance. No reverse-proxy or dynamic-DNS work needed here.
 - **Build automation:** local Xcode/Android Studio builds are fine during development of this phase; a GitHub Actions workflow producing signed build artifacts is required as this phase's exit criterion, before it's considered done.
 
 ## Scope
 
 ### 1. Make the API/realtime base URL configurable (prerequisite for everything else) — **done**
 
-- `apps/web/src/lib/api/base-url.ts` (new): `apiBaseUrl()`, empty string for same-origin web/PWA builds (today's behavior, unchanged) or an absolute URL injected at build time for the native build. Shared by `client.ts` and `realtime.ts` rather than living on `client.ts` itself, so importing it doesn't pull `client.ts`'s other dependencies (`token.ts`, `ApiError`) into `realtime.ts`.
-- `apps/web/src/lib/api/client.ts`: `apiFetch` now prefixes its request path with `apiBaseUrl()` instead of calling `fetch(path, ...)` directly against a bare relative path.
+Implemented in two passes — the first baked the URL in at build time via `VITE_API_BASE_URL`; the user then pushed back on hard-coding a server address into the binary at all (self-hosted apps like Nextcloud/Audiobookshelf/Donetick ask the user instead, at runtime, changeable without a rebuild), so the mechanism was replaced with a persisted, user-editable setting before any native build actually shipped. What's in the codebase now:
+
+- `apps/web/src/lib/api/server-url.ts` (new): `getServerUrl()`/`setServerUrl()`/`clearServerUrl()`, `localStorage`-backed (mirrors `token.ts` exactly, including its SSR/no-`window` guard) under `everylist:serverUrl`. Empty string until the user sets one — same-origin web/PWA behavior is completely unchanged, since nothing on the web build ever calls `setServerUrl`.
+- `apps/web/src/lib/api/base-url.ts` (new): `apiBaseUrl()` delegates to `getServerUrl()`. Kept as its own module (rather than living on `client.ts`) so importing it doesn't pull `client.ts`'s other dependencies (`token.ts`, `ApiError`) into `realtime.ts`.
+- `apps/web/src/lib/api/client.ts`: `apiFetch` prefixes its request path with `apiBaseUrl()` instead of calling `fetch(path, ...)` directly against a bare relative path.
 - `apps/web/src/lib/realtime.ts`: same source of truth drives `Transmit`'s `baseUrl` (`apiBaseUrl() || window.location.origin`) instead of hard-coding `window.location.origin`.
-- Source the value via `import.meta.env.VITE_API_BASE_URL` — **not** `PUBLIC_API_BASE_URL`/SvelteKit's `$env/static/public` as originally planned. `$env/static/public` throws a hard build error for a named import with no matching env var, which would break every dev/CI/Docker build that never sets it (the default, required-unaffected case) — an unacceptable regression, discovered while implementing. `VITE_API_BASE_URL` is Vite's own always-safe (`undefined` when unset, no throw) mechanism, and matches the existing `VITE_API_PROXY_TARGET` convention already used in `vite.config.ts`. Defaults to `''` via `?? ''`, so the existing web/PWA/Docker build is byte-for-byte unaffected. The Capacitor build supplies it via a `.env` consumed at `pnpm --filter web build` time before `npx cap sync`.
-- Updated the AdonisJS API's CORS config (`apps/api/config/cors.ts`): production `origin` is `['capacitor://localhost', 'https://localhost']` (was `[]` — the PWA is same-origin and never needed a CORS allowlist entry, so there was nothing to preserve "in addition to").
+- `apps/web/src/lib/api/ping.ts`: `fetchPing()` gained an optional `baseUrl` param (defaulting to `apiBaseUrl()`) — it had the same same-origin assumption (predates the native work, from Phase 14) and would otherwise always ping the local Capacitor scheme and report the server permanently unavailable on native. The override also lets `/server-setup` test a candidate URL before saving it.
+- `apps/web/src/routes/server-setup/+page.svelte` (new): a dedicated screen — server URL input, `new URL(...)`-based validation, pings the candidate via `fetchPing`, saves and continues to `/login` on success, or shows an inline "couldn't reach this server" warning with a non-blocking "Continue anyway" (a self-hosted server can be unreachable for reasons unrelated to a wrong URL — a cold container boot, a slow reverse proxy). Doubles as the "change server" screen (pre-fills from `getServerUrl()`).
+- `apps/web/src/routes/+layout.svelte`: on mount, if `Capacitor.isNativePlatform()` and no server URL is configured and the current route isn't already `/server-setup`, redirects there — before login, since a fresh native install has no token *and* nowhere for a login request to go. Pulled forward the `@capacitor/core` dependency (not the rest of §2 — `cap add ios/android` etc. — just the one package) to make this check possible; `Capacitor.isNativePlatform()` is a pure JS check that's always `false` with zero native project scaffolding, so this is safe to have landed ahead of §2.
+- `apps/web/src/routes/settings/+page.svelte`: a "Server" row, shown only when `Capacitor.isNativePlatform()`, displaying the current URL with a "Change" action (clears the token and server URL, returns to `/server-setup` — no confirm step, matching the existing "Log out" button's directness).
+- Updated the AdonisJS API's CORS config (`apps/api/config/cors.ts`): production `origin` is `['capacitor://localhost', 'https://localhost']` (was `[]` — the PWA is same-origin and never needed a CORS allowlist entry, so there was nothing to preserve "in addition to"). Unaffected by the runtime-URL rework above — CORS is about the Capacitor app's own origin, not which server it's configured to call.
 
 ### 2. Add Capacitor to `apps/web`
 
-- Add `@capacitor/core`, `@capacitor/cli`, `@capacitor/ios`, `@capacitor/android` as dependencies of `apps/web`.
+- Add `@capacitor/cli`, `@capacitor/ios`, `@capacitor/android` as dependencies of `apps/web` (`@capacitor/core` already added in §1, for `Capacitor.isNativePlatform()`).
 - `apps/web/capacitor.config.ts`: `appId` (reverse-DNS, e.g. `au.brianramsey.everylist`), `appName`, `webDir` pointing at the static build output directory, plus `ios.path`/`android.path` set to `../ios` and `../android` — matching this repo's existing top-level `apps/<platform>` separation (`apps/web`, `apps/api`) rather than nesting native projects inside `apps/web`.
 - `npx cap add ios` / `npx cap add android` (run from `apps/web`, where `capacitor.config.ts` lives) generate the native projects at `apps/ios/` and `apps/android/` per that path config — committed to the repo, consistent with how `docker/` already commits deployment-shape config rather than treating it as generated/ignored output.
 - `@capacitor/assets` (dev dependency) to generate the icon/splash set for both platforms from the existing `branding/icon.svg` source (already used for the PWA manifest per §9 of the foundational plan) — no new artwork needed, one generation pass.
@@ -46,7 +52,7 @@ The codebase is a favorable base for wrapping with **Capacitor**:
 ### 4. Native build tooling & local verification
 
 - Local prerequisites: Xcode + iOS Simulator for iOS builds, Android Studio + JDK for Android builds/emulator — dev-time-only, no store account requirements.
-- Local build loop: `pnpm --filter web build` (with `PUBLIC_API_BASE_URL` set) → `npx cap sync` → open/run via Xcode (`npx cap open ios`) and Android Studio (`npx cap open android`).
+- Local build loop: `pnpm --filter web build` → `npx cap sync` → open/run via Xcode (`npx cap open ios`) and Android Studio (`npx cap open android`). No build-time server URL to set (§1) — the app prompts for one via `/server-setup` on first launch.
 
 ### 5. Close the remaining online-only mutations — **done**
 
@@ -65,7 +71,7 @@ Implemented as designed, with two discovered refinements to the original plan:
 
 ### 7. CI: signed build artifacts (this phase's exit criterion)
 
-- New GitHub Actions workflow (alongside the existing `docker-publish.yml` pattern in `.github/workflows/`) that builds the web bundle with the native `PUBLIC_API_BASE_URL`, runs `cap sync`, then builds:
+- New GitHub Actions workflow (alongside the existing `docker-publish.yml` pattern in `.github/workflows/`) that builds the web bundle (no server URL to inject — §1 made that runtime-configurable, so one build serves every self-hosted instance), runs `cap sync`, then builds:
   - **Android:** an APK (and/or AAB) via Gradle, signed using a keystore supplied through repo secrets — sideload-ready today, AAB format also keeps a future Play Store submission unblocked.
   - **iOS:** an unsigned/simulator build at minimum; a signed device/TestFlight-capable build additionally requires an Apple Developer Program enrollment and certificates/provisioning profiles as CI secrets (account-level setup, outside this plan's engineering scope).
 - Artifacts uploaded as workflow build artifacts (not published to a store, matching the "sideload for now" decision) so a signed build is always one Actions run away without needing a local machine.
@@ -81,15 +87,14 @@ The sections above are scoped, not sequenced — here's the actual build order a
 5. **§4 (local build + manual device verification).** The integration checkpoint for §1–§3 and §5 together. **Needs the maintainer directly** — Xcode/iOS Simulator and Android Studio/emulator require a local GUI that isn't drivable from an agent session; native projects/configs/CLI builds can be prepared ahead of time, but the simulator/device walkthrough itself is a manual handoff.
 6. **§7 (CI signed builds).** Automates a build recipe, so it needs a working, manually-verified local build (§4) to codify first. **Needs secrets/account setup from the maintainer** (Android signing keystore; optionally an Apple Developer Program enrollment for a signed iOS build) — the workflow can be wired to consume them, but a legitimate signing identity can't be generated on its own.
 
-Open decisions to pin down at the relevant stage (not blocking the order above): the bundle ID for `capacitor.config.ts` (placeholder so far: `au.brianramsey.everylist`, confirm before §2), the real `VITE_API_BASE_URL` for native builds (needed at §2/§4), and whether an Android signing keystore already exists or needs generating (needed at §7).
+Open decisions to pin down at the relevant stage (not blocking the order above): the bundle ID for `capacitor.config.ts` — **confirmed: `au.brianramsey.everylist`** — and whether an Android signing keystore already exists or needs generating (needed at §7). (The native build's server address is no longer a build-time decision — see §1 — so there's nothing to pin down for that at §2/§4; a fresh install just goes through `/server-setup`.)
 
 ## Files to add/change (representative, not exhaustive)
 
-- `apps/web/src/lib/api/base-url.ts` (new), `apps/web/src/lib/api/client.ts`, `apps/web/src/lib/realtime.ts` — configurable base URL. **Done.**
+- `apps/web/src/lib/api/server-url.ts` (new), `apps/web/src/lib/api/base-url.ts` (new), `apps/web/src/lib/api/client.ts`, `apps/web/src/lib/realtime.ts`, `apps/web/src/lib/api/ping.ts`, `apps/web/src/routes/server-setup/+page.svelte` (new), `apps/web/src/routes/+layout.svelte`, `apps/web/src/routes/settings/+page.svelte` — runtime-configurable server URL. **Done.**
 - `apps/web/capacitor.config.ts` — new, with `ios.path`/`android.path` pointed out to the top-level `apps/` siblings.
 - `apps/ios/`, `apps/android/` — new, generated + committed (native projects, top-level siblings of `apps/web`/`apps/api`, not nested under `apps/web`).
-- `apps/web/package.json` — new Capacitor dependencies + `cap:*` scripts.
-- `apps/web/.env.native` (or similar) — `VITE_API_BASE_URL` for native builds.
+- `apps/web/package.json` — `@capacitor/core` already added (§1, for `Capacitor.isNativePlatform()`); `@capacitor/cli`/`ios`/`android` + `cap:*` scripts still needed here.
 - `apps/api/config/cors.ts` — allow Capacitor origins. **Done.**
 - `apps/web/src/lib/pwa/badge.ts` — native badge branch.
 - `apps/web/src/lib/offline/db.ts` — `QueuedMutation.op` gains `'reorder'`/`'attach'`; `isRowDirty()` extended. **Done.**
@@ -101,9 +106,9 @@ Open decisions to pin down at the relevant stage (not blocking the order above):
 
 ## Verification
 
-- `pnpm --filter web build && pnpm --filter web check` stays clean (typecheck/lint unaffected by the base-URL change).
-- Existing Vitest suite for `apps/web` stays at the 100% coverage gate — the base-URL resolution logic itself needs unit coverage (default empty-string/same-origin path and the injected-absolute-URL path).
-- Manual device verification on both platforms: login (token storage/persistence across app restarts), list CRUD against the real HTTPS API, offline mode (airplane mode → add/edit items → reconnect → confirm sync, reusing the existing Phase 5 offline behavior), and SSE reconnect after backgrounding the app for a minute and returning to it.
+- `pnpm --filter web build && pnpm --filter web check` stays clean (typecheck/lint unaffected by the server-URL change).
+- Existing Vitest suite for `apps/web` stays at the 100% coverage gate — `server-url.ts`/`base-url.ts`/`ping.ts`'s runtime resolution logic and `/server-setup`'s validate/ping/save flow all need unit coverage.
+- Manual device verification on both platforms: fresh install lands on `/server-setup` (not `/login`) before any server is configured; entering a real URL pings it and proceeds to login; entering an unreachable one shows the warning and "Continue anyway" still works; Settings → Server → Change clears the session and returns to `/server-setup`. Then: login (token storage/persistence across app restarts), list CRUD against the real HTTPS API, offline mode (airplane mode → add/edit items → reconnect → confirm sync, reusing the existing Phase 5 offline behavior), and SSE reconnect after backgrounding the app for a minute and returning to it.
 - Offline mode additionally covers the newly-closed gaps: reorder categories/store aisle order while offline and confirm the new order survives a reconnect; add a favorite to a list and attach an existing store while offline and confirm both resolve correctly on flush.
 - Settings sync-status view (already shipped, Phase 14): confirm the newly-queued reorder/attach mutations from this phase show up correctly in `/settings/sync`'s queued-item list alongside the existing create/update/delete entries.
 - CI: the new workflow run produces a downloadable Android APK/AAB artifact and an iOS build artifact.

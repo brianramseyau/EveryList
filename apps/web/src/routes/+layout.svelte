@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { afterNavigate, onNavigate } from '$app/navigation';
+	import { Capacitor } from '@capacitor/core';
+	import { afterNavigate, goto, onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { getToken } from '$lib/api/token';
+	import { getServerUrl } from '$lib/api/server-url';
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
 	import { initOrientation } from '$lib/orientation';
@@ -31,6 +34,13 @@
 	}
 
 	onMount(() => {
+		// Native builds have no baked-in server address (PHASE13_PLAN.md §1) — gate here rather
+		// than on /login itself, since a fresh native install also has no token, and every other
+		// API call (including login) needs somewhere real to point before it can work at all.
+		const serverSetupPath = resolve('/server-setup');
+		if (Capacitor.isNativePlatform() && !getServerUrl() && page.url.pathname !== serverSetupPath) {
+			void goto(serverSetupPath);
+		}
 		initTheme();
 		initAccent();
 		void initOrientation();

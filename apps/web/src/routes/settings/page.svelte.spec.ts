@@ -13,11 +13,21 @@ vi.mock('$lib/api/auth', () => ({
 	updateProfile: vi.fn()
 }));
 vi.mock('$lib/pwa/reset', () => ({ resetApp: vi.fn() }));
+vi.mock('@capacitor/core', () => ({
+	Capacitor: { isNativePlatform: vi.fn().mockReturnValue(false) }
+}));
+vi.mock('$lib/api/server-url', () => ({
+	getServerUrl: vi.fn().mockReturnValue(''),
+	clearServerUrl: vi.fn()
+}));
 
 const { goto } = await import('$app/navigation');
 const { logout, fetchProfile, updateProfile } = await import('$lib/api/auth');
 const { resetApp } = await import('$lib/pwa/reset');
 const { ApiError } = await import('$lib/api/client');
+const { Capacitor } = await import('@capacitor/core');
+const { getServerUrl, clearServerUrl } = await import('$lib/api/server-url');
+const { getToken, setToken } = await import('$lib/api/token');
 const SettingsPage = (await import('./+page.svelte')).default;
 
 const profile = {
@@ -33,6 +43,8 @@ describe('Settings +page.svelte', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		vi.clearAllMocks();
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+		vi.mocked(getServerUrl).mockReturnValue('');
 		resetConnectivityForTesting();
 	});
 
@@ -349,5 +361,31 @@ describe('Settings +page.svelte', () => {
 		nameInput.element().blur();
 
 		await expect.element(page.getByText('Name is invalid.')).toBeInTheDocument();
+	});
+
+	it('does not show a Server section on the web/PWA build', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Server')).not.toBeInTheDocument();
+	});
+
+	it('shows the configured server URL and changing it clears the token, server URL, and navigates', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+		vi.mocked(getServerUrl).mockReturnValue('https://everylist.example.com');
+		vi.mocked(goto).mockResolvedValue(undefined);
+		setToken('a-token');
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('https://everylist.example.com')).toBeInTheDocument();
+		await page.getByRole('button', { name: 'Change' }).click();
+
+		expect(clearServerUrl).toHaveBeenCalled();
+		expect(getToken()).toBeNull();
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(goto).toHaveBeenCalledWith('/server-setup');
 	});
 });
