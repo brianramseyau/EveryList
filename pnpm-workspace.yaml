@@ -2,6 +2,17 @@ packages:
   - "apps/*"
   - "packages/*"
 
+overrides:
+  # @adonisjs/transmit's compiled controllers import RuntimeException from
+  # @poppinss/utils/exception, but its own dependency chain (@boringnode/transmit)
+  # pulls in @poppinss/utils@6.10.1, which doesn't export that name — only 7.x
+  # does. Without this override, pnpm hoists whichever version wins the (fragile,
+  # install-order-dependent) shared-store slot, and when it picks 6.10.1 the SSE
+  # endpoint throws SyntaxError on every request. Pinning one version everywhere
+  # removes the ambiguity; @boringnode/transmit only uses the (stable, unchanged)
+  # `string` module, so 7.x satisfies it too.
+  "@poppinss/utils": "^7.0.1"
+
 onlyBuiltDependencies:
   - esbuild
   - better-sqlite3

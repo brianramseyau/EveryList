@@ -12,6 +12,21 @@ import router from '@adonisjs/core/services/router'
 import { controllers } from '#generated/controllers'
 import app from '@adonisjs/core/services/app'
 
+// Registers __transmit/events, __transmit/subscribe, and __transmit/unsubscribe
+// (see #start/transmit) before this file's own SPA catch-all route below. This
+// MUST be a static import, not a separate entry in adonisrc.ts's `preloads` —
+// preload modules import concurrently via Promise.all, so which file's
+// top-level code (and thus which routes get registered first) runs first is a
+// race. matchit (the route matcher) returns the first pattern in registration
+// order that matches, with no static-vs-wildcard prioritization, so losing
+// that race silently sends every __transmit/* request to the catch-all below
+// instead of the real SSE endpoint — this is exactly how the app shipped with
+// realtime sync structurally never able to connect. A static import is part
+// of this module's own synchronous dependency graph, which the ES module spec
+// guarantees runs to completion before any of this file's own top-level code
+// (i.e. router.get('*', ...) below) executes.
+import '#start/transmit'
+
 router
   .group(() => {
     router
