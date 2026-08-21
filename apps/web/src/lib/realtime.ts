@@ -29,6 +29,13 @@ function getClient(): Transmit | null {
 		/* v8 ignore next 7 */
 		client = new Transmit({
 			baseUrl: apiBaseUrl() || window.location.origin,
+			// transmit-client gives up permanently after 5 failed reconnect attempts by
+			// default (closing the EventSource and never retrying again), which
+			// co-shopping hits routinely: a phone locking, backgrounding, or losing
+			// signal in a store aisle easily burns through 5 attempts. Unlimited
+			// attempts lets the browser's own EventSource retry loop keep trying
+			// indefinitely instead of requiring a manual page reload to recover.
+			maxReconnectAttempts: Infinity,
 			beforeSubscribe: (request) => {
 				const token = getToken();
 				if (token) request.headers.set('Authorization', `Bearer ${token}`);
