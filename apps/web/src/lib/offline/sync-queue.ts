@@ -17,6 +17,58 @@ export async function enqueueMutation(
 	});
 }
 
+export interface ConsolidatedEnqueueResult {
+	id: number;
+	/** True when the row already had queued work, so the caller should leave the
+	 * (now-merged) mutation for the flush loop rather than firing its own
+	 * immediate request against a partial state (see sync-engine.ts). */
+	alreadyPending: boolean;
+}
+
+/** Enqueues a user-initiated mutation, coalescing it with any already-pending
+ * mutation for the same row so the queue holds the latest *state* rather than a
+ * history of actions. Multiple updates to one row fold into a single mutation
+ * carrying the merged field values and the row's *original* `expectedVersion`
+ * (the version it had when it first went dirty) — the correct baseline for
+ * detecting a genuine cross-device conflict. A distinct operation queued behind
+ * earlier edits (e.g. a delete after an update, which soft-deletes so the prior
+ * state change still matters) stays a separate mutation, but its
+ * `expectedVersion` is advanced past the earlier mutations' version bumps so it
+ * doesn't self-conflict against them. */
+export async function enqueueConsolidated(
+	mutation: Omit<QueuedMutation, 'id' | 'status' | 'attempts' | 'createdAt'>
+): Promise<ConsolidatedEnqueueResult | undefined> {
+	const db = getDb();
+	if (!db) return undefined;
+
+	const pending = await db.syncQueue
+		.where('status')
+		.equals('pending')
+		.filter((row) => row.entityType === mutation.entityType && row.targetId === mutation.targetId)
+		.sortBy('createdAt');
+
+	const pendingUpdate = pending.find((row) => row.op === 'update');
+	if (mutation.op === 'update' && pendingUpdate) {
+		await db.syncQueue.update(pendingUpdate.id!, {
+			payload: { ...pendingUpdate.payload, ...mutation.payload }
+		});
+		return { id: pendingUpdate.id!, alreadyPending: true };
+	}
+
+	const advanced = { ...mutation };
+	if (advanced.expectedVersion !== null && pending.length > 0) {
+		advanced.expectedVersion = advanced.expectedVersion + pending.length;
+	}
+
+	const id = await db.syncQueue.add({
+		...advanced,
+		status: 'pending',
+		attempts: 0,
+		createdAt: Date.now()
+	});
+	return { id, alreadyPending: pending.length > 0 };
+}
+
 /** All `pending` mutations, oldest first — the flush loop's replay order (PHASE5_PLAN.md §4). */
 export async function pendingMutations(): Promise<QueuedMutation[]> {
 	// Provably covered in isolation — other spec files' `vi.mock('./db', …)`/

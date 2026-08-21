@@ -13,14 +13,29 @@ export async function fetchItems(listId: number): Promise<ItemDto[]> {
 	// an offline toggle enqueues `expectedVersion: 0`, guaranteeing a spurious 409 on sync
 	// (see PHASE14_PLAN.md's sync-status page and apps/api's `reportVersionConflict`).
 	const db = getDb();
-	if (db) {
-		const ids = items.map((item) => item.id);
-		const existing = await db.items.bulkGet(ids);
-		// Never clobber a row with an unacked local edit (`_dirty`) with a stale re-fetch.
-		const toPut = items.filter((_item, index) => !existing[index]?._dirty);
-		if (toPut.length > 0) await db.items.bulkPut(toPut);
+	if (!db) return items;
+
+	const ids = items.map((item) => item.id);
+	const existing = await db.items.bulkGet(ids);
+	// Never clobber a row with an unacked local edit (`_dirty`) with a stale re-fetch.
+	const toPut = items.filter((_item, index) => !existing[index]?._dirty);
+	if (toPut.length > 0) await db.items.bulkPut(toPut);
+
+	// Merge local optimistic edits into the result so they survive a re-fetch (e.g. navigating
+	// back to the list while still offline, where the network/cache response predates the edit).
+	// A dirty local row overrides the server's copy, a locally-created (temp-id) row is appended,
+	// and a soft-deleted row is dropped. Map insertion order keeps the server's `sortOrder` order
+	// for existing rows while appending offline-created rows at the end.
+	const dirtyRows = await db.items
+		.filter((item) => item.listId === listId && item._dirty === true)
+		.toArray();
+	const byId = new Map<number, ItemDto>();
+	for (const item of items) byId.set(item.id, item);
+	for (const row of dirtyRows) {
+		if (row.deletedAt) byId.delete(row.id);
+		else byId.set(row.id, row);
 	}
-	return items;
+	return [...byId.values()];
 }
 
 /** Soft-deleted items still within their recovery window, most recent first. */

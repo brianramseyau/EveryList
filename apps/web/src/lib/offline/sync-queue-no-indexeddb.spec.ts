@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	dequeueMutation,
+	enqueueConsolidated,
 	enqueueMutation,
 	failedMutations,
 	pendingMutations,
@@ -19,6 +20,19 @@ describe('without an IndexedDB implementation', () => {
 				op: 'create',
 				targetId: -1,
 				expectedVersion: null,
+				payload: {},
+				url: '/api/v1/x'
+			})
+		).resolves.toBeUndefined();
+	});
+
+	it('enqueueConsolidated returns undefined', async () => {
+		await expect(
+			enqueueConsolidated({
+				entityType: 'item',
+				op: 'update',
+				targetId: 5,
+				expectedVersion: 1,
 				payload: {},
 				url: '/api/v1/x'
 			})

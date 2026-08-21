@@ -5,7 +5,7 @@ import type { ItemDto, SyncEventDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 import type { SortableReorderParams } from '$lib/actions/sortable-reorder';
-import type { ConflictListener } from '$lib/offline/flush';
+import type { ConflictListener, FlushOutcomeListener } from '$lib/offline/flush';
 import { markSelfMutation, resetSelfMutationsForTesting } from '$lib/offline/self-mutations';
 
 // SortableJS drives real mouse/touch gestures against real layout, neither of
@@ -51,7 +51,10 @@ vi.mock('$lib/api/selected-store', () => ({
 	getSelectedStoreSettings: vi.fn()
 }));
 vi.mock('$lib/realtime', () => ({ subscribeToList: vi.fn(() => vi.fn()) }));
-vi.mock('$lib/offline/flush', () => ({ onConflict: vi.fn(() => vi.fn()) }));
+vi.mock('$lib/offline/flush', () => ({
+	onConflict: vi.fn(() => vi.fn()),
+	onFlushOutcome: vi.fn(() => vi.fn())
+}));
 vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 
 const { fetchList } = await import('$lib/api/lists');
@@ -64,7 +67,7 @@ const { getSelectedStoreSettings } = await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
 const { refreshBadgeCount } = await import('$lib/pwa/badge');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { onConflict } = await import('$lib/offline/flush');
+const { onConflict, onFlushOutcome } = await import('$lib/offline/flush');
 const { goto } = await import('$app/navigation');
 const ListDetailPage = (await import('./+page.svelte')).default;
 
@@ -1551,6 +1554,39 @@ describe('List detail +page.svelte', () => {
 
 		handler({} as Parameters<ConflictListener>[0]);
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
+	});
+
+	it('silently refreshes once the flush loop drains its own queued offline edits', async () => {
+		let handler: FlushOutcomeListener = () => {};
+		vi.mocked(onFlushOutcome).mockImplementation((listener) => {
+			handler = listener ?? (() => {});
+			return vi.fn();
+		});
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		handler({ ok: true });
+		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
+	});
+
+	it('does not refresh when a flush drain aborts on a network error', async () => {
+		let handler: FlushOutcomeListener = () => {};
+		vi.mocked(onFlushOutcome).mockImplementation((listener) => {
+			handler = listener ?? (() => {});
+			return vi.fn();
+		});
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		handler({ ok: false });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(fetchList).toHaveBeenCalledTimes(1);
 	});
 
 	it('suppresses the refresh for a row with an unacked local edit', async () => {

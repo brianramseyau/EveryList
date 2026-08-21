@@ -15,7 +15,7 @@
 	import { isSelfMutation } from '$lib/offline/self-mutations';
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
-	import { onConflict } from '$lib/offline/flush';
+	import { onConflict, onFlushOutcome } from '$lib/offline/flush';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import { isListUnlocked } from '$lib/passcode';
 	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
@@ -90,6 +90,7 @@
 
 	let unsubscribeRealtime: (() => void) | null = null;
 	let unsubscribeConflict: (() => void) | null = null;
+	let unsubscribeFlushOutcome: (() => void) | null = null;
 
 	// Coarse (touch) pointers get the swipe-to-delete gesture; fine pointers
 	// (mouse/trackpad) get a static "×" fallback instead (PHASE9_PLAN.md #9)
@@ -247,11 +248,20 @@
 		unsubscribeConflict = onConflict(() => {
 			void loadAll();
 		});
+		// A successful flush of this client's own queued offline edits has no realtime broadcast
+		// to catch it — the SSE connection is usually still reconnecting when the `online`-driven
+		// flush runs, so the broadcast is lost. Reload once the queue drains so the DOM adopts the
+		// server's authoritative copy (real ids for offline-created rows, bumped versions) instead
+		// of leaving the optimistic temp-id/stale rows on screen until a manual refresh.
+		unsubscribeFlushOutcome = onFlushOutcome(({ ok }) => {
+			if (ok) void loadAll();
+		});
 	});
 
 	onDestroy(() => {
 		unsubscribeRealtime?.();
 		unsubscribeConflict?.();
+		unsubscribeFlushOutcome?.();
 		if (highlightTimeout) clearTimeout(highlightTimeout);
 	});
 

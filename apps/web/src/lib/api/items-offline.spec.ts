@@ -457,4 +457,91 @@ describe('fetchItems (cache hydration)', () => {
 		const [mutation] = await pendingMutations();
 		expect(mutation.expectedVersion).toBe(7);
 	});
+
+	it('merges a dirty local edit over the server copy in the returned list', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 8,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: true,
+			checkedAt: '2026-08-17T00:00:00.000Z',
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 7,
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([{ id: 8, name: 'Milk', checked: false, version: 7 }]);
+
+		const items = await fetchItems(1);
+
+		expect(items).toHaveLength(1);
+		expect(items[0].checked).toBe(true);
+	});
+
+	it('appends a locally-created (temp-id) row that the server has not seen yet', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: -1,
+			listId: 1,
+			name: 'Bread',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 999,
+			createdBy: 0,
+			createdAt: '2026-08-17T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_localId: '-1',
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([{ id: 8, name: 'Milk', version: 7 }]);
+
+		const items = await fetchItems(1);
+
+		expect(items.map((item) => item.id)).toEqual([8, -1]);
+		expect(items.map((item) => item.name)).toEqual(['Milk', 'Bread']);
+	});
+
+	it('drops a soft-deleted local row so a stale server copy does not resurrect it', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 8,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: '2026-08-17T00:00:00.000Z',
+			version: 7,
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([{ id: 8, name: 'Milk', version: 7 }]);
+
+		const items = await fetchItems(1);
+
+		expect(items).toHaveLength(0);
+	});
 });

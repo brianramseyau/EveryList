@@ -60,13 +60,9 @@ A native app used standing in a store with no signal needs all of these to work 
 - Attach/join operations: since the server computes the resulting row, the optimistic local row is a best-effort placeholder (e.g. a temp-id `Item`/`Store` row built from the favorite's/store's already-known local fields) that gets replaced by the server's authoritative response on flush — same reconciliation pattern `offlineCreate` already uses.
 - `apps/web/src/lib/offline/flush.ts`'s existing generic replay (stored `url`/`payload`/`expectedVersion`, replayed as-is) needs no structural change — it already doesn't dispatch per entity type — but its 409/conflict handling gets exercised by a new case (a reorder or attach queued while offline, replayed after another device already changed the same order) and needs test coverage for that path specifically.
 
-### 6. Settings sync-status page + banner
+### 6. Settings sync-status page + banner — **done, superseded by Phase 14**
 
-Today's `SyncStatusBanner.svelte` (root layout, Phase 5) shows a pending/failed count with a manual "Retry now" — good for an at-a-glance nudge, but it's transient and gives no history. This phase adds a persistent view, modeled on Bitwarden's vault sync status:
-- New `Settings > Sync Status` section/row linking to a dedicated view (or an expandable section inline, matching the existing grouped-row Settings pattern from Phase 3 §16) showing: last successful sync timestamp, current pending-mutation count, current failed-mutation count, and a per-item list of what's queued (entity type + a human-readable description, e.g. "Update item: Milk") with its retry state.
-- The existing root-layout banner stays as the lightweight, always-visible nudge (pending/failed count + "Retry now") — the Settings page is where you go to see *what* hasn't synced and *why*, not a replacement for the banner.
-- "Recent syncs have not been successful" framing: track consecutive flush failures (already implicit in `flush.ts`'s retry/backoff loop) and surface a distinct warning state — not just "N pending" but "syncing has been failing for N attempts" — in both the banner and the Settings view, so a genuinely stuck queue (e.g. expired token, server unreachable) reads differently from normal offline-queued-briefly behavior.
-- This is a frontend-only addition (`flush.ts` already tracks retry state via jittered exponential backoff; it needs to expose that state, e.g. via a small Svelte store, rather than keeping it as internal-only loop state) — no backend/schema changes.
+`foundational/PHASE14_PLAN.md` shipped this in full, ahead of this phase: `SyncStatusBanner.svelte`/`SyncToast.svelte` were deleted, and `apps/web/src/routes/settings/sync/+page.svelte` (linked from Settings, per `apps/web/src/routes/settings/+page.svelte`) now shows connection status, last successful sync time, and a per-item queued/failed list with "Retry now" — backed by `apps/web/src/lib/offline/connectivity.svelte.ts` (a real `/api/v1/ping` reachability probe, not just `navigator.onLine`) and a top-of-app `SyncStatusIcon.svelte` cloud-disconnected indicator replacing the old banner. Verified present in the codebase as of this review (2026-08-21) — no further work needed here; this phase's remaining sections (offline reorder/attach, native shell, CI) build on top of that connectivity/sync-status layer rather than creating it.
 
 ### 7. CI: signed build artifacts (this phase's exit criterion)
 
@@ -74,6 +70,19 @@ Today's `SyncStatusBanner.svelte` (root layout, Phase 5) shows a pending/failed 
   - **Android:** an APK (and/or AAB) via Gradle, signed using a keystore supplied through repo secrets — sideload-ready today, AAB format also keeps a future Play Store submission unblocked.
   - **iOS:** an unsigned/simulator build at minimum; a signed device/TestFlight-capable build additionally requires an Apple Developer Program enrollment and certificates/provisioning profiles as CI secrets (account-level setup, outside this plan's engineering scope).
 - Artifacts uploaded as workflow build artifacts (not published to a store, matching the "sideload for now" decision) so a signed build is always one Actions run away without needing a local machine.
+
+## Execution order
+
+The sections above are scoped, not sequenced — here's the actual build order and why, reviewed 2026-08-21:
+
+1. **§1 (base URL + CORS).** The acknowledged load-bearing decision — §2/§3/§4/§7 all assume it's done, since nothing native can reach the real API or pass CORS without it. Small and mechanical; fully unit-testable without any native tooling.
+2. **§5 (offline reorder/attach/favorite-add gaps).** No dependency on Capacitor — touches only the sync engine (`db.ts`, `sync-engine.ts`, `sync-queue.ts`, `flush.ts`, `categories.ts`/`stores.ts`/`favorites.ts`) and is testable today via the existing Vitest/Playwright suite. Sequenced early (rather than right before §4) so the native app is offline-complete from the point it exists, not patched right before the device pass. It does need to be *done* before §4, since §4's manual verification re-tests these paths on-device.
+3. **§2 (add Capacitor).** Needs §1 done first — no point wiring the native shell before it has anywhere real to point.
+4. **§3 (PWA/WebView reconciliation — SW gating, badge, SSE reconnect).** Needs §2's native projects to exist, since it's reconciling PWA behavior *against* the Capacitor WebView.
+5. **§4 (local build + manual device verification).** The integration checkpoint for §1–§3 and §5 together. **Needs the maintainer directly** — Xcode/iOS Simulator and Android Studio/emulator require a local GUI that isn't drivable from an agent session; native projects/configs/CLI builds can be prepared ahead of time, but the simulator/device walkthrough itself is a manual handoff.
+6. **§7 (CI signed builds).** Automates a build recipe, so it needs a working, manually-verified local build (§4) to codify first. **Needs secrets/account setup from the maintainer** (Android signing keystore; optionally an Apple Developer Program enrollment for a signed iOS build) — the workflow can be wired to consume them, but a legitimate signing identity can't be generated on its own.
+
+Open decisions to pin down at the relevant stage (not blocking the order above): the bundle ID for `capacitor.config.ts` (placeholder so far: `au.brianramsey.everylist`, confirm before §2), the real `PUBLIC_API_BASE_URL` for native builds (needed at §2/§4), and whether an Android signing keystore already exists or needs generating (needed at §7).
 
 ## Files to add/change (representative, not exhaustive)
 
@@ -86,10 +95,8 @@ Today's `SyncStatusBanner.svelte` (root layout, Phase 5) shows a pending/failed 
 - `apps/web/src/lib/pwa/badge.ts` — native badge branch.
 - `apps/web/src/lib/offline/db.ts` — `QueuedMutation.op` gains `'reorder'`/`'attach'`; `isRowDirty()` extended.
 - `apps/web/src/lib/offline/sync-engine.ts` — new offline-aware helper(s) for bulk-reorder/attach mutations, alongside the existing `offlineCreate`/`offlineMutate`.
-- `apps/web/src/lib/offline/flush.ts` — expose retry/failure-streak state for the sync-status UI; new conflict-handling test coverage for reorder/attach replay.
+- `apps/web/src/lib/offline/flush.ts` — new conflict-handling test coverage for reorder/attach replay (retry/failure-streak state is already exposed via `onFlushOutcome`, per Phase 14).
 - `apps/web/src/lib/api/categories.ts`, `apps/web/src/lib/api/stores.ts`, `apps/web/src/lib/api/favorites.ts` — route the three currently-online-only calls through the offline queue.
-- `apps/web/src/routes/settings/sync/+page.svelte` (or an inline expandable section on `settings/+page.svelte`) — new sync-status view.
-- `apps/web/src/lib/components/SyncStatusBanner.svelte` — extended with a "failing for N attempts" warning state.
 - `.github/workflows/native-build.yml` — new.
 
 ## Verification
@@ -98,5 +105,5 @@ Today's `SyncStatusBanner.svelte` (root layout, Phase 5) shows a pending/failed 
 - Existing Vitest suite for `apps/web` stays at the 100% coverage gate — the base-URL resolution logic itself needs unit coverage (default empty-string/same-origin path and the injected-absolute-URL path).
 - Manual device verification on both platforms: login (token storage/persistence across app restarts), list CRUD against the real HTTPS API, offline mode (airplane mode → add/edit items → reconnect → confirm sync, reusing the existing Phase 5 offline behavior), and SSE reconnect after backgrounding the app for a minute and returning to it.
 - Offline mode additionally covers the newly-closed gaps: reorder categories/store aisle order while offline and confirm the new order survives a reconnect; add a favorite to a list and attach an existing store while offline and confirm both resolve correctly on flush.
-- Settings sync-status view: confirm it reflects real pending/failed counts and last-sync time against a live queue (force a failure by pointing at an unreachable host, confirm the "failing for N attempts" state appears in both the banner and Settings, then restore connectivity and confirm it clears).
+- Settings sync-status view (already shipped, Phase 14): confirm the newly-queued reorder/attach mutations from this phase show up correctly in `/settings/sync`'s queued-item list alongside the existing create/update/delete entries.
 - CI: the new workflow run produces a downloadable Android APK/AAB artifact and an iOS build artifact.

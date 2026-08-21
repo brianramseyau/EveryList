@@ -1,16 +1,17 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// A pathological (never happens in practice) case where enqueueMutation
-// resolves `undefined` even though Dexie is available — exercises the
-// `queueId !== undefined` guard around dequeueMutation in both offlineCreate
-// and offlineMutate, which the normal-path specs in sync-engine.spec.ts
-// never hit (enqueueMutation always returns a real id there).
+// A pathological (never happens in practice) case where the enqueue helpers
+// resolve `undefined` even though Dexie is available — exercises the guard
+// around the enqueue result in both offlineCreate and offlineMutate, which the
+// normal-path specs in sync-engine.spec.ts never hit (the helpers always
+// return a real result there).
 vi.mock('./sync-queue', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('./sync-queue')>();
 	return {
 		...actual,
 		enqueueMutation: vi.fn().mockResolvedValue(undefined),
+		enqueueConsolidated: vi.fn().mockResolvedValue(undefined),
 		dequeueMutation: vi.fn()
 	};
 });
@@ -59,7 +60,8 @@ describe('offlineCreate with an unresolvable queue id', () => {
 });
 
 describe('offlineMutate with an unresolvable queue id', () => {
-	it('still resolves normally on success without calling dequeueMutation', async () => {
+	it('returns undefined without firing the immediate request or dequeuing', async () => {
+		const request = vi.fn();
 		const result = await offlineMutate<{ ok: true }>({
 			entityType: 'item',
 			op: 'update',
@@ -67,29 +69,11 @@ describe('offlineMutate with an unresolvable queue id', () => {
 			payload: {},
 			url: '/api/v1/x',
 			applyOptimistically: async () => 1,
-			request: async () => ({ ok: true })
+			request
 		});
 
-		expect(result).toEqual({ ok: true });
-		expect(dequeueMutation).not.toHaveBeenCalled();
-	});
-
-	it('still resolves normally after a non-conflict ApiError without calling dequeueMutation', async () => {
-		const { ApiError } = await import('$lib/api/client');
-		await expect(
-			offlineMutate<{ ok: true }>({
-				entityType: 'item',
-				op: 'update',
-				targetId: 1,
-				payload: {},
-				url: '/api/v1/x',
-				applyOptimistically: async () => 1,
-				request: async () => {
-					throw new ApiError(403, 'forbidden');
-				}
-			})
-		).rejects.toThrow('forbidden');
-
+		expect(result).toBeUndefined();
+		expect(request).not.toHaveBeenCalled();
 		expect(dequeueMutation).not.toHaveBeenCalled();
 	});
 });
