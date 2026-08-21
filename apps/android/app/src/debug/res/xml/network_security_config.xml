@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only: permits cleartext HTTP to the Android emulator's host-loopback alias so the app
+     can reach a local "pnpm filter api dev" server during development (10.0.2.2 is the
+     emulator's alias for 127.0.0.1 on the host machine). This source set only merges into debug
+     builds; release builds have no network security config override and keep Android's default
+     cleartext block, since production always talks to https://. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

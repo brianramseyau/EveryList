@@ -50,7 +50,7 @@ Implemented in two passes — the first baked the URL in at build time via `VITE
 - `apps/web/src/lib/realtime.ts`: `subscribeToList` now registers an `@capacitor/app` `appStateChange` listener when `Capacitor.isNativePlatform()`. On resume (`isActive: true`), it tears down and recreates the subscription against the shared Transmit client, rather than relying on the browser's implicit EventSource retry timing surviving an OS-level socket teardown during backgrounding. Encapsulated entirely inside `subscribeToList` (its only call site, `lists/[id]/+page.svelte`, needed no changes) rather than pushed onto callers.
 - `apps/web/src/lib/pwa/badge.ts`: `@capawesome/capacitor-badge` — not `@capacitor/badge`, which doesn't exist as a package; the actual community-maintained plugin under the Capawesome org — provides the native counterpart when `Capacitor.isNativePlatform()`, requesting notification permission lazily on first badge-set rather than at launch. Falls back to the existing Web Badging API path otherwise, same feature-detection pattern as `beforeinstallprompt`.
 
-### 4. Native build tooling & local verification — **in progress, needs the maintainer**
+### 4. Native build tooling & local verification — **in progress, needs the maintainer** (Android: dev-server connectivity + login confirmed working on-device; iOS: not yet verified, Xcode walkthrough below untested)
 
 - Local prerequisites: Xcode + iOS Simulator for iOS builds, Android Studio + JDK for Android builds/emulator — dev-time-only, no store account requirements.
 - Local build loop: `pnpm --filter web run cap:sync` (build + `cap sync`) → open/run via Xcode (`pnpm --filter web run cap:ios`) and Android Studio (`pnpm --filter web run cap:android`). No build-time server URL to set (§1) — the app prompts for one via `/server-setup` on first launch.
@@ -76,6 +76,43 @@ Implemented in two passes — the first baked the URL in at build time via `VITE
    the CLI (with `JAVA_HOME` pointed at Android Studio's bundled JDK) — useful for a build-only
    sanity check without opening the IDE or a device/emulator.
 
+#### Pointing the emulator/simulator at a local dev API server
+
+To exercise `/server-setup` against `pnpm --filter api dev` instead of production, host-side
+gotchas otherwise make it look like the app "can't communicate" even with the right address —
+and the right address itself differs by platform:
+
+- **`apps/api/.env`'s `HOST` must be `0.0.0.0`, not `localhost`.** A server bound to
+  `localhost`/`127.0.0.1` only accepts connections that originate on the same loopback interface;
+  a connection arriving via the Android emulator's host-loopback alias (below) looks external to
+  it and gets refused, regardless of the app having the right address. (Not needed for iOS — see
+  below — but harmless to leave set either way.)
+
+- **Android**: use `http://10.0.2.2:3334` — `10.0.2.2` is the emulator's alias for the host
+  machine's `127.0.0.1`; plain `localhost` from inside the emulator means the emulator itself.
+  Android also blocks cleartext (`http://`) traffic by default once `targetSdkVersion` is 28+
+  (this project targets 36) — a debug-only network security config
+  (`apps/android/app/src/debug/res/xml/network_security_config.xml` +
+  `apps/android/app/src/debug/AndroidManifest.xml`) allow-lists cleartext to `10.0.2.2`. Gradle's
+  debug source set merges it into debug builds only, so release builds (always `https://`) keep
+  the default block. Requires a rebuild (not just `cap sync`) to pick up.
+  That alone isn't sufficient, though: Capacitor serves the app's own pages over `https://localhost`
+  (its default `androidScheme`), and Chromium's WebView separately enforces Mixed Content — blocking
+  a plain `http://` `fetch()` from an `https://` page regardless of the OS-level cleartext policy
+  above. `apps/android/app/src/main/java/.../MainActivity.java` sets
+  `WebSettings.MIXED_CONTENT_ALWAYS_ALLOW` guarded by `BuildConfig.DEBUG`, so this only applies to
+  debug builds (`BuildConfig.DEBUG` is generated per build variant, so one shared `MainActivity`
+  can branch on it safely — no source-set duplicate-class issue like a `src/debug/java` override
+  would hit). Referencing `BuildConfig` requires `buildFeatures { buildConfig true }` in
+  `apps/android/app/build.gradle` — AGP 8+ stopped generating that class by default.
+
+- **iOS**: use `http://localhost:3334` — unlike the Android emulator, the iOS Simulator shares the
+  Mac's own network stack directly, so `10.0.2.2` means nothing there and `localhost` is correct.
+  iOS also blocks cleartext by default (App Transport Security) — `apps/ios/App/App/Info.plist`
+  sets `NSAppTransportSecurity` → `NSAllowsLocalNetworking`, Apple's built-in ATS exception scoped
+  to loopback/`.local` addresses specifically (not a blanket cleartext allowance), so it's left in
+  for both Debug and Release rather than split by build configuration like the Android case above.
+
 #### iOS walkthrough (Xcode) — for later, once Xcode itself finishes installing
 
 1. Install Xcode from the App Store (or Apple Developer site), open it once to accept the license
@@ -84,6 +121,171 @@ Implemented in two passes — the first baked the URL in at build time via `VITE
 2. `pnpm run cap:ios` (equivalent to `npx cap open ios`) opens `apps/ios/App/App.xcworkspace`.
 3. Pick a Simulator target from the scheme dropdown, click Run (▶). First build resolves Swift
    Package dependencies — can take a few minutes.
+
+#### "Refresh now" button (discovered during device testing, not in the original scope)
+
+Android's WebView has no pull-to-refresh gesture the way a normal mobile browser tab does, so
+once §4's device pass surfaced that gap there was otherwise no user-facing way to force a resync
+on demand short of force-quitting the app. Added a "Refresh now" button to the Connection section
+of Settings → Sync Status (`apps/web/src/routes/settings/sync/+page.svelte`), always visible
+(unlike "Retry now", which only appears once something is actually queued) — triggers a full
+`window.location.reload()` via a small wrapper (`apps/web/src/lib/reload.ts`, mirroring
+`$lib/pwa/reset.ts`'s `resetApp()` v8-ignore convention for a call that would otherwise navigate
+the real browser mid-test-suite). A reload re-runs every page's own fresh-data fetch on remount,
+re-subscribes SSE, and re-triggers the flush/connectivity startup checks — simpler and more
+robust than wiring a bespoke per-page refetch signal, and queued mutations survive it unaffected
+(persisted in IndexedDB, not in-memory state).
+
+#### Native SPA-fallback bug (discovered via the "Refresh now" button)
+
+Reloading on a nested route (e.g. `/settings/sync`) in the Android emulator rendered the wrong
+page (the prerendered "/" marketing splash) with broken icons and a console error
+(`Failed to fetch dynamically imported module: https://localhost/settings/_app/...`). Root cause:
+Capacitor's native local server hard-codes its SPA-fallback filename to `index.html` on both
+platforms (`WebViewLocalServer.java`'s `handleLocalRequest`, `Router.swift`'s `route(for:)`) —
+there's no way to point it at this project's `adapter-static` fallback file (`200.html`, chosen
+specifically to avoid colliding with the real prerendered `/` page — see the fallback comment
+above). It serves `build/index.html` for *any* unmatched deep path. That file (the real prerendered
+`/` page) used SvelteKit's default **relative** asset paths (`./_app/...`), correct only when
+served from its own exact URL; served instead at `/settings/sync`, the browser resolves `./_app/...`
+against the wrong base directory and every chunk 404s. `build/200.html` already used absolute paths
+— `adapter-static` forces that for the fallback file specifically — so this only ever affected
+`index.html`.
+
+Fixed by adding `paths: { relative: false }` to the `sveltekit()` plugin options in
+`apps/web/vite.config.ts`, forcing absolute (`/_app/...`) asset paths on *every* prerendered page,
+not just the fallback — safe here since this app always deploys at its domain root (no subpath
+deployment to support, which is the only reason SvelteKit defaults to relative paths). Verified via
+`pnpm --filter web run build`: both `build/index.html` and `build/200.html` now emit identical
+absolute paths. This was a latent, general bug (any cold app-launch or deep link landing on a
+nested route natively would have hit it) that the "Refresh now" button's real `location.reload()`
+happened to be the first thing to actually trigger.
+
+**Update**: device testing did surface exactly that — reloading (via "Refresh now" or pull-to-refresh)
+anywhere but the root route consistently landed back on the root list view instead of refreshing
+the current page, because `index.html`'s own client logic (redirecting an authenticated user to
+`/lists`) ran once Capacitor's fallback served its content. The `paths.relative: false` fix above
+only fixed the *crash*; it didn't stop the wrong page's content — and therefore its own redirect
+logic — from loading in the first place. Implemented the previously-deferred routing fix after all:
+
+- **Android**: `MainActivity.java`'s `setSpaFallbackRoute()` installs a `RouteProcessor`
+  (`bridgeBuilder.setRouteProcessor(...)`, set before `super.onCreate()` builds the Bridge) that
+  redirects the literal `/index.html` fallback path to `/200.html`. Non-obvious gotcha: this same
+  RouteProcessor is *also* consulted for every regular asset request, not just the SPA-fallback
+  branch (`WebViewLocalServer`'s generic `PathHandler#handle`, used for every `.js`/`.css`/etc.
+  file) — an unconditional redirect broke every asset load (each one got 200.html's HTML back
+  instead of its real content, `SyntaxError: Unexpected token '<'` on whichever chunk loaded
+  first). Checking for the exact literal `/index.html` scopes the redirect to only the one branch
+  that actually needs it and passes every real asset path through unchanged.
+- **iOS**: `MainViewController.swift`'s `SpaFallbackRouter` didn't hit the same bug — it already
+  mirrored `CapacitorRouter`'s own `pathExtension.isEmpty` check (real per-request path awareness
+  on iOS, unlike Android's literal-string fallback signal), so it was already scoped correctly to
+  only extensionless SPA routes.
+
+Verified on Android via a real device pass: cleared app data, cold-launched to `/server-setup`
+(correct — no bounce), triggered a reload there via a swipe gesture, confirmed via logcat that
+`https://localhost/server-setup` was fetched with every chunk loading cleanly (no syntax errors)
+and the app stayed on that screen instead of returning to the root list view. iOS not yet verified
+on-device (deferred with the rest of the iOS walkthrough, pending Xcode).
+
+#### Native pull-to-refresh (follow-up to "Refresh now")
+
+Neither platform's WebView has a built-in pull-to-refresh gesture — that's a Chrome/Safari
+browser-tab UI feature, not something exposed by the WebView platform APIs a hybrid app embeds —
+so "Refresh now" alone left native feeling less responsive than a typical mobile app. Added the
+real native gesture on both platforms, wired to the same reload action as the button:
+
+- **Android**: `apps/android/app/src/main/java/.../MainActivity.java`'s `setUpPullToRefresh()`
+  re-parents Capacitor's `WebView` inside a `SwipeRefreshLayout`
+  (`androidx.swiperefreshlayout`, added to `variables.gradle`/`app/build.gradle`) and calls
+  `webView.reload()` on trigger. Stopping the spinner uses `Bridge#addWebViewListener`
+  (`WebViewListener.onPageLoaded`/`onReceivedError`/`onReceivedHttpError`) — Capacitor's own
+  supported hook for this, rather than replacing `BridgeWebViewClient` (which also handles local
+  asset routing) just to observe load completion.
+- **iOS**: `apps/ios/App/App/MainViewController.swift` (new) subclasses `CAPBridgeViewController`,
+  overriding `capacitorDidLoad()` to attach a `UIRefreshControl` to the WKWebView's `scrollView`
+  and reload on trigger. `CAPBridgeViewController`'s own `WKNavigationDelegate` is internal with
+  no public "navigation finished" hook (unlike Android's `WebViewListener`) — stopping the spinner
+  instead observes `webView.isLoading` via KVO, a standard WebKit property independent of
+  Capacitor's internal delegate wiring. `Main.storyboard`'s root view controller references
+  `MainViewController`, and the new file is registered in `project.pbxproj` (hand-edited —
+  validated with `plutil -lint`) — **but neither actually wires the class in at runtime; see the
+  SceneDelegate bug below**, found only once real device testing exercised this code path.
+
+Both call the platform's native `reload()` directly rather than going through
+`apps/web/src/lib/reload.ts`'s `refreshApp()` — same effect (a real navigation reload, hitting the
+same fixed SPA-fallback routing above), just triggered from native code instead of JS, so there's
+no native-to-JS bridge call needed for the common case.
+
+#### iOS: MainViewController was never actually instantiated (found on device pass)
+
+Both "Refresh now" and pull-to-refresh appeared to bounce back to the root list view on iOS,
+mirroring Android's original SPA-fallback bug — despite `SpaFallbackRouter` (the fix for that
+exact bug) already being in place. Root cause, found only by testing on a real simulator rather
+than trusting the code: `apps/ios/App/App/SceneDelegate.swift` hard-codes
+`window?.rootViewController = CAPBridgeViewController()` — Capacitor's generated default, and a
+completely different line from anything `Main.storyboard` controls. This project's `SceneDelegate`
+builds its window/root view controller programmatically and never loads the storyboard at
+runtime, so `Main.storyboard`'s `customClass="MainViewController"` reference (and the
+`project.pbxproj` registration) were both real, valid, and entirely inert — `MainViewController`
+was compiled into the binary (confirmed via `strings` on the built binary and the compiled
+`Main.storyboardc`) but never constructed, so neither `router()` nor `capacitorDidLoad()` ever ran.
+
+This is why earlier verification looked convincing without being real proof: a cold launch to `/`
+resolves correctly under Capacitor's *default* router too (`index.html` genuinely is the right
+file for that one URL), and reaching `/login` via `goto()` is a client-side SvelteKit route change
+that never touches native routing at all — neither test actually exercised `SpaFallbackRouter`.
+Confirmed the fix with `fatalError()` placed at the top of `capacitorDidLoad()`: the app kept
+running uncrashed against the old `SceneDelegate`, and crashed immediately once
+`SceneDelegate.swift` was corrected to construct `MainViewController()` instead. Fixed by changing
+that one line; `Main.storyboard`'s reference was already correct and needed no change.
+
+**Lesson for future native-shell work here**: a subclass compiling cleanly and even being
+referenced by a storyboard is not evidence it's the class actually driving the screen — trace
+where `UIWindow.rootViewController` (iOS) / the launched `Activity` (Android) is actually
+constructed before trusting an override chain, especially on Capacitor's newer SPM-based
+templates where `SceneDelegate` frequently bypasses the storyboard entirely.
+
+#### iOS: pull-to-refresh visual polish (found on device pass, after the SceneDelegate fix)
+
+With `MainViewController` actually wired in, `UIRefreshControl` was confirmed *functionally*
+working via a temporary fire-counter overlay (8 successful reloads triggered across one test) —
+but with no visible spinner, which is why it initially looked broken. Two contributing issues,
+both cosmetic once the fire-counter proved the mechanism itself was sound:
+
+- The diagnostic overlay used to investigate this was very likely covering the actual spinner's
+  screen region itself (same top-of-content area) — removing it was part of the fix.
+- The rubber-band overscroll area was the scroll view's own background color showing through,
+  defaulting to plain white rather than the app's theme. `MainViewController` now sets
+  `webView.scrollView.backgroundColor` and the refresh control's `tintColor` from the same
+  `--color-paper`/`--color-ink` values as `apps/web/src/routes/layout.css`, picked via
+  `traitCollection.userInterfaceStyle`. This follows system light/dark, not the web layer's own
+  in-app theme setting (light/dark/automatic, stored in `localStorage`) — there's no live channel
+  from web to native for that, and system-appearance-following covers the common case (most users
+  leave the in-app setting on "automatic") without needing a bridge call just for this one detail.
+
+#### WebKit auto-zoom stuck across client-side navigation (found on iOS device pass)
+
+Testing the `/server-setup` → `/login` flow on the iOS Simulator surfaced a second, unrelated
+native-shell bug: after focusing the Server URL field and submitting, `/login` rendered zoomed in
+— inputs and the "Forgot password?" link cut off past the right edge, no right-side margin. Root
+cause: WebKit automatically zooms the page when a focused `<input>`'s font-size is under 16px
+(several inputs render at flowbite-svelte's default 14px, `text-sm`) — ordinarily self-correcting
+once the input blurs on a real page, but `goto('/login')` is a client-side SvelteKit route change,
+not a fresh page load, so nothing ever reset the scale on the same persisting WKWebView instance;
+it carried the zoomed-in state onto the new page's content. Confirmed this was WebKit-specific and
+not an app-level CSS bug by reproducing the identical narrow-viewport flow (direct load and
+client-side nav alike) in a real headless browser first — renders correctly there.
+
+First attempt — disabling `UIScrollView.minimumZoomScale`/`maximumZoomScale` on the native side —
+did **not** fix it (verified on-device, not just assumed): the automatic focus-zoom apparently
+doesn't route through the scroll view's public zoom API the same way manual pinch-zoom does.
+Reverted that. The actual fix lives at the page level, where WebKit computes the auto-zoom in the
+first place: `apps/web/src/app.html`'s `<meta name="viewport">` now adds `maximum-scale=1`. Applies
+to the PWA/Mobile Safari build too, not just native — same WebKit engine, same client-side-routing
+architecture, so the same failure mode is reachable there, not something scoped to Capacitor.
+Verified via a second on-device pass (fresh install, same repro path): `/login` renders full-width,
+no cutoff.
 
 #### What "done" looks like for this section
 

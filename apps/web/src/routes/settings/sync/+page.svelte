@@ -6,6 +6,7 @@
 	import { failedMutations, pendingMutations, queueCounts } from '$lib/offline/sync-queue';
 	import { flushQueue } from '$lib/offline/flush';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
+	import { refreshApp } from '$lib/reload';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 
@@ -15,6 +16,7 @@
 	let pending = $state<QueuedMutation[]>([]);
 	let failed = $state<QueuedMutation[]>([]);
 	let retrying = $state(false);
+	let refreshing = $state(false);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 	async function refresh() {
@@ -36,6 +38,11 @@
 			retrying = false;
 			await refresh();
 		}
+	}
+
+	function refreshNow() {
+		refreshing = true;
+		refreshApp();
 	}
 
 	onMount(() => {
@@ -87,9 +94,12 @@
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 		<h2
-			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
+			class="flex items-center justify-between border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
 		>
-			Connection
+			<span>Connection</span>
+			<Button type="button" size="xs" disabled={refreshing} onclick={refreshNow}>
+				{refreshing ? 'Refreshing…' : 'Refresh now'}
+			</Button>
 		</h2>
 		<div class="flex items-center justify-between px-4 py-3">
 			<span class="text-sm font-medium">Server</span>

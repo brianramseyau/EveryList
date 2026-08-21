@@ -2,7 +2,18 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<!-- maximum-scale=1 blocks WebKit's automatic zoom-in when a focused <input>'s font-size is
+		     under 16px (several inputs render at flowbite-svelte's default 14px) — normally
+		     self-correcting on blur, but a client-side route change (SvelteKit's router, not a
+		     fresh page load) doesn't reset it, since the WKWebView/scrollView instance persists
+		     across the navigation. That left whatever page a form submission routed to zoomed in,
+		     with content cut off past the right edge (found via a real device pass on native,
+		     PHASE13_PLAN.md §4, but the same WebKit engine and same client-side routing make this
+		     reachable from Mobile Safari/the PWA too, not just the native shell). -->
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+		/>
 		<meta name="text-scale" content="scale" />
 		<meta name="theme-color" content="#33404f" />
 		<link rel="manifest" href="/manifest.webmanifest" />
