@@ -5,6 +5,7 @@
 EveryList is a self-hosted, offline-first list app (PWA, SvelteKit + AdonisJS single-container deploy — see `foundational/PLAN.md`). Phases 0–12 are complete; the app is a fully static SPA (`adapter-static`, `fallback: '200.html'`) already served installable as a PWA. This phase wraps that same frontend as real native iOS/Android apps, without duplicating app logic.
 
 The codebase is a favorable base for wrapping with **Capacitor**:
+
 - Fully static SPA output (no SSR) — Capacitor just needs to load the build.
 - Token-based auth (`localStorage`, `Authorization: Bearer`) — no cookie-jar/WebView cookie complications.
 - Already offline-first: Dexie/IndexedDB local store, Workbox service worker, PWA manifest.
@@ -17,7 +18,7 @@ The codebase is a favorable base for wrapping with **Capacitor**:
 - **Platforms:** iOS and Android together in this phase, not staged.
 - **Distribution:** sideload/personal-use builds for now (no App Store/Play Store listing work in this phase) — but the technical setup (bundle IDs, versioning, signing config shape) should not foreclose a future store submission.
 - **API reachability:** the server URL is **runtime-configurable, not baked into the build** — revised from the original plan (see §1). A self-hosted client app shouldn't hard-code one server's address into the binary; the app asks the user for their server's address on first launch instead, the same way Nextcloud/Audiobookshelf/Donetick's native apps do. One APK/IPA works against anyone's instance. No reverse-proxy or dynamic-DNS work needed here.
-- **Build automation:** local Xcode/Android Studio builds are fine during development of this phase; a GitHub Actions workflow producing signed build artifacts is required as this phase's exit criterion, before it's considered done.
+- **Build automation:** local Xcode/Android Studio builds are fine during development of this phase; a GitHub Actions workflow producing signed build artifacts is required as this phase's exit criterion, before it's considered done. **Done — see §7.**
 
 ## Scope
 
@@ -31,7 +32,7 @@ Implemented in two passes — the first baked the URL in at build time via `VITE
 - `apps/web/src/lib/realtime.ts`: same source of truth drives `Transmit`'s `baseUrl` (`apiBaseUrl() || window.location.origin`) instead of hard-coding `window.location.origin`.
 - `apps/web/src/lib/api/ping.ts`: `fetchPing()` gained an optional `baseUrl` param (defaulting to `apiBaseUrl()`) — it had the same same-origin assumption (predates the native work, from Phase 14) and would otherwise always ping the local Capacitor scheme and report the server permanently unavailable on native. The override also lets `/server-setup` test a candidate URL before saving it.
 - `apps/web/src/routes/server-setup/+page.svelte` (new): a dedicated screen — server URL input, `new URL(...)`-based validation, pings the candidate via `fetchPing`, saves and continues to `/login` on success, or shows an inline "couldn't reach this server" warning with a non-blocking "Continue anyway" (a self-hosted server can be unreachable for reasons unrelated to a wrong URL — a cold container boot, a slow reverse proxy). Doubles as the "change server" screen (pre-fills from `getServerUrl()`).
-- `apps/web/src/routes/+layout.svelte`: on mount, if `Capacitor.isNativePlatform()` and no server URL is configured and the current route isn't already `/server-setup`, redirects there — before login, since a fresh native install has no token *and* nowhere for a login request to go. Pulled forward the `@capacitor/core` dependency (not the rest of §2 — `cap add ios/android` etc. — just the one package) to make this check possible; `Capacitor.isNativePlatform()` is a pure JS check that's always `false` with zero native project scaffolding, so this is safe to have landed ahead of §2.
+- `apps/web/src/routes/+layout.svelte`: on mount, if `Capacitor.isNativePlatform()` and no server URL is configured and the current route isn't already `/server-setup`, redirects there — before login, since a fresh native install has no token _and_ nowhere for a login request to go. Pulled forward the `@capacitor/core` dependency (not the rest of §2 — `cap add ios/android` etc. — just the one package) to make this check possible; `Capacitor.isNativePlatform()` is a pure JS check that's always `false` with zero native project scaffolding, so this is safe to have landed ahead of §2.
 - `apps/web/src/routes/settings/+page.svelte`: a "Server" row, shown only when `Capacitor.isNativePlatform()`, displaying the current URL with a "Change" action (clears the token and server URL, returns to `/server-setup` — no confirm step, matching the existing "Log out" button's directness).
 - Updated the AdonisJS API's CORS config (`apps/api/config/cors.ts`): production `origin` is `['capacitor://localhost', 'https://localhost']` (was `[]` — the PWA is same-origin and never needed a CORS allowlist entry, so there was nothing to preserve "in addition to"). Unaffected by the runtime-URL rework above — CORS is about the Capacitor app's own origin, not which server it's configured to call.
 
@@ -145,7 +146,7 @@ Capacitor's native local server hard-codes its SPA-fallback filename to `index.h
 platforms (`WebViewLocalServer.java`'s `handleLocalRequest`, `Router.swift`'s `route(for:)`) —
 there's no way to point it at this project's `adapter-static` fallback file (`200.html`, chosen
 specifically to avoid colliding with the real prerendered `/` page — see the fallback comment
-above). It serves `build/index.html` for *any* unmatched deep path. That file (the real prerendered
+above). It serves `build/index.html` for _any_ unmatched deep path. That file (the real prerendered
 `/` page) used SvelteKit's default **relative** asset paths (`./_app/...`), correct only when
 served from its own exact URL; served instead at `/settings/sync`, the browser resolves `./_app/...`
 against the wrong base directory and every chunk 404s. `build/200.html` already used absolute paths
@@ -153,7 +154,7 @@ against the wrong base directory and every chunk 404s. `build/200.html` already 
 `index.html`.
 
 Fixed by adding `paths: { relative: false }` to the `sveltekit()` plugin options in
-`apps/web/vite.config.ts`, forcing absolute (`/_app/...`) asset paths on *every* prerendered page,
+`apps/web/vite.config.ts`, forcing absolute (`/_app/...`) asset paths on _every_ prerendered page,
 not just the fallback — safe here since this app always deploys at its domain root (no subpath
 deployment to support, which is the only reason SvelteKit defaults to relative paths). Verified via
 `pnpm --filter web run build`: both `build/index.html` and `build/200.html` now emit identical
@@ -165,13 +166,13 @@ happened to be the first thing to actually trigger.
 anywhere but the root route consistently landed back on the root list view instead of refreshing
 the current page, because `index.html`'s own client logic (redirecting an authenticated user to
 `/lists`) ran once Capacitor's fallback served its content. The `paths.relative: false` fix above
-only fixed the *crash*; it didn't stop the wrong page's content — and therefore its own redirect
+only fixed the _crash_; it didn't stop the wrong page's content — and therefore its own redirect
 logic — from loading in the first place. Implemented the previously-deferred routing fix after all:
 
 - **Android**: `MainActivity.java`'s `setSpaFallbackRoute()` installs a `RouteProcessor`
   (`bridgeBuilder.setRouteProcessor(...)`, set before `super.onCreate()` builds the Bridge) that
   redirects the literal `/index.html` fallback path to `/200.html`. Non-obvious gotcha: this same
-  RouteProcessor is *also* consulted for every regular asset request, not just the SPA-fallback
+  RouteProcessor is _also_ consulted for every regular asset request, not just the SPA-fallback
   branch (`WebViewLocalServer`'s generic `PathHandler#handle`, used for every `.js`/`.css`/etc.
   file) — an unconditional redirect broke every asset load (each one got 200.html's HTML back
   instead of its real content, `SyntaxError: Unexpected token '<'` on whichever chunk loaded
@@ -232,7 +233,7 @@ was compiled into the binary (confirmed via `strings` on the built binary and th
 `Main.storyboardc`) but never constructed, so neither `router()` nor `capacitorDidLoad()` ever ran.
 
 This is why earlier verification looked convincing without being real proof: a cold launch to `/`
-resolves correctly under Capacitor's *default* router too (`index.html` genuinely is the right
+resolves correctly under Capacitor's _default_ router too (`index.html` genuinely is the right
 file for that one URL), and reaching `/login` via `goto()` is a client-side SvelteKit route change
 that never touches native routing at all — neither test actually exercised `SpaFallbackRouter`.
 Confirmed the fix with `fatalError()` placed at the top of `capacitorDidLoad()`: the app kept
@@ -248,7 +249,7 @@ templates where `SceneDelegate` frequently bypasses the storyboard entirely.
 
 #### iOS: pull-to-refresh visual polish (found on device pass, after the SceneDelegate fix)
 
-With `MainViewController` actually wired in, `UIRefreshControl` was confirmed *functionally*
+With `MainViewController` actually wired in, `UIRefreshControl` was confirmed _functionally_
 working via a temporary fire-counter overlay (8 successful reloads triggered across one test) —
 but with no visible spinner, which is why it initially looked broken. Two contributing issues,
 both cosmetic once the fire-counter proved the mechanism itself was sound:
@@ -310,12 +311,49 @@ Implemented as designed, with two discovered refinements to the original plan:
 
 `foundational/PHASE14_PLAN.md` shipped this in full, ahead of this phase: `SyncStatusBanner.svelte`/`SyncToast.svelte` were deleted, and `apps/web/src/routes/settings/sync/+page.svelte` (linked from Settings, per `apps/web/src/routes/settings/+page.svelte`) now shows connection status, last successful sync time, and a per-item queued/failed list with "Retry now" — backed by `apps/web/src/lib/offline/connectivity.svelte.ts` (a real `/api/v1/ping` reachability probe, not just `navigator.onLine`) and a top-of-app `SyncStatusIcon.svelte` cloud-disconnected indicator replacing the old banner. Verified present in the codebase as of this review (2026-08-21) — no further work needed here; this phase's remaining sections (offline reorder/attach, native shell, CI) build on top of that connectivity/sync-status layer rather than creating it.
 
-### 7. CI: signed build artifacts (this phase's exit criterion)
+### 7. CI: signed build artifacts (this phase's exit criterion) — **done**
 
-- New GitHub Actions workflow (alongside the existing `docker-publish.yml` pattern in `.github/workflows/`) that builds the web bundle (no server URL to inject — §1 made that runtime-configurable, so one build serves every self-hosted instance), runs `cap sync`, then builds:
-  - **Android:** an APK (and/or AAB) via Gradle, signed using a keystore supplied through repo secrets — sideload-ready today, AAB format also keeps a future Play Store submission unblocked.
-  - **iOS:** an unsigned/simulator build at minimum; a signed device/TestFlight-capable build additionally requires an Apple Developer Program enrollment and certificates/provisioning profiles as CI secrets (account-level setup, outside this plan's engineering scope).
-- Artifacts uploaded as workflow build artifacts (not published to a store, matching the "sideload for now" decision) so a signed build is always one Actions run away without needing a local machine.
+New `.github/workflows/native-build.yml`, alongside the existing `docker-publish.yml` pattern —
+same trigger (`push: tags: ["v*.*.*"]`) and same `test.yml` gate, but attaches its outputs as
+**assets on the GitHub Release for that tag** (via `softprops/action-gh-release`) rather than
+only leaving them as plain workflow-run artifacts — the maintainer's explicit preference over the
+plan's original "workflow artifacts only" wording, since a Release asset is downloadable straight
+from the Releases page without a logged-in GitHub session or a 90-day expiry.
+
+- **`test`**: reuses `test.yml`, same as `docker-publish.yml` — nothing native builds without the
+  full lint/typecheck/test gate passing first.
+- **`build-android`** (`ubuntu-latest`): `pnpm --filter @everylist/web run cap:sync` (build + sync,
+  the same local dev command), then `./gradlew assembleDebug` for a **debug-signed APK** — there's
+  no release-signing keystore yet (maintainer's call: ship debug-signed for now rather than block
+  this section on generating one), so this is sideload-ready today but not a Play-Store-submission
+  artifact. Swapping in `assembleRelease` plus a keystore-backed signing config (secrets:
+  `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+  `ANDROID_KEY_PASSWORD` would be the natural names) is a self-contained follow-up once one exists
+  — doesn't change this workflow's shape. `android-actions/setup-android` + `actions/setup-java`
+  (Temurin 21, matching AGP 8.13's requirement) precede the Gradle build; `sdkmanager --licenses`
+  accepted up front so AGP can auto-fetch the `compileSdk 36` platform/build-tools it needs.
+- **`build-ios`** (`macos-latest`): same `cap:sync`, then `xcodebuild` against `App.xcodeproj`
+  directly — Capacitor 8's default template resolves native deps via Swift Package Manager, not
+  CocoaPods, so there's no `.xcworkspace` here despite §4's walkthrough describing one (written
+  against an older Capacitor/CocoaPods assumption; not corrected there since that section is a
+  manual-verification walkthrough, not code). Builds `-sdk`/`-destination 'generic/platform=iOS
+Simulator'` with `CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO` — an **unsigned Simulator
+  build only** (maintainer's call: no Apple Developer Program enrollment yet, which a real
+  device/TestFlight-capable build requires — see the plan's original wording, unchanged). Zipped
+  (`App.app` → `.zip`, since a raw `.app` directory isn't practical as a single release asset) and
+  uploaded.
+- **`release`**: needs both build jobs (not run inline in each, to avoid two concurrent
+  `action-gh-release` calls racing to create the same tag's Release), downloads both artifacts, and
+  calls `softprops/action-gh-release` once with both files — creates the Release if the tag doesn't
+  have one yet, or appends to it if `docker-publish.yml`'s tag push already triggered other
+  automation. Needs `permissions: contents: write` for the default `GITHUB_TOKEN` to create/update
+  a Release and upload assets.
+
+Verified locally before relying on CI: `pnpm --filter @everylist/web run cap:sync` (clean sync into
+both native projects), `apps/android`'s `./gradlew assembleDebug` (builds `app-debug.apk`), and the
+exact `xcodebuild` invocation above against `apps/ios/App/App.xcodeproj` (builds `App.app` for
+`iphonesimulator`) all succeed on the maintainer's machine — the workflow's shape isn't newly
+invented, it mirrors commands already known to work locally.
 
 ### 8. Native offline reads: cache-fallback for GET fetchers — **done**
 
@@ -330,7 +368,7 @@ mutation queue, `sync-engine.ts`, `flush.ts`) was already genuinely offline-firs
 broken, and only on native.
 
 - New `apps/web/src/lib/api/cache-fallback.ts`: a single shared `withCacheFallback(request,
-  fallback)` helper rather than duplicating the same `err instanceof ApiError` check at every call
+fallback)` helper rather than duplicating the same `err instanceof ApiError` check at every call
   site (which `sync-engine.ts`'s `offlineCreate`/`offlineMutate` already do individually for
   writes). Falls back to cached data only on a genuine network failure — never on a real `ApiError`
   (404/403/401), since masking a real 403 with stale cache could show a list the user was just
@@ -347,7 +385,7 @@ broken, and only on native.
   Dexie caching, using the `lists` table (previously declared but fully dead code — nothing had
   ever written or read it) and the new `folders` table. `fetchStoreCategoryOrder` (`stores.ts`)
   gets the same treatment using the already-existing `storeCategoryOrders` table (already written
-  by the offline *write* path's `offlineReorder`/`replayReorder`, just never read back). This was
+  by the offline _write_ path's `offlineReorder`/`replayReorder`, just never read back). This was
   the highest-leverage part of the fix — nearly every page's first parallel fetch is
   `fetchList(listId)`.
 - `fetchCategories`, `fetchItems`, `fetchStores`, `fetchFavorites` already cached their responses
@@ -360,7 +398,7 @@ broken, and only on native.
   which is already correct. No new offline banner needed either — a page populated from cache is
   already covered by the existing global `SyncStatusIcon`/`connectivity.svelte.ts` indicator (§6).
 - **Explicitly out of scope**: `members`/`invites`, `recently-deleted` (`fetchRecentItems` — not
-  to be confused with `fetchRecentItemNames`, the *autocomplete* suggestions function, which
+  to be confused with `fetchRecentItemNames`, the _autocomplete_ suggestions function, which
   already had its own offline fallback before this work and was untouched), `fetchProfile`,
   `fetchMeta` stay network-only. Membership/invite data reflects who currently has access — a
   stale cache could show someone as still having access after removal (or the reverse), a worse
@@ -379,13 +417,13 @@ broken, and only on native.
   a non-ApiError failure" test was testing behavior that's no longer reachable by design — a plain
   network failure with nothing cached now resolves to the empty state, not an error — so it was
   repurposed to assert exactly that, with a new adjacent test (stubbing `indexedDB` itself as
-  `undefined`) covering the one way "Failed to load lists." *is* still reachable: Dexie truly
+  `undefined`) covering the one way "Failed to load lists." _is_ still reachable: Dexie truly
   unavailable, not just the network being down.
 - Two genuine coverage gaps (not the cross-file artifact below) needed real tests, not
   suppression: `lists.ts`'s fallback sort comparator (`(a._localSortOrder ?? 0) - (b…)`) needs a
   row with no `_localSortOrder` — reachable in practice via a list cached only through `fetchList`,
   never through `fetchLists` — to exercise its `?? 0` branches; `items.ts`'s fallback sort
-  comparator needs *two* cached rows, since `Array.prototype.sort` never invokes its comparator at
+  comparator needs _two_ cached rows, since `Array.prototype.sort` never invokes its comparator at
   all for a zero/one-element array.
 - The now-familiar Vitest browser-mode cross-file coverage artifact (documented repeatedly
   elsewhere in this codebase, e.g. `lib/api/selected-store.ts`) showed up twice more here: the new
@@ -419,12 +457,12 @@ server stopped. That pass surfaced three follow-ups, all done:
 
 - **Stray `Splash.imageset` files.** Xcode flagged "The image set 'Splash' has 3 unassigned
   children." The imageset folder held both the correctly-generated `Default@1x/2x/3x~universal~
-  anyany(-dark).png` set (which `Contents.json` actually references) and three leftover
+anyany(-dark).png` set (which `Contents.json` actually references) and three leftover
   `splash-2732x2732*.png` files from the original Capacitor template, committed in §2 and never
   cleaned up. Deleted — nothing referenced them.
 - **`fetchPing` had no request timeout** (`apps/web/src/lib/api/ping.ts`). The connectivity
   monitor (§6) relies on `navigator.onLine`'s `offline` event for a real network drop, but that
-  event never fires when only the *server process* dies with the network interface still up (e.g.
+  event never fires when only the _server process_ dies with the network interface still up (e.g.
   stopping the local dev API to simulate an outage) — detection then depends entirely on the 30s
   ping interval. On the Android emulator, a bare `fetch()` to a closed port routed through its
   virtual network layer (`10.0.2.2`) was observed taking far longer than 30s to fail, unlike the
@@ -463,7 +501,7 @@ test` (100% statements/branches/functions/lines) all pass.
 Every top-level `<main>` used a flat `p-8` (2rem) top padding, with no `env(safe-area-inset-top)`
 at all — fine on Android's small punch-hole-camera inset, but on notched/Dynamic-Island iPhones the
 page heading (`PageHeader`'s `<h1>`) sat close enough to clip under it. The one exception,
-`routes/lists/[id]/+page.svelte`'s sticky header, *did* add `pt-[env(safe-area-inset-top)]` — but
+`routes/lists/[id]/+page.svelte`'s sticky header, _did_ add `pt-[env(safe-area-inset-top)]` — but
 on top of the surrounding `<main>`'s own `p-8`, stacking to `2rem + inset` and looking noticeably
 over-padded by comparison.
 
@@ -483,11 +521,11 @@ maintainer's to do (Simulator/emulator can't be driven from here).
 The sections above are scoped, not sequenced — here's the actual build order and why, reviewed 2026-08-21:
 
 1. **§1 (base URL + CORS) — done.** The acknowledged load-bearing decision — §2/§3/§4/§7 all assume it's done, since nothing native can reach the real API or pass CORS without it. Small and mechanical; fully unit-testable without any native tooling.
-2. **§5 (offline reorder/attach/favorite-add gaps) — done.** No dependency on Capacitor — touches only the sync engine (`db.ts`, `sync-engine.ts`, `sync-queue.ts`, `flush.ts`, `categories.ts`/`stores.ts`/`favorites.ts`) and is testable today via the existing Vitest/Playwright suite. Sequenced early (rather than right before §4) so the native app is offline-complete from the point it exists, not patched right before the device pass. It does need to be *done* before §4, since §4's manual verification re-tests these paths on-device.
+2. **§5 (offline reorder/attach/favorite-add gaps) — done.** No dependency on Capacitor — touches only the sync engine (`db.ts`, `sync-engine.ts`, `sync-queue.ts`, `flush.ts`, `categories.ts`/`stores.ts`/`favorites.ts`) and is testable today via the existing Vitest/Playwright suite. Sequenced early (rather than right before §4) so the native app is offline-complete from the point it exists, not patched right before the device pass. It does need to be _done_ before §4, since §4's manual verification re-tests these paths on-device.
 3. **§2 (add Capacitor) — done.** Needed §1 done first — no point wiring the native shell before it has anywhere real to point.
-4. **§3 (PWA/WebView reconciliation — SW gating, badge, SSE reconnect) — done.** Needed §2's native projects to exist, since it's reconciling PWA behavior *against* the Capacitor WebView.
+4. **§3 (PWA/WebView reconciliation — SW gating, badge, SSE reconnect) — done.** Needed §2's native projects to exist, since it's reconciling PWA behavior _against_ the Capacitor WebView.
 5. **§4 (local build + manual device verification).** The integration checkpoint for §1–§3 and §5 together. **Needs the maintainer directly** — Xcode/iOS Simulator and Android Studio/emulator require a local GUI that isn't drivable from an agent session; native projects/configs/CLI builds can be prepared ahead of time, but the simulator/device walkthrough itself is a manual handoff.
-6. **§7 (CI signed builds).** Automates a build recipe, so it needs a working, manually-verified local build (§4) to codify first. **Needs secrets/account setup from the maintainer** (Android signing keystore; optionally an Apple Developer Program enrollment for a signed iOS build) — the workflow can be wired to consume them, but a legitimate signing identity can't be generated on its own.
+6. **§7 (CI signed builds) — done.** Automated the same `cap:sync` → build recipe already verified locally in §4. Shipped without either optional prerequisite — debug-signed Android and unsigned-Simulator iOS, both explicit maintainer calls rather than blocking on a keystore/Apple Developer enrollment that doesn't exist yet; either can be added later as a self-contained follow-up (see §7).
 
 Open decisions to pin down at the relevant stage (not blocking the order above): the bundle ID for `capacitor.config.ts` — **confirmed: `au.brianramsey.everylist`** — and whether an Android signing keystore already exists or needs generating (needed at §7). (The native build's server address is no longer a build-time decision — see §1 — so there's nothing to pin down for that at §2/§4; a fresh install just goes through `/server-setup`.)
 
@@ -522,7 +560,8 @@ Open decisions to pin down at the relevant stage (not blocking the order above):
 - Every top-level `<main>` under `apps/web/src/routes/**/+page.svelte` (28 files) — top padding
   changed to `pt-[max(env(safe-area-inset-top),2rem)]`; `lists/[id]/+page.svelte`'s sticky header
   carries it instead of its `<main>`. **Done.**
-- `.github/workflows/native-build.yml` — new.
+- `.github/workflows/native-build.yml` — new: builds a debug-signed Android APK and an unsigned
+  iOS Simulator build on every `vX.Y.Z` tag push, attached as GitHub Release assets. **Done.**
 
 ## Verification
 
@@ -531,4 +570,4 @@ Open decisions to pin down at the relevant stage (not blocking the order above):
 - Manual device verification on both platforms: fresh install lands on `/server-setup` (not `/login`) before any server is configured; entering a real URL pings it and proceeds to login; entering an unreachable one shows the warning and "Continue anyway" still works; Settings → Server → Change clears the session and returns to `/server-setup`. Then: login (token storage/persistence across app restarts), list CRUD against the real HTTPS API, offline mode (airplane mode → add/edit items → reconnect → confirm sync, reusing the existing Phase 5 offline behavior), and SSE reconnect after backgrounding the app for a minute and returning to it.
 - Offline mode additionally covers the newly-closed gaps: reorder categories/store aisle order while offline and confirm the new order survives a reconnect; add a favorite to a list and attach an existing store while offline and confirm both resolve correctly on flush.
 - Settings sync-status view (already shipped, Phase 14): confirm the newly-queued reorder/attach mutations from this phase show up correctly in `/settings/sync`'s queued-item list alongside the existing create/update/delete entries.
-- CI: the new workflow run produces a downloadable Android APK/AAB artifact and an iOS build artifact.
+- CI: pushing a `vX.Y.Z` tag produces a GitHub Release with a downloadable Android debug APK and an iOS Simulator build attached — **verified structurally** (workflow YAML validated, and each build command — `cap:sync`, `gradlew assembleDebug`, the `xcodebuild` invocation — run successfully on the maintainer's machine first); an actual tag push through CI to confirm the Release/asset-upload plumbing end-to-end is the maintainer's to do.

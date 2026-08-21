@@ -1,0 +1,135 @@
+name: Native App Build
+
+# Builds the Capacitor-wrapped iOS/Android apps (foundational/PHASE13_PLAN.md §7) and attaches
+# them as downloadable assets on the GitHub Release for every pushed vX.Y.Z tag — same trigger
+# as docker-publish.yml's release path, so a tag produces both the container image and the
+# native builds together.
+#
+# No server URL is baked in (PHASE13_PLAN.md §1 made that runtime-configurable via /server-setup),
+# so one build here serves every self-hosted instance.
+#
+#   - Android: a debug-signed APK via Gradle. Sideload-ready as-is; there's no release signing
+#     keystore yet, so this isn't Play-Store-submission-ready — swap `assembleDebug` for
+#     `assembleRelease` plus a keystore-backed signing config once one exists.
+#   - iOS: an unsigned Simulator build only (no Apple Developer Program enrollment yet, which a
+#     real device/TestFlight-capable build requires) — installable in the iOS Simulator via
+#     `xcrun simctl install`, not on a physical device.
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+concurrency:
+  group: native-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  build-android:
+    name: Build Android APK
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @everylist/shared build
+
+      - name: Build web bundle and sync into the native Android project
+        run: pnpm --filter @everylist/web run cap:sync
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Accept SDK licenses
+        # AGP auto-downloads any additional SDK platform/build-tools packages it needs
+        # (compileSdk 36, per apps/android/variables.gradle) on first use, but only once the
+        # licenses for those packages have been accepted.
+        run: yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Assemble debug APK
+        working-directory: apps/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: apps/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  build-ios:
+    name: Build iOS Simulator app
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @everylist/shared build
+
+      - name: Build web bundle and sync into the native iOS project
+        run: pnpm --filter @everylist/web run cap:sync
+
+      - name: Build for the iOS Simulator
+        # Capacitor 8's default template resolves its native deps via Swift Package Manager, not
+        # CocoaPods — App.xcodeproj (not a .xcworkspace) is the real project, and xcodebuild
+        # resolves the SPM graph itself before compiling. No code signing available/needed for a
+        # Simulator-only build.
+        run: |
+          xcodebuild build \
+            -project apps/ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+
+      - name: Zip the .app bundle
+        run: |
+          cd build/Build/Products/Release-iphonesimulator
+          zip -r -y "$GITHUB_WORKSPACE/EveryList-ios-simulator.zip" App.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-build
+          path: EveryList-ios-simulator.zip
+          if-no-files-found: error
+
+  release:
+    name: Attach builds to the GitHub Release
+    needs: [build-android, build-ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/android-apk/app-debug.apk
+            dist/ios-simulator-build/EveryList-ios-simulator.zip
