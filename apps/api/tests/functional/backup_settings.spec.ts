@@ -1,9 +1,16 @@
 import fs from 'node:fs'
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
+import { DateTime } from 'luxon'
 import type { BackupSettingsStateDto } from '@everylist/shared'
 import { backupDirectory, runScheduledBackupIfDue } from '#services/backup_service'
 import { bodyData, signupAndGetToken } from './helpers.js'
+
+// The first-ever automatic backup only fires once a scheduled period boundary
+// has passed since the settings row was created (see isBackupDue) — checking
+// a week out guarantees that for any frequency, without caring what time the
+// test itself happens to run.
+const wellPastFirstWindow = () => DateTime.now().plus({ days: 8 })
 
 test.group('Backup settings', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
@@ -35,7 +42,7 @@ test.group('Backup settings', (group) => {
 
   test('lists an automatic backup once the scheduler has taken one', async ({ client, assert }) => {
     const token = await signupAndGetToken(client)
-    await runScheduledBackupIfDue()
+    await runScheduledBackupIfDue(wellPastFirstWindow())
 
     const show = await client
       .get('/api/v1/backup-settings')
@@ -119,8 +126,9 @@ test.group('Backup settings', (group) => {
     // A manual run must never affect when the next scheduled backup fires —
     // otherwise running it late in a period could suppress that period's own
     // scheduled backup. Since scheduling is driven off the newest automatic
-    // file (there is none yet), a scheduled check right now must still fire.
-    const ran = await runScheduledBackupIfDue()
+    // file (there is none yet), a scheduled check once the first window
+    // arrives must still fire.
+    const ran = await runScheduledBackupIfDue(wellPastFirstWindow())
     assert.isTrue(ran)
   })
 
