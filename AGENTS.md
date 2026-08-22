@@ -108,6 +108,36 @@ differently-capable paths for reusing an item's history, and it's easy to assume
   distinction — see `items_controller.ts#recentNames`).
 - Not scoped or prioritized yet — flagging so it's not lost, not proposing which fix to take.
 
+### Offline-sync E2E test can intermittently see a duplicate row on CI (not locally)
+
+**Status (2026-08-22): open, unreproduced locally — suspected pre-existing race, not yet fixed.**
+
+`e2e/offline-sync.e2e.ts`'s "adds an item while offline and syncs it once back online" failed
+once in CI (Phase 16 PR #79) with a Playwright strict-mode violation: `getByText('Milk')`
+resolved to *two* elements right after `page.reload()`, where the test expects exactly one.
+
+- **Ruled out as caused by that PR's own diff**: the PR touched only `apps/api` auth/token/policy
+  code, `start/limiter.ts`, and the new `settings/tokens` page — nothing under
+  `apps/web/src/lib/offline/`, `lib/api/items.ts`, or the list page's flush/reload handling.
+- **Not reproduced locally**: the same test run 6 times back-to-back (3× solo, 3× alongside the
+  rest of the suite at 2 workers, matching CI's concurrency) — 6/6 passed every time.
+- **Matches a known-tricky area**: this exact class of bug — a local/Dexie optimistic row not
+  cleared before a reload lands — was fixed once already (`Fix offline sync DOM visibility and
+  self-conflicting edits`, #72). The likely mechanism: the "Server unavailable" indicator
+  clearing and the flush queue actually draining are two independent async signals (see
+  `+page.svelte`'s `onFlushOutcome`) — a `page.reload()` timed between them could catch a stale
+  Dexie temp row still present alongside the just-synced server row. CI's slower I/O plausibly
+  widens that window enough to hit; a fast local machine may not.
+
+**What this means for future work:**
+
+- If this reappears, don't assume it's a fresh regression from whatever PR is open at the time —
+  check first whether the diff touches offline-sync code at all.
+- Whoever picks this up: instrument the gap between the connectivity indicator clearing and the
+  flush's Dexie cleanup actually completing (`lib/offline/flush.ts`'s `onFlushOutcome` and
+  whatever clears the dirty/temp row) to find the real race window, rather than just adding a
+  wait to the test — the test caught a real (if narrow) gap.
+
 ## Working conventions
 
 - Full-stack features go migration → backend (model/validator/controller/policy) → shared DTO → frontend, in that order — see any `Phase 6:` commit for the pattern.
