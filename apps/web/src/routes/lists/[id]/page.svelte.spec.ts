@@ -56,6 +56,7 @@ vi.mock('$lib/offline/flush', () => ({
 	onFlushOutcome: vi.fn(() => vi.fn())
 }));
 vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
+vi.mock('$lib/open-external-link', () => ({ openExternalLink: vi.fn() }));
 
 const { fetchList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
@@ -66,6 +67,7 @@ const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores')
 const { getSelectedStoreSettings } = await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
 const { refreshBadgeCount } = await import('$lib/pwa/badge');
+const { openExternalLink } = await import('$lib/open-external-link');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { onConflict, onFlushOutcome } = await import('$lib/offline/flush');
 const { goto } = await import('$app/navigation');
@@ -693,6 +695,54 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Corner Shop')).toBeInTheDocument();
 		const breadRow = page.getByText('Bread').element().closest('li') as HTMLElement;
 		expect(breadRow.textContent).not.toContain('Corner Shop');
+	});
+
+	it('shows a note on its own line under the item, and none for an item without one', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, notes: 'get the ripe ones' }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, notes: null })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('get the ripe ones')).toBeInTheDocument();
+		const breadRow = page.getByText('Bread').element().closest('li') as HTMLElement;
+		expect(breadRow.textContent).not.toContain('get the ripe ones');
+	});
+
+	it("renders a URL inside a note as a clickable link, leaving the rest of the note's text and spacing intact", async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({
+				id: 100,
+				name: 'Bananas',
+				categoryId: 10,
+				notes: 'see https://example.com/recipe for the recipe'
+			})
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Bananas', { exact: true })).toBeInTheDocument();
+		const bananasRow = page
+			.getByText('Bananas', { exact: true })
+			.element()
+			.closest('li') as HTMLElement;
+		const noteEl = bananasRow.querySelector('p') as HTMLElement;
+		expect(noteEl.textContent).toBe('see https://example.com/recipe for the recipe');
+
+		const link = page.getByRole('link', { name: 'https://example.com/recipe' });
+		expect(link.element().getAttribute('href')).toBe('https://example.com/recipe');
+		expect(link.element().getAttribute('target')).toBe('_blank');
+
+		await link.click();
+
+		expect(openExternalLink).toHaveBeenCalledWith(
+			'https://example.com/recipe',
+			expect.any(MouseEvent)
+		);
+		// Clicking the link must not be misread as a tap on the row itself.
+		expect(updateItem).not.toHaveBeenCalled();
+		expect(deleteItem).not.toHaveBeenCalled();
 	});
 
 	it("colors the header's store icon to match the currently selected store", async () => {
