@@ -652,16 +652,51 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     )
     await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bread' }))
     await auth(client.delete(`/api/v1/lists/${listId}/items/${bananas.body().data.id}`))
-    // Re-adding "bananas" (different case) after it was deleted exercises
-    // the case-insensitive dedup within recentNames' own history scan —
-    // deleted items aren't excluded from the source query, only the
-    // duplicate name is collapsed to one entry.
-    await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'bananas' }))
+    // Bulk import bypasses store()'s active/deleted dedup (which would otherwise restore the
+    // just-deleted "Bananas" row instead of creating a second one) — the one remaining path that
+    // produces a genuine same-name duplicate, exercising recentNames' own case-insensitive
+    // collapse. Deleted items aren't excluded from the source query, only the duplicate name is.
+    await auth(client.post(`/api/v1/lists/${listId}/items/import`).json({ text: 'bananas' }))
 
     const recentNames = await auth(client.get(`/api/v1/lists/${listId}/items/recent-names`))
     recentNames.assertStatus(200)
     const names: string[] = recentNames.body().data
     assert.deepEqual(names, ['bananas', 'Bread'])
+  })
+
+  test("re-adding a deleted item's name restores its old row, keeping store/price/quantity/notes instead of creating a fresh duplicate", async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const created = await auth(
+      client
+        .post(`/api/v1/lists/${listId}/items`)
+        .json({ name: 'Milk', quantity: '2', notes: 'oat', price: 350 })
+    )
+    const original = created.body().data
+    await auth(client.delete(`/api/v1/lists/${listId}/items/${original.id}`))
+
+    const readded = await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'milk' }))
+    readded.assertStatus(200)
+    const restored = readded.body().data
+
+    assert.equal(restored.id, original.id, 'same row restored, not a new one')
+    assert.isNull(restored.deletedAt)
+    assert.equal(restored.quantity, '2')
+    assert.equal(restored.notes, 'oat')
+    assert.equal(restored.price, 350)
+    assert.equal(
+      restored.version,
+      original.version + 2,
+      'delete bumped it, implicit restore bumps again'
+    )
+
+    const index = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.lengthOf(index.body().data, 1, 'no duplicate row was created')
   })
 
   test('recent-names caps out at 50 distinct names', async ({ client, assert }) => {

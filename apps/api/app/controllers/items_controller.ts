@@ -74,6 +74,24 @@ async function nextSortOrder(listId: number): Promise<number> {
   return Number(result?.$extras.maxSortOrder ?? -1) + 1
 }
 
+/** Clears `deletedAt` on an existing row (vs. creating a fresh one) so its category/store/price/
+ * quantity/notes survive — shared by the explicit restore endpoint and `store()`'s implicit
+ * restore-on-name-match. */
+async function restoreItemRow(list: List, item: Item): Promise<void> {
+  item.deletedAt = null
+  item.sortOrder = await nextSortOrder(list.id)
+  item.version += 1
+  await item.save()
+
+  await broadcastSync({
+    listId: list.id,
+    entityType: 'item',
+    entityId: item.id,
+    op: 'create',
+    version: item.version,
+  })
+}
+
 export default class ItemsController {
   async index({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
@@ -144,11 +162,12 @@ export default class ItemsController {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createItemValidator)
+    const normalizedName = payload.name.trim().toLowerCase()
 
     const existing = await Item.query()
       .where('listId', list.id)
       .whereNull('deletedAt')
-      .whereRaw('LOWER(TRIM(name)) = ?', [payload.name.trim().toLowerCase()])
+      .whereRaw('LOWER(TRIM(name)) = ?', [normalizedName])
       .first()
 
     if (existing) {
@@ -168,6 +187,21 @@ export default class ItemsController {
       }
 
       return serialize(ItemTransformer.transform(existing))
+    }
+
+    // No active match — re-adding a name that was deleted restores its old row (category, store,
+    // price, quantity, notes intact) rather than silently creating a metadata-less duplicate. See
+    // AGENTS.md's "Re-adding a deleted item's name" footgun.
+    const deletedMatch = await Item.query()
+      .where('listId', list.id)
+      .whereNotNull('deletedAt')
+      .whereRaw('LOWER(TRIM(name)) = ?', [normalizedName])
+      .orderBy('deletedAt', 'desc')
+      .first()
+
+    if (deletedMatch) {
+      await restoreItemRow(list, deletedMatch)
+      return serialize(ItemTransformer.transform(deletedMatch))
     }
 
     const categoryId = await resolveCategoryId(list, payload.name, payload.categoryId)
@@ -374,18 +408,7 @@ export default class ItemsController {
       .whereNotNull('deletedAt')
       .firstOrFail()
 
-    item.deletedAt = null
-    item.sortOrder = await nextSortOrder(list.id)
-    item.version += 1
-    await item.save()
-
-    await broadcastSync({
-      listId: list.id,
-      entityType: 'item',
-      entityId: item.id,
-      op: 'create',
-      version: item.version,
-    })
+    await restoreItemRow(list, item)
 
     return serialize(ItemTransformer.transform(item))
   }

@@ -73,40 +73,25 @@ bypassing the frontend entirely:
   `subscriber.writeMessage()` call after boot doesn't reach an already-piped response, when
   identical calls immediately afterward do.
 
-### Re-adding a deleted item's name silently loses its store/price/quantity/notes
+### Re-adding a deleted item's name silently lost its store/price/quantity/notes
 
-**Status (2026-08-22): open gap, not yet scoped as a fix.**
+**Status (2026-08-22): fixed.** `items_controller.ts#store` used to dedup only against *active*
+items (`whereNull('deletedAt')`), so typing/autocomplete-adding a name that matched a deleted item
+created a fresh, metadata-less row instead of reusing the old one — unlike the explicit
+`/lists/:id/recently-deleted` → `restoreItem()` restore flow, which always preserved
+`categoryId`/`storeId`/`price`/`quantity`/`notes` because it operates on the same row.
 
-`items_controller.ts#store`'s create-time dedup (`Item.query()...whereNull('deletedAt')...LOWER(TRIM(name))`)
-only matches *active* items on purpose — a deleted item doesn't come back just because someone
-typed its name again; that's what the explicit restore flow is for. But that leaves two
-differently-capable paths for reusing an item's history, and it's easy to assume they're the same:
+Fix: when `store()` finds no active match, it now also checks for the most recently *deleted*
+match and restores that row (via a `restoreItemRow` helper shared with the explicit `restore()`
+endpoint) instead of creating a new one. This applies to both the autocomplete-pick and
+typed-and-submitted paths, since the frontend already funnels both through the same
+`POST .../items` call — no frontend or DTO changes were needed. See
+`apps/api/tests/functional/items.spec.ts`'s `"re-adding a deleted item's name restores its old
+row..."` test.
 
-- **Explicit restore** (`/lists/:id/recently-deleted` → `restoreItem()` →
-  `POST .../items/:itemId/restore`): full fidelity — same row, `deletedAt` cleared, `categoryId`/
-  `storeId`/`price`/`quantity`/`notes` all intact.
-- **Add-item / autocomplete** (typing a name, `GET .../items/recent-names` suggestions, then
-  `POST .../items`): name-only. `category_suggestion_service.ts`'s `personalizedCategoryId` *does*
-  query item history without a `deletedAt` filter, so a re-added item usually still lands in the
-  right category — but `storeId`/`price`/`quantity`/`notes` are never re-derived from history
-  anywhere; `store()` only sets them from what the client sends. And the autocomplete suggestion
-  type (`AutocompleteSuggestion` in `apps/web/src/lib/autocomplete.ts`) is `{ name, isFavorite }`
-  only — there's no field to carry that metadata through even if the backend offered it. So
-  re-adding a deleted item's name by typing/autocomplete creates a fresh item that keeps its
-  category but silently drops store, price, quantity, and notes.
-
-**What this means for future work:**
-
-- Don't read "item reuse works" as one behavior — check which of the two paths a report is about.
-  A "my price/store didn't come back" report is this gap; a "the item didn't come back at all" is
-  a genuine restore-flow bug (different code, more serious).
-- A real fix likely means either: (a) `store()`'s dedup also matching a *recently*-deleted item
-  and treating a create as an implicit restore (needs a UX decision — is that surprising if it
-  wasn't what the user meant?), or (b) surfacing "you deleted this — restore it instead?" at
-  autocomplete time, which needs `recent-names` to return enough to distinguish an active match
-  from a deleted one (it currently returns bare `string[]`, deliberately collapsing that
-  distinction — see `items_controller.ts#recentNames`).
-- Not scoped or prioritized yet — flagging so it's not lost, not proposing which fix to take.
+If this resurfaces: check whether `store()`'s deleted-match lookup is still in place before
+assuming it's the same bug — a regression here would look identical to the original report (price/
+store/quantity/notes missing after re-adding a name).
 
 ### Offline-sync E2E test can intermittently see a duplicate row on CI (not locally)
 
