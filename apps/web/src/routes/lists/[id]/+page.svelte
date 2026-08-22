@@ -467,7 +467,7 @@
 			byCategory.get(key)!.push(item);
 		}
 
-		const lines: string[] = [list?.name ?? 'List', ''];
+		const lines: string[] = [list!.name, ''];
 		const appendSection = (header: string | null, sectionItems: ItemDto[]) => {
 			if (sectionItems.length === 0) return;
 			if (header) lines.push(header.toUpperCase());
@@ -478,7 +478,7 @@
 			lines.push('');
 		};
 
-		if (list?.useCategories === false) {
+		if (list!.useCategories === false) {
 			appendSection(null, unchecked);
 		} else {
 			const orderedCategories = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);

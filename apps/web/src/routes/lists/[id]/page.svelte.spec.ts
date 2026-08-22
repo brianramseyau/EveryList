@@ -155,6 +155,7 @@ describe('List detail +page.svelte', () => {
 
 	afterEach(async () => {
 		vi.clearAllMocks();
+		vi.unstubAllGlobals();
 		clearToken();
 		window.sessionStorage.clear();
 		window.localStorage.clear();
@@ -1265,8 +1266,14 @@ describe('List detail +page.svelte', () => {
 		});
 
 		it('copies the list to the clipboard in AnyList format', async () => {
+			// Includes a second Produce item (exercises the "category bucket
+			// already exists" path in buildShareText) and a third, itemless
+			// category (exercises its "no bucket for this category" fallback).
+			const bakery = { ...produce, id: 12, name: 'Bakery', sortOrder: 2 };
+			vi.mocked(fetchCategories).mockResolvedValue([produce, dairy, bakery]);
 			vi.mocked(fetchItems).mockResolvedValue([
 				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false, quantity: '2' }),
+				makeItem({ id: 104, name: 'Apples', categoryId: 10, checked: false }),
 				makeItem({ id: 101, name: 'Milk', categoryId: 11, checked: false }),
 				makeItem({ id: 103, name: 'Old Bread', categoryId: 10, checked: true })
 			]);
@@ -1282,8 +1289,34 @@ describe('List detail +page.svelte', () => {
 
 			await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
 			expect(writeText).toHaveBeenCalledWith(
-				'Groceries\n\nPRODUCE\n• Bananas (2)\n\nDAIRY\n• Milk'
+				'Groceries\n\nPRODUCE\n• Bananas (2)\n• Apples\n\nDAIRY\n• Milk'
 			);
+
+			// A second click while the "Copied!" flash is still armed exercises
+			// re-arming the timeout (clearing the previous one) rather than a
+			// fresh one racing it.
+			await page.getByRole('button', { name: 'Copied!' }).click();
+			await expect.poll(() => writeText.mock.calls.length).toBe(2);
+		});
+
+		it('copies a categories-disabled list to the clipboard as one flat section', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false }),
+				makeItem({ id: 101, name: 'Milk', categoryId: 11, checked: true })
+			]);
+			const writeText = vi.fn().mockResolvedValue(undefined);
+			vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Copy to Clipboard' }).click();
+
+			await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
+			expect(writeText).toHaveBeenCalledWith('Groceries\n\n• Bananas');
 		});
 
 		it('sends an email export from the Share submenu', async () => {
@@ -1303,6 +1336,84 @@ describe('List detail +page.svelte', () => {
 
 			expect(emailExportList).toHaveBeenCalledWith(1, 'friend@example.com');
 			await expect.element(page.getByText('Export sent.')).toBeInTheDocument();
+		});
+
+		it('shows the ApiError message when the email export fails', async () => {
+			vi.mocked(emailExportList).mockRejectedValue(
+				new ApiError(503, 'Email export is not configured on this server.')
+			);
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Email export…' }).click();
+			await page.getByPlaceholder('you@example.com').fill('friend@example.com');
+			await page.getByRole('button', { name: 'Send' }).click();
+
+			await expect
+				.element(page.getByText('Email export is not configured on this server.'))
+				.toBeInTheDocument();
+		});
+
+		it('shows a generic error message when the email export fails without an ApiError', async () => {
+			vi.mocked(emailExportList).mockRejectedValue(new TypeError('network down'));
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Email export…' }).click();
+			await page.getByPlaceholder('you@example.com').fill('friend@example.com');
+			await page.getByRole('button', { name: 'Send' }).click();
+
+			await expect.element(page.getByText('Failed to send export.')).toBeInTheDocument();
+		});
+
+		it('does not submit the Share submenu email export form with only whitespace', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Email export…' }).click();
+
+			const input = page.getByPlaceholder('you@example.com');
+			const form = input.element().closest('form');
+			await input.fill('   ');
+			form?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+			expect(emailExportList).not.toHaveBeenCalled();
+		});
+
+		it('cancels the email export form from the Share submenu', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Email export…' }).click();
+
+			await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+			await expect.element(page.getByRole('button', { name: 'Email export…' })).toBeInTheDocument();
+			expect(emailExportList).not.toHaveBeenCalled();
 		});
 
 		it('returns to the main menu from the Share submenu', async () => {

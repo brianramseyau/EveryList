@@ -30,7 +30,6 @@
 	}
 
 	function close() {
-		if (!open) return;
 		open = false;
 		onOpenChange?.(open);
 	}
