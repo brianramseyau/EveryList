@@ -152,14 +152,21 @@ export function lastAutomaticBackupAt(backupDir: string): DateTime | null {
 
 /** Due at most once per period: fires as soon as `now` reaches the period's
  * scheduled time, and stays "not due" once the last automatic backup catches
- * up to it. */
+ * up to it. If no automatic backup has ever run, waits for the first period
+ * boundary *after* the schedule was created rather than backdating to
+ * whatever the current period's start happens to be — otherwise a schedule
+ * that's only just been created (e.g. this instance's first-ever startup)
+ * would see a stale, already-elapsed period as "due" and fire immediately,
+ * however far that is from the configured time-of-day. */
 export function isBackupDue(
   schedule: { frequency: BackupFrequency; timeOfDay: string },
   lastAutomaticAt: DateTime | null,
-  now: DateTime
+  now: DateTime,
+  scheduleCreatedAt: DateTime | null = null
 ): boolean {
   const periodStart = currentPeriodStart(schedule.frequency, schedule.timeOfDay, now)
-  return !lastAutomaticAt || lastAutomaticAt < periodStart
+  if (lastAutomaticAt) return lastAutomaticAt < periodStart
+  return !scheduleCreatedAt || periodStart >= scheduleCreatedAt
 }
 
 /**
@@ -190,7 +197,8 @@ export async function runScheduledBackupIfDue(now: DateTime = DateTime.now()): P
   const due = isBackupDue(
     { frequency: settings.frequency as BackupFrequency, timeOfDay: settings.timeOfDay },
     lastAutomaticBackupAt(backupDir),
-    now
+    now,
+    settings.createdAt
   )
   if (!due) return false
 

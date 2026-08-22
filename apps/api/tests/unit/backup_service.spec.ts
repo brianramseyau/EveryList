@@ -70,6 +70,28 @@ test.group('isBackupDue', () => {
     assert.isTrue(isBackupDue({ frequency: 'daily', timeOfDay: '03:00' }, null, now))
   })
 
+  test('is not due when the schedule was just created and the current period predates it', ({
+    assert,
+  }) => {
+    // 2026-08-22 is a Saturday; a weekly schedule anchored to Sunday 03:00
+    // shouldn't fire just because this is the first check ever — it should
+    // wait for the Sunday after the schedule was created, not backdate to
+    // the most recent (already-elapsed) Sunday.
+    const scheduleCreatedAt = DateTime.fromISO('2026-08-22T22:44:00')
+    const now = DateTime.fromISO('2026-08-22T22:48:00')
+    assert.isFalse(
+      isBackupDue({ frequency: 'weekly', timeOfDay: '03:00' }, null, now, scheduleCreatedAt)
+    )
+  })
+
+  test('is due once the current period starts after the schedule was created', ({ assert }) => {
+    const scheduleCreatedAt = DateTime.fromISO('2026-08-22T22:44:00')
+    const now = DateTime.fromISO('2026-08-23T03:05:00')
+    assert.isTrue(
+      isBackupDue({ frequency: 'weekly', timeOfDay: '03:00' }, null, now, scheduleCreatedAt)
+    )
+  })
+
   test('is due once the last automatic backup predates the current period', ({ assert }) => {
     const now = DateTime.fromISO('2026-08-22T03:05:00')
     const lastAutomaticAt = DateTime.fromISO('2026-08-21T03:00:00')
@@ -203,6 +225,7 @@ test.group('runManualBackup / runScheduledBackupIfDue', (group) => {
     const setting = await BackupSetting.current()
     setting.frequency = 'daily'
     setting.timeOfDay = '03:00'
+    setting.createdAt = DateTime.fromISO('2026-08-01T00:00:00')
     await setting.save()
 
     // Runs late in the previous period — if this incorrectly counted as an
@@ -218,6 +241,7 @@ test.group('runManualBackup / runScheduledBackupIfDue', (group) => {
     const setting = await BackupSetting.current()
     setting.frequency = 'daily'
     setting.timeOfDay = '03:00'
+    setting.createdAt = DateTime.fromISO('2026-08-01T00:00:00')
     await setting.save()
 
     const now = DateTime.fromISO('2026-08-22T03:05:00')
@@ -231,6 +255,7 @@ test.group('runManualBackup / runScheduledBackupIfDue', (group) => {
     const setting = await BackupSetting.current()
     setting.frequency = 'daily'
     setting.timeOfDay = '03:00'
+    setting.createdAt = DateTime.fromISO('2026-08-01T00:00:00')
     await setting.save()
 
     await runScheduledBackupIfDue(now)
@@ -245,6 +270,7 @@ test.group('runManualBackup / runScheduledBackupIfDue', (group) => {
     setting.frequency = 'daily'
     setting.timeOfDay = '03:00'
     setting.retentionCount = 2
+    setting.createdAt = DateTime.fromISO('2026-08-01T00:00:00')
     await setting.save()
 
     await runScheduledBackupIfDue(DateTime.fromISO('2026-08-20T03:00:00'))
