@@ -6,7 +6,7 @@
 	import { Button, Input, Select } from 'flowbite-svelte';
 	import type { FolderDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { deleteList, emailExportList, fetchList, updateList } from '$lib/api/lists';
+	import { deleteList, fetchList, updateList } from '$lib/api/lists';
 	import { fetchFolders } from '$lib/api/folders';
 	import { ApiError } from '$lib/api/client';
 	import { buildPasscodeHash } from '$lib/passcode';
@@ -29,10 +29,6 @@
 	let savingName = $state(false);
 	let confirmingDelete = $state(false);
 	let deleting = $state(false);
-	let exportingEmail = $state(false);
-	let exportEmail = $state('');
-	let exportStatus = $state<'idle' | 'sent' | 'error'>('idle');
-	let exportErrorMessage = $state('');
 	let settingPasscode = $state(false);
 	let draftPin = $state('');
 	let savingPasscode = $state(false);
@@ -78,31 +74,6 @@
 			void refreshBadgeCount();
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to update list.';
-		}
-	}
-
-	function printList() {
-		// window.print() on this page would print the settings form itself — the
-		// list-detail route is the one with print:hidden styling that hides its
-		// chrome and prints just the items, so send the browser there first.
-		// The `?print=1` suffix is appended to this app's own resolve() output,
-		// not statically verifiable by the lint rule below.
-		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		void goto(`${resolve('/lists/[id]', { id: String(listId) })}?print=1`);
-	}
-
-	async function sendEmailExport(event: SubmitEvent) {
-		event.preventDefault();
-		const trimmed = exportEmail.trim();
-		if (!trimmed) return;
-		exportStatus = 'idle';
-		try {
-			await emailExportList(listId, trimmed);
-			exportStatus = 'sent';
-			exportEmail = '';
-		} catch (err) {
-			exportStatus = 'error';
-			exportErrorMessage = err instanceof ApiError ? err.message : 'Failed to send export.';
 		}
 	}
 
@@ -330,47 +301,6 @@
 					Remove passcode
 				</button>
 			{/if}
-		{/if}
-
-		<hr class="border-gray-200 dark:border-gray-700" />
-
-		<button
-			type="button"
-			class="rounded-lg border border-gray-200 px-3 py-3 text-left text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-			onclick={printList}
-		>
-			Print list
-		</button>
-
-		{#if exportingEmail}
-			<form class="flex flex-col gap-2" onsubmit={sendEmailExport}>
-				<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">Email export</span>
-				<Input type="email" placeholder="you@example.com" bind:value={exportEmail} required />
-				<div class="flex items-center gap-2">
-					<Button type="submit" size="sm" disabled={!exportEmail.trim()}>Send</Button>
-					<Button
-						type="button"
-						size="sm"
-						color="alternative"
-						onclick={() => (exportingEmail = false)}
-					>
-						Cancel
-					</Button>
-				</div>
-				{#if exportStatus === 'sent'}
-					<p class="text-xs text-green-600 dark:text-green-400">Export sent.</p>
-				{:else if exportStatus === 'error'}
-					<p class="text-xs text-red-600 dark:text-red-400">{exportErrorMessage}</p>
-				{/if}
-			</form>
-		{:else}
-			<button
-				type="button"
-				class="rounded-lg border border-gray-200 px-3 py-3 text-left text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-				onclick={() => (exportingEmail = true)}
-			>
-				Email export…
-			</button>
 		{/if}
 
 		<hr class="border-gray-200 dark:border-gray-700" />

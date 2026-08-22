@@ -9,13 +9,12 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/lists', () => ({
 	fetchList: vi.fn(),
 	updateList: vi.fn(),
-	deleteList: vi.fn(),
-	emailExportList: vi.fn()
+	deleteList: vi.fn()
 }));
 vi.mock('$lib/api/folders', () => ({ fetchFolders: vi.fn() }));
 vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 
-const { fetchList, updateList, deleteList, emailExportList } = await import('$lib/api/lists');
+const { fetchList, updateList, deleteList } = await import('$lib/api/lists');
 const { fetchFolders } = await import('$lib/api/folders');
 const { refreshBadgeCount } = await import('$lib/pwa/badge');
 const { goto } = await import('$app/navigation');
@@ -380,74 +379,6 @@ describe('List settings +page.svelte', () => {
 
 		await expect.element(page.getByRole('button', { name: 'Set passcode…' })).toBeInTheDocument();
 		expect(updateList).not.toHaveBeenCalled();
-	});
-
-	it('navigates to the list to print it, rather than printing the settings page', async () => {
-		render(SettingsPage);
-
-		await page.getByRole('button', { name: 'Print list' }).click();
-
-		expect(goto).toHaveBeenCalledWith('/lists/1?print=1');
-	});
-
-	it('sends an email export and shows a success message', async () => {
-		vi.mocked(emailExportList).mockResolvedValue(undefined);
-
-		render(SettingsPage);
-		await page.getByRole('button', { name: 'Email export…' }).click();
-		await page.getByPlaceholder('you@example.com').fill('friend@example.com');
-		await page.getByRole('button', { name: 'Send' }).click();
-
-		expect(emailExportList).toHaveBeenCalledWith(1, 'friend@example.com');
-		await expect.element(page.getByText('Export sent.')).toBeInTheDocument();
-	});
-
-	it('shows the ApiError message when the email export fails', async () => {
-		vi.mocked(emailExportList).mockRejectedValue(
-			new ApiError(503, 'Email export is not configured on this server.')
-		);
-
-		render(SettingsPage);
-		await page.getByRole('button', { name: 'Email export…' }).click();
-		await page.getByPlaceholder('you@example.com').fill('friend@example.com');
-		await page.getByRole('button', { name: 'Send' }).click();
-
-		await expect
-			.element(page.getByText('Email export is not configured on this server.'))
-			.toBeInTheDocument();
-	});
-
-	it('shows a generic error message when the email export fails without an ApiError', async () => {
-		vi.mocked(emailExportList).mockRejectedValue(new TypeError('network down'));
-
-		render(SettingsPage);
-		await page.getByRole('button', { name: 'Email export…' }).click();
-		await page.getByPlaceholder('you@example.com').fill('friend@example.com');
-		await page.getByRole('button', { name: 'Send' }).click();
-
-		await expect.element(page.getByText('Failed to send export.')).toBeInTheDocument();
-	});
-
-	it('does not submit the email export form with only whitespace', async () => {
-		render(SettingsPage);
-		await page.getByRole('button', { name: 'Email export…' }).click();
-
-		const input = page.getByPlaceholder('you@example.com');
-		const form = input.element().closest('form');
-		await input.fill('   ');
-		form?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-
-		expect(emailExportList).not.toHaveBeenCalled();
-	});
-
-	it('cancels the email export form', async () => {
-		render(SettingsPage);
-		await page.getByRole('button', { name: 'Email export…' }).click();
-
-		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-
-		await expect.element(page.getByRole('button', { name: 'Email export…' })).toBeInTheDocument();
-		expect(emailExportList).not.toHaveBeenCalled();
 	});
 
 	it('requires a confirmation click before deleting the list, then navigates back to the list index', async () => {

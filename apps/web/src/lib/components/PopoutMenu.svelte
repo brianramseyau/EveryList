@@ -12,10 +12,12 @@
 	let {
 		label,
 		iconName,
+		onOpenChange,
 		children
 	}: {
 		label: string;
 		iconName: string;
+		onOpenChange?: (open: boolean) => void;
 		children: Snippet<[close: () => void]>;
 	} = $props();
 
@@ -24,15 +26,23 @@
 
 	function toggle() {
 		open = !open;
+		onOpenChange?.(open);
 	}
 
 	function close() {
+		if (!open) return;
 		open = false;
+		onOpenChange?.(open);
 	}
 
 	function handleWindowClick(event: MouseEvent) {
 		if (!open || !containerEl) return;
-		if (!containerEl.contains(event.target as Node)) close();
+		// composedPath() is captured at dispatch time, before any listener runs —
+		// unlike containerEl.contains(event.target), it still reports the click as
+		// "inside" even when a menu item's own onclick handler swaps out its DOM
+		// subtree (e.g. toggling from one panel view to another) before this
+		// window-level listener runs during the same bubble phase.
+		if (!event.composedPath().includes(containerEl)) close();
 	}
 
 	function handleWindowKeydown(event: KeyboardEvent) {

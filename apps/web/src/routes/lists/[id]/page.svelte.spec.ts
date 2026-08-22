@@ -35,7 +35,8 @@ vi.mock('$lib/actions/sortable-reorder', () => ({
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/lists', () => ({
-	fetchList: vi.fn()
+	fetchList: vi.fn(),
+	emailExportList: vi.fn()
 }));
 vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
 vi.mock('$lib/api/items', () => ({
@@ -58,7 +59,7 @@ vi.mock('$lib/offline/flush', () => ({
 vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 vi.mock('$lib/open-external-link', () => ({ openExternalLink: vi.fn() }));
 
-const { fetchList } = await import('$lib/api/lists');
+const { fetchList, emailExportList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
 const { fetchItems, createItem, deleteItem, updateItem, fetchRecentItemNames } =
 	await import('$lib/api/items');
@@ -184,19 +185,6 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 
 		await expect.element(page.getByText('List not found')).toBeInTheDocument();
-	});
-
-	it('prints and strips the ?print=1 param when arriving from the settings page print button', async () => {
-		window.history.pushState(null, '', '/lists/1?print=1');
-		const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
-
-		render(ListDetailPage);
-
-		await expect.poll(() => printSpy.mock.calls.length).toBe(1);
-		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
-		expect(vi.mocked(goto).mock.calls[0][0]).toBeInstanceOf(URL);
-		expect((vi.mocked(goto).mock.calls[0][0] as URL).searchParams.has('print')).toBe(false);
-		printSpy.mockRestore();
 	});
 
 	it('applies the store-specific category order when a store is selected', async () => {
@@ -1255,6 +1243,87 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Clear all 1 item?')).not.toBeInTheDocument();
 		expect(deleteItem).not.toHaveBeenCalled();
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+	});
+
+	describe('Share submenu', () => {
+		it('prints the list from the Share submenu, without navigating away', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
+			]);
+			const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Print list' }).click();
+
+			await expect.poll(() => printSpy.mock.calls.length).toBe(1);
+			expect(goto).not.toHaveBeenCalled();
+			printSpy.mockRestore();
+		});
+
+		it('copies the list to the clipboard in AnyList format', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false, quantity: '2' }),
+				makeItem({ id: 101, name: 'Milk', categoryId: 11, checked: false }),
+				makeItem({ id: 103, name: 'Old Bread', categoryId: 10, checked: true })
+			]);
+			const writeText = vi.fn().mockResolvedValue(undefined);
+			vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Copy to Clipboard' }).click();
+
+			await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
+			expect(writeText).toHaveBeenCalledWith(
+				'Groceries\n\nPRODUCE\n• Bananas (2)\n\nDAIRY\n• Milk'
+			);
+		});
+
+		it('sends an email export from the Share submenu', async () => {
+			vi.mocked(emailExportList).mockResolvedValue(undefined);
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Email export…' }).click();
+			await page.getByPlaceholder('you@example.com').fill('friend@example.com');
+			await page.getByRole('button', { name: 'Send' }).click();
+
+			expect(emailExportList).toHaveBeenCalledWith(1, 'friend@example.com');
+			await expect.element(page.getByText('Export sent.')).toBeInTheDocument();
+		});
+
+		it('returns to the main menu from the Share submenu', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([]);
+
+			render(ListDetailPage);
+			await expect
+				.element(page.getByText('Nothing here yet. Add your first item above.'))
+				.toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await expect.element(page.getByRole('button', { name: 'Print list' })).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Back to list menu' }).click();
+
+			await expect.element(page.getByRole('button', { name: 'Share' })).toBeInTheDocument();
+			await expect
+				.element(page.getByRole('button', { name: 'Clear checked off items' }))
+				.toBeInTheDocument();
+		});
 	});
 
 	it('reloads the list when unchecking all items fails', async () => {
