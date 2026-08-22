@@ -74,6 +74,7 @@ export default defineConfig({
     // #start/transmit is intentionally NOT listed here — see the import at the
     // top of #start/routes for why.
     () => import('#start/routes'),
+    () => import('#start/backup_scheduler'),
   ],
 
   /*

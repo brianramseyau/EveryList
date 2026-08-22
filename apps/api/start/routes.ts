@@ -172,6 +172,18 @@ router
       .prefix('stores')
       .as('stores')
       .use(middleware.auth())
+
+    // Instance-wide, not per-list — there's no admin role in this app, so any
+    // authenticated user can view/change the shared backup schedule.
+    router
+      .group(() => {
+        router.get('/', [controllers.BackupSettings, 'show'])
+        router.patch('/', [controllers.BackupSettings, 'update'])
+        router.post('run', [controllers.BackupSettings, 'run'])
+      })
+      .prefix('backup-settings')
+      .as('backupSettings')
+      .use(middleware.auth())
   })
   .prefix('/api/v1')
 

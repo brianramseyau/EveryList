@@ -354,6 +354,21 @@
 		<h2
 			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
 		>
+			Backups
+		</h2>
+		<a
+			href={resolve('/settings/backups')}
+			class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+		>
+			<span>Automated backups</span>
+			<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
+		</a>
+	</section>
+
+	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+		<h2
+			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
+		>
 			Integrations
 		</h2>
 		<a

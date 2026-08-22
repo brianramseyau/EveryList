@@ -5,6 +5,7 @@
 
 export const controllers = {
   AccessTokens: () => import('#controllers/access_tokens_controller'),
+  BackupSettings: () => import('#controllers/backup_settings_controller'),
   Categories: () => import('#controllers/categories_controller'),
   FavoriteItems: () => import('#controllers/favorite_items_controller'),
   Folders: () => import('#controllers/folders_controller'),

@@ -35,7 +35,7 @@ foundational/   PLAN.md and phase plans — the product/architecture spec
 
 - Any new migration that runs `alterTable` to **add a column with an inline FK reference** (`.references(...).inTable(...)`) on a table that has children with `onDelete('CASCADE')` is the exact shape that triggers this. The fix above closes the general case, but if you're touching migration/DB config again, verify the fix is still in place before assuming it's safe.
 - Before merging any migration that alters an existing (non-empty-in-prod) table, reproduce it against a seeded SQLite file locally first: build the schema at the pre-migration state, insert representative rows into parent + child tables, run just the new migration, and confirm child rows survive. Don't rely on the test suite alone — Japa tests run against a fresh empty schema every time and won't catch this class of bug.
-- There are no production backups configured as of this incident — data lost this way is not recoverable. Treat that as a reason to be conservative with schema changes, not just to fix the enforcement bug.
+- There were no production backups configured as of this incident. **Update (2026-08-22): fixed** — see `app/services/backup_service.ts`, configurable from `Settings → Backups` (daily/weekly/monthly, a chosen time of day, and a retention window in days), taken via better-sqlite3's native online backup API so it's safe to run against a live database. Still treat schema changes conservatively — a restore is now possible, but is not the same as a schema change being risk-free.
 
 ### Realtime SSE broadcasts can silently miss the first write after a fresh server boot
 

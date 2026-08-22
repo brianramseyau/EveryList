@@ -35,6 +35,7 @@ EveryList is feature-complete and self-hostable today.
 - **Light/dark/automatic theme + accent palettes** — four accent themes on top of a real, flash-free light/dark/automatic mode.
 - **Installable PWA** — add to your home screen on any device, no app store required.
 - **Self-hosted, single container** — one Docker image, one process, one SQLite file under `/config`; trivial to back up.
+- **Automated backups** — configurable daily/weekly/monthly schedule with a chosen time of day and retention window, taken via SQLite's native online backup API so it's safe to run while the app is live; also triggerable on demand from `Settings → Backups`.
 
 Deliberately out of scope: native Watch apps, Siri/Alexa, home-screen widgets, and third-party fulfillment integrations (Instacart, etc.) — see the [feature decision matrix](foundational/PLAN.md#3-feature-decision-matrix) in the plan for the full reasoning.
 

@@ -71,6 +71,9 @@ export type ScannedRoutes = {
     'stores.stores.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'stores.stores.reorder_categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'backupSettings.backup_settings.show': { paramsTuple?: []; params?: {} }
+    'backupSettings.backup_settings.update': { paramsTuple?: []; params?: {} }
+    'backupSettings.backup_settings.run': { paramsTuple?: []; params?: {} }
   }
   GET: {
     'event_stream': { paramsTuple?: []; params?: {} }
@@ -93,6 +96,7 @@ export type ScannedRoutes = {
     'personal_access_tokens.me': { paramsTuple?: []; params?: {} }
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'backupSettings.backup_settings.show': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
     'event_stream': { paramsTuple?: []; params?: {} }
@@ -115,6 +119,7 @@ export type ScannedRoutes = {
     'personal_access_tokens.me': { paramsTuple?: []; params?: {} }
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'backupSettings.backup_settings.show': { paramsTuple?: []; params?: {} }
   }
   POST: {
     'subscribe': { paramsTuple?: []; params?: {} }
@@ -140,6 +145,7 @@ export type ScannedRoutes = {
     'lists.list_invites.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'tokens.personal_access_tokens.store': { paramsTuple?: []; params?: {} }
     'invite_accept.accept': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
+    'backupSettings.backup_settings.run': { paramsTuple?: []; params?: {} }
   }
   PATCH: {
     'profile.profile.update': { paramsTuple?: []; params?: {} }
@@ -156,6 +162,7 @@ export type ScannedRoutes = {
     'tokens.personal_access_tokens.update': { paramsTuple: [ParamValue]; params: {'tokenId': ParamValue} }
     'stores.stores.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'stores.stores.reorder_categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'backupSettings.backup_settings.update': { paramsTuple?: []; params?: {} }
   }
   DELETE: {
     'folders.folders.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }

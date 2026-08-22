@@ -119,4 +119,11 @@ export interface ApiDefinition {
       reorderCategories: typeof routes['stores.stores.reorder_categories']
     }
   }
+  backupSettings: {
+    backupSettings: {
+      show: typeof routes['backupSettings.backup_settings.show']
+      update: typeof routes['backupSettings.backup_settings.update']
+      run: typeof routes['backupSettings.backup_settings.run']
+    }
+  }
 }
