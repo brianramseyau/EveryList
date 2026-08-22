@@ -222,6 +222,12 @@ const routes = {
     tokens: [{"old":"/api/v1/lists/:listId/items/:itemId","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/:itemId","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/:itemId","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/:itemId","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/:itemId","type":1,"val":"itemId","end":""}],
     types: placeholder as Registry['lists.items.update']['types'],
   },
+  'lists.items.move': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/lists/:listId/items/:itemId/move',
+    tokens: [{"old":"/api/v1/lists/:listId/items/:itemId/move","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/move","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/move","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/move","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/move","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/move","type":1,"val":"itemId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/move","type":0,"val":"move","end":""}],
+    types: placeholder as Registry['lists.items.move']['types'],
+  },
   'lists.items.destroy': {
     methods: ["DELETE"],
     pattern: '/api/v1/lists/:listId/items/:itemId',
@@ -233,6 +239,12 @@ const routes = {
     pattern: '/api/v1/lists/:listId/items/:itemId/restore',
     tokens: [{"old":"/api/v1/lists/:listId/items/:itemId/restore","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/restore","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/restore","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/restore","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/restore","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/restore","type":1,"val":"itemId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/restore","type":0,"val":"restore","end":""}],
     types: placeholder as Registry['lists.items.restore']['types'],
+  },
+  'lists.items.purge': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/lists/:listId/items/:itemId/purge',
+    tokens: [{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":1,"val":"itemId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"purge","end":""}],
+    types: placeholder as Registry['lists.items.purge']['types'],
   },
   'lists.stores.index': {
     methods: ["GET","HEAD"],
@@ -348,11 +360,23 @@ const routes = {
     tokens: [{"old":"/api/v1/tokens","type":0,"val":"api","end":""},{"old":"/api/v1/tokens","type":0,"val":"v1","end":""},{"old":"/api/v1/tokens","type":0,"val":"tokens","end":""}],
     types: placeholder as Registry['tokens.personal_access_tokens.store']['types'],
   },
+  'tokens.personal_access_tokens.update': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/tokens/:tokenId',
+    tokens: [{"old":"/api/v1/tokens/:tokenId","type":0,"val":"api","end":""},{"old":"/api/v1/tokens/:tokenId","type":0,"val":"v1","end":""},{"old":"/api/v1/tokens/:tokenId","type":0,"val":"tokens","end":""},{"old":"/api/v1/tokens/:tokenId","type":1,"val":"tokenId","end":""}],
+    types: placeholder as Registry['tokens.personal_access_tokens.update']['types'],
+  },
   'tokens.personal_access_tokens.destroy': {
     methods: ["DELETE"],
     pattern: '/api/v1/tokens/:tokenId',
     tokens: [{"old":"/api/v1/tokens/:tokenId","type":0,"val":"api","end":""},{"old":"/api/v1/tokens/:tokenId","type":0,"val":"v1","end":""},{"old":"/api/v1/tokens/:tokenId","type":0,"val":"tokens","end":""},{"old":"/api/v1/tokens/:tokenId","type":1,"val":"tokenId","end":""}],
     types: placeholder as Registry['tokens.personal_access_tokens.destroy']['types'],
+  },
+  'personal_access_tokens.me': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/tokens/me',
+    tokens: [{"old":"/api/v1/tokens/me","type":0,"val":"api","end":""},{"old":"/api/v1/tokens/me","type":0,"val":"v1","end":""},{"old":"/api/v1/tokens/me","type":0,"val":"tokens","end":""},{"old":"/api/v1/tokens/me","type":0,"val":"me","end":""}],
+    types: placeholder as Registry['personal_access_tokens.me']['types'],
   },
   'invite_accept.preview': {
     methods: ["GET","HEAD"],
