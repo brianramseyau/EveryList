@@ -1,9 +1,10 @@
 name: Test
 
-# Reusable lint/typecheck/test job — the single source of truth for "does
-# this commit pass the gate" so ci.yml (PR gate) and docker-publish.yml
-# (which re-runs this as a hard prerequisite before ever publishing an
-# image) can't drift apart. See foundational/PLAN.md §12.
+# Reusable lint/typecheck/test job called by ci.yml — the single source of
+# truth for "does this commit pass the PR gate" (branch protection on main
+# requires it). docker-publish.yml does NOT call this: it only runs after a
+# commit is already on main, where this has already passed. See
+# foundational/PLAN.md §12.
 #
 # Coverage thresholds (100%, per PLAN.md §11) are enforced per-workspace by
 # each package's own test config: packages/shared (vitest --coverage) and

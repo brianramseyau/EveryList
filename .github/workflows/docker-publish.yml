@@ -13,9 +13,13 @@ name: Docker Publish
 # but deliberately does NOT move `latest` or the `vX` major tag, so prereleases can't leak
 # into anyone pinned to a major version or tracking `latest`.
 #
-# `test` re-runs the same lint/typecheck/coverage-gated suite required on every PR (test.yml,
-# shared with ci.yml so the two pipelines can't drift apart), so nothing gets published -
-# nightly or release - without it passing, even for a tag pushed on an older commit.
+# This workflow does build-and-push ONLY, deliberately with no test/lint/typecheck gate of
+# its own. That gate lives entirely in ci.yml at PR time (test.yml, shared by both so they
+# can't drift apart), enforced by branch protection on main - nothing lands on main without
+# it passing. Re-running the same suite here on every push/tag would just double deploy time
+# for a commit that's already been verified. Tag releases should be cut from a commit that's
+# already on main for the same reason - tagging an arbitrary unverified commit bypasses that
+# guarantee.
 
 on:
   push:
@@ -31,12 +35,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    uses: ./.github/workflows/test.yml
-
   build-and-push:
     name: Build & push image
-    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
