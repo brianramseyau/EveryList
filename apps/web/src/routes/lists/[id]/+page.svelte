@@ -4,9 +4,10 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { Button, Input } from 'flowbite-svelte';
 	import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { fetchList } from '$lib/api/lists';
+	import { emailExportList, fetchList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
 	import { createItem, deleteItem, fetchItems, updateItem } from '$lib/api/items';
 	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
@@ -53,6 +54,19 @@
 	// menu's destructive options (clear checked, uncheck all, clear all) all
 	// route through one banner, distinguished by this value.
 	let confirmAction = $state<'clearChecked' | 'uncheckAll' | 'clearAll' | null>(null);
+
+	// Ellipses menu's "Share" panel state — swapped in place of the main menu
+	// items rather than a separate nested PopoutMenu, so the same click-outside/
+	// Escape handling covers both views. Reset via resetShareState() whenever
+	// the menu itself closes, so reopening it doesn't resurrect an in-progress
+	// email form or "Copied!" flash from the last time it was open.
+	let shareView = $state(false);
+	let exportingEmail = $state(false);
+	let exportEmail = $state('');
+	let exportStatus = $state<'idle' | 'sent' | 'error'>('idle');
+	let exportErrorMessage = $state('');
+	let copied = $state(false);
+	let copyTimeout: ReturnType<typeof setTimeout> | undefined;
 
 	// Measured height of the pinned header (title bar + item entry field), so
 	// category headings can stick just beneath it instead of overlapping it.
@@ -233,17 +247,7 @@
 		}
 		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		showChecked = getShowChecked(listId);
-		void loadAll().then(() => {
-			if (new URLSearchParams(window.location.search).get('print') === '1') {
-				window.print();
-				const url = new URL(window.location.href);
-				url.searchParams.delete('print');
-				// Stripping a query param off this same page's own URL, not
-				// statically verifiable by the lint rule below.
-				// eslint-disable-next-line svelte/no-navigation-without-resolve
-				void goto(url, { replaceState: true, noScroll: true, keepFocus: true });
-			}
-		});
+		void loadAll();
 		unsubscribeRealtime = subscribeToList(listId, (event) => {
 			// Our own edit's broadcast (sent right after the flush clears `_dirty`)
 			// is suppressed — the optimistic update already reflects it, so
@@ -439,6 +443,91 @@
 		if (confirmAction === 'uncheckAll') void uncheckAllItems();
 		if (confirmAction === 'clearAll') void clearAllItems();
 	}
+
+	function resetShareState() {
+		shareView = false;
+		exportingEmail = false;
+		exportEmail = '';
+		exportStatus = 'idle';
+		exportErrorMessage = '';
+		copied = false;
+	}
+
+	// AnyList's own bulk-export text format (category headers in ALL CAPS,
+	// bulleted items below), so a copied list round-trips through this app's
+	// paste-import (see bulk_import_parser.ts) as cleanly as an AnyList export
+	// does. Always unchecked items, regardless of the selected-store filter or
+	// the showChecked toggle — sharing means "what's left to get."
+	function buildShareText(): string {
+		const unchecked = items.filter((item) => !item.checked);
+		const byCategory = new SvelteMap<number | null, ItemDto[]>();
+		for (const item of unchecked) {
+			const key = item.categoryId;
+			if (!byCategory.has(key)) byCategory.set(key, []);
+			byCategory.get(key)!.push(item);
+		}
+
+		const lines: string[] = [list!.name, ''];
+		const appendSection = (header: string | null, sectionItems: ItemDto[]) => {
+			if (sectionItems.length === 0) return;
+			if (header) lines.push(header.toUpperCase());
+			for (const item of sectionItems) {
+				const quantity = item.quantity ? ` (${item.quantity})` : '';
+				lines.push(`• ${item.name}${quantity}`);
+			}
+			lines.push('');
+		};
+
+		if (list!.useCategories === false) {
+			appendSection(null, unchecked);
+		} else {
+			const orderedCategories = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
+			for (const category of orderedCategories) {
+				appendSection(category.name, byCategory.get(category.id) ?? []);
+			}
+			appendSection(null, byCategory.get(null) ?? []);
+		}
+
+		return lines.join('\n').trimEnd();
+	}
+
+	async function copyListToClipboard() {
+		try {
+			await navigator.clipboard.writeText(buildShareText());
+			copied = true;
+			if (copyTimeout) clearTimeout(copyTimeout);
+			copyTimeout = setTimeout(() => {
+				copied = false;
+			}, 2000);
+		} catch {
+			// Clipboard access can be denied by the browser — there's no
+			// server round-trip to retry, so this is a nice-to-have, not fatal.
+		}
+	}
+
+	function printList(close: () => void) {
+		close();
+		// The popout panel is only in the DOM while `open` (see PopoutMenu),
+		// and closing it clears that synchronously — but Svelte's own DOM
+		// update from that state change hasn't flushed yet, so print
+		// immediately would still capture the menu. Defer one tick.
+		setTimeout(() => window.print(), 0);
+	}
+
+	async function sendEmailExport(event: SubmitEvent) {
+		event.preventDefault();
+		const trimmed = exportEmail.trim();
+		if (!trimmed) return;
+		exportStatus = 'idle';
+		try {
+			await emailExportList(listId, trimmed);
+			exportStatus = 'sent';
+			exportEmail = '';
+		} catch (err) {
+			exportStatus = 'error';
+			exportErrorMessage = err instanceof ApiError ? err.message : 'Failed to send export.';
+		}
+	}
 </script>
 
 <svelte:head>
@@ -462,47 +551,124 @@
 						<Icon name="store" class="h-5 w-5" />
 					</span>
 				</a>
-				<PopoutMenu label="List menu" iconName="dotsVertical">
+				<PopoutMenu
+					label="List menu"
+					iconName="dotsVertical"
+					onOpenChange={(isOpen) => {
+						if (!isOpen) resetShareState();
+					}}
+				>
 					{#snippet children(close)}
-						<button
-							type="button"
-							disabled={checkedItems.length === 0}
-							onclick={() => {
-								confirmAction = 'clearChecked';
-								close();
-							}}
-							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
-						>
-							Clear Checked Off Items
-						</button>
-						<button
-							type="button"
-							disabled={checkedItems.length === 0}
-							onclick={() => {
-								confirmAction = 'uncheckAll';
-								close();
-							}}
-							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
-						>
-							Uncheck All Items
-						</button>
-						<button
-							type="button"
-							disabled={items.length === 0}
-							onclick={() => {
-								confirmAction = 'clearAll';
-								close();
-							}}
-							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
-						>
-							Clear ALL List Items
-						</button>
-						<a
-							href={resolve('/lists/[id]/settings', { id: String(listId) })}
-							class="mt-1 block rounded border-t border-gray-200 px-2 pt-2 text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:border-gray-700 dark:text-primary-400 dark:hover:bg-gray-700"
-						>
-							List Settings
-						</a>
+						{#if shareView}
+							<div
+								class="mb-1 flex items-center gap-1 border-b border-gray-200 pb-1.5 dark:border-gray-700"
+							>
+								<button
+									type="button"
+									aria-label="Back to list menu"
+									onclick={() => (shareView = false)}
+									class="flex h-6 w-6 items-center justify-center rounded text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+								>
+									<Icon name="chevronLeft" class="h-4 w-4" />
+								</button>
+								<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">Share</span>
+							</div>
+							<button
+								type="button"
+								onclick={() => printList(close)}
+								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+							>
+								Print list
+							</button>
+							<button
+								type="button"
+								onclick={copyListToClipboard}
+								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+							>
+								{copied ? 'Copied!' : 'Copy to Clipboard'}
+							</button>
+							{#if exportingEmail}
+								<form class="flex flex-col gap-2 px-2 py-1.5" onsubmit={sendEmailExport}>
+									<Input
+										type="email"
+										placeholder="you@example.com"
+										bind:value={exportEmail}
+										required
+									/>
+									<div class="flex items-center gap-2">
+										<Button type="submit" size="sm" disabled={!exportEmail.trim()}>Send</Button>
+										<Button
+											type="button"
+											size="sm"
+											color="alternative"
+											onclick={() => (exportingEmail = false)}
+										>
+											Cancel
+										</Button>
+									</div>
+									{#if exportStatus === 'sent'}
+										<p class="text-xs text-green-600 dark:text-green-400">Export sent.</p>
+									{:else if exportStatus === 'error'}
+										<p class="text-xs text-red-600 dark:text-red-400">{exportErrorMessage}</p>
+									{/if}
+								</form>
+							{:else}
+								<button
+									type="button"
+									onclick={() => (exportingEmail = true)}
+									class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+								>
+									Email export…
+								</button>
+							{/if}
+						{:else}
+							<button
+								type="button"
+								disabled={checkedItems.length === 0}
+								onclick={() => {
+									confirmAction = 'clearChecked';
+									close();
+								}}
+								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
+							>
+								Clear Checked Off Items
+							</button>
+							<button
+								type="button"
+								disabled={checkedItems.length === 0}
+								onclick={() => {
+									confirmAction = 'uncheckAll';
+									close();
+								}}
+								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
+							>
+								Uncheck All Items
+							</button>
+							<button
+								type="button"
+								disabled={items.length === 0}
+								onclick={() => {
+									confirmAction = 'clearAll';
+									close();
+								}}
+								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
+							>
+								Clear ALL List Items
+							</button>
+							<button
+								type="button"
+								onclick={() => (shareView = true)}
+								class="mt-1 block w-full rounded border-t border-gray-200 px-2 pt-2 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:border-gray-700 dark:text-primary-400 dark:hover:bg-gray-700"
+							>
+								Share
+							</button>
+							<a
+								href={resolve('/lists/[id]/settings', { id: String(listId) })}
+								class="block rounded px-2 py-1.5 text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+							>
+								List Settings
+							</a>
+						{/if}
 					{/snippet}
 				</PopoutMenu>
 			{/snippet}
