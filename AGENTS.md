@@ -95,33 +95,35 @@ store/quantity/notes missing after re-adding a name).
 
 ### Offline-sync E2E test can intermittently see a duplicate row on CI (not locally)
 
-**Status (2026-08-22): open, unreproduced locally — suspected pre-existing race, not yet fixed.**
+**Status (2026-08-22): fixed.** `apps/web/e2e/offline-sync.e2e.ts`'s "adds an item while offline
+and syncs it once back online" failed once in CI (Phase 16 PR #79) with a Playwright strict-mode
+violation: `getByText('Milk')` resolved to *two* elements right after `page.reload()`, where the
+test expects exactly one.
 
-`apps/web/e2e/offline-sync.e2e.ts`'s "adds an item while offline and syncs it once back online" failed
-once in CI (Phase 16 PR #79) with a Playwright strict-mode violation: `getByText('Milk')`
-resolved to *two* elements right after `page.reload()`, where the test expects exactly one.
+Root cause: `connectivity.svelte.ts`'s own `online` listener and `flush.ts`'s own `online`
+listener both race to clear the "Server unavailable" indicator on reconnect. The connectivity
+listener calls `pingNow()` (a single cheap `/api/v1/ping` round trip); the flush listener calls
+`attemptFlush()`, which replays the queued create — a slower `POST` — and only *then* deletes the
+optimistic temp row from Dexie (`flush.ts`'s `replay()`). The ping routinely wins, clearing the
+indicator before the temp row is gone. `page.reload()` timed right after the indicator clears (as
+the test does, matching real usage — the indicator is the natural "safe to reload" signal) could
+land in that gap: `fetchItems()` (`lib/api/items.ts`) merges any still-`_dirty` Dexie row into the
+server's fresh list on the assumption it's an unsynced local edit, so the not-yet-deleted temp row
+got appended alongside the now-synced server row — the observed duplicate. CI's slower I/O widened
+the gap enough to hit it; a fast local machine usually replays+deletes before the ping resolves,
+which is why 6/6 local runs passed even before the fix.
 
-- **Ruled out as caused by that PR's own diff**: the PR touched only `apps/api` auth/token/policy
-  code, `start/limiter.ts`, and the new `settings/tokens` page — nothing under
-  `apps/web/src/lib/offline/`, `lib/api/items.ts`, or the list page's flush/reload handling.
-- **Not reproduced locally**: the same test run 6 times back-to-back (3× solo, 3× alongside the
-  rest of the suite at 2 workers, matching CI's concurrency) — 6/6 passed every time.
-- **Matches a known-tricky area**: this exact class of bug — a local/Dexie optimistic row not
-  cleared before a reload lands — was fixed once already (`Fix offline sync DOM visibility and
-  self-conflicting edits`, #72). The likely mechanism: the "Server unavailable" indicator
-  clearing and the flush queue actually draining are two independent async signals (see
-  `+page.svelte`'s `onFlushOutcome`) — a `page.reload()` timed between them could catch a stale
-  Dexie temp row still present alongside the just-synced server row. CI's slower I/O plausibly
-  widens that window enough to hit; a fast local machine may not.
+Fix: `pingNow()` (`lib/offline/connectivity.svelte.ts`) no longer clears `serverUnavailable` on a
+bare successful ping if `pendingMutations()` (`lib/offline/sync-queue.ts`) is non-empty — in that
+case a drain is in flight or about to be scheduled, and `onFlushOutcome`'s `ok: true` (fired only
+after `flushQueue` fully drains, including each mutation's Dexie cleanup) is left as the sole
+signal that clears the indicator. See `connectivity.svelte.spec.ts`'s "stays unavailable after a
+successful ping while a queued mutation is still draining".
 
-**What this means for future work:**
-
-- If this reappears, don't assume it's a fresh regression from whatever PR is open at the time —
-  check first whether the diff touches offline-sync code at all.
-- Whoever picks this up: instrument the gap between the connectivity indicator clearing and the
-  flush's Dexie cleanup actually completing (`lib/offline/flush.ts`'s `onFlushOutcome` and
-  whatever clears the dirty/temp row) to find the real race window, rather than just adding a
-  wait to the test — the test caught a real (if narrow) gap.
+**If this resurfaces:** don't assume it's a fresh regression from whatever PR is open at the
+time — check first whether the diff touches offline-sync code, and whether `pingNow()` still
+checks `pendingMutations()` before clearing `serverUnavailable` (a regression there would
+reproduce this exact symptom).
 
 ## Working conventions
 

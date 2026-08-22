@@ -2,11 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/api/ping', () => ({ fetchPing: vi.fn() }));
 vi.mock('$lib/offline/flush', () => ({ onFlushOutcome: vi.fn() }));
+vi.mock('$lib/offline/sync-queue', () => ({ pendingMutations: vi.fn().mockResolvedValue([]) }));
 
 const { fetchPing } = await import('$lib/api/ping');
 const { onFlushOutcome } = await import('$lib/offline/flush');
-const { connectivity, startConnectivityMonitor, resetConnectivityForTesting } =
-	await import('./connectivity.svelte');
+const { pendingMutations } = await import('$lib/offline/sync-queue');
+const {
+	connectivity,
+	startConnectivityMonitor,
+	resetConnectivityForTesting,
+	setServerUnavailableForTesting
+} = await import('./connectivity.svelte');
 
 type FlushListener = (outcome: { ok: boolean }) => void;
 
@@ -16,6 +22,7 @@ describe('connectivity', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 		vi.mocked(fetchPing).mockResolvedValue(true);
+		vi.mocked(pendingMutations).mockResolvedValue([]);
 		vi.mocked(onFlushOutcome).mockImplementation((listener) => {
 			flushListener = listener as FlushListener;
 			return vi.fn();
@@ -35,6 +42,16 @@ describe('connectivity', () => {
 
 		expect(connectivity.serverUnavailable).toBe(false);
 		expect(connectivity.lastSuccessfulSyncAt).not.toBeNull();
+	});
+
+	it('stays unavailable after a successful ping while a queued mutation is still draining', async () => {
+		vi.mocked(pendingMutations).mockResolvedValue([{ id: 1 } as never]);
+		setServerUnavailableForTesting(true);
+
+		await connectivity.pingNow();
+
+		expect(connectivity.serverUnavailable).toBe(true);
+		expect(connectivity.lastSuccessfulSyncAt).toBeNull();
 	});
 
 	it('reports unavailable after a failed ping', async () => {

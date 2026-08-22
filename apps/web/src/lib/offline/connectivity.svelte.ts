@@ -1,5 +1,6 @@
 import { fetchPing } from '$lib/api/ping';
 import { onFlushOutcome } from '$lib/offline/flush';
+import { pendingMutations } from '$lib/offline/sync-queue';
 
 const PING_INTERVAL_MS = 30_000;
 
@@ -25,8 +26,21 @@ async function pingNow(): Promise<void> {
 		return;
 	}
 	const reachable = await fetchPing();
-	serverUnavailable = !reachable;
-	if (reachable) lastSuccessfulSyncAt = Date.now();
+	if (!reachable) {
+		serverUnavailable = true;
+		return;
+	}
+	// A bare ping succeeding doesn't mean this client's own queued writes have landed — the
+	// flush loop's `online` listener races this same ping on reconnect, and the ping (a single
+	// cheap round trip) routinely wins before `flushQueue` has replayed a pending mutation and
+	// deleted its optimistic Dexie row. Clearing `serverUnavailable` here anyway let a reload
+	// land between the ping's "we're back" and the flush's actual cleanup, catching the stale
+	// temp row still merged into `fetchItems`'s result alongside the now-synced server row
+	// (see AGENTS.md's offline-sync E2E flake). Pending mutations mean a drain is either running
+	// or about to be scheduled — `onFlushOutcome` is the authoritative signal for that case.
+	if ((await pendingMutations()).length > 0) return;
+	serverUnavailable = false;
+	lastSuccessfulSyncAt = Date.now();
 }
 
 /**
