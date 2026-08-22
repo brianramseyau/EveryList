@@ -11,7 +11,7 @@ import { middleware } from '#start/kernel'
 import router from '@adonisjs/core/services/router'
 import { controllers } from '#generated/controllers'
 import app from '@adonisjs/core/services/app'
-import { listsThrottle } from '#start/limiter'
+import { authThrottle, listsThrottle } from '#start/limiter'
 
 // Registers __transmit/events, __transmit/subscribe, and __transmit/unsubscribe
 // (see #start/transmit) before this file's own SPA catch-all route below. This
@@ -39,6 +39,11 @@ router
       })
       .prefix('auth')
       .as('auth')
+      // The only unauthenticated endpoints on the API — the actual
+      // brute-force/credential-stuffing/signup-spam surface. See
+      // start/limiter.ts for why the SPA's authenticated traffic elsewhere
+      // isn't throttled at all.
+      .use(authThrottle)
 
     router
       .group(() => {
