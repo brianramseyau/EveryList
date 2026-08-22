@@ -8,9 +8,10 @@ name: Native App Build
 # No server URL is baked in (PHASE13_PLAN.md §1 made that runtime-configurable via /server-setup),
 # so one build here serves every self-hosted instance.
 #
-#   - Android: a debug-signed APK via Gradle. Sideload-ready as-is; there's no release signing
-#     keystore yet, so this isn't Play-Store-submission-ready — swap `assembleDebug` for
-#     `assembleRelease` plus a keystore-backed signing config once one exists.
+#   - Android: signed release AAB/APK via Gradle, once the ANDROID_KEYSTORE_BASE64 secret (and its
+#     companion password/alias secrets) are set in repo settings — see apps/android/app/build.gradle
+#     for the signingConfig that reads them. Until those secrets exist, this falls back to a
+#     debug-signed APK (sideload-ready, not Play-Store-submission-ready).
 #   - iOS: an unsigned Simulator build only (no Apple Developer Program enrollment yet, which a
 #     real device/TestFlight-capable build requires) — installable in the iOS Simulator via
 #     `xcrun simctl install`, not on a physical device.
@@ -61,15 +62,54 @@ jobs:
         # licenses for those packages have been accepted.
         run: yes | sdkmanager --licenses >/dev/null || true
 
-      - name: Assemble debug APK
+      - name: Derive Android version from the pushed tag
+        id: version
+        # Tags are vX.Y.Z (workflow trigger, above); versionName drops the leading "v" and
+        # versionCode uses the run number so it strictly increases across releases, as Play requires.
+        run: |
+          echo "version_name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "version_code=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether release signing secrets are configured
+        # Secrets can't be referenced directly in an `if:` condition (GitHub Actions evaluates it
+        # to always-false), so surface presence/absence via a step output instead.
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "has_keystore=$([ -n "$ANDROID_KEYSTORE_BASE64" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Decode release signing keystore
+        if: steps.signing.outputs.has_keystore == 'true'
+        working-directory: apps/android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > release.keystore
+
+      - name: Assemble signed release bundle + APK
+        if: steps.signing.outputs.has_keystore == 'true'
+        working-directory: apps/android
+        env:
+          ANDROID_KEYSTORE_PATH: release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          ANDROID_VERSION_NAME: ${{ steps.version.outputs.version_name }}
+        run: ./gradlew bundleRelease assembleRelease --no-daemon
+
+      - name: Assemble debug APK (no release signing secrets configured yet)
+        if: steps.signing.outputs.has_keystore == 'false'
         working-directory: apps/android
         run: ./gradlew assembleDebug --no-daemon
 
       - uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: apps/android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          name: android-build
+          path: |
+            apps/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/android/app/build/outputs/apk/release/app-release.apk
+            apps/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: ignore
 
   build-ios:
     name: Build iOS Simulator app
@@ -131,5 +171,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/android-apk/app-debug.apk
+            dist/android-build/app-debug.apk
+            dist/android-build/app-release.apk
+            dist/android-build/app-release.aab
             dist/ios-simulator-build/EveryList-ios-simulator.zip

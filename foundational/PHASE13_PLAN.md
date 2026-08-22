@@ -571,3 +571,19 @@ Open decisions to pin down at the relevant stage (not blocking the order above):
 - Offline mode additionally covers the newly-closed gaps: reorder categories/store aisle order while offline and confirm the new order survives a reconnect; add a favorite to a list and attach an existing store while offline and confirm both resolve correctly on flush.
 - Settings sync-status view (already shipped, Phase 14): confirm the newly-queued reorder/attach mutations from this phase show up correctly in `/settings/sync`'s queued-item list alongside the existing create/update/delete entries.
 - CI: pushing a `vX.Y.Z` tag produces a GitHub Release with a downloadable Android debug APK and an iOS Simulator build attached — **verified structurally** (workflow YAML validated, and each build command — `cap:sync`, `gradlew assembleDebug`, the `xcodebuild` invocation — run successfully on the maintainer's machine first); an actual tag push through CI to confirm the Release/asset-upload plumbing end-to-end is the maintainer's to do.
+
+## Play Store release — maintainer to-do (2026-08-23)
+
+The maintainer now has a Google Play developer account. `apps/android/app/build.gradle` and
+`.github/workflows/native-build.yml` were updated to support a signed release build (reading the
+keystore/passwords from env vars or a gitignored `keystore.properties`, with CI falling back to a
+debug build until the signing secrets exist), but the following steps still need the maintainer
+directly — none of it can be done from an agent session:
+
+1. Generate a release keystore (`keytool -genkey -v -keystore ... -alias everylist -keyalg RSA -keysize 2048 -validity 10000`) and store the file + its passwords somewhere durable outside the repo. Losing it means the app can never be updated again under that Play listing; leaking it lets anyone sign as the app.
+2. Add four GitHub Secrets to the repo: `ANDROID_KEYSTORE_BASE64` (the keystore file, base64-encoded), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Once these exist, `native-build.yml` automatically switches from a debug APK to a signed release AAB/APK on the next tag push.
+3. Create the app in Google Play Console: store listing (screenshots, description, icon), content rating questionnaire, data safety form, a hosted privacy policy URL, app access declaration, pricing/distribution/countries.
+4. Push a `vX.Y.Z` tag once the secrets are in place, download the resulting signed `.aab` from the GitHub Release, and upload it manually through Play Console to create the app's first release (this first upload can't be automated — the app has to exist in Console first).
+5. Enroll in Play App Signing when Console prompts on that first upload (Google's recommended default: you keep an upload key, Google holds the real signing key, and a compromised upload key can be reset without losing the app).
+6. Budget for Google's closed-testing requirement on new developer accounts: at least 20 testers enrolled for 14 continuous days before Play allows a production release. Start this track early since it's on the critical path to going live, not optional.
+7. Only after that: promote Internal Testing → Closed Testing → Production.
