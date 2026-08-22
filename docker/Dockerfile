@@ -145,6 +145,7 @@ ENV HOST=0.0.0.0 \
     LOG_LEVEL=info \
     APP_URL=http://0.0.0.0:3000 \
     SESSION_DRIVER=cookie \
+    LIMITER_STORE=database \
     DATABASE_FILENAME=/config/everylist.sqlite3 \
     PUID=99 \
     PGID=100 \

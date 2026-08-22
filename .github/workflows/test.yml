@@ -30,6 +30,7 @@ jobs:
       APP_KEY: ci-3B65vVbNzQY6nqACpAxWnZUX2ZPfL5pI
       APP_URL: http://127.0.0.1:3333
       SESSION_DRIVER: cookie
+      LIMITER_STORE: database
     steps:
       - uses: actions/checkout@v4
 
