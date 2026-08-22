@@ -112,7 +112,7 @@ differently-capable paths for reusing an item's history, and it's easy to assume
 
 **Status (2026-08-22): open, unreproduced locally — suspected pre-existing race, not yet fixed.**
 
-`e2e/offline-sync.e2e.ts`'s "adds an item while offline and syncs it once back online" failed
+`apps/web/e2e/offline-sync.e2e.ts`'s "adds an item while offline and syncs it once back online" failed
 once in CI (Phase 16 PR #79) with a Playwright strict-mode violation: `getByText('Milk')`
 resolved to *two* elements right after `page.reload()`, where the test expects exactly one.
 
