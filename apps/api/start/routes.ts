@@ -11,6 +11,7 @@ import { middleware } from '#start/kernel'
 import router from '@adonisjs/core/services/router'
 import { controllers } from '#generated/controllers'
 import app from '@adonisjs/core/services/app'
+import { listsThrottle } from '#start/limiter'
 
 // Registers __transmit/events, __transmit/subscribe, and __transmit/unsubscribe
 // (see #start/transmit) before this file's own SPA catch-all route below. This
@@ -118,6 +119,27 @@ router
       })
       .prefix('lists')
       .as('lists')
+      // Accepts a login session token or a Personal Access Token (Home
+      // Assistant/Alexa-style integrations) — ListPolicy reduces a PAT's
+      // effective role down to its encoded per-list grant either way.
+      // Throttled per-token since this is the surface exposed to always-on
+      // external clients — see start/limiter.ts.
+      .use([middleware.auth({ guards: ['api', 'pat'] }), listsThrottle])
+
+    router
+      .group(() => {
+        router.get('/', [controllers.PersonalAccessTokens, 'index'])
+        router.post('/', [controllers.PersonalAccessTokens, 'store'])
+        router.delete(':tokenId', [controllers.PersonalAccessTokens, 'destroy'])
+      })
+      .prefix('tokens')
+      .as('tokens')
+      // A token belongs to an account, not a single list — one token can be
+      // scoped to several lists (see ListPolicy's grant-per-ability model).
+      // Login-session only: minting more tokens from a PAT isn't allowed
+      // (also structurally blocked — a PAT can never satisfy the 'owner'
+      // check `store` requires, since its effective role is always capped
+      // at editor/viewer).
       .use(middleware.auth())
 
     router.get('invites/:token', [controllers.InviteAccept, 'preview'])

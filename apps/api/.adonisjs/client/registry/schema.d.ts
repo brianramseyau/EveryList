@@ -667,6 +667,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/list_invites_controller').default['destroy']>>>
     }
   }
+  'tokens.personal_access_tokens.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/tokens'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['index']>>>
+    }
+  }
+  'tokens.personal_access_tokens.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/tokens'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/personal_access_token').createPersonalAccessTokenValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/personal_access_token').createPersonalAccessTokenValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'tokens.personal_access_tokens.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/tokens/:tokenId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { tokenId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['destroy']>>>
+    }
+  }
   'invite_accept.preview': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/invites/:token'

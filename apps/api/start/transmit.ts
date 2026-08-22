@@ -13,8 +13,13 @@ export async function authorizeListChannel(
   params: { id: string }
 ): Promise<boolean> {
   try {
-    const user = await ctx.auth.use('api').authenticate()
-    const role = await ListPolicy.roleFor(user.id, params.id)
+    // Accepts either a login session token or a Personal Access Token — a
+    // PAT scoped to this list must be able to subscribe to its channel too,
+    // or it gets full REST access but no realtime push. `roleFor` reduces
+    // the role down to what the token actually grants either way.
+    await ctx.auth.authenticateUsing(['api', 'pat'])
+    const user = ctx.auth.getUserOrFail()
+    const role = await ListPolicy.roleFor(user, params.id)
     return role !== null
   } catch {
     return false

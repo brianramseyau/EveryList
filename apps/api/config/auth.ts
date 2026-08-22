@@ -11,11 +11,25 @@ const authConfig = defineConfig({
 
   guards: {
     /**
-     * Token-based guard for stateless API authentication.
+     * Token-based guard for stateless API authentication (login-derived
+     * session tokens).
      */
     api: tokensGuard({
       provider: tokensUserProvider({
         tokens: 'accessTokens',
+        model: () => import('#models/user'),
+      }),
+    }),
+
+    /**
+     * Token-based guard for Personal Access Tokens (integrations like Home
+     * Assistant/Alexa). A separate guard because AdonisJS's tokensUserProvider
+     * verifies against exactly one named token bucket on the model — routes
+     * that should accept a PAT authenticate with `guards: ['api', 'pat']`.
+     */
+    pat: tokensGuard({
+      provider: tokensUserProvider({
+        tokens: 'personalAccessTokens',
         model: () => import('#models/user'),
       }),
     }),

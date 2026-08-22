@@ -6,6 +6,17 @@ import { type AccessToken, DbAccessTokensProvider } from '@adonisjs/auth/access_
 
 export default class User extends compose(UserSchema, withAuthFinder(hash)) {
   static accessTokens = DbAccessTokensProvider.forModel(User, { expiresIn: '30 days' })
+  /**
+   * Personal Access Tokens for third-party integrations (Home Assistant,
+   * Alexa) — a separate bucket (own `type`/prefix) from login tokens so it
+   * doesn't inherit their 30-day expiry and lists independently via `.all()`.
+   * Each token's `abilities` encodes its list grants as `list:<id>:<role>`
+   * strings — see ListPolicy for how those are enforced.
+   */
+  static personalAccessTokens = DbAccessTokensProvider.forModel(User, {
+    type: 'pat',
+    prefix: 'elt_',
+  })
   declare currentAccessToken?: AccessToken
 
   get initials() {

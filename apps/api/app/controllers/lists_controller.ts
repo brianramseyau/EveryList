@@ -104,7 +104,7 @@ export default class ListsController {
 
   async show({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    await ListPolicy.requireList(user.id, params.id, 'viewer')
+    await ListPolicy.requireList(user, params.id, 'viewer')
     const list = await List.query()
       .where('id', params.id)
       .whereNull('deletedAt')
@@ -119,7 +119,7 @@ export default class ListsController {
 
   async update({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
-    await ListPolicy.requireList(user.id, params.id, 'owner')
+    await ListPolicy.requireList(user, params.id, 'owner')
     const list = await List.query()
       .where('id', params.id)
       .whereNull('deletedAt')
@@ -170,7 +170,7 @@ export default class ListsController {
 
   async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
-    await ListPolicy.requireList(user.id, params.id, 'owner')
+    await ListPolicy.requireList(user, params.id, 'owner')
     const list = await List.query().where('id', params.id).whereNull('deletedAt').firstOrFail()
 
     const expectedVersion = parseExpectedVersion(request)

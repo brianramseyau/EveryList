@@ -13,7 +13,7 @@ function generateToken(): string {
 export default class ListInvitesController {
   async index({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const invites = await ListInvite.query()
       .where('listId', list.id)
       .whereNull('revokedAt')
@@ -24,7 +24,7 @@ export default class ListInvitesController {
 
   async store({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createListInviteValidator)
 
     const invite = await ListInvite.create({
@@ -41,7 +41,7 @@ export default class ListInvitesController {
 
   async destroy({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const invite = await ListInvite.query()
       .where('id', params.inviteId)
       .where('listId', list.id)
