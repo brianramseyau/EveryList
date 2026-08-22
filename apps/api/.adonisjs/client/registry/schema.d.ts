@@ -439,6 +439,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'lists.items.move': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/lists/:listId/items/:itemId/move'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/item').moveItemValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; itemId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/item').moveItemValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['move']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['move']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'lists.items.destroy': {
     methods: ["DELETE"]
     pattern: '/api/v1/lists/:listId/items/:itemId'
@@ -461,6 +473,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['restore']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['restore']>>>
+    }
+  }
+  'lists.items.purge': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/lists/:listId/items/:itemId/purge'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; itemId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['purge']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['purge']>>>
     }
   }
   'lists.stores.index': {
@@ -691,6 +715,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'tokens.personal_access_tokens.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/tokens/:tokenId'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/personal_access_token').updatePersonalAccessTokenValidator)>>
+      paramsTuple: [ParamValue]
+      params: { tokenId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/personal_access_token').updatePersonalAccessTokenValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'tokens.personal_access_tokens.destroy': {
     methods: ["DELETE"]
     pattern: '/api/v1/tokens/:tokenId'
@@ -701,6 +737,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['destroy']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['destroy']>>>
+    }
+  }
+  'personal_access_tokens.me': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/tokens/me'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['me']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['me']>>>
     }
   }
   'invite_accept.preview': {

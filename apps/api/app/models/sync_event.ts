@@ -5,7 +5,7 @@ import List from '#models/list'
 
 export type SyncEntityType =
   'list' | 'category' | 'item' | 'favorite_item' | 'store' | 'store_category_order'
-export type SyncOp = 'create' | 'update' | 'delete'
+export type SyncOp = 'create' | 'update' | 'delete' | 'purge'
 
 export default class SyncEvent extends SyncEventSchema {
   declare entityType: SyncEntityType

@@ -18,7 +18,9 @@
  * instead of burning (at times multiple) GitHub Actions round trips.
  *
  * Not covered here (CI-only, needs Docker): the `docker-smoke` job — building
- * the production image, smoke-testing it, and the Lighthouse audit.
+ * the production image and smoke-testing it. (Lighthouse's CI gate was
+ * removed in PR #30 — `scripts/lighthouse-check.mjs` still exists for
+ * manual/local runs, but nothing in CI invokes it.)
  *
  * Usage:
  *   pnpm check               # full local gate, E2E included
@@ -84,6 +86,6 @@ if (failure) {
 
 console.log('\n===== All local gate steps passed =====')
 console.log(
-  'Not covered here: the CI docker-smoke job (production Docker image build + smoke test + Lighthouse) — it needs Docker.'
+  'Not covered here: the CI docker-smoke job (production Docker image build + smoke test) — it needs Docker.'
 )
 process.exit(0)

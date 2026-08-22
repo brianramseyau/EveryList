@@ -132,7 +132,14 @@ export default defineConfig({
 			'/openapi': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334',
 			// The Scalar UI served at /docs pulls its renderer from this path
 			// (config/openapi.ts's `uiAssetPath`, served from the API's public/).
-			'/scalar.js': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'
+			'/scalar.js': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334',
+			// realtime.ts's Transmit client falls back to `window.location.origin` in
+			// dev (apiBaseUrl() is only set for the Capacitor native build), so
+			// without this its EventSource/subscribe calls hit Vite itself (404)
+			// instead of the API — realtime sync silently never works under
+			// `pnpm dev` otherwise, even though it's same-origin (and fine) in
+			// production, where AdonisJS serves both API and static build.
+			'/__transmit': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'
 		}
 	},
 	// `vite preview` serves the production `build/` (with the real sw.js) — the
@@ -148,7 +155,14 @@ export default defineConfig({
 			'/openapi': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334',
 			// The Scalar UI served at /docs pulls its renderer from this path
 			// (config/openapi.ts's `uiAssetPath`, served from the API's public/).
-			'/scalar.js': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'
+			'/scalar.js': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334',
+			// realtime.ts's Transmit client falls back to `window.location.origin` in
+			// dev (apiBaseUrl() is only set for the Capacitor native build), so
+			// without this its EventSource/subscribe calls hit Vite itself (404)
+			// instead of the API — realtime sync silently never works under
+			// `pnpm dev` otherwise, even though it's same-origin (and fine) in
+			// production, where AdonisJS serves both API and static build.
+			'/__transmit': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'
 		}
 	},
 	test: {

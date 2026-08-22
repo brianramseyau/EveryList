@@ -22,8 +22,10 @@
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { computeMidpointSortOrder } from '$lib/item-sort-order';
 	import { swipeReveal } from '$lib/actions/swipe-reveal';
+	import { splitTextWithLinks } from '$lib/linkify';
 	import Icon from '$lib/components/Icon.svelte';
 	import ItemAutocomplete from '$lib/components/ItemAutocomplete.svelte';
+	import NoteLink from '$lib/components/NoteLink.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PasscodeGate from '$lib/components/PasscodeGate.svelte';
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
@@ -192,7 +194,12 @@
 	const progressText = $derived(`${checkedItems.length} of ${visibleItems.length} done`);
 
 	async function loadAll() {
-		loading = true;
+		// Only the very first load (before `list` exists) should show the loading
+		// placeholder — it unmounts the entire keyed item list below, which resets
+		// scroll position. Realtime/conflict/flush-outcome refreshes reuse this same
+		// function while `list` is already populated, and must patch state in place
+		// instead of tearing the DOM down and rebuilding it under the user.
+		if (!list) loading = true;
 		try {
 			[list, categories, items, stores] = await Promise.all([
 				fetchList(listId),
@@ -712,6 +719,17 @@
 															{itemStore.name}
 														</span>
 													{/if}
+												{/if}
+												{#if item.notes}
+													<p
+														class="text-xs whitespace-pre-line text-gray-500 italic dark:text-gray-400"
+													>
+														{#each splitTextWithLinks(item.notes) as segment, i (i)}
+															{#if segment.type === 'link'}<NoteLink
+																	url={segment.value}
+																/>{:else}{segment.value}{/if}
+														{/each}
+													</p>
 												{/if}
 											</div>
 											{#if !isCoarsePointer}

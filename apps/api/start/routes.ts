@@ -97,8 +97,10 @@ router
         router.post(':listId/items', [controllers.Items, 'store'])
         router.post(':listId/items/import', [controllers.Items, 'import'])
         router.patch(':listId/items/:itemId', [controllers.Items, 'update'])
+        router.patch(':listId/items/:itemId/move', [controllers.Items, 'move'])
         router.delete(':listId/items/:itemId', [controllers.Items, 'destroy'])
         router.post(':listId/items/:itemId/restore', [controllers.Items, 'restore'])
+        router.delete(':listId/items/:itemId/purge', [controllers.Items, 'purge'])
 
         router.get(':listId/stores', [controllers.Stores, 'index'])
         router.post(':listId/stores', [controllers.Stores, 'store'])
@@ -135,6 +137,7 @@ router
       .group(() => {
         router.get('/', [controllers.PersonalAccessTokens, 'index'])
         router.post('/', [controllers.PersonalAccessTokens, 'store'])
+        router.patch(':tokenId', [controllers.PersonalAccessTokens, 'update'])
         router.delete(':tokenId', [controllers.PersonalAccessTokens, 'destroy'])
       })
       .prefix('tokens')

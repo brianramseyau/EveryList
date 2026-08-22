@@ -6,7 +6,7 @@
 	import type { AccessTokenDto, ListDto, ListRole } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchLists } from '$lib/api/lists';
-	import { createToken, fetchTokens, revokeToken } from '$lib/api/tokens';
+	import { createToken, fetchTokens, revokeToken, updateToken } from '$lib/api/tokens';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
@@ -22,6 +22,11 @@
 	let lastCreatedToken = $state<string | null>(null);
 	let copied = $state(false);
 	let copyTimeout: ReturnType<typeof setTimeout> | undefined;
+
+	let editingTokenId = $state<number | null>(null);
+	let editListIds = $state<number[]>([]);
+	let editRole = $state<Exclude<ListRole, 'owner'>>('editor');
+	let saving = $state(false);
 
 	// Minting a token requires being an owner of every list it's scoped to
 	// (apps/api's PersonalAccessTokensController gates on it), so only owned
@@ -83,6 +88,31 @@
 			error = err instanceof ApiError ? err.message : 'Failed to create token.';
 		} finally {
 			creating = false;
+		}
+	}
+
+	function startEdit(token: AccessTokenDto) {
+		editingTokenId = token.id;
+		editListIds = token.grants.map((grant) => grant.listId);
+		// Grants are always applied uniformly across a token's lists, so the
+		// first grant's role represents the whole token.
+		editRole = token.grants[0]?.role ?? 'editor';
+	}
+
+	function cancelEdit() {
+		editingTokenId = null;
+	}
+
+	async function handleSaveEdit(token: AccessTokenDto) {
+		saving = true;
+		try {
+			const updated = await updateToken(token.id, editListIds, editRole, token.name ?? undefined);
+			tokens = tokens.map((current) => (current.id === updated.id ? updated : current));
+			editingTokenId = null;
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to update token.';
+		} finally {
+			saving = false;
 		}
 	}
 
@@ -194,23 +224,73 @@
 				<ul class="flex flex-col gap-2">
 					{#each tokens as token (token.id)}
 						<li
-							class="flex items-center gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700"
+							class="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700"
 						>
-							<div class="flex flex-col">
-								<span>{token.name}</span>
-								<span class="text-xs text-gray-600 dark:text-gray-400">
-									{token.grants
-										.map((grant) => `${listName(grant.listId)} (${grant.role})`)
-										.join(', ')}
-								</span>
+							<div class="flex items-center gap-2">
+								<div class="flex flex-col">
+									<span>{token.name}</span>
+									<span class="text-xs text-gray-600 dark:text-gray-400">
+										{token.grants
+											.map((grant) => `${listName(grant.listId)} (${grant.role})`)
+											.join(', ')}
+									</span>
+								</div>
+								<div class="ml-auto flex gap-2">
+									{#if editingTokenId !== token.id}
+										<button
+											type="button"
+											class="text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+											onclick={() => startEdit(token)}
+										>
+											Edit
+										</button>
+									{/if}
+									<button
+										type="button"
+										class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+										onclick={() => handleRevoke(token)}
+									>
+										Revoke
+									</button>
+								</div>
 							</div>
-							<button
-								type="button"
-								class="ml-auto text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-								onclick={() => handleRevoke(token)}
-							>
-								Revoke
-							</button>
+
+							{#if editingTokenId === token.id}
+								<div class="flex flex-col gap-2 border-t border-gray-200 pt-2 dark:border-gray-700">
+									<div class="flex flex-col gap-1">
+										<span class="text-xs text-gray-500 dark:text-gray-400">Lists</span>
+										<ul class="flex flex-col gap-1">
+											{#each ownedLists as list (list.id)}
+												<li>
+													<Checkbox group={editListIds} value={list.id}>{list.name}</Checkbox>
+												</li>
+											{/each}
+										</ul>
+									</div>
+
+									<div class="flex gap-2">
+										<select
+											aria-label="Role"
+											class="rounded border border-gray-300 bg-white text-sm dark:border-gray-600 dark:bg-gray-800"
+											bind:value={editRole}
+										>
+											<option value="editor">Editor — can add/remove items</option>
+											<option value="viewer">Viewer — read only</option>
+										</select>
+										<Button
+											type="button"
+											size="sm"
+											disabled={saving || editListIds.length === 0}
+											onclick={() => handleSaveEdit(token)}
+										>
+											Save
+										</Button>
+										<Button type="button" size="sm" color="alternative" onclick={cancelEdit}>
+											Cancel
+										</Button>
+									</div>
+								</div>
+							{/if}
 						</li>
 					{/each}
 				</ul>

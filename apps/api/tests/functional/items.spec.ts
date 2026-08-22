@@ -4,11 +4,11 @@ import type { ApiClient, ApiRequest } from '@japa/api-client'
 import type { CategoryDto, ItemDto, ListDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
-async function createList(client: ApiClient, token: string) {
+async function createList(client: ApiClient, token: string, name = 'Test List') {
   const response = await client
     .post('/api/v1/lists')
     .header('Authorization', `Bearer ${token}`)
-    .json({ name: 'Test List' })
+    .json({ name })
   return bodyData<ListDto>(response).id
 }
 
@@ -139,6 +139,171 @@ test.group('Items CRUD', (group) => {
       client.delete(`/api/v1/lists/${listId}/items/${item.id}`).qs({ expectedVersion: 3 })
     )
     destroy.assertStatus(204)
+  })
+
+  test('purge hard-deletes a soft-deleted item, removing it from recent and blocking restore', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const create = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Typo Itme' })
+    )
+    const item = create.body().data
+
+    // Purging an active (not yet soft-deleted) item isn't allowed — it has to go through
+    // `destroy` first, same as `restore` requires a soft-deleted row.
+    const purgeActive = await auth(client.delete(`/api/v1/lists/${listId}/items/${item.id}/purge`))
+    purgeActive.assertStatus(404)
+
+    const destroy = await auth(client.delete(`/api/v1/lists/${listId}/items/${item.id}`))
+    destroy.assertStatus(204)
+
+    const purge = await auth(client.delete(`/api/v1/lists/${listId}/items/${item.id}/purge`))
+    purge.assertStatus(204)
+
+    const recent = await auth(client.get(`/api/v1/lists/${listId}/items/recent`))
+    assert.lengthOf(recent.body().data, 0)
+
+    // The row is really gone, not just re-hidden — restoring it now 404s, and purging it again 404s.
+    const restore = await auth(client.post(`/api/v1/lists/${listId}/items/${item.id}/restore`))
+    restore.assertStatus(404)
+
+    const purgeAgain = await auth(client.delete(`/api/v1/lists/${listId}/items/${item.id}/purge`))
+    purgeAgain.assertStatus(404)
+  })
+
+  test('move repositions a single item relative to another, touching only that item', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const milk = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk' }))
+    )
+    const eggs = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Eggs' }))
+    )
+    const bread = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bread' }))
+    )
+    // Created order: Milk, Eggs, Bread.
+
+    // Move Bread to right after Milk: Milk, Bread, Eggs.
+    const move = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${bread.id}/move`)
+        .json({ previousItemId: milk.id })
+    )
+    move.assertStatus(200)
+    assert.equal(move.body().data.version, bread.version + 1)
+
+    const afterFirstMove = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.deepEqual(
+      afterFirstMove.body().data.map((item: { name: string }) => item.name),
+      ['Milk', 'Bread', 'Eggs']
+    )
+    // Only the moved row's version changed — its former neighbors are untouched.
+    const eggsAfter = afterFirstMove.body().data.find((item: { id: number }) => item.id === eggs.id)
+    assert.equal(eggsAfter.version, eggs.version)
+
+    // Move Eggs to the front (no previousItemId): Eggs, Milk, Bread.
+    const moveToFront = await auth(
+      client.patch(`/api/v1/lists/${listId}/items/${eggs.id}/move`).json({})
+    )
+    moveToFront.assertStatus(200)
+
+    const afterSecondMove = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.deepEqual(
+      afterSecondMove.body().data.map((item: { name: string }) => item.name),
+      ['Eggs', 'Milk', 'Bread']
+    )
+
+    // Move Milk to the very end (after Bread, the current last item, so there's no "after"
+    // neighbor): Eggs, Bread, Milk.
+    const moveToEnd = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${milk.id}/move`)
+        .json({ previousItemId: bread.id })
+    )
+    moveToEnd.assertStatus(200)
+
+    const afterThirdMove = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.deepEqual(
+      afterThirdMove.body().data.map((item: { name: string }) => item.name),
+      ['Eggs', 'Bread', 'Milk']
+    )
+  })
+
+  test('move rejects a previousItemId that is not an active item in the same list', async ({
+    client,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const otherListId = await createList(client, token, 'Other List')
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const item = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk' }))
+    )
+    const foreignItem = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${otherListId}/items`).json({ name: 'Other list' }))
+    )
+
+    const crossList = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${item.id}/move`)
+        .json({ previousItemId: foreignItem.id })
+    )
+    crossList.assertStatus(400)
+
+    const selfReference = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${item.id}/move`)
+        .json({ previousItemId: item.id })
+    )
+    selfReference.assertStatus(400)
+
+    const missing = await auth(
+      client.patch(`/api/v1/lists/${listId}/items/${item.id}/move`).json({ previousItemId: 999999 })
+    )
+    missing.assertStatus(400)
+  })
+
+  test('move honors expectedVersion — stale conflicts with 409, matching applies', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const item = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk' }))
+    )
+    assert.equal(item.version, 1)
+
+    const stale = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${item.id}/move`)
+        .json({ previousItemId: null, expectedVersion: 99 })
+    )
+    stale.assertStatus(409)
+    assert.isTrue(stale.body().conflict)
+
+    const matching = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${item.id}/move`)
+        .json({ previousItemId: null, expectedVersion: 1 })
+    )
+    matching.assertStatus(200)
+    assert.equal(matching.body().data.version, 2)
   })
 
   test('bulk import splits pasted text into items', async ({ client, assert }) => {
@@ -464,9 +629,27 @@ TOILETRIES
       .delete(`/api/v1/lists/${listId}/items/${itemId}`)
       .header('Authorization', `Bearer ${viewer.token}`)
     destroy.assertStatus(403)
+
+    const move = await client
+      .patch(`/api/v1/lists/${listId}/items/${itemId}/move`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({})
+    move.assertStatus(403)
+
+    await client
+      .delete(`/api/v1/lists/${listId}/items/${itemId}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+
+    const purge = await client
+      .delete(`/api/v1/lists/${listId}/items/${itemId}/purge`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    purge.assertStatus(403)
   })
 
-  test('an editor can create, update, and delete items', async ({ client, assert }) => {
+  test('an editor can create, update, move, delete, and purge items', async ({
+    client,
+    assert,
+  }) => {
     const owner = await signupAndGetUser(client)
     const listId = await createList(client, owner.token)
     const editor = await signupAndGetUser(client)
@@ -479,10 +662,21 @@ TOILETRIES
     create.assertStatus(200)
     assert.equal(create.body().data.name, 'Bananas')
 
+    const move = await client
+      .patch(`/api/v1/lists/${listId}/items/${create.body().data.id}/move`)
+      .header('Authorization', `Bearer ${editor.token}`)
+      .json({})
+    move.assertStatus(200)
+
     const destroy = await client
       .delete(`/api/v1/lists/${listId}/items/${create.body().data.id}`)
       .header('Authorization', `Bearer ${editor.token}`)
     destroy.assertStatus(204)
+
+    const purge = await client
+      .delete(`/api/v1/lists/${listId}/items/${create.body().data.id}/purge`)
+      .header('Authorization', `Bearer ${editor.token}`)
+    purge.assertStatus(204)
   })
 })
 
@@ -652,16 +846,51 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     )
     await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bread' }))
     await auth(client.delete(`/api/v1/lists/${listId}/items/${bananas.body().data.id}`))
-    // Re-adding "bananas" (different case) after it was deleted exercises
-    // the case-insensitive dedup within recentNames' own history scan —
-    // deleted items aren't excluded from the source query, only the
-    // duplicate name is collapsed to one entry.
-    await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'bananas' }))
+    // Bulk import bypasses store()'s active/deleted dedup (which would otherwise restore the
+    // just-deleted "Bananas" row instead of creating a second one) — the one remaining path that
+    // produces a genuine same-name duplicate, exercising recentNames' own case-insensitive
+    // collapse. Deleted items aren't excluded from the source query, only the duplicate name is.
+    await auth(client.post(`/api/v1/lists/${listId}/items/import`).json({ text: 'bananas' }))
 
     const recentNames = await auth(client.get(`/api/v1/lists/${listId}/items/recent-names`))
     recentNames.assertStatus(200)
     const names: string[] = recentNames.body().data
     assert.deepEqual(names, ['bananas', 'Bread'])
+  })
+
+  test("re-adding a deleted item's name restores its old row, keeping store/price/quantity/notes instead of creating a fresh duplicate", async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const created = await auth(
+      client
+        .post(`/api/v1/lists/${listId}/items`)
+        .json({ name: 'Milk', quantity: '2', notes: 'oat', price: 350 })
+    )
+    const original = created.body().data
+    await auth(client.delete(`/api/v1/lists/${listId}/items/${original.id}`))
+
+    const readded = await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'milk' }))
+    readded.assertStatus(200)
+    const restored = readded.body().data
+
+    assert.equal(restored.id, original.id, 'same row restored, not a new one')
+    assert.isNull(restored.deletedAt)
+    assert.equal(restored.quantity, '2')
+    assert.equal(restored.notes, 'oat')
+    assert.equal(restored.price, 350)
+    assert.equal(
+      restored.version,
+      original.version + 2,
+      'delete bumped it, implicit restore bumps again'
+    )
+
+    const index = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.lengthOf(index.body().data, 1, 'no duplicate row was created')
   })
 
   test('recent-names caps out at 50 distinct names', async ({ client, assert }) => {

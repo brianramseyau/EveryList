@@ -28,6 +28,18 @@ async function mintTokenData(
   return bodyData<AccessTokenCreatedDto>(await mintToken(client, token, payload))
 }
 
+async function updateToken(
+  client: ApiClient,
+  token: string,
+  tokenId: number,
+  payload: { name?: string; listIds: number[]; role: string }
+): Promise<ApiResponse> {
+  return client
+    .patch(`/api/v1/tokens/${tokenId}`)
+    .header('Authorization', `Bearer ${token}`)
+    .json(payload)
+}
+
 test.group('Personal access tokens', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
 
@@ -309,6 +321,151 @@ test.group('Personal access tokens', (group) => {
       .delete('/api/v1/tokens/999999')
       .header('Authorization', `Bearer ${owner.token}`)
     revoke.assertStatus(404)
+  })
+
+  test('an owner can retroactively add and remove lists on an existing token', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listAId = await createList(client, owner.token, 'List A')
+    const listBId = await createList(client, owner.token, 'List B')
+    const created = await mintTokenData(client, owner.token, {
+      name: 'Home Assistant',
+      listIds: [listAId],
+      role: 'editor',
+    })
+
+    const updated = await updateToken(client, owner.token, created.id, {
+      listIds: [listBId],
+      role: 'viewer',
+    })
+    updated.assertStatus(200)
+    const updatedData = bodyData<AccessTokenDto>(updated)
+    assert.equal(updatedData.id, created.id)
+    assert.equal(updatedData.name, 'Home Assistant')
+    assert.sameDeepMembers(updatedData.grants, [{ listId: listBId, role: 'viewer' }])
+    // The plaintext secret is never re-emitted after creation.
+    assert.isUndefined((updatedData as AccessTokenCreatedDto).token)
+
+    // Old grant is gone, new grant works, using the same token value.
+    const oldList = await client
+      .get(`/api/v1/lists/${listAId}/items`)
+      .header('Authorization', `Bearer ${created.token}`)
+    oldList.assertStatus(404)
+
+    const newList = await client
+      .get(`/api/v1/lists/${listBId}/items`)
+      .header('Authorization', `Bearer ${created.token}`)
+    newList.assertStatus(200)
+  })
+
+  test('updating a token can rename it, and omitting name keeps the existing one', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const created = await mintTokenData(client, owner.token, {
+      name: 'Home Assistant',
+      listIds: [listId],
+      role: 'editor',
+    })
+
+    const renamed = await updateToken(client, owner.token, created.id, {
+      name: 'Renamed',
+      listIds: [listId],
+      role: 'editor',
+    })
+    assert.equal(bodyData<AccessTokenDto>(renamed).name, 'Renamed')
+
+    const untouched = await updateToken(client, owner.token, created.id, {
+      listIds: [listId],
+      role: 'viewer',
+    })
+    assert.equal(bodyData<AccessTokenDto>(untouched).name, 'Renamed')
+  })
+
+  test('updating requires ownership of every requested list, not just some of them', async ({
+    client,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const ownedListId = await createList(client, owner.token, 'Owned')
+    const created = await mintTokenData(client, owner.token, {
+      name: 'Home Assistant',
+      listIds: [ownedListId],
+      role: 'editor',
+    })
+
+    const otherOwner = await signupAndGetUser(client)
+    const notOwnedListId = await createList(client, otherOwner.token, 'Not owned')
+
+    const response = await updateToken(client, owner.token, created.id, {
+      listIds: [ownedListId, notOwnedListId],
+      role: 'editor',
+    })
+    response.assertStatus(404)
+  })
+
+  test('a user cannot update another user`s token', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const created = await mintTokenData(client, owner.token, {
+      name: 'Home Assistant',
+      listIds: [listId],
+      role: 'editor',
+    })
+
+    const stranger = await signupAndGetUser(client)
+    const strangerListId = await createList(client, stranger.token)
+    const response = await updateToken(client, stranger.token, created.id, {
+      listIds: [strangerListId],
+      role: 'editor',
+    })
+    response.assertStatus(404)
+  })
+
+  test('updating an unknown token id returns 404', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+
+    const response = await updateToken(client, owner.token, 999999, {
+      listIds: [listId],
+      role: 'editor',
+    })
+    response.assertStatus(404)
+  })
+
+  test('updating rejects an empty listIds array', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const created = await mintTokenData(client, owner.token, {
+      name: 'Home Assistant',
+      listIds: [listId],
+      role: 'editor',
+    })
+
+    const response = await updateToken(client, owner.token, created.id, {
+      listIds: [],
+      role: 'editor',
+    })
+    response.assertStatus(422)
+  })
+
+  test('a duplicate listId on update is only granted once', async ({ client, assert }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const created = await mintTokenData(client, owner.token, {
+      name: 'Home Assistant',
+      listIds: [listId],
+      role: 'editor',
+    })
+
+    const response = await updateToken(client, owner.token, created.id, {
+      listIds: [listId, listId],
+      role: 'viewer',
+    })
+    assert.sameDeepMembers(bodyData<AccessTokenDto>(response).grants, [{ listId, role: 'viewer' }])
   })
 
   test('listing returns every token the user owns, across lists', async ({ client, assert }) => {

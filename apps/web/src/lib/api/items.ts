@@ -60,6 +60,13 @@ export function restoreItem(listId: number, itemId: number): Promise<ItemDto> {
 	return apiPost(`/api/v1/lists/${listId}/items/${itemId}/restore`);
 }
 
+/** Hard-deletes an already soft-deleted row — the "Recently Deleted" page's permanent-delete
+ * action. Not offline-queueable like the other item mutations here: there's no local row to
+ * reconcile against once it's gone, so this requires a live connection. */
+export function purgeItem(listId: number, itemId: number): Promise<void> {
+	return apiDelete(`/api/v1/lists/${listId}/items/${itemId}/purge`);
+}
+
 /** Purely local category guess against the static keyword table and whatever
  * categories are already cached in Dexie for this list — the offline fallback
  * for `fetchCategorySuggestion` below (PHASE7_PLAN.md §3), and mirrors the
@@ -231,6 +238,17 @@ export async function updateItem(
 		},
 		request: () => apiPatch<ItemDto>(`/api/v1/lists/${listId}/items/${itemId}`, input)
 	});
+}
+
+/** Repositions a single item to just after `previousItemId` (or the front of the list if
+ * omitted/null) — the server-side counterpart to `handleItemDrop`'s local reordering, and what
+ * the Home Assistant integration's `MOVE_TODO_ITEM` support calls (PHASE16_PLAN.md). */
+export function moveItem(
+	listId: number,
+	itemId: number,
+	previousItemId: number | null
+): Promise<ItemDto> {
+	return apiPatch(`/api/v1/lists/${listId}/items/${itemId}/move`, { previousItemId });
 }
 
 export async function deleteItem(listId: number, itemId: number): Promise<void> {

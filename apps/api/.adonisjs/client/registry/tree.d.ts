@@ -64,8 +64,10 @@ export interface ApiDefinition {
       store: typeof routes['lists.items.store']
       import: typeof routes['lists.items.import']
       update: typeof routes['lists.items.update']
+      move: typeof routes['lists.items.move']
       destroy: typeof routes['lists.items.destroy']
       restore: typeof routes['lists.items.restore']
+      purge: typeof routes['lists.items.purge']
     }
     stores: {
       index: typeof routes['lists.stores.index']
@@ -99,8 +101,12 @@ export interface ApiDefinition {
     personalAccessTokens: {
       index: typeof routes['tokens.personal_access_tokens.index']
       store: typeof routes['tokens.personal_access_tokens.store']
+      update: typeof routes['tokens.personal_access_tokens.update']
       destroy: typeof routes['tokens.personal_access_tokens.destroy']
     }
+  }
+  personalAccessTokens: {
+    me: typeof routes['personal_access_tokens.me']
   }
   inviteAccept: {
     preview: typeof routes['invite_accept.preview']

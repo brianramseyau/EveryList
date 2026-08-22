@@ -2,7 +2,12 @@ import type List from '#models/list'
 import Item from '#models/item'
 import Category from '#models/category'
 import ListPolicy from '#policies/list_policy'
-import { createItemValidator, updateItemValidator, importItemsValidator } from '#validators/item'
+import {
+  createItemValidator,
+  updateItemValidator,
+  importItemsValidator,
+  moveItemValidator,
+} from '#validators/item'
 import type { HttpContext } from '@adonisjs/core/http'
 import ItemTransformer from '#transformers/item_transformer'
 import { suggestCategoryId } from '#services/category_suggestion_service'
@@ -72,6 +77,40 @@ async function nextSortOrder(listId: number): Promise<number> {
     .max('sort_order as maxSortOrder')
     .first()
   return Number(result?.$extras.maxSortOrder ?? -1) + 1
+}
+
+// Mirrors apps/web/src/lib/item-sort-order.ts's computeMidpointSortOrder exactly: only the
+// moved item's own sortOrder ever changes, to a value strictly between its new neighbors'
+// *existing* sortOrder values (fractional indexing) — never a shared/derived index. No other
+// row is touched, so there's nothing to collide with and no fan-out of version bumps to other
+// items (this app's offline sync queue does per-row optimistic-locking on `version`, so
+// touching every sibling on every move would risk spurious conflicts for concurrent edits on
+// other devices). Kept in sync with the frontend's copy rather than shared, since one is
+// TypeScript-in-a-Node-service and the other TypeScript-in-a-Vite-bundle with no shared runtime
+// package between them for a five-line pure function.
+function computeMidpointSortOrder(before: number | undefined, after: number | undefined): number {
+  if (before === undefined && after === undefined) return 0
+  if (before === undefined) return after! - 1
+  if (after === undefined) return before + 1
+  return (before + after) / 2
+}
+
+/** Clears `deletedAt` on an existing row (vs. creating a fresh one) so its category/store/price/
+ * quantity/notes survive — shared by the explicit restore endpoint and `store()`'s implicit
+ * restore-on-name-match. */
+async function restoreItemRow(list: List, item: Item): Promise<void> {
+  item.deletedAt = null
+  item.sortOrder = await nextSortOrder(list.id)
+  item.version += 1
+  await item.save()
+
+  await broadcastSync({
+    listId: list.id,
+    entityType: 'item',
+    entityId: item.id,
+    op: 'create',
+    version: item.version,
+  })
 }
 
 export default class ItemsController {
@@ -144,11 +183,12 @@ export default class ItemsController {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createItemValidator)
+    const normalizedName = payload.name.trim().toLowerCase()
 
     const existing = await Item.query()
       .where('listId', list.id)
       .whereNull('deletedAt')
-      .whereRaw('LOWER(TRIM(name)) = ?', [payload.name.trim().toLowerCase()])
+      .whereRaw('LOWER(TRIM(name)) = ?', [normalizedName])
       .first()
 
     if (existing) {
@@ -168,6 +208,21 @@ export default class ItemsController {
       }
 
       return serialize(ItemTransformer.transform(existing))
+    }
+
+    // No active match — re-adding a name that was deleted restores its old row (category, store,
+    // price, quantity, notes intact) rather than silently creating a metadata-less duplicate. See
+    // AGENTS.md's "Re-adding a deleted item's name" footgun.
+    const deletedMatch = await Item.query()
+      .where('listId', list.id)
+      .whereNotNull('deletedAt')
+      .whereRaw('LOWER(TRIM(name)) = ?', [normalizedName])
+      .orderBy('deletedAt', 'desc')
+      .first()
+
+    if (deletedMatch) {
+      await restoreItemRow(list, deletedMatch)
+      return serialize(ItemTransformer.transform(deletedMatch))
     }
 
     const categoryId = await resolveCategoryId(list, payload.name, payload.categoryId)
@@ -326,6 +381,71 @@ export default class ItemsController {
     return serialize(ItemTransformer.transform(item))
   }
 
+  /** Repositions a single item within the list — one item, one neighbor reference, one row
+   * touched (see computeMidpointSortOrder above). Mirrors the drag-and-drop UI's
+   * `handleItemDrop`, and matches Home Assistant's `todo.move_item` service (`item` +
+   * `previous_uid`) closely enough to back it directly, unlike the folders/lists/categories
+   * `reorder` endpoints, which take a full `order: number[]` and renumber every row — a shape
+   * that doesn't fit items' fractional-indexing design. */
+  async move({ auth, params, request, response, serialize, logger }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
+    const item = await Item.query()
+      .where('id', params.itemId)
+      .where('listId', list.id)
+      .whereNull('deletedAt')
+      .firstOrFail()
+
+    const { previousItemId, expectedVersion } = await request.validateUsing(moveItemValidator)
+
+    if (hasVersionConflict(item, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'item',
+        id: item.id,
+        expectedVersion,
+        actualVersion: item.version,
+        userId: user.id,
+      })
+      return response.conflict({
+        ...(await serialize(ItemTransformer.transform(item))),
+        conflict: true,
+      })
+    }
+
+    const siblings = await Item.query()
+      .where('listId', list.id)
+      .whereNull('deletedAt')
+      .whereNot('id', item.id)
+      .orderBy('sortOrder', 'asc')
+
+    let precedingIndex = -1
+    if (previousItemId !== undefined && previousItemId !== null) {
+      precedingIndex = siblings.findIndex((sibling) => sibling.id === previousItemId)
+      if (precedingIndex === -1) {
+        return response.badRequest({
+          message: 'previousItemId must reference a different active item in this list',
+        })
+      }
+    }
+
+    item.sortOrder = computeMidpointSortOrder(
+      siblings[precedingIndex]?.sortOrder,
+      siblings[precedingIndex + 1]?.sortOrder
+    )
+    item.version += 1
+    await item.save()
+
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'item',
+      entityId: item.id,
+      op: 'update',
+      version: item.version,
+    })
+
+    return serialize(ItemTransformer.transform(item))
+  }
+
   async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
@@ -374,19 +494,34 @@ export default class ItemsController {
       .whereNotNull('deletedAt')
       .firstOrFail()
 
-    item.deletedAt = null
-    item.sortOrder = await nextSortOrder(list.id)
-    item.version += 1
-    await item.save()
+    await restoreItemRow(list, item)
+
+    return serialize(ItemTransformer.transform(item))
+  }
+
+  /** Hard-deletes an already-soft-deleted row — the "Recently Deleted" page's permanent-delete
+   * action, for a test item or typo that shouldn't be kept around waiting to be restored. Only
+   * reachable for a row that's already soft-deleted, so an active item can't be purged without
+   * going through `destroy` first. */
+  async purge({ auth, params, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
+    const item = await Item.query()
+      .where('id', params.itemId)
+      .where('listId', list.id)
+      .whereNotNull('deletedAt')
+      .firstOrFail()
+
+    const itemId = item.id
+    await item.delete()
 
     await broadcastSync({
       listId: list.id,
       entityType: 'item',
-      entityId: item.id,
-      op: 'create',
-      version: item.version,
+      entityId: itemId,
+      op: 'purge',
     })
 
-    return serialize(ItemTransformer.transform(item))
+    return response.noContent()
   }
 }

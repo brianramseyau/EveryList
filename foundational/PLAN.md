@@ -258,7 +258,7 @@ GitHub Actions pipeline (per PR):
 5. Playwright E2E smoke against the built container.
 6. Merge blocked on any failing step, including coverage falling under 100%.
 
-**Docker publishing** (`.github/workflows/docker-publish.yml`, implemented) targets GHCR (`ghcr.io/brianramseyau/everylist`) and re-runs the same lint/typecheck/coverage-gated test suite as a hard prerequisite (`needs: test`) before ever pushing an image — a tag pushed against an old, broken commit can't slip a bad image out. Two triggers, two tagging behaviors:
+**Docker publishing** (`.github/workflows/docker-publish.yml`, implemented) targets GHCR (`ghcr.io/brianramseyau/everylist`) and does build-and-push only — it does not re-run the test suite. The full gate above runs exactly once, at PR time, and branch protection on `main` enforces it before merge; re-running it again on every push to `main` or every tag would just double the time to deploy for a commit that's already been verified. Tags should be cut from a commit that's already on `main` so this guarantee still holds. Two triggers, two tagging behaviors:
 
 | Trigger | Tags produced | Intent |
 |---|---|---|

@@ -6,7 +6,7 @@
 	import type { ItemDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
-	import { fetchRecentItems, restoreItem } from '$lib/api/items';
+	import { fetchRecentItems, purgeItem, restoreItem } from '$lib/api/items';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
@@ -16,6 +16,8 @@
 	let recentItems = $state<ItemDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+	let confirmingPurgeId = $state<number | null>(null);
+	let purging = $state(false);
 
 	async function loadAll() {
 		loading = true;
@@ -46,6 +48,26 @@
 			void loadAll();
 		}
 	}
+
+	// A plain string built here (vs. an inline `{`...`}` template literal in the markup below)
+	// avoids the Svelte compiler's defensive `?? ''` fallback around multi-part interpolated
+	// text — item.name is never nullish, so that branch would sit permanently uncovered.
+	function purgeConfirmMessage(item: ItemDto): string {
+		return `Permanently delete "${item.name}"? This can't be undone.`;
+	}
+
+	async function confirmPurge(item: ItemDto) {
+		purging = true;
+		try {
+			await purgeItem(listId, item.id);
+			recentItems = recentItems.filter((current) => current.id !== item.id);
+			confirmingPurgeId = null;
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to delete item.';
+		} finally {
+			purging = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -74,17 +96,49 @@
 	{:else}
 		<ul class="flex flex-col gap-2">
 			{#each recentItems as item (item.id)}
-				<li
-					class="flex items-center gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700"
-				>
-					<span>{item.name}</span>
-					<button
-						type="button"
-						class="ml-auto text-sm text-primary-700 underline dark:text-primary-400"
-						onclick={() => restoreRecentItem(item)}
-					>
-						Restore
-					</button>
+				<li class="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+					<div class="flex items-center gap-2">
+						<span>{item.name}</span>
+						<button
+							type="button"
+							class="ml-auto text-sm text-primary-700 underline dark:text-primary-400"
+							onclick={() => restoreRecentItem(item)}
+						>
+							Restore
+						</button>
+						<button
+							type="button"
+							class="text-sm text-red-600 underline dark:text-red-400"
+							onclick={() => (confirmingPurgeId = item.id)}
+						>
+							Delete permanently
+						</button>
+					</div>
+					{#if confirmingPurgeId === item.id}
+						<div
+							class="flex items-center gap-2 rounded-lg border border-red-200 p-2 dark:border-red-900"
+						>
+							<p class="text-sm text-red-600 dark:text-red-400">
+								{purgeConfirmMessage(item)}
+							</p>
+							<button
+								type="button"
+								class="ml-auto shrink-0 text-sm font-medium text-red-600 dark:text-red-400"
+								disabled={purging}
+								onclick={() => confirmPurge(item)}
+							>
+								{purging ? 'Deleting…' : 'Confirm'}
+							</button>
+							<button
+								type="button"
+								class="shrink-0 text-sm text-gray-600 dark:text-gray-400"
+								disabled={purging}
+								onclick={() => (confirmingPurgeId = null)}
+							>
+								Cancel
+							</button>
+						</div>
+					{/if}
 				</li>
 			{/each}
 		</ul>

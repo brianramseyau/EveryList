@@ -192,7 +192,7 @@ export interface AccessTokenCreatedDto extends AccessTokenDto {
 export interface SyncEventDto {
   entityType: 'list' | 'category' | 'item' | 'favorite_item' | 'store' | 'store_category_order'
   entityId: number
-  op: 'create' | 'update' | 'delete'
+  op: 'create' | 'update' | 'delete' | 'purge'
   payload: Record<string, unknown> | null
   version: number | null
 }

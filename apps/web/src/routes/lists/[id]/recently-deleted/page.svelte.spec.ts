@@ -8,10 +8,14 @@ import { ApiError } from '$lib/api/client';
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn() }));
-vi.mock('$lib/api/items', () => ({ fetchRecentItems: vi.fn(), restoreItem: vi.fn() }));
+vi.mock('$lib/api/items', () => ({
+	fetchRecentItems: vi.fn(),
+	restoreItem: vi.fn(),
+	purgeItem: vi.fn()
+}));
 
 const { fetchList } = await import('$lib/api/lists');
-const { fetchRecentItems, restoreItem } = await import('$lib/api/items');
+const { fetchRecentItems, restoreItem, purgeItem } = await import('$lib/api/items');
 const { goto } = await import('$app/navigation');
 const RecentlyDeletedPage = (await import('./+page.svelte')).default;
 
@@ -139,5 +143,73 @@ describe('Recently Deleted +page.svelte', () => {
 
 		await expect.poll(() => vi.mocked(fetchRecentItems).mock.calls.length).toBe(2);
 		await expect.element(page.getByText('Eggs')).toBeInTheDocument();
+	});
+
+	it('asks for confirmation before permanently deleting an item, and cancel backs out without purging', async () => {
+		vi.mocked(fetchRecentItems).mockResolvedValue([makeItem({ id: 300, name: 'Eggs' })]);
+
+		render(RecentlyDeletedPage);
+		await expect.element(page.getByText('Eggs')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Delete permanently' }).click();
+		await expect
+			.element(page.getByText('Permanently delete "Eggs"? This can\'t be undone.'))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+		expect(purgeItem).not.toHaveBeenCalled();
+		await expect
+			.element(page.getByText('Permanently delete "Eggs"? This can\'t be undone.'))
+			.not.toBeInTheDocument();
+		await expect.element(page.getByText('Eggs')).toBeInTheDocument();
+	});
+
+	it('permanently deletes an item after confirming, showing a pending state while in flight', async () => {
+		vi.mocked(fetchRecentItems).mockResolvedValue([makeItem({ id: 300, name: 'Eggs' })]);
+		let resolvePurge!: () => void;
+		vi.mocked(purgeItem).mockReturnValue(
+			new Promise((resolve) => {
+				resolvePurge = () => resolve(undefined);
+			})
+		);
+
+		render(RecentlyDeletedPage);
+		await expect.element(page.getByText('Eggs')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Delete permanently' }).click();
+		await page.getByRole('button', { name: 'Confirm' }).click();
+
+		expect(purgeItem).toHaveBeenCalledWith(1, 300);
+		await expect.element(page.getByRole('button', { name: 'Deleting…' })).toBeInTheDocument();
+
+		resolvePurge();
+		await expect.element(page.getByText('Nothing recently deleted.')).toBeInTheDocument();
+	});
+
+	it('shows an error and keeps the confirm panel open when purging fails', async () => {
+		vi.mocked(fetchRecentItems).mockResolvedValue([makeItem({ id: 300, name: 'Eggs' })]);
+		vi.mocked(purgeItem).mockRejectedValue(new ApiError(500, 'Could not delete'));
+
+		render(RecentlyDeletedPage);
+		await expect.element(page.getByText('Eggs')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Delete permanently' }).click();
+		await page.getByRole('button', { name: 'Confirm' }).click();
+
+		await expect.element(page.getByText('Could not delete')).toBeInTheDocument();
+		await expect.element(page.getByText('Eggs', { exact: true })).toBeInTheDocument();
+	});
+
+	it('shows a generic error when purging fails without an ApiError', async () => {
+		vi.mocked(fetchRecentItems).mockResolvedValue([makeItem({ id: 300, name: 'Eggs' })]);
+		vi.mocked(purgeItem).mockRejectedValue(new TypeError('network down'));
+
+		render(RecentlyDeletedPage);
+		await expect.element(page.getByText('Eggs')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Delete permanently' }).click();
+		await page.getByRole('button', { name: 'Confirm' }).click();
+
+		await expect.element(page.getByText('Failed to delete item.')).toBeInTheDocument();
 	});
 });

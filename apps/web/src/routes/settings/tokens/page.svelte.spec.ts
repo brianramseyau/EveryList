@@ -9,11 +9,12 @@ vi.mock('$lib/api/lists', () => ({ fetchLists: vi.fn() }));
 vi.mock('$lib/api/tokens', () => ({
 	fetchTokens: vi.fn(),
 	createToken: vi.fn(),
-	revokeToken: vi.fn()
+	revokeToken: vi.fn(),
+	updateToken: vi.fn()
 }));
 
 const { fetchLists } = await import('$lib/api/lists');
-const { fetchTokens, createToken, revokeToken } = await import('$lib/api/tokens');
+const { fetchTokens, createToken, revokeToken, updateToken } = await import('$lib/api/tokens');
 const { goto } = await import('$app/navigation');
 const TokensPage = (await import('./+page.svelte')).default;
 
@@ -44,7 +45,7 @@ function list(
 function token(
 	overrides: Partial<{
 		id: number;
-		name: string;
+		name: string | null;
 		grants: { listId: number; role: 'editor' | 'viewer' }[];
 	}>
 ) {
@@ -318,5 +319,122 @@ describe('Access Tokens +page.svelte', () => {
 
 		await expect.element(page.getByText('Could not revoke token')).toBeInTheDocument();
 		resolveReload!([existing]);
+	});
+
+	it('opens the edit panel pre-filled with the token`s current lists and role', async () => {
+		vi.mocked(fetchLists).mockResolvedValue([
+			list({ id: 1, name: 'Groceries' }),
+			list({ id: 2, name: 'Hardware Store' })
+		]);
+		vi.mocked(fetchTokens).mockResolvedValue([
+			token({ id: 5, name: 'Home Assistant', grants: [{ listId: 1, role: 'viewer' }] })
+		]);
+
+		render(TokensPage);
+		await page.getByRole('button', { name: 'Edit' }).click();
+
+		await expect.element(page.getByRole('checkbox', { name: 'Groceries' }).nth(1)).toBeChecked();
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Hardware Store' }).nth(1))
+			.not.toBeChecked();
+		await expect.element(page.getByRole('combobox', { name: 'Role' }).nth(1)).toHaveValue('viewer');
+	});
+
+	it('falls back to editor when a token has no grants at all', async () => {
+		vi.mocked(fetchTokens).mockResolvedValue([token({ id: 5, grants: [] })]);
+
+		render(TokensPage);
+		await page.getByRole('button', { name: 'Edit' }).click();
+
+		await expect.element(page.getByRole('combobox', { name: 'Role' }).nth(1)).toHaveValue('editor');
+	});
+
+	it('cancels editing without saving', async () => {
+		vi.mocked(fetchTokens).mockResolvedValue([token({ id: 5, name: 'Home Assistant' })]);
+
+		render(TokensPage);
+		await page.getByRole('button', { name: 'Edit' }).click();
+		await expect.element(page.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		await expect.element(page.getByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+		expect(updateToken).not.toHaveBeenCalled();
+	});
+
+	it('saves an edited token`s lists and role, leaving other tokens untouched', async () => {
+		vi.mocked(fetchLists).mockResolvedValue([
+			list({ id: 1, name: 'Groceries' }),
+			list({ id: 2, name: 'Hardware Store' })
+		]);
+		vi.mocked(fetchTokens).mockResolvedValue([
+			token({ id: 5, name: 'Home Assistant', grants: [{ listId: 1, role: 'editor' }] }),
+			token({ id: 6, name: 'Alexa', grants: [{ listId: 2, role: 'viewer' }] })
+		]);
+		vi.mocked(updateToken).mockResolvedValue(
+			token({
+				id: 5,
+				name: 'Home Assistant',
+				grants: [{ listId: 2, role: 'viewer' }]
+			})
+		);
+
+		render(TokensPage);
+		await page.getByRole('button', { name: 'Edit' }).nth(0).click();
+		await page.getByRole('checkbox', { name: 'Groceries' }).nth(1).click();
+		await page.getByRole('checkbox', { name: 'Hardware Store' }).nth(1).click();
+		await page.getByRole('combobox', { name: 'Role' }).nth(1).selectOptions('viewer');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateToken).toHaveBeenCalledWith(5, [2], 'viewer', 'Home Assistant');
+		// Both the just-edited token and the untouched second token now show this
+		// grant text — proves the edit didn't clobber the other list entry.
+		await expect.poll(() => page.getByText('Hardware Store (viewer)').elements().length).toBe(2);
+		await expect.element(page.getByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+	});
+
+	it('shows the ApiError message when saving an edited token fails', async () => {
+		vi.mocked(fetchTokens).mockResolvedValue([token({ id: 5, name: 'Home Assistant' })]);
+		vi.mocked(updateToken).mockRejectedValue(new ApiError(403, 'Not an owner'));
+
+		render(TokensPage);
+		await page.getByRole('button', { name: 'Edit' }).click();
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect.element(page.getByText('Not an owner')).toBeInTheDocument();
+	});
+
+	it('shows a generic error message when saving an edited token fails without an ApiError', async () => {
+		vi.mocked(fetchTokens).mockResolvedValue([token({ id: 5, name: 'Home Assistant' })]);
+		vi.mocked(updateToken).mockRejectedValue(new TypeError('network down'));
+
+		render(TokensPage);
+		await page.getByRole('button', { name: 'Edit' }).click();
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect.element(page.getByText('Failed to update token.')).toBeInTheDocument();
+	});
+
+	it('omits the name from the update payload when the token has none', async () => {
+		vi.mocked(fetchTokens).mockResolvedValue([token({ id: 5, name: null })]);
+		vi.mocked(updateToken).mockResolvedValue(token({ id: 5, name: null }));
+
+		render(TokensPage);
+		await page.getByRole('button', { name: 'Edit' }).click();
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateToken).toHaveBeenCalledWith(5, [1], 'editor', undefined);
+	});
+
+	it('disables Save once every list is unchecked', async () => {
+		vi.mocked(fetchTokens).mockResolvedValue([token({ id: 5, name: 'Home Assistant' })]);
+
+		render(TokensPage);
+		await page.getByRole('button', { name: 'Edit' }).click();
+		await expect.element(page.getByRole('button', { name: 'Save' })).not.toBeDisabled();
+
+		await page.getByRole('checkbox', { name: 'Groceries' }).nth(1).click();
+
+		await expect.element(page.getByRole('button', { name: 'Save' })).toBeDisabled();
 	});
 });

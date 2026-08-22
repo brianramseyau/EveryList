@@ -56,6 +56,7 @@ vi.mock('$lib/offline/flush', () => ({
 	onFlushOutcome: vi.fn(() => vi.fn())
 }));
 vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
+vi.mock('$lib/open-external-link', () => ({ openExternalLink: vi.fn() }));
 
 const { fetchList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
@@ -66,6 +67,7 @@ const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores')
 const { getSelectedStoreSettings } = await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
 const { refreshBadgeCount } = await import('$lib/pwa/badge');
+const { openExternalLink } = await import('$lib/open-external-link');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { onConflict, onFlushOutcome } = await import('$lib/offline/flush');
 const { goto } = await import('$app/navigation');
@@ -695,6 +697,54 @@ describe('List detail +page.svelte', () => {
 		expect(breadRow.textContent).not.toContain('Corner Shop');
 	});
 
+	it('shows a note on its own line under the item, and none for an item without one', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, notes: 'get the ripe ones' }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10, notes: null })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('get the ripe ones')).toBeInTheDocument();
+		const breadRow = page.getByText('Bread').element().closest('li') as HTMLElement;
+		expect(breadRow.textContent).not.toContain('get the ripe ones');
+	});
+
+	it("renders a URL inside a note as a clickable link, leaving the rest of the note's text and spacing intact", async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({
+				id: 100,
+				name: 'Bananas',
+				categoryId: 10,
+				notes: 'see https://example.com/recipe for the recipe'
+			})
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Bananas', { exact: true })).toBeInTheDocument();
+		const bananasRow = page
+			.getByText('Bananas', { exact: true })
+			.element()
+			.closest('li') as HTMLElement;
+		const noteEl = bananasRow.querySelector('p') as HTMLElement;
+		expect(noteEl.textContent).toBe('see https://example.com/recipe for the recipe');
+
+		const link = page.getByRole('link', { name: 'https://example.com/recipe' });
+		expect(link.element().getAttribute('href')).toBe('https://example.com/recipe');
+		expect(link.element().getAttribute('target')).toBe('_blank');
+
+		await link.click();
+
+		expect(openExternalLink).toHaveBeenCalledWith(
+			'https://example.com/recipe',
+			expect.any(MouseEvent)
+		);
+		// Clicking the link must not be misread as a tap on the row itself.
+		expect(updateItem).not.toHaveBeenCalled();
+		expect(deleteItem).not.toHaveBeenCalled();
+	});
+
 	it("colors the header's store icon to match the currently selected store", async () => {
 		const store = {
 			id: 20,
@@ -957,10 +1007,10 @@ describe('List detail +page.svelte', () => {
 	});
 
 	it('reloads the list when toggling checked fails without an ApiError', async () => {
-		// toggleChecked's catch sets `error` and immediately triggers a reload
-		// via loadAll(), which flips `loading` back to true in the same tick —
-		// the page collapses to its "Loading…" state before the error message
-		// ever paints, so what's observable here is the reload itself.
+		// toggleChecked's catch sets `error` and immediately triggers a reload via
+		// loadAll(), whose own successful completion clears `error` back to null —
+		// so the message set here is never the visible end state; what's
+		// observable is the reload itself.
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
 		]);
@@ -1347,9 +1397,9 @@ describe('List detail +page.svelte', () => {
 	});
 
 	it('reloads the list when reordering an item fails without an ApiError', async () => {
-		// reordering's catch, like toggleChecked's, sets `error` and then
-		// reloads — the reload's `loading = true` collapses the page before
-		// the message paints, so the observable effect is the reload itself.
+		// reordering's catch, like toggleChecked's, sets `error` and then reloads
+		// — loadAll()'s own successful completion clears `error` back to null, so
+		// the observable effect is the reload itself.
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
 			makeItem({ id: 101, name: 'Bread', categoryId: 10 })
@@ -1380,9 +1430,9 @@ describe('List detail +page.svelte', () => {
 	});
 
 	it('reloads the list when removing an item fails without an ApiError', async () => {
-		// removeItem's catch, like toggleChecked's, sets `error` and then
-		// reloads — the reload's `loading = true` collapses the page before
-		// the message paints, so the observable effect is the reload itself.
+		// removeItem's catch, like toggleChecked's, sets `error` and then reloads
+		// — loadAll()'s own successful completion clears `error` back to null, so
+		// the observable effect is the reload itself.
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
 		]);
@@ -1519,6 +1569,31 @@ describe('List detail +page.svelte', () => {
 		// The "This list was updated" toast was removed (PHASE14_PLAN.md) — the
 		// event now drives a silent re-load of the list.
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
+	});
+
+	it('keeps the item list mounted (no scroll-resetting remount) across a realtime refresh', async () => {
+		let handler: (event: SyncEventDto) => void = () => {};
+		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
+			handler = onEvent;
+			return vi.fn();
+		});
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		const rowBefore = page.getByText('Bananas').element();
+
+		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null, version: 1 });
+		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
+
+		// loadAll() only shows the "Loading…" placeholder — which tears down and
+		// rebuilds the whole keyed item list, resetting scroll — before `list`
+		// exists. A silent background refresh must reuse the same DOM node
+		// instead, so an already-mounted row's element identity survives it.
+		await expect.element(page.getByText('Loading…')).not.toBeInTheDocument();
+		expect(page.getByText('Bananas').element()).toBe(rowBefore);
 	});
 
 	it('suppresses the refresh for an entity this client just mutated', async () => {
