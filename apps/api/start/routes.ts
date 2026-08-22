@@ -137,6 +137,7 @@ router
       .group(() => {
         router.get('/', [controllers.PersonalAccessTokens, 'index'])
         router.post('/', [controllers.PersonalAccessTokens, 'store'])
+        router.patch(':tokenId', [controllers.PersonalAccessTokens, 'update'])
         router.delete(':tokenId', [controllers.PersonalAccessTokens, 'destroy'])
       })
       .prefix('tokens')

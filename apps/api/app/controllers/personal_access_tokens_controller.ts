@@ -1,6 +1,10 @@
 import User from '#models/user'
 import ListPolicy from '#policies/list_policy'
-import { createPersonalAccessTokenValidator } from '#validators/personal_access_token'
+import {
+  createPersonalAccessTokenValidator,
+  updatePersonalAccessTokenValidator,
+} from '#validators/personal_access_token'
+import db from '@adonisjs/lucid/services/db'
 import type { HttpContext } from '@adonisjs/core/http'
 import PersonalAccessTokenTransformer, {
   type PersonalAccessTokenView,
@@ -71,6 +75,43 @@ export default class PersonalAccessTokensController {
   async me({ auth, response }: HttpContext) {
     const user = auth.getUserOrFail()
     return response.ok({ data: toView(user.currentAccessToken!) })
+  }
+
+  /**
+   * Replaces a token's grants (and optionally its name) in place, preserving
+   * its id/hash so integrations holding the plaintext value don't need to
+   * re-mint — DbAccessTokensProvider only exposes create/find/delete, so this
+   * writes the `abilities` column directly rather than going through it.
+   */
+  async update({ auth, params, request, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const existing = await User.personalAccessTokens.find(user, params.tokenId)
+    if (!existing) {
+      return response.notFound({ message: 'Token not found' })
+    }
+
+    const payload = await request.validateUsing(updatePersonalAccessTokenValidator)
+    const listIds = [...new Set(payload.listIds)]
+
+    const lists = await Promise.all(
+      listIds.map((listId) => ListPolicy.requireList(user, listId, 'owner'))
+    )
+
+    const abilities = lists.map((list) => `list:${list.id}:${payload.role}`)
+
+    await db
+      .from('auth_access_tokens')
+      .where('id', params.tokenId)
+      .where('tokenable_id', user.id)
+      .where('type', 'pat')
+      .update({
+        name: payload.name ?? existing.name,
+        abilities: JSON.stringify(abilities),
+        updated_at: new Date(),
+      })
+
+    const updated = await User.personalAccessTokens.find(user, params.tokenId)
+    return response.ok({ data: toView(updated!) })
   }
 
   async destroy({ auth, params, response }: HttpContext) {
