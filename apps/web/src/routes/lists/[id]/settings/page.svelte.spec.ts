@@ -382,14 +382,12 @@ describe('List settings +page.svelte', () => {
 		expect(updateList).not.toHaveBeenCalled();
 	});
 
-	it('prints the list via window.print', async () => {
-		const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
+	it('navigates to the list to print it, rather than printing the settings page', async () => {
 		render(SettingsPage);
 
 		await page.getByRole('button', { name: 'Print list' }).click();
 
-		expect(printSpy).toHaveBeenCalled();
-		printSpy.mockRestore();
+		expect(goto).toHaveBeenCalledWith('/lists/1?print=1');
 	});
 
 	it('sends an email export and shows a success message', async () => {

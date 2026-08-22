@@ -233,7 +233,17 @@
 		}
 		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		showChecked = getShowChecked(listId);
-		void loadAll();
+		void loadAll().then(() => {
+			if (new URLSearchParams(window.location.search).get('print') === '1') {
+				window.print();
+				const url = new URL(window.location.href);
+				url.searchParams.delete('print');
+				// Stripping a query param off this same page's own URL, not
+				// statically verifiable by the lint rule below.
+				// eslint-disable-next-line svelte/no-navigation-without-resolve
+				void goto(url, { replaceState: true, noScroll: true, keepFocus: true });
+			}
+		});
 		unsubscribeRealtime = subscribeToList(listId, (event) => {
 			// Our own edit's broadcast (sent right after the flush clears `_dirty`)
 			// is suppressed — the optimistic update already reflects it, so

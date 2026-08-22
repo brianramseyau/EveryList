@@ -153,6 +153,10 @@ Full architecture, scope decisions, and the AnyList feature-by-feature decision 
 
 Every instance — including your own self-hosted one — serves its full API reference at `/docs` (a [Scalar](https://scalar.com) UI, vendored so it works offline with no CDN calls), backed by the raw OpenAPI 3.1 document at `/openapi`. Both are unauthenticated. Generated from the Tuyau route registry, so it's always in sync with the actual API.
 
+## Known issues
+
+- **Auth token rehydration race:** deep-linking straight to a route that needs auth (e.g. `/lists/[id]/recently-deleted`) can fire a couple of API calls (`/api/v1/lists`, `/api/v1/folders`) before the bearer token has rehydrated from `localStorage`, causing brief 401s in the console. Not user-visible (the calls that matter retry/succeed once the token is ready), but worth fixing at the root — likely by gating those early fetches on token rehydration completing.
+
 ## Contributing
 
 This is a personal project built against [`foundational/PLAN.md`](foundational/PLAN.md) as the single source of truth — any deviation during implementation should be reflected back into that document first. Issues and PRs are welcome.

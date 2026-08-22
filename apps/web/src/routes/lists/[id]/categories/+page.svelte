@@ -208,10 +208,11 @@
 						<button
 							type="button"
 							data-reorder-ignore
-							class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+							aria-label="Delete category"
+							class="text-gray-400 hover:text-red-600 dark:hover:text-red-400"
 							onclick={() => removeCategory(category)}
 						>
-							Delete
+							<Icon name="delete" class="h-5 w-5" />
 						</button>
 					{/if}
 				</li>

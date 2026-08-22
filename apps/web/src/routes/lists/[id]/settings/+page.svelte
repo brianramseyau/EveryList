@@ -82,7 +82,13 @@
 	}
 
 	function printList() {
-		window.print();
+		// window.print() on this page would print the settings form itself — the
+		// list-detail route is the one with print:hidden styling that hides its
+		// chrome and prints just the items, so send the browser there first.
+		// The `?print=1` suffix is appended to this app's own resolve() output,
+		// not statically verifiable by the lint rule below.
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(`${resolve('/lists/[id]', { id: String(listId) })}?print=1`);
 	}
 
 	async function sendEmailExport(event: SubmitEvent) {
@@ -268,14 +274,6 @@
 		<button
 			type="button"
 			class="rounded-lg border border-gray-200 px-3 py-3 text-left text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-			onclick={() => toggleArchived(list!)}
-		>
-			{list.archived ? 'Unarchive list' : 'Archive list'}
-		</button>
-
-		<button
-			type="button"
-			class="rounded-lg border border-gray-200 px-3 py-3 text-left text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
 			onclick={() => toggleBadgeExcluded(list!)}
 		>
 			{list.badgeExcluded ? 'Include in badge count' : 'Exclude from badge count'}
@@ -374,6 +372,16 @@
 				Email export…
 			</button>
 		{/if}
+
+		<hr class="border-gray-200 dark:border-gray-700" />
+
+		<button
+			type="button"
+			class="rounded-lg border border-orange-200 px-3 py-3 text-left text-orange-600 hover:bg-orange-50 dark:border-orange-900 dark:text-orange-400 dark:hover:bg-orange-950"
+			onclick={() => toggleArchived(list!)}
+		>
+			{list.archived ? 'Unarchive list' : 'Archive list'}
+		</button>
 
 		{#if confirmingDelete}
 			<div class="flex flex-col gap-2 rounded-lg border border-red-200 p-3 dark:border-red-900">
