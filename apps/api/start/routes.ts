@@ -97,6 +97,7 @@ router
         router.post(':listId/items', [controllers.Items, 'store'])
         router.post(':listId/items/import', [controllers.Items, 'import'])
         router.patch(':listId/items/:itemId', [controllers.Items, 'update'])
+        router.patch(':listId/items/:itemId/move', [controllers.Items, 'move'])
         router.delete(':listId/items/:itemId', [controllers.Items, 'destroy'])
         router.post(':listId/items/:itemId/restore', [controllers.Items, 'restore'])
         router.delete(':listId/items/:itemId/purge', [controllers.Items, 'purge'])

@@ -240,6 +240,17 @@ export async function updateItem(
 	});
 }
 
+/** Repositions a single item to just after `previousItemId` (or the front of the list if
+ * omitted/null) — the server-side counterpart to `handleItemDrop`'s local reordering, and what
+ * the Home Assistant integration's `MOVE_TODO_ITEM` support calls (PHASE16_PLAN.md). */
+export function moveItem(
+	listId: number,
+	itemId: number,
+	previousItemId: number | null
+): Promise<ItemDto> {
+	return apiPatch(`/api/v1/lists/${listId}/items/${itemId}/move`, { previousItemId });
+}
+
 export async function deleteItem(listId: number, itemId: number): Promise<void> {
 	await offlineMutate<void>({
 		entityType: 'item',

@@ -24,3 +24,10 @@ export const updateItemValidator = vine.create({
 export const importItemsValidator = vine.create({
   text: vine.string().trim().minLength(1).maxLength(20_000),
 })
+
+export const moveItemValidator = vine.create({
+  // The item this one should be placed immediately after — omitted/null moves it to the front
+  // of the list. See ItemsController#move.
+  previousItemId: vine.number().positive().nullable().optional(),
+  expectedVersion: vine.number().optional(),
+})

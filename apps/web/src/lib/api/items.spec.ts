@@ -22,6 +22,7 @@ const {
 	fetchRecentItemNames,
 	fetchRecentItems,
 	importItems,
+	moveItem,
 	purgeItem,
 	restoreItem,
 	updateItem
@@ -47,6 +48,20 @@ describe('items api', () => {
 	it('purgeItem DELETEs the purge endpoint', () => {
 		purgeItem(1, 100);
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/100/purge');
+	});
+
+	it('moveItem PATCHes the move endpoint with the target previousItemId', () => {
+		moveItem(1, 100, 42);
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/items/100/move', {
+			previousItemId: 42
+		});
+	});
+
+	it('moveItem PATCHes null to move an item to the front', () => {
+		moveItem(1, 100, null);
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/items/100/move', {
+			previousItemId: null
+		});
 	});
 
 	it('createItem POSTs the input', () => {

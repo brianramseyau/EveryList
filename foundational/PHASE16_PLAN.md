@@ -242,6 +242,13 @@ integration code, not as an afterthought once tests already exist.
   honoring the existing `expectedVersion`/409-conflict pattern (`hasVersionConflict`/
   `response.conflict()` in `items_controller.ts`) — on a 409, refetch and retry once rather
   than surfacing a raw error to Voice Assist.
+- `async_move_todo_item` (backs `MOVE_TODO_ITEM`) → `PATCH .../items/:itemId/move` with
+  `{ previousItemId }` (HA's `previous_uid`; omit/null for "move to the front of the list").
+  This is a dedicated single-item positional-move endpoint, not the `order: number[]`
+  full-reorder shape the folders/lists/categories `/reorder` endpoints use — items use
+  fractional-indexed `sortOrder` (see `apps/web/src/lib/item-sort-order.ts`) specifically so a
+  move only ever touches the one moved row, and a bulk renumber-everything endpoint would
+  reintroduce the version-bump fan-out that design avoids.
 - Realtime: subscribe to `list/{listId}` via Transmit's `__transmit/subscribe`
   (`apps/api/start/transmit.ts`) so the entity reflects changes made elsewhere without
   polling; fall back to a periodic poll as a safety net if the SSE connection drops.

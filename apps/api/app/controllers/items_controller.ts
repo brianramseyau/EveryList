@@ -2,7 +2,12 @@ import type List from '#models/list'
 import Item from '#models/item'
 import Category from '#models/category'
 import ListPolicy from '#policies/list_policy'
-import { createItemValidator, updateItemValidator, importItemsValidator } from '#validators/item'
+import {
+  createItemValidator,
+  updateItemValidator,
+  importItemsValidator,
+  moveItemValidator,
+} from '#validators/item'
 import type { HttpContext } from '@adonisjs/core/http'
 import ItemTransformer from '#transformers/item_transformer'
 import { suggestCategoryId } from '#services/category_suggestion_service'
@@ -72,6 +77,22 @@ async function nextSortOrder(listId: number): Promise<number> {
     .max('sort_order as maxSortOrder')
     .first()
   return Number(result?.$extras.maxSortOrder ?? -1) + 1
+}
+
+// Mirrors apps/web/src/lib/item-sort-order.ts's computeMidpointSortOrder exactly: only the
+// moved item's own sortOrder ever changes, to a value strictly between its new neighbors'
+// *existing* sortOrder values (fractional indexing) — never a shared/derived index. No other
+// row is touched, so there's nothing to collide with and no fan-out of version bumps to other
+// items (this app's offline sync queue does per-row optimistic-locking on `version`, so
+// touching every sibling on every move would risk spurious conflicts for concurrent edits on
+// other devices). Kept in sync with the frontend's copy rather than shared, since one is
+// TypeScript-in-a-Node-service and the other TypeScript-in-a-Vite-bundle with no shared runtime
+// package between them for a five-line pure function.
+function computeMidpointSortOrder(before: number | undefined, after: number | undefined): number {
+  if (before === undefined && after === undefined) return 0
+  if (before === undefined) return after! - 1
+  if (after === undefined) return before + 1
+  return (before + after) / 2
 }
 
 /** Clears `deletedAt` on an existing row (vs. creating a fresh one) so its category/store/price/
@@ -346,6 +367,71 @@ export default class ItemsController {
       item.checked = checked
       item.checkedAt = checked ? DateTime.now() : null
     }
+    item.version += 1
+    await item.save()
+
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'item',
+      entityId: item.id,
+      op: 'update',
+      version: item.version,
+    })
+
+    return serialize(ItemTransformer.transform(item))
+  }
+
+  /** Repositions a single item within the list — one item, one neighbor reference, one row
+   * touched (see computeMidpointSortOrder above). Mirrors the drag-and-drop UI's
+   * `handleItemDrop`, and matches Home Assistant's `todo.move_item` service (`item` +
+   * `previous_uid`) closely enough to back it directly, unlike the folders/lists/categories
+   * `reorder` endpoints, which take a full `order: number[]` and renumber every row — a shape
+   * that doesn't fit items' fractional-indexing design. */
+  async move({ auth, params, request, response, serialize, logger }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
+    const item = await Item.query()
+      .where('id', params.itemId)
+      .where('listId', list.id)
+      .whereNull('deletedAt')
+      .firstOrFail()
+
+    const { previousItemId, expectedVersion } = await request.validateUsing(moveItemValidator)
+
+    if (hasVersionConflict(item, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'item',
+        id: item.id,
+        expectedVersion,
+        actualVersion: item.version,
+        userId: user.id,
+      })
+      return response.conflict({
+        ...(await serialize(ItemTransformer.transform(item))),
+        conflict: true,
+      })
+    }
+
+    const siblings = await Item.query()
+      .where('listId', list.id)
+      .whereNull('deletedAt')
+      .whereNot('id', item.id)
+      .orderBy('sortOrder', 'asc')
+
+    let precedingIndex = -1
+    if (previousItemId !== undefined && previousItemId !== null) {
+      precedingIndex = siblings.findIndex((sibling) => sibling.id === previousItemId)
+      if (precedingIndex === -1) {
+        return response.badRequest({
+          message: 'previousItemId must reference a different active item in this list',
+        })
+      }
+    }
+
+    item.sortOrder = computeMidpointSortOrder(
+      siblings[precedingIndex]?.sortOrder,
+      siblings[precedingIndex + 1]?.sortOrder
+    )
     item.version += 1
     await item.save()
 
