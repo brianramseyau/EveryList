@@ -9,6 +9,7 @@
 	import { fetchRecentItems, purgeItem, restoreItem } from '$lib/api/items';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -101,16 +102,18 @@
 						<span>{item.name}</span>
 						<button
 							type="button"
-							class="ml-auto text-sm text-primary-700 underline dark:text-primary-400"
+							class="ml-auto flex items-center gap-1 text-sm text-primary-700 underline dark:text-primary-400"
 							onclick={() => restoreRecentItem(item)}
 						>
+							<Icon name="restore" class="h-4 w-4" />
 							Restore
 						</button>
 						<button
 							type="button"
-							class="text-sm text-red-600 underline dark:text-red-400"
+							class="flex items-center gap-1 text-sm text-red-600 underline dark:text-red-400"
 							onclick={() => (confirmingPurgeId = item.id)}
 						>
+							<Icon name="deleteForever" class="h-4 w-4" />
 							Delete permanently
 						</button>
 					</div>
