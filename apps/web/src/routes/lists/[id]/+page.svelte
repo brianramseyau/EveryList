@@ -234,7 +234,7 @@
 		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		showChecked = getShowChecked(listId);
 		void loadAll().then(() => {
-			if (page.url.searchParams.get('print') === '1') {
+			if (new URLSearchParams(window.location.search).get('print') === '1') {
 				window.print();
 				const url = new URL(window.location.href);
 				url.searchParams.delete('print');

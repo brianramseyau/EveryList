@@ -157,6 +157,7 @@ describe('List detail +page.svelte', () => {
 		clearToken();
 		window.sessionStorage.clear();
 		window.localStorage.clear();
+		window.history.replaceState(null, '', '/');
 		resetSelfMutationsForTesting();
 		await resetDbForTesting();
 	});
@@ -183,6 +184,19 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 
 		await expect.element(page.getByText('List not found')).toBeInTheDocument();
+	});
+
+	it('prints and strips the ?print=1 param when arriving from the settings page print button', async () => {
+		window.history.pushState(null, '', '/lists/1?print=1');
+		const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
+
+		render(ListDetailPage);
+
+		await expect.poll(() => printSpy.mock.calls.length).toBe(1);
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(vi.mocked(goto).mock.calls[0][0]).toBeInstanceOf(URL);
+		expect((vi.mocked(goto).mock.calls[0][0] as URL).searchParams.has('print')).toBe(false);
+		printSpy.mockRestore();
 	});
 
 	it('applies the store-specific category order when a store is selected', async () => {
