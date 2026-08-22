@@ -22,6 +22,7 @@ const {
 	fetchRecentItemNames,
 	fetchRecentItems,
 	importItems,
+	purgeItem,
 	restoreItem,
 	updateItem
 } = await import('./items');
@@ -41,6 +42,11 @@ describe('items api', () => {
 	it('restoreItem POSTs to the restore endpoint', () => {
 		restoreItem(1, 100);
 		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items/100/restore');
+	});
+
+	it('purgeItem DELETEs the purge endpoint', () => {
+		purgeItem(1, 100);
+		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/100/purge');
 	});
 
 	it('createItem POSTs the input', () => {

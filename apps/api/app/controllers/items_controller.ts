@@ -412,4 +412,30 @@ export default class ItemsController {
 
     return serialize(ItemTransformer.transform(item))
   }
+
+  /** Hard-deletes an already-soft-deleted row — the "Recently Deleted" page's permanent-delete
+   * action, for a test item or typo that shouldn't be kept around waiting to be restored. Only
+   * reachable for a row that's already soft-deleted, so an active item can't be purged without
+   * going through `destroy` first. */
+  async purge({ auth, params, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
+    const item = await Item.query()
+      .where('id', params.itemId)
+      .where('listId', list.id)
+      .whereNotNull('deletedAt')
+      .firstOrFail()
+
+    const itemId = item.id
+    await item.delete()
+
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'item',
+      entityId: itemId,
+      op: 'purge',
+    })
+
+    return response.noContent()
+  }
 }

@@ -60,6 +60,13 @@ export function restoreItem(listId: number, itemId: number): Promise<ItemDto> {
 	return apiPost(`/api/v1/lists/${listId}/items/${itemId}/restore`);
 }
 
+/** Hard-deletes an already soft-deleted row — the "Recently Deleted" page's permanent-delete
+ * action. Not offline-queueable like the other item mutations here: there's no local row to
+ * reconcile against once it's gone, so this requires a live connection. */
+export function purgeItem(listId: number, itemId: number): Promise<void> {
+	return apiDelete(`/api/v1/lists/${listId}/items/${itemId}/purge`);
+}
+
 /** Purely local category guess against the static keyword table and whatever
  * categories are already cached in Dexie for this list — the offline fallback
  * for `fetchCategorySuggestion` below (PHASE7_PLAN.md §3), and mirrors the

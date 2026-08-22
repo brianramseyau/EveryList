@@ -141,6 +141,41 @@ test.group('Items CRUD', (group) => {
     destroy.assertStatus(204)
   })
 
+  test('purge hard-deletes a soft-deleted item, removing it from recent and blocking restore', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const create = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Typo Itme' })
+    )
+    const item = create.body().data
+
+    // Purging an active (not yet soft-deleted) item isn't allowed — it has to go through
+    // `destroy` first, same as `restore` requires a soft-deleted row.
+    const purgeActive = await auth(client.delete(`/api/v1/lists/${listId}/items/${item.id}/purge`))
+    purgeActive.assertStatus(404)
+
+    const destroy = await auth(client.delete(`/api/v1/lists/${listId}/items/${item.id}`))
+    destroy.assertStatus(204)
+
+    const purge = await auth(client.delete(`/api/v1/lists/${listId}/items/${item.id}/purge`))
+    purge.assertStatus(204)
+
+    const recent = await auth(client.get(`/api/v1/lists/${listId}/items/recent`))
+    assert.lengthOf(recent.body().data, 0)
+
+    // The row is really gone, not just re-hidden — restoring it now 404s, and purging it again 404s.
+    const restore = await auth(client.post(`/api/v1/lists/${listId}/items/${item.id}/restore`))
+    restore.assertStatus(404)
+
+    const purgeAgain = await auth(client.delete(`/api/v1/lists/${listId}/items/${item.id}/purge`))
+    purgeAgain.assertStatus(404)
+  })
+
   test('bulk import splits pasted text into items', async ({ client, assert }) => {
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
@@ -464,9 +499,18 @@ TOILETRIES
       .delete(`/api/v1/lists/${listId}/items/${itemId}`)
       .header('Authorization', `Bearer ${viewer.token}`)
     destroy.assertStatus(403)
+
+    await client
+      .delete(`/api/v1/lists/${listId}/items/${itemId}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+
+    const purge = await client
+      .delete(`/api/v1/lists/${listId}/items/${itemId}/purge`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    purge.assertStatus(403)
   })
 
-  test('an editor can create, update, and delete items', async ({ client, assert }) => {
+  test('an editor can create, update, delete, and purge items', async ({ client, assert }) => {
     const owner = await signupAndGetUser(client)
     const listId = await createList(client, owner.token)
     const editor = await signupAndGetUser(client)
@@ -483,6 +527,11 @@ TOILETRIES
       .delete(`/api/v1/lists/${listId}/items/${create.body().data.id}`)
       .header('Authorization', `Bearer ${editor.token}`)
     destroy.assertStatus(204)
+
+    const purge = await client
+      .delete(`/api/v1/lists/${listId}/items/${create.body().data.id}/purge`)
+      .header('Authorization', `Bearer ${editor.token}`)
+    purge.assertStatus(204)
   })
 })
 
