@@ -32,6 +32,23 @@ export class AuthAccessTokenSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class BackupSettingSchema extends BaseModel {
+  static $columns = ['createdAt', 'frequency', 'id', 'retentionCount', 'timeOfDay', 'updatedAt'] as const
+  $columns = BackupSettingSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare frequency: string
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare retentionCount: number
+  @column()
+  declare timeOfDay: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
 export class CategorySchema extends BaseModel {
   static $columns = ['createdAt', 'deletedAt', 'forkedFromId', 'icon', 'id', 'isDefault', 'listId', 'name', 'sortOrder', 'updatedAt', 'version'] as const
   $columns = CategorySchema.$columns

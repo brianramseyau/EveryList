@@ -408,6 +408,24 @@ const routes = {
     tokens: [{"old":"/api/v1/stores/:id/categories","type":0,"val":"api","end":""},{"old":"/api/v1/stores/:id/categories","type":0,"val":"v1","end":""},{"old":"/api/v1/stores/:id/categories","type":0,"val":"stores","end":""},{"old":"/api/v1/stores/:id/categories","type":1,"val":"id","end":""},{"old":"/api/v1/stores/:id/categories","type":0,"val":"categories","end":""}],
     types: placeholder as Registry['stores.stores.reorder_categories']['types'],
   },
+  'backupSettings.backup_settings.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/backup-settings',
+    tokens: [{"old":"/api/v1/backup-settings","type":0,"val":"api","end":""},{"old":"/api/v1/backup-settings","type":0,"val":"v1","end":""},{"old":"/api/v1/backup-settings","type":0,"val":"backup-settings","end":""}],
+    types: placeholder as Registry['backupSettings.backup_settings.show']['types'],
+  },
+  'backupSettings.backup_settings.update': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/backup-settings',
+    tokens: [{"old":"/api/v1/backup-settings","type":0,"val":"api","end":""},{"old":"/api/v1/backup-settings","type":0,"val":"v1","end":""},{"old":"/api/v1/backup-settings","type":0,"val":"backup-settings","end":""}],
+    types: placeholder as Registry['backupSettings.backup_settings.update']['types'],
+  },
+  'backupSettings.backup_settings.run': {
+    methods: ["POST"],
+    pattern: '/api/v1/backup-settings/run',
+    tokens: [{"old":"/api/v1/backup-settings/run","type":0,"val":"api","end":""},{"old":"/api/v1/backup-settings/run","type":0,"val":"v1","end":""},{"old":"/api/v1/backup-settings/run","type":0,"val":"backup-settings","end":""},{"old":"/api/v1/backup-settings/run","type":0,"val":"run","end":""}],
+    types: placeholder as Registry['backupSettings.backup_settings.run']['types'],
+  },
 } as const satisfies Record<string, AdonisEndpoint>
 
 export { routes }

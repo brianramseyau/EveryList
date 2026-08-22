@@ -189,6 +189,37 @@ export interface AccessTokenCreatedDto extends AccessTokenDto {
   token: string
 }
 
+export type BackupFrequency = 'daily' | 'weekly' | 'monthly'
+
+/** `automatic` (taken by the schedule) vs `manual` (an on-demand "back up now") —
+ * kept as fully decoupled processes: a manual backup never affects when the next
+ * scheduled one fires, and retention is counted separately per kind. */
+export type BackupKind = 'automatic' | 'manual'
+
+/** Instance-wide automated backup schedule — one singleton row, shared by everyone
+ * on this self-hosted instance. `timeOfDay` is a 24h "HH:mm" local server time.
+ * `retentionCount` keeps the newest N backups of each kind, not a day window —
+ * see apps/api's backup_service.ts for why a count avoids pruning away the
+ * backup a due-check still needs to compare against. */
+export interface BackupSettingsDto {
+  frequency: BackupFrequency
+  timeOfDay: string
+  retentionCount: number
+}
+
+/** A single backup file on disk under `/config/backups`. */
+export interface BackupFileDto {
+  filename: string
+  kind: BackupKind
+  sizeBytes: number
+  createdAt: string
+}
+
+export interface BackupSettingsStateDto {
+  settings: BackupSettingsDto
+  files: BackupFileDto[]
+}
+
 export interface SyncEventDto {
   entityType: 'list' | 'category' | 'item' | 'favorite_item' | 'store' | 'store_category_order'
   entityId: number

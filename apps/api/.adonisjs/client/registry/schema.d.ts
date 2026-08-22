@@ -811,4 +811,40 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['reorderCategories']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'backupSettings.backup_settings.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/backup-settings'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['show']>>>
+    }
+  }
+  'backupSettings.backup_settings.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/backup-settings'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/backup_setting').updateBackupSettingValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/backup_setting').updateBackupSettingValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'backupSettings.backup_settings.run': {
+    methods: ["POST"]
+    pattern: '/api/v1/backup-settings/run'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['run']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['run']>>>
+    }
+  }
 }
