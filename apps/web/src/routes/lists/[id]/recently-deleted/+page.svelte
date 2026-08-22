@@ -103,7 +103,7 @@
 						<button
 							type="button"
 							aria-label="Restore"
-							class="ml-auto text-primary-700 dark:text-primary-400"
+							class="ml-auto text-gray-400 hover:text-primary-700 dark:hover:text-primary-400"
 							onclick={() => restoreRecentItem(item)}
 						>
 							<Icon name="restore" class="h-5 w-5" />
@@ -111,7 +111,7 @@
 						<button
 							type="button"
 							aria-label="Delete permanently"
-							class="text-red-600 dark:text-red-400"
+							class="text-gray-400 hover:text-red-600 dark:hover:text-red-400"
 							onclick={() => (confirmingPurgeId = item.id)}
 						>
 							<Icon name="deleteForever" class="h-5 w-5" />
