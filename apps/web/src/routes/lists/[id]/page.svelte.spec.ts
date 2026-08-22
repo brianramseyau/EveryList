@@ -957,10 +957,10 @@ describe('List detail +page.svelte', () => {
 	});
 
 	it('reloads the list when toggling checked fails without an ApiError', async () => {
-		// toggleChecked's catch sets `error` and immediately triggers a reload
-		// via loadAll(), which flips `loading` back to true in the same tick —
-		// the page collapses to its "Loading…" state before the error message
-		// ever paints, so what's observable here is the reload itself.
+		// toggleChecked's catch sets `error` and immediately triggers a reload via
+		// loadAll(), whose own successful completion clears `error` back to null —
+		// so the message set here is never the visible end state; what's
+		// observable is the reload itself.
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
 		]);
@@ -1347,9 +1347,9 @@ describe('List detail +page.svelte', () => {
 	});
 
 	it('reloads the list when reordering an item fails without an ApiError', async () => {
-		// reordering's catch, like toggleChecked's, sets `error` and then
-		// reloads — the reload's `loading = true` collapses the page before
-		// the message paints, so the observable effect is the reload itself.
+		// reordering's catch, like toggleChecked's, sets `error` and then reloads
+		// — loadAll()'s own successful completion clears `error` back to null, so
+		// the observable effect is the reload itself.
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
 			makeItem({ id: 101, name: 'Bread', categoryId: 10 })
@@ -1380,9 +1380,9 @@ describe('List detail +page.svelte', () => {
 	});
 
 	it('reloads the list when removing an item fails without an ApiError', async () => {
-		// removeItem's catch, like toggleChecked's, sets `error` and then
-		// reloads — the reload's `loading = true` collapses the page before
-		// the message paints, so the observable effect is the reload itself.
+		// removeItem's catch, like toggleChecked's, sets `error` and then reloads
+		// — loadAll()'s own successful completion clears `error` back to null, so
+		// the observable effect is the reload itself.
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
 		]);
@@ -1519,6 +1519,31 @@ describe('List detail +page.svelte', () => {
 		// The "This list was updated" toast was removed (PHASE14_PLAN.md) — the
 		// event now drives a silent re-load of the list.
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
+	});
+
+	it('keeps the item list mounted (no scroll-resetting remount) across a realtime refresh', async () => {
+		let handler: (event: SyncEventDto) => void = () => {};
+		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
+			handler = onEvent;
+			return vi.fn();
+		});
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		const rowBefore = page.getByText('Bananas').element();
+
+		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null, version: 1 });
+		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
+
+		// loadAll() only shows the "Loading…" placeholder — which tears down and
+		// rebuilds the whole keyed item list, resetting scroll — before `list`
+		// exists. A silent background refresh must reuse the same DOM node
+		// instead, so an already-mounted row's element identity survives it.
+		await expect.element(page.getByText('Loading…')).not.toBeInTheDocument();
+		expect(page.getByText('Bananas').element()).toBe(rowBefore);
 	});
 
 	it('suppresses the refresh for an entity this client just mutated', async () => {

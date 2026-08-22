@@ -192,7 +192,12 @@
 	const progressText = $derived(`${checkedItems.length} of ${visibleItems.length} done`);
 
 	async function loadAll() {
-		loading = true;
+		// Only the very first load (before `list` exists) should show the loading
+		// placeholder — it unmounts the entire keyed item list below, which resets
+		// scroll position. Realtime/conflict/flush-outcome refreshes reuse this same
+		// function while `list` is already populated, and must patch state in place
+		// instead of tearing the DOM down and rebuilding it under the user.
+		if (!list) loading = true;
 		try {
 			[list, categories, items, stores] = await Promise.all([
 				fetchList(listId),
