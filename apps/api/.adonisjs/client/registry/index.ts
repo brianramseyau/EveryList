@@ -336,6 +336,24 @@ const routes = {
     tokens: [{"old":"/api/v1/lists/:listId/invites/:inviteId","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/invites/:inviteId","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/invites/:inviteId","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/invites/:inviteId","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/invites/:inviteId","type":0,"val":"invites","end":""},{"old":"/api/v1/lists/:listId/invites/:inviteId","type":1,"val":"inviteId","end":""}],
     types: placeholder as Registry['lists.list_invites.destroy']['types'],
   },
+  'tokens.personal_access_tokens.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/tokens',
+    tokens: [{"old":"/api/v1/tokens","type":0,"val":"api","end":""},{"old":"/api/v1/tokens","type":0,"val":"v1","end":""},{"old":"/api/v1/tokens","type":0,"val":"tokens","end":""}],
+    types: placeholder as Registry['tokens.personal_access_tokens.index']['types'],
+  },
+  'tokens.personal_access_tokens.store': {
+    methods: ["POST"],
+    pattern: '/api/v1/tokens',
+    tokens: [{"old":"/api/v1/tokens","type":0,"val":"api","end":""},{"old":"/api/v1/tokens","type":0,"val":"v1","end":""},{"old":"/api/v1/tokens","type":0,"val":"tokens","end":""}],
+    types: placeholder as Registry['tokens.personal_access_tokens.store']['types'],
+  },
+  'tokens.personal_access_tokens.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/tokens/:tokenId',
+    tokens: [{"old":"/api/v1/tokens/:tokenId","type":0,"val":"api","end":""},{"old":"/api/v1/tokens/:tokenId","type":0,"val":"v1","end":""},{"old":"/api/v1/tokens/:tokenId","type":0,"val":"tokens","end":""},{"old":"/api/v1/tokens/:tokenId","type":1,"val":"tokenId","end":""}],
+    types: placeholder as Registry['tokens.personal_access_tokens.destroy']['types'],
+  },
   'invite_accept.preview': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/invites/:token',

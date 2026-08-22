@@ -20,7 +20,7 @@ import { DateTime } from 'luxon'
 export default class CategoriesController {
   async index({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
+    const list = await ListPolicy.requireList(user, params.listId, 'viewer')
     const categories = await getEffectiveCategories(list)
 
     return serialize(CategoryTransformer.transform(categories))
@@ -28,7 +28,7 @@ export default class CategoriesController {
 
   async store({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createCategoryValidator)
 
     const maxSortOrder = await Category.query()
@@ -66,7 +66,7 @@ export default class CategoriesController {
    */
   async import({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const { sourceListId, categoryIds } = await request.validateUsing(importCategoriesValidator)
 
     if (sourceListId === list.id) {
@@ -75,7 +75,7 @@ export default class CategoriesController {
       })
     }
 
-    const sourceList = await ListPolicy.requireList(user.id, sourceListId, 'viewer')
+    const sourceList = await ListPolicy.requireList(user, sourceListId, 'viewer')
     const sourceCategories = await getEffectiveCategories(sourceList)
     const requestedIds = categoryIds ? new Set(categoryIds) : null
     const candidates = requestedIds
@@ -121,7 +121,7 @@ export default class CategoriesController {
 
   async update({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const category = await Category.query()
       .where('id', params.categoryId)
       .where('listId', list.id)
@@ -162,7 +162,7 @@ export default class CategoriesController {
 
   async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const category = await Category.query()
       .where('id', params.categoryId)
       .where('listId', list.id)
@@ -201,7 +201,7 @@ export default class CategoriesController {
 
   async reorder({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const { order } = await request.validateUsing(reorderCategoriesValidator)
 
     const categories = await Category.query()

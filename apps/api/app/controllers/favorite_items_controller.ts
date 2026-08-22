@@ -16,7 +16,7 @@ import { DateTime } from 'luxon'
 export default class FavoriteItemsController {
   async index({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
+    const list = await ListPolicy.requireList(user, params.listId, 'viewer')
     const favorites = await FavoriteItem.query()
       .where('listId', list.id)
       .whereNull('deletedAt')
@@ -27,7 +27,7 @@ export default class FavoriteItemsController {
 
   async store({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createFavoriteItemValidator)
 
     // Re-adding a favorite by the same name previously deletes-then-recreates
@@ -90,7 +90,7 @@ export default class FavoriteItemsController {
 
   async update({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const favorite = await FavoriteItem.query()
       .where('id', params.id)
       .where('listId', list.id)
@@ -131,7 +131,7 @@ export default class FavoriteItemsController {
 
   async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const favorite = await FavoriteItem.query()
       .where('id', params.id)
       .where('listId', list.id)
@@ -175,7 +175,7 @@ export default class FavoriteItemsController {
    */
   async addToList({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const favorite = await FavoriteItem.query()
       .where('id', params.id)
       .where('listId', list.id)

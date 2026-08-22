@@ -77,7 +77,7 @@ async function nextSortOrder(listId: number): Promise<number> {
 export default class ItemsController {
   async index({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
+    const list = await ListPolicy.requireList(user, params.listId, 'viewer')
 
     const includeChecked = request.input('includeChecked', 'true') !== 'false'
     const query = Item.query().where('listId', list.id).whereNull('deletedAt')
@@ -90,7 +90,7 @@ export default class ItemsController {
   /** Backs the client's optimistic-row category guess — see PHASE7_PLAN.md §3. */
   async categorize({ auth, params, request, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
+    const list = await ListPolicy.requireList(user, params.listId, 'viewer')
     const name = request.input('name', '')
     const body: CategorizeSuggestionDto = { categoryId: await suggestCategoryId(list, name) }
 
@@ -99,7 +99,7 @@ export default class ItemsController {
 
   async recent({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
+    const list = await ListPolicy.requireList(user, params.listId, 'viewer')
 
     const items = await Item.query()
       .where('listId', list.id)
@@ -113,7 +113,7 @@ export default class ItemsController {
   /** Distinct item names from this list's full history (incl. checked/deleted), most recent first — backs autocomplete. */
   async recentNames({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
+    const list = await ListPolicy.requireList(user, params.listId, 'viewer')
 
     // createdAt has only second-level precision, so ties are common between
     // requests in the same second — break ties by id desc so the most
@@ -142,7 +142,7 @@ export default class ItemsController {
 
   async store({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createItemValidator)
 
     const existing = await Item.query()
@@ -199,7 +199,7 @@ export default class ItemsController {
 
   async import({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const { text } = await request.validateUsing(importItemsValidator)
 
     const parsed = parseBulkImport(text)
@@ -283,7 +283,7 @@ export default class ItemsController {
 
   async update({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const item = await Item.query()
       .where('id', params.itemId)
       .where('listId', list.id)
@@ -328,7 +328,7 @@ export default class ItemsController {
 
   async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const item = await Item.query()
       .where('id', params.itemId)
       .where('listId', list.id)
@@ -367,7 +367,7 @@ export default class ItemsController {
 
   async restore({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const item = await Item.query()
       .where('id', params.itemId)
       .where('listId', list.id)

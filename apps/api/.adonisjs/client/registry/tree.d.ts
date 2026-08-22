@@ -95,6 +95,13 @@ export interface ApiDefinition {
       destroy: typeof routes['lists.list_invites.destroy']
     }
   }
+  tokens: {
+    personalAccessTokens: {
+      index: typeof routes['tokens.personal_access_tokens.index']
+      store: typeof routes['tokens.personal_access_tokens.store']
+      destroy: typeof routes['tokens.personal_access_tokens.destroy']
+    }
+  }
   inviteAccept: {
     preview: typeof routes['invite_accept.preview']
     accept: typeof routes['invite_accept.accept']

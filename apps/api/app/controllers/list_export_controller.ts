@@ -15,7 +15,7 @@ function formatItemLine(item: Item): string {
 export default class ListExportController {
   async email({ auth, params, request, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    await ListPolicy.requireList(user.id, params.listId, 'viewer')
+    await ListPolicy.requireList(user, params.listId, 'viewer')
 
     if (!isMailConfigured()) {
       return response.serviceUnavailable({

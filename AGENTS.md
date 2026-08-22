@@ -37,6 +37,107 @@ foundational/   PLAN.md and phase plans — the product/architecture spec
 - Before merging any migration that alters an existing (non-empty-in-prod) table, reproduce it against a seeded SQLite file locally first: build the schema at the pre-migration state, insert representative rows into parent + child tables, run just the new migration, and confirm child rows survive. Don't rely on the test suite alone — Japa tests run against a fresh empty schema every time and won't catch this class of bug.
 - There are no production backups configured as of this incident — data lost this way is not recoverable. Treat that as a reason to be conservative with schema changes, not just to fix the enforcement bug.
 
+### Realtime SSE broadcasts can silently miss the first write after a fresh server boot
+
+**Status (2026-08-22): open, unresolved — needs investigation, not yet reproduced to a root cause.**
+
+While manually testing Personal Access Tokens (Phase 16), a PAT-authenticated write to
+`POST /lists/:listId/items` didn't push a live update to a browser tab subscribed to that list's
+`list/:id` Transmit channel — the item was created (200, correct data, `broadcastSync` ran), but
+the subscriber never saw it without a manual refresh.
+
+Reproduced directly with curl against `apps/api/start/transmit.ts`'s subscribe protocol
+(`GET __transmit/events?uid=...` + `POST __transmit/subscribe` with a matching `uid`/`channel`),
+bypassing the frontend entirely:
+
+- **Ruled out**: this is not PAT-specific. The identical miss reproduced with a plain login
+  session token — no PAT involved at all — on the *first* write immediately after a fresh
+  `node ace serve` boot, in both `--hmr` and static mode.
+- Once a process had handled at least one broadcast successfully (directly via
+  `transmit.broadcast()` or through a real write), every subsequent write in that same process
+  broadcast reliably — PAT or session token, no further misses observed.
+- Subscriber registration itself was confirmed correct at the time of the miss (queried
+  `transmit.getSubscribersFor('list/:id')` directly and the uid was present), so the gap is
+  somewhere between a confirmed-registered subscriber and message delivery on that first
+  broadcast — not an auth/authorization problem in `authorizeListChannel`.
+
+**What this means for future work:**
+
+- Don't assume a single manual "it didn't update live" observation is a PAT/auth bug — check
+  whether it's actually this first-broadcast-after-boot gap first (try the same action again
+  without restarting the server).
+- This directly affects the co-shopping field test noted as still-unconfirmed after PR #76 — a
+  session that starts with a fresh deploy/restart is exactly when this would bite.
+- Next step for whoever picks this up: instrument `@boringnode/transmit`'s `Stream`/`StreamManager`
+  (vendored under `node_modules/.pnpm/@boringnode+transmit@*`) to find out why the first
+  `subscriber.writeMessage()` call after boot doesn't reach an already-piped response, when
+  identical calls immediately afterward do.
+
+### Re-adding a deleted item's name silently loses its store/price/quantity/notes
+
+**Status (2026-08-22): open gap, not yet scoped as a fix.**
+
+`items_controller.ts#store`'s create-time dedup (`Item.query()...whereNull('deletedAt')...LOWER(TRIM(name))`)
+only matches *active* items on purpose — a deleted item doesn't come back just because someone
+typed its name again; that's what the explicit restore flow is for. But that leaves two
+differently-capable paths for reusing an item's history, and it's easy to assume they're the same:
+
+- **Explicit restore** (`/lists/:id/recently-deleted` → `restoreItem()` →
+  `POST .../items/:itemId/restore`): full fidelity — same row, `deletedAt` cleared, `categoryId`/
+  `storeId`/`price`/`quantity`/`notes` all intact.
+- **Add-item / autocomplete** (typing a name, `GET .../items/recent-names` suggestions, then
+  `POST .../items`): name-only. `category_suggestion_service.ts`'s `personalizedCategoryId` *does*
+  query item history without a `deletedAt` filter, so a re-added item usually still lands in the
+  right category — but `storeId`/`price`/`quantity`/`notes` are never re-derived from history
+  anywhere; `store()` only sets them from what the client sends. And the autocomplete suggestion
+  type (`AutocompleteSuggestion` in `apps/web/src/lib/autocomplete.ts`) is `{ name, isFavorite }`
+  only — there's no field to carry that metadata through even if the backend offered it. So
+  re-adding a deleted item's name by typing/autocomplete creates a fresh item that keeps its
+  category but silently drops store, price, quantity, and notes.
+
+**What this means for future work:**
+
+- Don't read "item reuse works" as one behavior — check which of the two paths a report is about.
+  A "my price/store didn't come back" report is this gap; a "the item didn't come back at all" is
+  a genuine restore-flow bug (different code, more serious).
+- A real fix likely means either: (a) `store()`'s dedup also matching a *recently*-deleted item
+  and treating a create as an implicit restore (needs a UX decision — is that surprising if it
+  wasn't what the user meant?), or (b) surfacing "you deleted this — restore it instead?" at
+  autocomplete time, which needs `recent-names` to return enough to distinguish an active match
+  from a deleted one (it currently returns bare `string[]`, deliberately collapsing that
+  distinction — see `items_controller.ts#recentNames`).
+- Not scoped or prioritized yet — flagging so it's not lost, not proposing which fix to take.
+
+### Offline-sync E2E test can intermittently see a duplicate row on CI (not locally)
+
+**Status (2026-08-22): open, unreproduced locally — suspected pre-existing race, not yet fixed.**
+
+`e2e/offline-sync.e2e.ts`'s "adds an item while offline and syncs it once back online" failed
+once in CI (Phase 16 PR #79) with a Playwright strict-mode violation: `getByText('Milk')`
+resolved to *two* elements right after `page.reload()`, where the test expects exactly one.
+
+- **Ruled out as caused by that PR's own diff**: the PR touched only `apps/api` auth/token/policy
+  code, `start/limiter.ts`, and the new `settings/tokens` page — nothing under
+  `apps/web/src/lib/offline/`, `lib/api/items.ts`, or the list page's flush/reload handling.
+- **Not reproduced locally**: the same test run 6 times back-to-back (3× solo, 3× alongside the
+  rest of the suite at 2 workers, matching CI's concurrency) — 6/6 passed every time.
+- **Matches a known-tricky area**: this exact class of bug — a local/Dexie optimistic row not
+  cleared before a reload lands — was fixed once already (`Fix offline sync DOM visibility and
+  self-conflicting edits`, #72). The likely mechanism: the "Server unavailable" indicator
+  clearing and the flush queue actually draining are two independent async signals (see
+  `+page.svelte`'s `onFlushOutcome`) — a `page.reload()` timed between them could catch a stale
+  Dexie temp row still present alongside the just-synced server row. CI's slower I/O plausibly
+  widens that window enough to hit; a fast local machine may not.
+
+**What this means for future work:**
+
+- If this reappears, don't assume it's a fresh regression from whatever PR is open at the time —
+  check first whether the diff touches offline-sync code at all.
+- Whoever picks this up: instrument the gap between the connectivity indicator clearing and the
+  flush's Dexie cleanup actually completing (`lib/offline/flush.ts`'s `onFlushOutcome` and
+  whatever clears the dirty/temp row) to find the real race window, rather than just adding a
+  wait to the test — the test caught a real (if narrow) gap.
+
 ## Working conventions
 
 - Full-stack features go migration → backend (model/validator/controller/policy) → shared DTO → frontend, in that order — see any `Phase 6:` commit for the pattern.

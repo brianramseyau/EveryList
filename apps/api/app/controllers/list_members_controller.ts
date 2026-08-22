@@ -21,7 +21,7 @@ async function countOwners(listId: number): Promise<number> {
 export default class ListMembersController {
   async index({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
+    const list = await ListPolicy.requireList(user, params.listId, 'viewer')
     const members = await ListMember.query()
       .where('listId', list.id)
       .whereNotNull('acceptedAt')
@@ -34,7 +34,7 @@ export default class ListMembersController {
   /** Users the requester could directly add: people they already share another list with. */
   async candidates({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const candidates = await findMemberCandidates(user.id, list)
 
     return serialize(MemberCandidateTransformer.transform(candidates))
@@ -48,7 +48,7 @@ export default class ListMembersController {
    */
   async store({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createListMemberValidator)
 
     const target = await User.find(payload.userId)
@@ -89,7 +89,7 @@ export default class ListMembersController {
 
   async update({ auth, params, request, serialize, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'owner')
+    const list = await ListPolicy.requireList(user, params.listId, 'owner')
     const member = await ListMember.query()
       .where('id', params.memberId)
       .where('listId', list.id)
@@ -111,7 +111,7 @@ export default class ListMembersController {
 
   async destroy({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'owner')
+    const list = await ListPolicy.requireList(user, params.listId, 'owner')
     const member = await ListMember.query()
       .where('id', params.memberId)
       .where('listId', list.id)

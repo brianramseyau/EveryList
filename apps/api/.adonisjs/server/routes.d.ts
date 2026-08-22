@@ -59,6 +59,9 @@ export type ScannedRoutes = {
     'lists.list_invites.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_invites.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_invites.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'inviteId': ParamValue} }
+    'tokens.personal_access_tokens.index': { paramsTuple?: []; params?: {} }
+    'tokens.personal_access_tokens.store': { paramsTuple?: []; params?: {} }
+    'tokens.personal_access_tokens.destroy': { paramsTuple: [ParamValue]; params: {'tokenId': ParamValue} }
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
     'invite_accept.accept': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
     'stores.stores.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -82,6 +85,7 @@ export type ScannedRoutes = {
     'lists.list_members.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_members.candidates': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_invites.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'tokens.personal_access_tokens.index': { paramsTuple?: []; params?: {} }
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
@@ -102,6 +106,7 @@ export type ScannedRoutes = {
     'lists.list_members.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_members.candidates': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_invites.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'tokens.personal_access_tokens.index': { paramsTuple?: []; params?: {} }
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
@@ -127,6 +132,7 @@ export type ScannedRoutes = {
     'lists.list_members.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_export.email': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_invites.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'tokens.personal_access_tokens.store': { paramsTuple?: []; params?: {} }
     'invite_accept.accept': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
   }
   PATCH: {
@@ -152,6 +158,7 @@ export type ScannedRoutes = {
     'lists.favorite_items.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'id': ParamValue} }
     'lists.list_members.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'memberId': ParamValue} }
     'lists.list_invites.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'inviteId': ParamValue} }
+    'tokens.personal_access_tokens.destroy': { paramsTuple: [ParamValue]; params: {'tokenId': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {

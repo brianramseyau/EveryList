@@ -168,6 +168,27 @@ export interface ListInvitePreviewDto {
   role: Exclude<ListRole, 'owner'>
 }
 
+/** A single list a Personal Access Token was granted access to, and at what role. */
+export interface AccessTokenGrantDto {
+  listId: number
+  role: Exclude<ListRole, 'owner'>
+}
+
+/** A Personal Access Token for third-party integrations (Home Assistant, Alexa, ...) — scoped to one or more lists. */
+export interface AccessTokenDto {
+  id: number
+  name: string | null
+  grants: AccessTokenGrantDto[]
+  lastUsedAt: string | null
+  expiresAt: string | null
+  createdAt: string
+}
+
+/** The one-time creation response — `token` is never returned again after this. */
+export interface AccessTokenCreatedDto extends AccessTokenDto {
+  token: string
+}
+
 export interface SyncEventDto {
   entityType: 'list' | 'category' | 'item' | 'favorite_item' | 'store' | 'store_category_order'
   entityId: number

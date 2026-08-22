@@ -17,7 +17,7 @@ import { hasVersionConflict, reportVersionConflict } from '#services/version_con
 export default class StoresController {
   async index({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'viewer')
+    const list = await ListPolicy.requireList(user, params.listId, 'viewer')
     await list.load('stores', (query) => query.whereNull('deletedAt'))
 
     return serialize(StoreTransformer.transform(list.stores))
@@ -29,12 +29,12 @@ export default class StoresController {
    */
   async store({ auth, params, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(attachStoreValidator)
 
     let store: Store
     if (payload.storeId) {
-      store = await ListPolicy.requireStoreRole(user.id, payload.storeId, 'viewer')
+      store = await ListPolicy.requireStoreRole(user, payload.storeId, 'viewer')
     } else if (payload.name) {
       store = await Store.create({
         name: payload.name,
@@ -60,7 +60,7 @@ export default class StoresController {
 
   async update({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
-    const store = await ListPolicy.requireStoreRole(user.id, params.id, 'editor')
+    const store = await ListPolicy.requireStoreRole(user, params.id, 'editor')
     const payload = await request.validateUsing(updateStoreValidator)
     const { expectedVersion, ...rest } = payload
 
@@ -94,7 +94,7 @@ export default class StoresController {
 
   async detach({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
-    const list = await ListPolicy.requireList(user.id, params.listId, 'editor')
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
     await ListStore.query().where('listId', list.id).where('storeId', params.storeId).delete()
 
     await broadcastSync({
@@ -109,7 +109,7 @@ export default class StoresController {
 
   async categories({ auth, params, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const store = await ListPolicy.requireStoreRole(user.id, params.id, 'viewer')
+    const store = await ListPolicy.requireStoreRole(user, params.id, 'viewer')
     const orders = await StoreCategoryOrder.query()
       .where('storeId', store.id)
       .whereNull('deletedAt')
@@ -120,7 +120,7 @@ export default class StoresController {
 
   async reorderCategories({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const store = await ListPolicy.requireStoreRole(user.id, params.id, 'editor')
+    const store = await ListPolicy.requireStoreRole(user, params.id, 'editor')
     const { categories } = await request.validateUsing(reorderStoreCategoriesValidator)
 
     const categoryIds = categories.map((entry) => entry.categoryId)

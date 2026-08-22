@@ -27,7 +27,7 @@ test.group('ListPolicy', (group) => {
       acceptedAt: DateTime.now(),
     })
 
-    assert.isNull(await ListPolicy.roleFor(stranger.id, list.id))
+    assert.isNull(await ListPolicy.roleFor(stranger, list.id))
   })
 
   test('roleFor ignores a pending (not-yet-accepted) membership', async ({ assert }) => {
@@ -42,12 +42,12 @@ test.group('ListPolicy', (group) => {
       acceptedAt: null,
     })
 
-    assert.isNull(await ListPolicy.roleFor(invitee.id, list.id))
+    assert.isNull(await ListPolicy.roleFor(invitee, list.id))
   })
 
   test('requireList throws 404 for a nonexistent list', async ({ assert }) => {
     const user = await makeUser('u1@example.com')
-    await assert.rejects(() => ListPolicy.requireList(user.id, 999999, 'viewer'), /List not found/)
+    await assert.rejects(() => ListPolicy.requireList(user, 999999, 'viewer'), /List not found/)
   })
 
   test('requireList throws 404 for a list the user is not a member of', async ({ assert }) => {
@@ -56,7 +56,7 @@ test.group('ListPolicy', (group) => {
     const list = await List.create({ name: 'Groceries', ownerId: owner.id })
 
     await assert.rejects(
-      () => ListPolicy.requireList(stranger.id, list.id, 'viewer'),
+      () => ListPolicy.requireList(stranger, list.id, 'viewer'),
       /List not found/
     )
   })
@@ -73,7 +73,7 @@ test.group('ListPolicy', (group) => {
       acceptedAt: DateTime.now(),
     })
 
-    await assert.rejects(() => ListPolicy.requireList(viewer.id, list.id, 'editor'), /permission/)
+    await assert.rejects(() => ListPolicy.requireList(viewer, list.id, 'editor'), /permission/)
   })
 
   test('requireList returns the list when role meets the minimum', async ({ assert }) => {
@@ -87,7 +87,7 @@ test.group('ListPolicy', (group) => {
       acceptedAt: DateTime.now(),
     })
 
-    const found = await ListPolicy.requireList(owner.id, list.id, 'owner')
+    const found = await ListPolicy.requireList(owner, list.id, 'owner')
     assert.equal(found.id, list.id)
   })
 
@@ -97,7 +97,7 @@ test.group('ListPolicy', (group) => {
     const owner = await makeUser('u7@example.com')
     const store = await Store.create({ name: 'Walmart', color: '#3b82f6', createdBy: owner.id })
 
-    assert.isNull(await ListPolicy.storeRoleFor(owner.id, store.id))
+    assert.isNull(await ListPolicy.storeRoleFor(owner, store.id))
   })
 
   test('storeRoleFor returns the best role across every list the store is attached to', async ({
@@ -135,13 +135,13 @@ test.group('ListPolicy', (group) => {
       acceptedAt: DateTime.now(),
     })
 
-    assert.equal(await ListPolicy.storeRoleFor(user.id, store.id), 'editor')
+    assert.equal(await ListPolicy.storeRoleFor(user, store.id), 'editor')
   })
 
   test('requireStoreRole throws 404 for a nonexistent store', async ({ assert }) => {
     const user = await makeUser('u9@example.com')
     await assert.rejects(
-      () => ListPolicy.requireStoreRole(user.id, 999999, 'viewer'),
+      () => ListPolicy.requireStoreRole(user, 999999, 'viewer'),
       /List not found/
     )
   })
@@ -161,10 +161,7 @@ test.group('ListPolicy', (group) => {
       acceptedAt: DateTime.now(),
     })
 
-    await assert.rejects(
-      () => ListPolicy.requireStoreRole(owner.id, store.id, 'editor'),
-      /permission/
-    )
+    await assert.rejects(() => ListPolicy.requireStoreRole(owner, store.id, 'editor'), /permission/)
   })
 
   test('requireStoreRole returns the store when the best role meets the minimum', async ({
@@ -182,7 +179,7 @@ test.group('ListPolicy', (group) => {
       acceptedAt: DateTime.now(),
     })
 
-    const found = await ListPolicy.requireStoreRole(owner.id, store.id, 'editor')
+    const found = await ListPolicy.requireStoreRole(owner, store.id, 'editor')
     assert.equal(found.id, store.id)
   })
 })
