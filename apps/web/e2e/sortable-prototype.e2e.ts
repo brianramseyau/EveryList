@@ -122,7 +122,19 @@ test('keeps a multi-step same-category reorder stable across reloads', async ({ 
 			steps: 20
 		});
 		await page.waitForTimeout(50);
+		// A drop fires an optimistic Dexie write, then a PATCH to persist it (see
+		// `handleItemDrop`/`offlineMutate`) — the PATCH's response is what clears the row's
+		// `_dirty` flag. Wait for it explicitly rather than a flat timeout: a reload landing
+		// before that response clears `_dirty` (a real risk under CI's slower I/O — see
+		// AGENTS.md's offline-sync flake, the same class of race, for the mechanism) would have
+		// `fetchItems()` merge the row's own still-dirty optimistic copy back in — same id, so
+		// not a duplicate row, but a real risk of the reload's assertions racing an unsettled
+		// write.
+		const patched = page.waitForResponse(
+			(res) => res.request().method() === 'PATCH' && res.url().includes('/items/')
+		);
 		await page.mouse.up();
+		await patched;
 		await page.waitForTimeout(300);
 	}
 

@@ -125,6 +125,38 @@ time — check first whether the diff touches offline-sync code, and whether `pi
 checks `pendingMutations()` before clearing `serverUnavailable` (a regression there would
 reproduce this exact symptom).
 
+### Sortable-prototype E2E test can intermittently see a duplicate row on CI (not locally)
+
+**Status (2026-08-22): mitigated, root cause unconfirmed.** `apps/web/e2e/sortable-prototype.e2e.ts`'s
+"keeps a multi-step same-category reorder stable across reloads" failed once in CI (PR #83, unrelated
+to that PR's own diff — a connectivity-monitor fix) with the same shape of Playwright strict-mode
+violation as the offline-sync flake above: `getByText('Charlie Item', { exact: true })` resolved to
+*two* elements right after the test's second `page.reload()`.
+
+- **Not reproduced locally** despite substantial effort: 60 back-to-back runs (30× each of both
+  tests in the file) all passed; artificially delaying the drag's PATCH response by up to 5s (to
+  widen any race between the optimistic Dexie write, the request settling, and the reload) never
+  produced a duplicate, only ever 0 or 1 matches.
+- **The obvious theory doesn't hold up under test**: `handleItemDrop` → `updateItem` →
+  `offlineMutate` is an `op: 'update'` (not `'create'`), so even if the reload's `fetchItems()`
+  raced the PATCH's `onSuccess` (which clears `_dirty`) and merged in a stale dirty row (per the
+  offline-sync postmortem above), that row is keyed by the *same* item id as the server's copy —
+  `fetchItems()`'s `byId` Map would overwrite, not duplicate. A genuine two-element match needs two
+  *different* ids sharing the name "Charlie Item," and nothing in the create path (fully awaited,
+  temp-id row deleted before `createItem` returns), the reorder path, or the server's `store()`/
+  `update()` controllers was found to produce that.
+- **Mitigated defensively anyway**: `dragRowOnto`'s helper now waits for the drop's PATCH response
+  before reloading, instead of a flat `waitForTimeout(300)` — closes the specific race that *was*
+  plausible (a reload landing before the mutation's response settles) even though it couldn't be
+  confirmed as the actual cause.
+
+**If this resurfaces:** the root cause is still open. Worth trying next: capture a Playwright trace
+in CI specifically for this test (`--trace on`, currently not configured — see `ci.yml`'s `e2e` job,
+which uploads no artifacts on failure) so the actual DOM/network state at failure time can be
+inspected instead of re-guessing blind; check for SQLite lock contention between the two CI workers'
+concurrent DB writes (CI runs 2 workers against one `tmp/e2e.sqlite3` file, unlike a fast local
+machine) as a source of unusually long request latencies neither of the above theories accounted for.
+
 ## Working conventions
 
 - Full-stack features go migration → backend (model/validator/controller/policy) → shared DTO → frontend, in that order — see any `Phase 6:` commit for the pattern.
