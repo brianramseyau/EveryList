@@ -255,6 +255,40 @@ describe('List settings +page.svelte', () => {
 		expect(refreshBadgeCount).toHaveBeenCalled();
 	});
 
+	it('disables categories, flipping the button label and hiding the Categories link', async () => {
+		vi.mocked(updateList).mockResolvedValue({ ...list, useCategories: false });
+
+		render(SettingsPage);
+		await expect
+			.element(page.getByRole('button', { name: 'Disable categories' }))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Disable categories' }).click();
+
+		expect(updateList).toHaveBeenCalledWith(1, { useCategories: false });
+		await expect
+			.element(page.getByRole('button', { name: 'Enable categories' }))
+			.toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'Categories' })).not.toBeInTheDocument();
+	});
+
+	it('re-enables categories from a list that had them disabled', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
+		vi.mocked(updateList).mockResolvedValue({ ...list, useCategories: true });
+
+		render(SettingsPage);
+		await expect
+			.element(page.getByRole('button', { name: 'Enable categories' }))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Enable categories' }).click();
+
+		expect(updateList).toHaveBeenCalledWith(1, { useCategories: true });
+		await expect
+			.element(page.getByRole('button', { name: 'Disable categories' }))
+			.toBeInTheDocument();
+	});
+
 	it('shows an error when updating the list fails', async () => {
 		vi.mocked(updateList).mockRejectedValue(new ApiError(500, 'Could not update list'));
 

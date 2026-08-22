@@ -68,6 +68,7 @@
 			icon: string | null;
 			archived: boolean;
 			badgeExcluded: boolean;
+			useCategories: boolean;
 			passcodeHash: string | null;
 			folderId: number | null;
 		}>
@@ -138,6 +139,10 @@
 
 	async function toggleBadgeExcluded(current: ListDto) {
 		await onupdate({ badgeExcluded: !current.badgeExcluded });
+	}
+
+	async function toggleUseCategories(current: ListDto) {
+		await onupdate({ useCategories: current.useCategories === false });
 	}
 
 	async function savePasscode(event: SubmitEvent) {
@@ -274,6 +279,14 @@
 			onclick={() => toggleBadgeExcluded(list!)}
 		>
 			{list.badgeExcluded ? 'Include in badge count' : 'Exclude from badge count'}
+		</button>
+
+		<button
+			type="button"
+			class="rounded-lg border border-gray-200 px-3 py-3 text-left text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+			onclick={() => toggleUseCategories(list!)}
+		>
+			{list.useCategories === false ? 'Enable categories' : 'Disable categories'}
 		</button>
 
 		{#if settingPasscode}
