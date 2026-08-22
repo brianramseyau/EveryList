@@ -102,19 +102,19 @@
 						<span>{item.name}</span>
 						<button
 							type="button"
-							class="ml-auto flex items-center gap-1 text-sm text-primary-700 underline dark:text-primary-400"
+							aria-label="Restore"
+							class="ml-auto text-primary-700 dark:text-primary-400"
 							onclick={() => restoreRecentItem(item)}
 						>
-							<Icon name="restore" class="h-4 w-4" />
-							Restore
+							<Icon name="restore" class="h-5 w-5" />
 						</button>
 						<button
 							type="button"
-							class="flex items-center gap-1 text-sm text-red-600 underline dark:text-red-400"
+							aria-label="Delete permanently"
+							class="text-red-600 dark:text-red-400"
 							onclick={() => (confirmingPurgeId = item.id)}
 						>
-							<Icon name="deleteForever" class="h-4 w-4" />
-							Delete permanently
+							<Icon name="deleteForever" class="h-5 w-5" />
 						</button>
 					</div>
 					{#if confirmingPurgeId === item.id}
