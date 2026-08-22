@@ -41,8 +41,21 @@ the design below without new packages or migrations.
 
 ## Stage 0 — Personal Access Tokens
 
-**Status: implemented and verified** (typecheck/lint/tests green across all workspaces, 100%
-coverage maintained). Not yet committed as of this writing — reviewed but pending `git commit`.
+**Status: implemented and verified, in review as PR #79** (typecheck/lint/tests green across all
+workspaces, 100% coverage maintained). Two things were added after the initial commit, both
+found while scaffolding Stage 1 against the real API rather than planned up front:
+
+- `GET /api/v1/tokens/me` — PAT-only self-introspection (see the `personal_access_tokens_controller.ts`
+  and routes bullets below) so an external client can discover its own list grants instead of
+  requiring the user to re-enter the same list IDs a second time in that integration's own setup
+  flow.
+- The `lists`-group throttle turned out to apply to the SPA's own session-token traffic too
+  (same route group, same guards) — a single list page mount's ~5 parallel GETs blew past even a
+  generous per-minute number from one legitimate browser session. Rescoped to PAT traffic only
+  (`currentAccessToken.type === 'pat'`); ordinary logins aren't throttled at all now. Separately,
+  the actual unauthenticated brute-force surface (signup/login/forgot-password/reset-password)
+  had no throttling at all — added an IP-keyed `authThrottle` there. See the limiter bullet below
+  and `apps/api/start/limiter.ts` for the current design.
 
 ### The critical thing this stage must get right
 
@@ -112,6 +125,10 @@ user's list SSE channels defeats the point.
     name })`.
   - `destroy`: `User.personalAccessTokens.find(user, tokenId)` — already scoped to the calling
     user, so no list-ownership re-check is needed to revoke your own credential.
+  - `me` (added post-Stage-1-scaffolding): returns the *authenticating token's own* decoded
+    grants — `toView(user.currentAccessToken!)`. Routed outside the `tokens` group below on the
+    `pat` guard only, not `api`/`pat`: a login session has full membership-derived access, not a
+    per-list "grant" to report, so the concept doesn't apply to it the same way.
 - `apps/api/app/validators/personal_access_token.ts` (new) — `{ name: string (1-100), listIds:
   number[] (min 1), role: 'editor' | 'viewer' }`.
 - `apps/api/app/transformers/personal_access_token_transformer.ts` (new) — `{ id, name, grants:
@@ -125,17 +142,22 @@ user's list SSE channels defeats the point.
   ```
   on the plain `api` guard only (login session) — a PAT can never satisfy `store`'s `'owner'`
   check anyway (its effective role is always capped at editor/viewer), so minting more PATs
-  from a PAT is structurally blocked, not just a route-level choice.
+  from a PAT is structurally blocked, not just a route-level choice. `GET tokens/me` is a
+  sibling route outside this group, on the `pat` guard only (see the controller bullet above).
 - `apps/api/start/limiter.ts` (new, via `node ace configure @adonisjs/limiter` — database
   store, backed by a new `rate_limits` table/migration, SQLite so no Redis needed) — no rate
-  limiting existed anywhere in the app before this. Exports `listsThrottle`, an
-  `limiter.define('lists', ...)` HTTP limiter keyed on `ctx.auth.user.currentAccessToken`'s
-  identifier (falling back to IP only if that's ever missing) rather than per-IP, so a runaway
-  HA instance throttles only its own token's quota, not the interactive session sharing the
-  same account. Applied in `routes.ts` to the `lists/:listId/*` group only (where a PAT
-  actually reads/writes data) — the `tokens` management routes above aren't throttled, since
-  they're driven by an interactive human occasionally minting/revoking, not an always-on
-  integration.
+  limiting existed anywhere in the app before this. Two limiters, both revised after the first
+  draft throttled the SPA itself (see the status note above):
+  - `listsThrottle`, applied to `lists/:listId/*`: `limiter.noLimit()` unless the authenticating
+    token's `type === 'pat'`, in which case 60/min keyed on its identifier. A HA/Alexa
+    integration polling every 15-30s plus occasional mutations stays well under that; an ordinary
+    login session isn't throttled on this group at all, since its ~5-parallel-GETs-per-page-mount
+    pattern would blow past any number still tight enough to matter for an integration.
+  - `authThrottle`, applied to the whole `auth` group (signup/login/forgot-password/reset-password)
+    — the only unauthenticated endpoints on the API, and so the actual brute-force/
+    credential-stuffing/signup-spam surface, which had no protection at all before this stage.
+    20/min per IP, skipped entirely under Japa (`app.inTest`) since the functional suite signs
+    up ~200 real users over HTTP in under a minute.
 - `packages/shared/src/domain.ts` — `AccessTokenGrantDto { listId, role }`, `AccessTokenDto {
   id, name, grants: AccessTokenGrantDto[], lastUsedAt, expiresAt, createdAt }`, and
   `AccessTokenCreatedDto extends AccessTokenDto` (adds `token: string`).

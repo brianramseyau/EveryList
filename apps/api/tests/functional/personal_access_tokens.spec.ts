@@ -387,6 +387,45 @@ test.group('Personal access tokens', (group) => {
       .json({ storeId })
     attach.assertStatus(404)
   })
+
+  test('a token can introspect its own grants via /tokens/me', async ({ client, assert }) => {
+    const owner = await signupAndGetUser(client)
+    const listAId = await createList(client, owner.token, 'List A')
+    const listBId = await createList(client, owner.token, 'List B')
+    const created = await mintTokenData(client, owner.token, {
+      name: 'Home Assistant',
+      listIds: [listAId, listBId],
+      role: 'editor',
+    })
+
+    const me = await client
+      .get('/api/v1/tokens/me')
+      .header('Authorization', `Bearer ${created.token}`)
+    me.assertStatus(200)
+    const view = bodyData<AccessTokenDto>(me)
+    assert.equal(view.id, created.id)
+    assert.equal(view.name, 'Home Assistant')
+    assert.sameDeepMembers(view.grants, [
+      { listId: listAId, role: 'editor' },
+      { listId: listBId, role: 'editor' },
+    ])
+  })
+
+  test('a login session cannot use /tokens/me — it has no per-list grant to report', async ({
+    client,
+  }) => {
+    const owner = await signupAndGetUser(client)
+
+    const me = await client
+      .get('/api/v1/tokens/me')
+      .header('Authorization', `Bearer ${owner.token}`)
+    me.assertStatus(401)
+  })
+
+  test('/tokens/me requires authentication', async ({ client }) => {
+    const me = await client.get('/api/v1/tokens/me')
+    me.assertStatus(401)
+  })
 })
 
 // `authorizeListChannel` (apps/api/start/transmit.ts) calls the same

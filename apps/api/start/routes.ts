@@ -147,6 +147,14 @@ router
       // at editor/viewer).
       .use(middleware.auth())
 
+    // PAT-only self-introspection — a login session can't authenticate here
+    // (it has no per-list "grant" to report), so this sits outside the
+    // `tokens` group above rather than sharing its guard config. See
+    // PersonalAccessTokensController#me.
+    router
+      .get('tokens/me', [controllers.PersonalAccessTokens, 'me'])
+      .use(middleware.auth({ guards: ['pat'] }))
+
     router.get('invites/:token', [controllers.InviteAccept, 'preview'])
     router
       .post('invites/:token/accept', [controllers.InviteAccept, 'accept'])

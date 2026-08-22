@@ -59,6 +59,20 @@ export default class PersonalAccessTokensController {
     return response.created({ data: { ...view, token: token.value!.release() } })
   }
 
+  /**
+   * Self-introspection for the token that authenticated this request — the
+   * only way an external client (Home Assistant, Alexa) can discover which
+   * lists it was granted without the user re-entering the same list IDs a
+   * second time in that integration's own setup flow. PAT-only (see
+   * routes.ts): a login session has no per-list "grant" to report — it has
+   * full membership-derived access, a different concept `decodeGrants`
+   * isn't meant to represent.
+   */
+  async me({ auth, response }: HttpContext) {
+    const user = auth.getUserOrFail()
+    return response.ok({ data: toView(user.currentAccessToken!) })
+  }
+
   async destroy({ auth, params, response }: HttpContext) {
     const user = auth.getUserOrFail()
     const token = await User.personalAccessTokens.find(user, params.tokenId)
