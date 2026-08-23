@@ -119,7 +119,7 @@ location / {
 
 Reload nginx, then confirm both paths are actually reachable without a session before touching
 the Alexa console — a plain `curl -i https://your-everylist-domain/api/v1/alexa` should come back
-from AdonisJS (a 401 "Missing Alexa request signature headers" JSON body is correct — that means
+from AdonisJS (a 400 "Missing Alexa request signature headers" JSON body is correct — that means
 the request reached the app) rather than an HTML redirect to Authentik's login page.
 
 ### 4. Configure EveryList's environment

@@ -16,6 +16,10 @@ import { alexaSignatureVerifier } from '#services/alexa/signature_verifier'
  * never verify against `alexa-verifier`'s RSA-SHA256 check. `signature-256`
  * is the one meant to pair with it. Confirmed by reproducing a real failing
  * request with plain `openssl dgst -sha256 -verify`, independent of Node.
+ *
+ * Rejects with 400, matching Amazon's documented behavior for a signature
+ * mismatch — see "Check request signature" at
+ * https://developer.amazon.com/en-US/docs/alexa/custom-skills/host-a-custom-skill-as-a-web-service.html#check-request-signature.
  */
 export default class AlexaSignatureMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
@@ -28,14 +32,14 @@ export default class AlexaSignatureMiddleware {
         { certUrl: Boolean(certUrl), signature: Boolean(signature), rawBody: Boolean(rawBody) },
         'Alexa request missing signature headers'
       )
-      return ctx.response.unauthorized({ message: 'Missing Alexa request signature headers' })
+      return ctx.response.badRequest({ message: 'Missing Alexa request signature headers' })
     }
 
     try {
       await alexaSignatureVerifier.verify(certUrl, signature, rawBody)
     } catch (error) {
       ctx.logger.warn({ err: error, certUrl }, 'Alexa request signature verification failed')
-      return ctx.response.unauthorized({ message: 'Invalid Alexa request signature' })
+      return ctx.response.badRequest({ message: 'Invalid Alexa request signature' })
     }
 
     return next()
