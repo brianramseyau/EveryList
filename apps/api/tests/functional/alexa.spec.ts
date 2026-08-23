@@ -11,9 +11,14 @@ type Envelope = {
   applicationId?: string
   accessToken?: string
   accessTokenLocation?: 'session' | 'context' | 'none'
-  type: 'LaunchRequest' | 'IntentRequest' | 'SessionEndedRequest'
+  type:
+    'LaunchRequest' | 'IntentRequest' | 'SessionEndedRequest' | 'Alexa.Presentation.APL.UserEvent'
   intentName?: string
   slots?: Record<string, string | undefined>
+  /** Declares `Alexa.Presentation.APL` support on the requesting device (PHASE16_PLAN.md Stage 3). */
+  hasDisplay?: boolean
+  /** `request.arguments` for an `Alexa.Presentation.APL.UserEvent` (a tap on-screen). */
+  args?: unknown[]
 }
 
 function buildEnvelope(options: Envelope) {
@@ -30,6 +35,9 @@ function buildEnvelope(options: Envelope) {
       System: {
         application: { applicationId: options.applicationId ?? 'test-skill-id' },
         ...(accessTokenLocation === 'context' ? userWithToken : { user: {} }),
+        device: {
+          supportedInterfaces: options.hasDisplay ? { 'Alexa.Presentation.APL': {} } : {},
+        },
       },
     },
     request: {
@@ -51,6 +59,7 @@ function buildEnvelope(options: Envelope) {
             },
           }
         : {}),
+      ...(options.args ? { arguments: options.args } : {}),
     },
   }
 }
@@ -657,5 +666,263 @@ test.group('Alexa skill endpoint', (group) => {
       buildEnvelope({ type: 'IntentRequest', accessToken: pat })
     )
     assert.include(response.body().response.outputSpeech.text, "didn't understand that")
+  })
+
+  test('a non-screen device never gets a display directive', async ({ client, assert }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'Welcome to EveryList')
+    assert.isUndefined(response.body().response.directives)
+  })
+
+  test('LaunchRequest on a screen device with one accessible list shows it immediately', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: true })
+    )
+    assert.include(response.body().response.outputSpeech.text, "Here's Groceries")
+    const directives = response.body().response.directives
+    assert.lengthOf(directives, 1)
+    assert.equal(directives[0].type, 'Alexa.Presentation.APL.RenderDocument')
+    assert.equal(directives[0].token, `list-${listId}`)
+    assert.equal(directives[0].datasources.listData.properties.listName, 'Groceries')
+  })
+
+  test('LaunchRequest on a screen device with several lists asks to disambiguate and shows nothing', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listAId = await createList(client, owner.token, 'Groceries')
+    const listBId = await createList(client, owner.token, 'Hardware')
+    const pat = await mintPat(client, owner.token, [listAId, listBId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: true })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'Which list did you mean')
+    assert.isUndefined(response.body().response.directives)
+  })
+
+  test('LaunchRequest on a screen device with no accessible list shows nothing', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+    await client.delete(`/api/v1/lists/${listId}`).header('Authorization', `Bearer ${owner.token}`)
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: true })
+    )
+    assert.include(response.body().response.outputSpeech.text, "couldn't find that list")
+    assert.isUndefined(response.body().response.directives)
+  })
+
+  test('AddItemIntent on a screen device refreshes the display with the new item', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        hasDisplay: true,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Milk' },
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'Added Milk to Groceries')
+    const rows = response.body().response.directives[0].datasources.listData.properties.rows
+    assert.deepInclude(rows, { type: 'header', text: 'Other' })
+    assert.isTrue(rows.some((row: { name?: string }) => row.name === 'Milk'))
+  })
+
+  test('an ambiguous or not-found list outcome on a screen device attaches no directive', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listAId = await createList(client, owner.token, 'Groceries')
+    const listBId = await createList(client, owner.token, 'Hardware')
+    const pat = await mintPat(client, owner.token, [listAId, listBId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        hasDisplay: true,
+        intentName: 'ReadListIntent',
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'Which list did you mean')
+    assert.isUndefined(response.body().response.directives)
+  })
+
+  test('tapping an item on-screen (a UserEvent) marks it done and refreshes the display', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+    await addItem(client, owner.token, listId, 'Milk')
+
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const milk = bodyData<{ id: number }[]>(items)[0]!
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['complete', milk.id, listId],
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'Marked Milk as done')
+    const rows = response.body().response.directives[0].datasources.listData.properties.rows
+    assert.isTrue(
+      rows.some((row: { name?: string; checked?: boolean }) => row.name === 'Milk' && row.checked)
+    )
+
+    const after = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    assert.isTrue(bodyData<{ checked: boolean }[]>(after)[0]!.checked)
+  })
+
+  test('a UserEvent with no arguments at all is treated as unrecognized', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, "didn't understand that")
+  })
+
+  test('a UserEvent with an action other than "complete" is treated as unrecognized', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['delete', 1, listId],
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, "didn't understand that")
+    assert.isUndefined(response.body().response.directives)
+  })
+
+  test('a UserEvent from a viewer-scoped token cannot complete an item', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId], 'viewer')
+    await addItem(client, owner.token, listId, 'Milk')
+
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const milk = bodyData<{ id: number }[]>(items)[0]!
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['complete', milk.id, listId],
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, "don't have permission")
+    assert.isUndefined(response.body().response.directives)
+  })
+
+  test('a UserEvent for an item that no longer exists refreshes the display anyway', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['complete', 999999, listId],
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, "couldn't find that item")
+    assert.lengthOf(response.body().response.directives, 1)
+  })
+
+  test('a UserEvent for a list that no longer exists attaches no directive', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+    await client.delete(`/api/v1/lists/${listId}`).header('Authorization', `Bearer ${owner.token}`)
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['complete', 1, listId],
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, "couldn't find that list")
+    assert.isUndefined(response.body().response.directives)
   })
 })

@@ -2,21 +2,31 @@ import User from '#models/user'
 import { Secret } from '@adonisjs/core/helpers'
 import type { HttpContext } from '@adonisjs/core/http'
 import type { AccessToken } from '@adonisjs/auth/access_tokens'
-import { say, linkAccountRequired } from '#services/alexa/response_builder'
+import { say, linkAccountRequired, type AlexaResponse } from '#services/alexa/response_builder'
 import {
   handleAddItem,
   handleRemoveOrComplete,
   handleReadList,
+  handleLaunchWithDisplay,
+  type IntentResult,
 } from '#services/alexa/intent_router'
+import { buildListDisplay } from '#services/alexa/apl_view'
+import { handleTouchEvent } from '#services/alexa/apl_touch_handler'
 
 type AlexaRequestBody = {
   context?: {
-    System?: { application?: { applicationId?: string }; user?: { accessToken?: string } }
+    System?: {
+      application?: { applicationId?: string }
+      user?: { accessToken?: string }
+      device?: { supportedInterfaces?: Record<string, unknown> }
+    }
   }
   session?: { user?: { accessToken?: string } }
   request: {
-    type: 'LaunchRequest' | 'IntentRequest' | 'SessionEndedRequest'
+    type:
+      'LaunchRequest' | 'IntentRequest' | 'SessionEndedRequest' | 'Alexa.Presentation.APL.UserEvent'
     intent?: { name: string; slots?: Record<string, { value?: string } | undefined> }
+    arguments?: unknown[]
   }
 }
 
@@ -28,15 +38,31 @@ function slotValues(intent?: { slots?: Record<string, { value?: string } | undef
   return slots
 }
 
+/**
+ * Merges an APL display directive into an intent's speech response — only when the requesting
+ * device declared `Alexa.Presentation.APL` support and the intent resolved a list to show
+ * (PHASE16_PLAN.md Stage 3). Non-screen devices, and outcomes with no resolved list
+ * (not-found/ambiguous/no-slot-yet), pass through unchanged — `response_builder.ts` itself never
+ * knows about displays at all.
+ */
+async function withDisplay(result: IntentResult, hasDisplay: boolean): Promise<AlexaResponse> {
+  if (!hasDisplay || !result.list) return result.response
+
+  const directive = await buildListDisplay(result.list)
+  return {
+    ...result.response,
+    response: { ...result.response.response, directives: [directive] },
+  }
+}
+
 /** Handles the Alexa custom skill's `LaunchRequest`/`IntentRequest`/`SessionEndedRequest`
- * (PHASE16_PLAN.md Stage 2). Reached only after `AlexaSignatureMiddleware` has confirmed the
- * request actually came from Amazon. */
+ * (PHASE16_PLAN.md Stage 2) and, for screen devices, `Alexa.Presentation.APL.UserEvent` touch
+ * events (Stage 3). Reached only after `AlexaSignatureMiddleware` has confirmed the request
+ * actually came from Amazon. */
 export default class AlexaController {
   async handle({ request, response }: HttpContext) {
     const body = request.body() as AlexaRequestBody
 
-    // Reads `process.env` directly (rather than `#start/env`) so the test suite can toggle it
-    // per-call — same convention as `mail_configured.ts`'s SMTP2GO check.
     const skillId = process.env.ALEXA_SKILL_ID
     if (skillId && body.context?.System?.application?.applicationId !== skillId) {
       return response.unauthorized({ message: 'Unrecognized skill application id' })
@@ -53,19 +79,37 @@ export default class AlexaController {
       return response.ok(linkAccountRequired())
     }
 
+    const hasDisplay = Boolean(
+      body.context?.System?.device?.supportedInterfaces?.['Alexa.Presentation.APL']
+    )
+
     switch (body.request.type) {
-      case 'LaunchRequest':
-        return response.ok(
-          say("Welcome to EveryList. You can say things like 'add milk' or 'what's on my list'.", {
-            reprompt: 'What would you like to do?',
-          })
-        )
+      case 'LaunchRequest': {
+        if (!hasDisplay) {
+          return response.ok(
+            say(
+              "Welcome to EveryList. You can say things like 'add milk' or 'what's on my list'.",
+              {
+                reprompt: 'What would you like to do?',
+              }
+            )
+          )
+        }
+        return response.ok(await withDisplay(await handleLaunchWithDisplay(token), hasDisplay))
+      }
 
       case 'SessionEndedRequest':
         return response.ok({ version: '1.0', response: {} })
 
       case 'IntentRequest':
-        return response.ok(await this.#routeIntent(token, body.request))
+        return response.ok(
+          await withDisplay(await this.#routeIntent(token, body.request), hasDisplay)
+        )
+
+      case 'Alexa.Presentation.APL.UserEvent':
+        return response.ok(
+          await withDisplay(await handleTouchEvent(token, body.request.arguments ?? []), hasDisplay)
+        )
 
       /* c8 ignore next 2 -- Alexa's request.type is a closed enum; no other value is ever sent. */
       default:
@@ -73,7 +117,10 @@ export default class AlexaController {
     }
   }
 
-  async #routeIntent(token: AccessToken, alexaRequest: AlexaRequestBody['request']) {
+  async #routeIntent(
+    token: AccessToken,
+    alexaRequest: AlexaRequestBody['request']
+  ): Promise<IntentResult> {
     const intentName = alexaRequest.intent?.name ?? ''
     const slots = slotValues(alexaRequest.intent)
 
@@ -87,16 +134,20 @@ export default class AlexaController {
       case 'ReadListIntent':
         return handleReadList(token, slots)
       case 'AMAZON.HelpIntent':
-        return say("You can say 'add milk to my list' or 'what's on my list'.", {
-          reprompt: 'What would you like to do?',
-        })
+        return {
+          response: say("You can say 'add milk to my list' or 'what's on my list'.", {
+            reprompt: 'What would you like to do?',
+          }),
+        }
       case 'AMAZON.CancelIntent':
       case 'AMAZON.StopIntent':
-        return say('Goodbye.')
+        return { response: say('Goodbye.') }
       default:
-        return say(
-          "Sorry, I didn't understand that. You can say 'add milk' or 'what's on my list'."
-        )
+        return {
+          response: say(
+            "Sorry, I didn't understand that. You can say 'add milk' or 'what's on my list'."
+          ),
+        }
     }
   }
 }

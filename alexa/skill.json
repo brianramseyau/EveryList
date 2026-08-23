@@ -5,7 +5,7 @@
         "en-US": {
           "name": "EveryList",
           "summary": "Add, remove, and check off items on your self-hosted EveryList lists.",
-          "description": "A private skill for a self-hosted EveryList instance. Add items, mark them done, remove them, and hear what's on a list — all by voice.",
+          "description": "A private skill for a self-hosted EveryList instance. Add items, mark them done, remove them, and hear (or, on a screen device, see) what's on a list.",
           "examplePhrases": [
             "Alexa, ask every list to add milk",
             "Alexa, tell every list I got eggs",
@@ -24,7 +24,11 @@
         "endpoint": {
           "uri": "https://your-everylist-domain.example.com/api/v1/alexa"
         },
-        "interfaces": []
+        "interfaces": [
+          {
+            "type": "ALEXA_PRESENTATION_APL"
+          }
+        ]
       }
     },
     "manifestVersion": "1.0",

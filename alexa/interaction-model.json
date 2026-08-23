@@ -82,7 +82,14 @@
             "what do i need to buy",
             "read my list",
             "read the {ListName} list",
-            "what's left on my list"
+            "what's left on my list",
+            "show me my list",
+            "show my list",
+            "show the {ListName} list",
+            "open my list",
+            "open the {ListName} list",
+            "display my list",
+            "display the {ListName} list"
           ]
         }
       ]

@@ -385,7 +385,14 @@ stalls on anything HA-specific.
 
 ## Stage 3 — APL visual display for screen devices (Echo Show/Hub)
 
-**Status: scoped, not yet implemented.** Stage 2 shipped voice-only: every response is
+**Status: application code implemented and verified (100% coverage, typecheck/lint green) —
+awaiting deployment alongside Stage 2.** One deviation from the design below worth flagging: the
+APL document lives at `apps/api/app/services/alexa/apl_document.ts` (a plain TS object), not a
+standalone `alexa/apl/list-view.json` file — the production Docker image's build stage only
+copies `apps/api/` (see `docker/Dockerfile`), not the repo-root `alexa/` deployment-assets
+directory, so anything the running server needs at request time has to live inside `apps/api`.
+
+Stage 2 shipped voice-only: every response is
 `PlainText` speech plus a plain "Simple" card, which only shows in the Alexa app's interaction
 history — never on-device. On a screen device like the household's Echo Hub, opening "every
 list" or asking what's on it today just talks; the screen shows Alexa's generic

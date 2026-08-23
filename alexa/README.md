@@ -155,6 +155,32 @@ names tolerate near-miss transcriptions ("miilk" still matches "Milk"). A token 
 `viewer`-only access to a list can hear what's on it but can't add, remove, or complete items on
 it.
 
+## Screen devices (Echo Show/Hub)
+
+On a device with a screen — the household's Echo Hub, an Echo Show, etc. — this skill shows the
+list visually as well as speaking, using [APL](https://developer.amazon.com/en-US/docs/alexa/alexa-presentation-language/apl-overview.html).
+This is automatic; there's nothing extra to configure per device.
+
+- **Opening the skill opens the list.** "Alexa, open every list" shows your list on-screen
+  immediately (the single accessible list, or a prompt asking which one if you have several)
+  instead of just a spoken welcome — which is what happens instead on a screen-less device like
+  an Echo Dot.
+- **The screen stays current.** Adding, removing, or completing an item by voice — or asking
+  "what's on my list" — re-renders the display with the current state, grouped by category the
+  same way the EveryList app itself groups a list, with checked items shown struck through
+  rather than hidden.
+- **Tap an item to mark it done.** No voice needed for that one action — tapping sends the same
+  completion straight to EveryList, respecting the same `editor`-role check a voice command
+  would (a `viewer`-linked token can look but not tap-to-complete).
+- This is declared via the `ALEXA_PRESENTATION_APL` interface already checked into
+  [`skill.json`](skill.json) — deploying that file (console paste or `ask deploy`) is all that's
+  needed; there's no separate document/widget resource to register.
+- **This can only be verified by actually looking at it.** The Alexa Developer Console's **Test**
+  tab renders APL visually (not just the text/voice transcript) for a `development`-stage skill,
+  so check the layout and the tap-to-complete behavior there before trusting it on the real Echo
+  Hub — spacing, colors, and whether checked items render as struck-through the way intended are
+  all things this repo's own test suite can exercise the *data* for, but never the actual pixels.
+
 ## Troubleshooting
 
 - **"Please link your EveryList account" every time, even after linking**: check that the PAT

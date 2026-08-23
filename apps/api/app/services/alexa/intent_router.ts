@@ -6,9 +6,22 @@ import { suggestCategoryId } from '#services/category_suggestion_service'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { closestMatch } from '#services/alexa/fuzzy_match'
 import { resolveList, roleFor } from '#services/alexa/list_resolution'
-import { say } from '#services/alexa/response_builder'
+import { say, type AlexaResponse } from '#services/alexa/response_builder'
 
 type AlexaSlots = Record<string, string | undefined>
+
+/**
+ * Every intent handler's result: the spoken response, plus the list it acted on when one was
+ * successfully resolved — `alexa_controller.ts` uses `list` to attach an APL display directive
+ * for screen devices (PHASE16_PLAN.md Stage 3). `list` is omitted when there's nothing sensible
+ * to show: a not-found/ambiguous list, or a request that never got far enough to resolve one
+ * (e.g. no `ItemName` slot at all).
+ */
+export type IntentResult = { response: AlexaResponse; list?: List }
+
+function respond(response: AlexaResponse, list?: List): IntentResult {
+  return list ? { response, list } : { response }
+}
 
 // Mirrors items_controller.ts's own private copy — see that file's comment on
 // why this five-line helper isn't shared through packages/shared.
@@ -25,7 +38,7 @@ async function activeItems(listId: number): Promise<Item[]> {
   return Item.query().where('listId', listId).whereNull('deletedAt')
 }
 
-function speakAmbiguousLists(options: List[]): ReturnType<typeof say> {
+function speakAmbiguousLists(options: List[]): AlexaResponse {
   const names = options.map((list) => list.name).join(', ')
   return say(`Which list did you mean: ${names}?`, { reprompt: 'Which list did you mean?' })
 }
@@ -33,11 +46,31 @@ function speakAmbiguousLists(options: List[]): ReturnType<typeof say> {
 async function resolveListOrRespond(
   token: AccessToken,
   listNameSlot: string | undefined
-): Promise<{ list: List } | { response: ReturnType<typeof say> }> {
+): Promise<{ list: List } | { response: AlexaResponse }> {
   const resolution = await resolveList(token, listNameSlot)
   if (resolution.kind === 'found') return { list: resolution.list }
   if (resolution.kind === 'ambiguous') return { response: speakAmbiguousLists(resolution.options) }
   return { response: say("I couldn't find that list.") }
+}
+
+/**
+ * Marks an active item done — the shared mutation behind both the voice `CompleteItemIntent`
+ * path below and the touch-driven completion path (`apl_touch_handler.ts`, PHASE16_PLAN.md
+ * Stage 3), so the version bump/`checkedAt`/`broadcastSync` sequence exists in exactly one place.
+ */
+export async function completeItemRow(list: List, item: Item): Promise<void> {
+  item.checked = true
+  item.checkedAt = DateTime.now()
+  item.version += 1
+  await item.save()
+
+  await broadcastSync({
+    listId: list.id,
+    entityType: 'item',
+    entityId: item.id,
+    op: 'update',
+    version: item.version,
+  })
 }
 
 /**
@@ -48,16 +81,16 @@ async function resolveListOrRespond(
  * rather than creating a metadata-less duplicate, so it's reused wholesale here instead of
  * reimplemented.
  */
-export async function handleAddItem(token: AccessToken, slots: AlexaSlots) {
+export async function handleAddItem(token: AccessToken, slots: AlexaSlots): Promise<IntentResult> {
   const itemName = slots.ItemName?.trim()
-  if (!itemName) return say("I didn't catch what to add.")
+  if (!itemName) return respond(say("I didn't catch what to add."))
 
   const resolved = await resolveListOrRespond(token, slots.ListName)
-  if ('response' in resolved) return resolved.response
+  if ('response' in resolved) return respond(resolved.response)
   const list = resolved.list
 
   if (roleFor(token, list.id) !== 'editor') {
-    return say(`You only have view access to ${list.name}, so I can't add to it.`)
+    return respond(say(`You only have view access to ${list.name}, so I can't add to it.`), list)
   }
 
   const normalizedName = itemName.toLowerCase()
@@ -73,6 +106,7 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots) {
       existing.checkedAt = null
       existing.version += 1
       await existing.save()
+
       await broadcastSync({
         listId: list.id,
         entityType: 'item',
@@ -81,7 +115,7 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots) {
         version: existing.version,
       })
     }
-    return say(`${existing.name} is already on ${list.name}.`)
+    return respond(say(`${existing.name} is already on ${list.name}.`), list)
   }
 
   const deletedMatch = await Item.query()
@@ -96,6 +130,7 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots) {
     deletedMatch.sortOrder = await nextSortOrder(list.id)
     deletedMatch.version += 1
     await deletedMatch.save()
+
     await broadcastSync({
       listId: list.id,
       entityType: 'item',
@@ -103,7 +138,7 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots) {
       op: 'create',
       version: deletedMatch.version,
     })
-    return say(`Added ${deletedMatch.name} to ${list.name}.`)
+    return respond(say(`Added ${deletedMatch.name} to ${list.name}.`), list)
   }
 
   const item = await Item.create({
@@ -128,60 +163,57 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots) {
     version: item.version,
   })
 
-  return say(`Added ${item.name} to ${list.name}.`)
+  return respond(say(`Added ${item.name} to ${list.name}.`), list)
 }
 
-/** Backs both `RemoveItemIntent` (soft-deletes) and `CompleteItemIntent` (marks checked) — same
- * fuzzy-match-before-mutate resolution, differing only in the mutation applied once a matching
- * active item is found. */
+/** Backs both `RemoveItemIntent` (soft-deletes) and `CompleteItemIntent` (marks checked, via the
+ * shared `completeItemRow`) — same fuzzy-match-before-mutate resolution, differing only in the
+ * mutation applied once a matching active item is found. */
 export async function handleRemoveOrComplete(
   token: AccessToken,
   slots: AlexaSlots,
   action: 'remove' | 'complete'
-) {
+): Promise<IntentResult> {
   const itemName = slots.ItemName?.trim()
-  if (!itemName) return say("I didn't catch which item you meant.")
+  if (!itemName) return respond(say("I didn't catch which item you meant."))
 
   const resolved = await resolveListOrRespond(token, slots.ListName)
-  if ('response' in resolved) return resolved.response
+  if ('response' in resolved) return respond(resolved.response)
   const list = resolved.list
 
   if (roleFor(token, list.id) !== 'editor') {
-    return say(`You only have view access to ${list.name}, so I can't change it.`)
+    return respond(say(`You only have view access to ${list.name}, so I can't change it.`), list)
   }
 
   const items = await activeItems(list.id)
   const match = closestMatch(itemName, items, (item) => item.name)
-  if (!match) return say(`I couldn't find ${itemName} on ${list.name}.`)
+  if (!match) return respond(say(`I couldn't find ${itemName} on ${list.name}.`), list)
 
-  match.version += 1
   if (action === 'remove') {
     match.deletedAt = DateTime.now()
-  } else {
-    match.checked = true
-    match.checkedAt = DateTime.now()
+    match.version += 1
+    await match.save()
+
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'item',
+      entityId: match.id,
+      op: 'delete',
+      version: match.version,
+    })
+    return respond(say(`Removed ${match.name} from ${list.name}.`), list)
   }
-  await match.save()
 
-  await broadcastSync({
-    listId: list.id,
-    entityType: 'item',
-    entityId: match.id,
-    op: action === 'remove' ? 'delete' : 'update',
-    version: match.version,
-  })
-
-  return say(
-    action === 'remove'
-      ? `Removed ${match.name} from ${list.name}.`
-      : `Marked ${match.name} as done on ${list.name}.`
-  )
+  await completeItemRow(list, match)
+  return respond(say(`Marked ${match.name} as done on ${list.name}.`), list)
 }
 
-/** `ReadListIntent` — a spoken summary, not a full read of a long list (PHASE16_PLAN.md Stage 2). */
-export async function handleReadList(token: AccessToken, slots: AlexaSlots) {
+/** `ReadListIntent` — a spoken summary, not a full read of a long list (PHASE16_PLAN.md Stage 2).
+ * Unlike the APL display (`apl_view.ts`, Stage 3), this only speaks unchecked items — the two
+ * are deliberately allowed to diverge (see PHASE16_PLAN.md Stage 3's design note). */
+export async function handleReadList(token: AccessToken, slots: AlexaSlots): Promise<IntentResult> {
   const resolved = await resolveListOrRespond(token, slots.ListName)
-  if ('response' in resolved) return resolved.response
+  if ('response' in resolved) return respond(resolved.response)
   const list = resolved.list
 
   const items = await Item.query()
@@ -190,7 +222,7 @@ export async function handleReadList(token: AccessToken, slots: AlexaSlots) {
     .where('checked', false)
     .orderBy('sortOrder', 'asc')
 
-  if (items.length === 0) return say(`${list.name} is empty.`)
+  if (items.length === 0) return respond(say(`${list.name} is empty.`), list)
 
   const maxSpoken = 5
   const spoken = items.slice(0, maxSpoken).map((item) => item.name)
@@ -201,5 +233,21 @@ export async function handleReadList(token: AccessToken, slots: AlexaSlots) {
       ? `On ${list.name}, you have ${spoken.join(', ')}, and ${remaining} more item${remaining === 1 ? '' : 's'}.`
       : `On ${list.name}, you have ${spoken.join(', ')}.`
 
-  return say(summary)
+  return respond(say(summary), list)
+}
+
+/**
+ * Screen-aware `LaunchRequest` (PHASE16_PLAN.md Stage 3): resolves a list exactly the way
+ * `ReadListIntent` with no `ListName` slot does (single accessible list used implicitly, several
+ * asks to disambiguate), but always with a short greeting rather than the read-back summary —
+ * the display itself, attached by `alexa_controller.ts` when the device has a screen, carries
+ * the actual contents. Non-screen devices never call this; they keep the plain welcome message
+ * `alexa_controller.ts` already had.
+ */
+export async function handleLaunchWithDisplay(token: AccessToken): Promise<IntentResult> {
+  const resolved = await resolveListOrRespond(token, undefined)
+  if ('response' in resolved) return respond(resolved.response)
+  const list = resolved.list
+
+  return respond(say(`Here's ${list.name}.`), list)
 }

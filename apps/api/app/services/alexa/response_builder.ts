@@ -1,10 +1,14 @@
-/** Minimal shape of an Alexa skill response envelope — only the fields this skill ever sets. */
-type AlexaResponse = {
+/** Minimal shape of an Alexa skill response envelope — only the fields this skill ever sets.
+ * `directives` is never populated here — this module stays device-agnostic; `alexa_controller.ts`
+ * merges an APL display directive in on top of whatever this builds, only for screen devices
+ * (PHASE16_PLAN.md Stage 3). */
+export type AlexaResponse = {
   version: '1.0'
   response: {
     outputSpeech: { type: 'PlainText'; text: string }
     reprompt?: { outputSpeech: { type: 'PlainText'; text: string } }
     card?: { type: 'Simple' | 'LinkAccount'; title?: string; content?: string }
+    directives?: Record<string, unknown>[]
     shouldEndSession: boolean
   }
 }
