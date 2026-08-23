@@ -222,9 +222,13 @@ This is automatic; there's nothing extra to configure per device.
   "what's on my list" — re-renders the display with the current state, grouped by category the
   same way the EveryList app itself groups a list, with checked items shown struck through
   rather than hidden.
-- **Tap an item to mark it done.** No voice needed for that one action — tapping sends the same
-  completion straight to EveryList, respecting the same `editor`-role check a voice command
-  would (a `viewer`-linked token can look but not tap-to-complete).
+- **Tap an item to check or uncheck it.** No voice needed for that — tapping toggles the item
+  straight on EveryList, respecting the same `editor`-role check a voice command would (a
+  `viewer`-linked token can look but not tap-to-toggle).
+- **Looks like the app.** The list/category icons and colors match the EveryList app's own —
+  rendered on the fly as PNGs by a small, unauthenticated icon endpoint
+  (`/api/v1/alexa/icons/:name`) the Alexa display fetches directly, since APL can't render the
+  app's SVG icon library itself.
 - This is declared via the `ALEXA_PRESENTATION_APL` interface already checked into
   [`skill.json`](skill.json) — deploying that file (console paste or `ask deploy`) is all that's
   needed; there's no separate document/widget resource to register.
@@ -242,6 +246,13 @@ This is automatic; there's nothing extra to configure per device.
 - **Alexa's console reports a certificate error**: your endpoint's certificate isn't from a CA
   Alexa trusts, or the certificate chain is incomplete — check with `openssl s_client -connect
   your-domain:443 -showcerts`.
+- **Screen device shows speech but no visual list, or the interaction ends with "The device does
+  not support Alexa.Presentation.APL directives"**: the `ALEXA_PRESENTATION_APL` interface isn't
+  enabled for the skill in the Developer Console (Build → Interfaces) — enable it there. Don't
+  rely on `context.Viewports` in a request to mean the device can render one: a real Echo Hub can
+  report a `Viewports` entry with `type: "APL"` while its `System.device.supportedInterfaces` is
+  still empty and the platform rejects the directive outright — `supportedInterfaces` is the only
+  signal `alexa_controller.ts` trusts.
 - **Account linking fails at the Authentik step**: confirm the redirect URI registered in
   Authentik matches exactly what the Alexa developer console shows (including trailing slashes).
 - **Every request gets "Please link your EveryList account" / the Alexa Test tab shows a

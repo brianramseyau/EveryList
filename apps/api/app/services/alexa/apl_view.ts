@@ -1,11 +1,30 @@
 import Item from '#models/item'
 import type Category from '#models/category'
 import type List from '#models/list'
+import { appUrl } from '#config/app'
 import { getEffectiveCategories } from '#services/category_service'
 import { LIST_VIEW_DOCUMENT } from '#services/alexa/apl_document'
 
 type ListRow =
-  { type: 'header'; text: string } | { type: 'item'; id: number; name: string; checked: boolean }
+  | { type: 'header'; text: string; iconUrl: string }
+  | { type: 'item'; id: number; name: string; checked: boolean }
+
+/**
+ * Builds a public URL for `alexa_icons_controller.ts` to render `iconName` tinted with
+ * `colorHex` (the list's own `color`, matching how the app itself colors category headers) —
+ * `iconName` is untrusted user input in the general case (any string a user picks for a custom
+ * category), but the controller re-validates it before touching the filesystem/renderer, so no
+ * validation is needed here.
+ */
+export function buildIconUrl(iconName: string, colorHex: string): string {
+  return `${appUrl}/api/v1/alexa/icons/${iconName}?color=${colorHex.replace('#', '')}`
+}
+
+// Matches the DB column default (`create_lists_table.ts`) — `List.create()` doesn't refresh a
+// model with the DB-assigned default when the caller omits `color`, so a list created that way
+// (as most tests, and any future direct `List.create()` call, do) would otherwise carry
+// `color: undefined` here even though a real row always has one.
+const DEFAULT_LIST_COLOR = '#3b82f6'
 
 /** Unchecked items before checked ones, each group in `sortOrder`. */
 function sortBucket(bucket: Item[]): Item[] {
@@ -23,7 +42,7 @@ function sortBucket(bucket: Item[]): Item[] {
  * items are included here — struck through, grouped after unchecked ones within each category —
  * mirroring the main app's list view, which keeps checked items visible rather than hiding them.
  */
-function buildRows(items: Item[], categories: Category[]): ListRow[] {
+function buildRows(items: Item[], categories: Category[], listColor: string): ListRow[] {
   const byCategory = new Map<number, Item[]>()
   const uncategorized: Item[] = []
 
@@ -41,14 +60,22 @@ function buildRows(items: Item[], categories: Category[]): ListRow[] {
   for (const category of categories) {
     const bucket = byCategory.get(category.id)
     if (!bucket || bucket.length === 0) continue
-    rows.push({ type: 'header', text: category.name })
+    rows.push({
+      type: 'header',
+      text: category.name,
+      iconUrl: buildIconUrl(category.icon, listColor),
+    })
     for (const item of sortBucket(bucket)) {
       rows.push({ type: 'item', id: item.id, name: item.name, checked: item.checked })
     }
   }
 
   if (uncategorized.length > 0) {
-    rows.push({ type: 'header', text: 'Other' })
+    rows.push({
+      type: 'header',
+      text: 'Other',
+      iconUrl: buildIconUrl('dotsHorizontalCircle', listColor),
+    })
     for (const item of sortBucket(uncategorized)) {
       rows.push({ type: 'item', id: item.id, name: item.name, checked: item.checked })
     }
@@ -71,6 +98,8 @@ export async function buildListDisplay(list: List) {
     getEffectiveCategories(list),
   ])
 
+  const listColor = list.color ?? DEFAULT_LIST_COLOR
+
   return {
     type: 'Alexa.Presentation.APL.RenderDocument' as const,
     token: `list-${list.id}`,
@@ -81,7 +110,11 @@ export async function buildListDisplay(list: List) {
         properties: {
           listId: list.id,
           listName: list.name,
-          rows: buildRows(items, categories),
+          listColor,
+          // `list.icon` can be null (no icon chosen) — the document only renders the
+          // `Image` when this is non-empty, so an empty string is the "nothing to show" state.
+          listIconUrl: list.icon ? buildIconUrl(list.icon, listColor) : '',
+          rows: buildRows(items, categories, listColor),
         },
       },
     },

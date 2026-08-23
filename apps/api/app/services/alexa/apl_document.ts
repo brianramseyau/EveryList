@@ -8,13 +8,23 @@
  * document resource in the skill manifest, which keeps deployment to just `alexa/skill.json` +
  * `alexa/interaction-model.json` with no extra console/`ask-cli` step.
  *
- * Deliberately uses only core APL primitives (Container/Sequence/Text/TouchWrapper) with inline
- * styling rather than the `alexa-layouts` responsive component package, to avoid depending on an
- * external package's exact prop shapes that can't be verified from this repo. A single top-level
- * `Sequence` iterates one flattened array of `{type: 'header'|'item', ...}` rows (built by
- * `apl_view.ts`) rather than nesting a `Sequence` per category — APL doesn't support nesting
- * scrollable `Sequence`s cleanly, and flattening with a `when` conditional per row template is
- * the standard APL pattern for a sectioned list.
+ * Deliberately uses only core APL primitives (Container/Sequence/Text/Frame/Image/TouchWrapper)
+ * with inline styling rather than the `alexa-layouts` responsive component package, to avoid
+ * depending on an external package's exact prop shapes that can't be verified from this repo. A
+ * single top-level `Sequence` iterates one flattened array of `{type: 'header'|'item', ...}`
+ * rows (built by `apl_view.ts`) rather than nesting a `Sequence` per category — APL doesn't
+ * support nesting scrollable `Sequence`s cleanly, and flattening with a `when` conditional per
+ * row template is the standard APL pattern for a sectioned list.
+ *
+ * Styled to match the main app's own dark theme (`apps/web/src/routes/layout.css`: background
+ * `#1b1d1f`, text `#edeae3`) rather than the generic `#1e1e1e`/`#ffffff` this started with. The
+ * app's colored bottom-border underline under each category heading (drawn in the list's own
+ * `color`, not a fixed brand color) is approximated here with a thin `Frame` beneath the header
+ * text, since APL text components have no `borderBottom` property. Category/list icons are
+ * images fetched from `alexa_icons_controller.ts`, which rasterizes the app's own MDI glyphs —
+ * APL can't render arbitrary SVG icon libraries directly, only fetch real images by URL.
+ * APL has no custom font loading (Amazon's own bundled fonts only), so no `fontFamily` is set
+ * anywhere here — the app's actual typefaces (Space Grotesk/Public Sans) aren't reproducible.
  *
  * Only verifiable by actually rendering it — via the Alexa Developer Console's APL simulator, or
  * the standalone APL Authoring Tool — neither of which this repo can run; treat the exact visual
@@ -31,17 +41,32 @@ export const LIST_VIEW_DOCUMENT = {
         type: 'Container',
         width: '100vw',
         height: '100vh',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: '#1b1d1f',
         items: [
           {
-            type: 'Text',
-            text: '${payload.listData.properties.listName}',
-            fontSize: '32dp',
-            fontWeight: 'bold',
-            color: '#ffffff',
+            type: 'Container',
+            direction: 'row',
+            alignItems: 'center',
             paddingTop: '24dp',
             paddingLeft: '24dp',
             paddingBottom: '12dp',
+            items: [
+              {
+                type: 'Image',
+                when: '${payload.listData.properties.listIconUrl != ""}',
+                source: '${payload.listData.properties.listIconUrl}',
+                width: '40dp',
+                height: '40dp',
+                paddingRight: '12dp',
+              },
+              {
+                type: 'Text',
+                text: '${payload.listData.properties.listName}',
+                fontSize: '32dp',
+                fontWeight: 'bold',
+                color: '#edeae3',
+              },
+            ],
           },
           {
             type: 'Sequence',
@@ -52,13 +77,40 @@ export const LIST_VIEW_DOCUMENT = {
             data: '${payload.listData.properties.rows}',
             items: [
               {
-                type: 'Text',
+                type: 'Container',
                 when: "${data.type == 'header'}",
-                text: '${data.text}',
-                fontSize: '20dp',
-                color: '#9d9d9d',
                 paddingTop: '16dp',
                 paddingBottom: '6dp',
+                items: [
+                  {
+                    type: 'Container',
+                    direction: 'row',
+                    alignItems: 'center',
+                    items: [
+                      {
+                        type: 'Image',
+                        source: '${data.iconUrl}',
+                        width: '24dp',
+                        height: '24dp',
+                        paddingRight: '8dp',
+                      },
+                      {
+                        type: 'Text',
+                        text: '${data.text}',
+                        fontSize: '20dp',
+                        fontWeight: '600',
+                        color: '${payload.listData.properties.listColor}',
+                      },
+                    ],
+                  },
+                  {
+                    type: 'Frame',
+                    height: '2dp',
+                    width: '100%',
+                    marginTop: '4dp',
+                    backgroundColor: '${payload.listData.properties.listColor}',
+                  },
+                ],
               },
               {
                 type: 'TouchWrapper',
@@ -66,17 +118,38 @@ export const LIST_VIEW_DOCUMENT = {
                 onPress: [
                   {
                     type: 'SendEvent',
-                    arguments: ['complete', '${data.id}', '${payload.listData.properties.listId}'],
+                    arguments: [
+                      "${data.checked ? 'uncheck' : 'complete'}",
+                      '${data.id}',
+                      '${payload.listData.properties.listId}',
+                    ],
                   },
                 ],
                 items: [
                   {
-                    type: 'Text',
-                    text: "${data.checked ? '<s>' + data.name + '</s>' : data.name}",
-                    fontSize: '26dp',
-                    color: "${data.checked ? '#6d6d6d' : '#ffffff'}",
+                    type: 'Container',
+                    direction: 'row',
+                    alignItems: 'center',
                     paddingTop: '8dp',
                     paddingBottom: '8dp',
+                    items: [
+                      {
+                        type: 'Frame',
+                        width: '20dp',
+                        height: '20dp',
+                        borderRadius: '4dp',
+                        borderWidth: '${data.checked ? 0 : 2}dp',
+                        borderColor: '#6d6d6d',
+                        backgroundColor: "${data.checked ? '#2e8b57' : 'transparent'}",
+                        marginRight: '12dp',
+                      },
+                      {
+                        type: 'Text',
+                        text: "${data.checked ? '<s>' + data.name + '</s>' : data.name}",
+                        fontSize: '26dp',
+                        color: "${data.checked ? '#6d6d6d' : '#edeae3'}",
+                      },
+                    ],
                   },
                 ],
               },

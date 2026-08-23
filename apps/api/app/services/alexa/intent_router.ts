@@ -74,6 +74,28 @@ export async function completeItemRow(list: List, item: Item): Promise<void> {
 }
 
 /**
+ * Reverses `completeItemRow` — the touch-driven counterpart to tapping an already-checked item
+ * on-screen (`apl_touch_handler.ts`, PHASE16_PLAN.md Stage 3). There's no voice equivalent (no
+ * `UncheckItemIntent` exists; the closest voice path is re-saying an item's name via
+ * `handleAddItem`, which restores it as a side effect of its own dedup logic) — this only exists
+ * for the tap gesture, so it lives here as its own function rather than folded into that.
+ */
+export async function uncheckItemRow(list: List, item: Item): Promise<void> {
+  item.checked = false
+  item.checkedAt = null
+  item.version += 1
+  await item.save()
+
+  await broadcastSync({
+    listId: list.id,
+    entityType: 'item',
+    entityId: item.id,
+    op: 'update',
+    version: item.version,
+  })
+}
+
+/**
  * `AddItemIntent` — fuzzy-matches the spoken name against the list's existing item names first
  * (catching near-miss transcriptions like "miilk" vs "milk", per PHASE16_PLAN.md Stage 2) before
  * falling back to the API's own exact-match dedup/restore behavior that `items_controller.ts`'s

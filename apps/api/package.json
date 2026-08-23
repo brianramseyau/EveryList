@@ -81,6 +81,8 @@
     "@adonisjs/transmit": "^3.0.1",
     "@everylist/shared": "workspace:*",
     "@japa/api-client": "^3.2.1",
+    "@mdi/js": "^7.4.47",
+    "@resvg/resvg-js": "^2.6.2",
     "@tuyau/core": "^1.2.2",
     "@vinejs/vine": "^4.4.0",
     "alexa-verifier": "^4.0.0",
