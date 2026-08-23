@@ -122,7 +122,7 @@ test.group('Alexa skill endpoint', (group) => {
     const response = await postAlexa(client, buildEnvelope({ type: 'LaunchRequest' }), {
       certUrl: null,
     })
-    response.assertStatus(401)
+    response.assertStatus(400)
     assert.equal(response.body().message, 'Missing Alexa request signature headers')
   })
 
@@ -133,7 +133,7 @@ test.group('Alexa skill endpoint', (group) => {
     }
     try {
       const response = await postAlexa(client, buildEnvelope({ type: 'LaunchRequest' }))
-      response.assertStatus(401)
+      response.assertStatus(400)
     } finally {
       alexaSignatureVerifier.verify = original
     }
