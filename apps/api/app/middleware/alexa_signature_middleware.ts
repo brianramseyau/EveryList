@@ -1,6 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import { alexaSignatureVerifier } from '#services/alexa/signature_verifier'
+import { writeFile } from 'node:fs/promises'
 
 /**
  * Verifies that a request to the Alexa skill endpoint actually came from
@@ -39,6 +40,16 @@ export default class AlexaSignatureMiddleware {
         },
         'Alexa request signature verification failed'
       )
+      // TEMPORARY: dumps the exact failing payload to disk (never to logs/chat) so it can be
+      // replayed locally against alexa-verifier to isolate whether corruption happens in transit
+      // or in verification itself. Remove once the real cause is found (see PHASE16_PLAN.md).
+      if (process.env.ALEXA_DEBUG_DUMP_SIGNATURE_FAILURES === 'true') {
+        await writeFile(
+          '/tmp/alexa-signature-failure.json',
+          JSON.stringify({ certUrl, signature, rawBody })
+          /* c8 ignore next -- disk-write failure isn't worth a contrived test for throwaway debug code */
+        ).catch(() => {})
+      }
       return ctx.response.unauthorized({ message: 'Invalid Alexa request signature' })
     }
 
