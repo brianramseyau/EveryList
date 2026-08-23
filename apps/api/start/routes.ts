@@ -171,6 +171,9 @@ router
         // client-credentials-style exchange bridging to Authentik, not
         // signed the way skill requests are.
         router.post('oauth/token', [controllers.AlexaOauth, 'token'])
+        // Category/list icons for the APL visual display — a plain public image URL Alexa's
+        // renderer fetches directly, not a signed skill request.
+        router.get('icons/:name', [controllers.AlexaIcons, 'show'])
       })
       .prefix('alexa')
       .as('alexa')

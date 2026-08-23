@@ -755,7 +755,11 @@ test.group('Alexa skill endpoint', (group) => {
     )
     assert.include(response.body().response.outputSpeech.text, 'Added Milk to Groceries')
     const rows = response.body().response.directives[0].datasources.listData.properties.rows
-    assert.deepInclude(rows, { type: 'header', text: 'Other' })
+    assert.isTrue(
+      rows.some(
+        (row: { type?: string; text?: string }) => row.type === 'header' && row.text === 'Other'
+      )
+    )
     assert.isTrue(rows.some((row: { name?: string }) => row.name === 'Milk'))
   })
 
@@ -816,6 +820,75 @@ test.group('Alexa skill endpoint', (group) => {
     assert.isTrue(bodyData<{ checked: boolean }[]>(after)[0]!.checked)
   })
 
+  test('tapping an already-checked item on-screen unchecks it', async ({ client, assert }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+    await addItem(client, owner.token, listId, 'Milk')
+
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const milk = bodyData<{ id: number }[]>(items)[0]!
+
+    await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['complete', milk.id, listId],
+      })
+    )
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['uncheck', milk.id, listId],
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'Marked Milk as not done')
+    const rows = response.body().response.directives[0].datasources.listData.properties.rows
+    assert.isTrue(
+      rows.some((row: { name?: string; checked?: boolean }) => row.name === 'Milk' && !row.checked)
+    )
+
+    const after = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    assert.isFalse(bodyData<{ checked: boolean }[]>(after)[0]!.checked)
+  })
+
+  test('a UserEvent from a viewer-scoped token cannot uncheck an item', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId], 'viewer')
+    await addItem(client, owner.token, listId, 'Milk')
+
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const milk = bodyData<{ id: number }[]>(items)[0]!
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['uncheck', milk.id, listId],
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, "don't have permission")
+    assert.isUndefined(response.body().response.directives)
+  })
+
   test('a UserEvent with no arguments at all is treated as unrecognized', async ({
     client,
     assert,
@@ -835,7 +908,7 @@ test.group('Alexa skill endpoint', (group) => {
     assert.include(response.body().response.outputSpeech.text, "didn't understand that")
   })
 
-  test('a UserEvent with an action other than "complete" is treated as unrecognized', async ({
+  test('a UserEvent with an action other than "complete" or "uncheck" is treated as unrecognized', async ({
     client,
     assert,
   }) => {
