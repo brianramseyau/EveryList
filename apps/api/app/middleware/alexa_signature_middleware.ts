@@ -1,7 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import { alexaSignatureVerifier } from '#services/alexa/signature_verifier'
-import { writeFile } from 'node:fs/promises'
 
 /**
  * Verifies that a request to the Alexa skill endpoint actually came from
@@ -11,11 +10,17 @@ import { writeFile } from 'node:fs/promises'
  * middleware alongside its parsed JSON — see @adonisjs/bodyparser's
  * `updateRawBody`) rather than re-serializing the parsed body, since
  * re-serializing wouldn't byte-for-byte match what Amazon signed.
+ *
+ * Reads the `signature-256` header, not the plain `signature` header — Amazon
+ * sends both, but `signature` carries a legacy (non-SHA-256) value that will
+ * never verify against `alexa-verifier`'s RSA-SHA256 check. `signature-256`
+ * is the one meant to pair with it. Confirmed by reproducing a real failing
+ * request with plain `openssl dgst -sha256 -verify`, independent of Node.
  */
 export default class AlexaSignatureMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
     const certUrl = ctx.request.header('signaturecertchainurl')
-    const signature = ctx.request.header('signature')
+    const signature = ctx.request.header('signature-256')
     const rawBody = ctx.request.raw()
 
     if (!certUrl || !signature || !rawBody) {
@@ -29,27 +34,7 @@ export default class AlexaSignatureMiddleware {
     try {
       await alexaSignatureVerifier.verify(certUrl, signature, rawBody)
     } catch (error) {
-      ctx.logger.warn(
-        {
-          err: error,
-          certUrl,
-          rawBodyLength: Buffer.byteLength(rawBody, 'utf8'),
-          contentLengthHeader: ctx.request.header('content-length'),
-          contentEncodingHeader: ctx.request.header('content-encoding'),
-          transferEncodingHeader: ctx.request.header('transfer-encoding'),
-        },
-        'Alexa request signature verification failed'
-      )
-      // TEMPORARY: dumps the exact failing payload to disk (never to logs/chat) so it can be
-      // replayed locally against alexa-verifier to isolate whether corruption happens in transit
-      // or in verification itself. Remove once the real cause is found (see PHASE16_PLAN.md).
-      if (process.env.ALEXA_DEBUG_DUMP_SIGNATURE_FAILURES === 'true') {
-        await writeFile(
-          '/tmp/alexa-signature-failure.json',
-          JSON.stringify({ certUrl, signature, rawBody, headers: ctx.request.headers() })
-          /* c8 ignore next -- disk-write failure isn't worth a contrived test for throwaway debug code */
-        ).catch(() => {})
-      }
+      ctx.logger.warn({ err: error, certUrl }, 'Alexa request signature verification failed')
       return ctx.response.unauthorized({ message: 'Invalid Alexa request signature' })
     }
 

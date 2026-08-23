@@ -2,7 +2,6 @@ import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { ApiClient, ApiResponse } from '@japa/api-client'
 import type { ListDto } from '@everylist/shared'
-import { readFile, rm } from 'node:fs/promises'
 import { alexaSignatureVerifier } from '#services/alexa/signature_verifier'
 import { addMember, bodyData, signupAndGetUser } from './helpers.js'
 
@@ -75,7 +74,7 @@ async function postAlexa(
     request = request.header('signaturecertchainurl', headers.certUrl ?? CERT_URL)
   }
   if (headers.signature !== null) {
-    request = request.header('signature', headers.signature ?? 'dGVzdA==')
+    request = request.header('signature-256', headers.signature ?? 'dGVzdA==')
   }
   return request
 }
@@ -137,31 +136,6 @@ test.group('Alexa skill endpoint', (group) => {
       response.assertStatus(401)
     } finally {
       alexaSignatureVerifier.verify = original
-    }
-  })
-
-  test('dumps the failing payload to disk when ALEXA_DEBUG_DUMP_SIGNATURE_FAILURES is set', async ({
-    client,
-    assert,
-  }) => {
-    const dumpPath = '/tmp/alexa-signature-failure.json'
-    await rm(dumpPath, { force: true })
-    const original = alexaSignatureVerifier.verify
-    const originalFlag = process.env.ALEXA_DEBUG_DUMP_SIGNATURE_FAILURES
-    alexaSignatureVerifier.verify = async () => {
-      throw new Error('bad signature')
-    }
-    process.env.ALEXA_DEBUG_DUMP_SIGNATURE_FAILURES = 'true'
-    try {
-      const response = await postAlexa(client, buildEnvelope({ type: 'LaunchRequest' }))
-      response.assertStatus(401)
-      const dumped = JSON.parse(await readFile(dumpPath, 'utf8'))
-      assert.equal(dumped.certUrl, CERT_URL)
-    } finally {
-      alexaSignatureVerifier.verify = original
-      if (originalFlag === undefined) delete process.env.ALEXA_DEBUG_DUMP_SIGNATURE_FAILURES
-      else process.env.ALEXA_DEBUG_DUMP_SIGNATURE_FAILURES = originalFlag
-      await rm(dumpPath, { force: true })
     }
   })
 
