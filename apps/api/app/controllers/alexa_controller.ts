@@ -15,7 +15,6 @@ import { handleTouchEvent } from '#services/alexa/apl_touch_handler'
 
 type AlexaRequestBody = {
   context?: {
-    Viewports?: { type?: string }[]
     System?: {
       application?: { applicationId?: string }
       user?: { accessToken?: string }
@@ -82,13 +81,14 @@ export default class AlexaController {
       return response.ok(linkAccountRequired())
     }
 
-    // Multimodal/Hub-style devices (e.g. Echo Hub) declare APL support via a `Viewports` entry
-    // in `context`, leaving the legacy `System.device.supportedInterfaces` map empty — confirmed
-    // against real Echo Hub traffic, not just the documented single-viewport convention. Check
-    // both so older single-purpose Show/Spot-style devices and newer Hub devices are covered.
-    const hasDisplay =
-      Boolean(body.context?.System?.device?.supportedInterfaces?.['Alexa.Presentation.APL']) ||
-      Boolean(body.context?.Viewports?.some((viewport) => viewport.type === 'APL'))
+    // `context.Viewports` can list an `APL`-typed viewport (e.g. an Echo Hub's overlay/widget
+    // surface) even when the device can't actually render a skill's APL RenderDocument directive
+    // — confirmed by a real Echo Hub rejecting one with "The device does not support
+    // Alexa.Presentation.APL directives" despite declaring a Viewports entry. supportedInterfaces
+    // is the only reliable signal.
+    const hasDisplay = Boolean(
+      body.context?.System?.device?.supportedInterfaces?.['Alexa.Presentation.APL']
+    )
 
     switch (body.request.type) {
       case 'LaunchRequest': {
