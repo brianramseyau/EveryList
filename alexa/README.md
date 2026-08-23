@@ -22,7 +22,15 @@ been built or tested against another IdP (Authelia, Keycloak, etc.), even though
 equivalent authorization-code flow might work. If you don't run Authentik in front of EveryList
 today, set that up first.
 
-If either of those isn't true for your setup, this skill isn't a fit yet.
+**3. If your EveryList instance sits behind forward-auth (SWAG + Authentik, Authelia, etc.)
+covering the whole domain, two paths must bypass it.** This is easy to miss: forward-auth over
+the whole domain only "works" for the web app today because your browser already carries a
+session cookie. Alexa's servers call EveryList directly with no browser and no cookie, so
+`POST /api/v1/alexa` and `POST /api/v1/alexa/oauth/token` need to reach AdonisJS unauthenticated
+by the proxy — each authenticates the caller itself (Alexa's request signature, and the
+account-linking client credentials, respectively). See step 2 below.
+
+If any of those isn't true for your setup, this skill isn't a fit yet.
 
 ## How account linking works
 
@@ -67,13 +75,54 @@ Note the provider's:
 - Userinfo URL (`.../application/o/userinfo/`)
 - Client ID and Client Secret
 
-If SWAG (or another reverse proxy) fronts Authentik with forward-auth protecting everything by
-default, carve out `/application/o/authorize/` and `/application/o/token/` (and `/userinfo/`) so
-Alexa's servers and your phone's browser can reach them directly — everything else stays behind
-forward-auth exactly as it is today. This is a proxy/Authentik config change only; no EveryList
-application code is involved.
+Authentik itself normally sits behind nothing (it can't front its own login check), so its
+`/authorize`/`/token`/`/userinfo` endpoints are already reachable directly — no proxy change on
+Authentik's side.
 
-### 2. Configure EveryList's environment
+### 2. Carve out EveryList's two Alexa endpoints from forward-auth
+
+**This step is easy to miss and the skill will not work without it if your EveryList instance is
+itself behind SWAG (or another reverse proxy) with forward-auth covering the whole domain.**
+Forward-auth in that setup only "works" for the web app today because your browser already
+carries a valid Authentik session cookie on every request — Alexa's servers never will, since
+they call EveryList directly, server-to-server, with no browser and no cookie. Two paths need to
+bypass forward-auth entirely (everything else on the domain stays protected exactly as today —
+each of these two endpoints authenticates the caller itself, so nothing is left unauthenticated):
+
+- `POST /api/v1/alexa` — verified by Alexa's own request signature
+  (`alexa_signature_middleware.ts`), not a session.
+- `POST /api/v1/alexa/oauth/token` — verified by the account-linking client credentials Amazon
+  presents (`alexa_oauth_controller.ts`), not a session.
+
+In SWAG's nginx config for your EveryList site (adapt the upstream/proxy directives to whatever
+your existing site conf already uses — the key part is that these two `location` blocks must
+appear *before* the general `location /` block that includes the forward-auth snippet, and must
+not include that snippet themselves):
+
+```nginx
+location = /api/v1/alexa {
+    include /config/nginx/proxy.conf;
+    proxy_pass http://<your-everylist-upstream>;
+}
+
+location = /api/v1/alexa/oauth/token {
+    include /config/nginx/proxy.conf;
+    proxy_pass http://<your-everylist-upstream>;
+}
+
+location / {
+    include /config/nginx/authentik-server.conf;  # or whatever your forward-auth include is called
+    proxy_pass http://<your-everylist-upstream>;
+    ...
+}
+```
+
+Reload nginx, then confirm both paths are actually reachable without a session before touching
+the Alexa console — a plain `curl -i https://your-everylist-domain/api/v1/alexa` should come back
+from AdonisJS (a 401 "Missing Alexa request signature headers" JSON body is correct — that means
+the request reached the app) rather than an HTML redirect to Authentik's login page.
+
+### 4. Configure EveryList's environment
 
 Set these on your EveryList API container/process (see `.env.example`):
 
@@ -83,16 +132,19 @@ AUTHENTIK_USERINFO_URL=https://your-authentik-domain/application/o/userinfo/
 AUTHENTIK_CLIENT_ID=<the client id from step 1>
 AUTHENTIK_CLIENT_SECRET=<the client secret from step 1>
 
-# Optional but recommended once you have a skill id (step 3):
+# Optional but recommended once you have a skill id (step 5):
 ALEXA_SKILL_ID=<your skill's application id>
 ```
 
 All of these are optional — with none of them set, the skill endpoint responds to every request
 by asking Alexa to prompt for account linking, and the app otherwise boots and runs normally.
 
-### 3. Create the skill in the Alexa developer console
+### 5. Create the skill in the Alexa developer console
 
-Using your own Amazon developer account:
+Using your own Amazon developer account. Account Linking (sub-step 4 below) is where Alexa shows
+you its own redirect URI — if you didn't already add it to the Authentik provider in step 1,
+come back and add it there once you see it here (Authentik lets you edit a provider's redirect
+URIs any time).
 
 1. Create a new custom skill, English (or your locale). Choose **Provision your own** for hosting
    (this is what lets you skip Lambda).
@@ -112,11 +164,12 @@ Using your own Amazon developer account:
    - Domain list: leave empty unless the console requires an entry
    ([`account-linking.json`](account-linking.json) has this as a ready-made template)
 5. Note the skill's **Application ID** (looks like `amzn1.ask.skill.xxxxxxxx`) shown on the
-   skill's "Endpoint" page, and set it as `ALEXA_SKILL_ID` (step 2) — the skill endpoint checks
+   skill's "Endpoint" page, and set it as `ALEXA_SKILL_ID` (step 4) — the skill endpoint checks
    this on every request as defense-in-depth alongside Amazon's request-signature verification.
 6. Test in the console's **Test** tab (enable testing for the "Development" stage) before
    touching a real Echo device — the built-in simulator sends real signed requests to your
-   endpoint without needing certification.
+   endpoint without needing certification, and its **Display** panel renders the APL visual list
+   (PHASE16_PLAN.md Stage 3) so you can check the on-screen layout and tap-to-complete there too.
 
 ### Deploying with `ask-cli` instead of the console
 
@@ -190,9 +243,13 @@ This is automatic; there's nothing extra to configure per device.
   Alexa trusts, or the certificate chain is incomplete — check with `openssl s_client -connect
   your-domain:443 -showcerts`.
 - **Account linking fails at the Authentik step**: confirm the redirect URI registered in
-  Authentik matches exactly what the Alexa developer console shows (including trailing slashes),
-  and that SWAG/your reverse proxy isn't still forward-auth-protecting Authentik's `/authorize` or
-  `/token` endpoints.
+  Authentik matches exactly what the Alexa developer console shows (including trailing slashes).
+- **Every request gets "Please link your EveryList account" / the Alexa Test tab shows a
+  connection or auth error, and you're behind SWAG-style forward-auth**: confirm `POST
+  /api/v1/alexa` and `POST /api/v1/alexa/oauth/token` actually bypass forward-auth (step 2) —
+  `curl -i` either path and check you get a plain JSON response from AdonisJS, not an HTML
+  redirect to Authentik's login page. This is the single most common way this skill silently
+  fails to work at all on a forward-auth-protected instance.
 - There is no staging environment for the skill endpoint itself: since Alexa must reach a real
   public HTTPS endpoint, some verification is unavoidably against your real instance. Keep the
   skill private/personal-account-only and use a narrowly-scoped test account while validating.

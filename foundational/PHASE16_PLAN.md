@@ -304,10 +304,17 @@ there's no structural reason to split it out.
   deploy step required — this is the first thing someone evaluating the skill needs to know,
   not an implementation detail buried later in the doc.
 - **Account linking reuses Stage 0, not a second auth system, and Authentik is a hard
-  requirement, not one option among several.** Authentik (already the household's IdP,
-  already fronted by SWAG) becomes the skill's OAuth2 provider — carve out only its
-  `/authorize` and `/token` endpoints from SWAG's forward-auth (everything else stays
-  protected, as today; this is a SWAG/Authentik config change, not application code). On
+  requirement, not one option among several.** Authentik (already the household's IdP) becomes
+  the skill's OAuth2 provider — Authentik itself sits in front of nothing (it can't be behind
+  its own forward-auth check) so its `/authorize`/`/token`/`/userinfo` endpoints are already
+  directly reachable, no proxy change needed there. **The actual carve-out is on EveryList's own
+  domain**: it's SWAG-fronted with forward-auth covering the whole domain, which today only
+  "works" for the SPA because the browser already carries a valid Authentik session cookie —
+  Alexa's servers never will, for either the signed skill endpoint (`POST /api/v1/alexa`) or the
+  OAuth token-bridge endpoint (`POST /api/v1/alexa/oauth/token`), so both must bypass
+  forward-auth at the proxy (everything else on the domain stays protected, as today; this is a
+  SWAG config change, not application code — each endpoint authenticates itself, via Alexa's
+  request signature and the account-linking client credentials respectively). On
   successful auth-code exchange, mint a Stage-0 PAT server-side (scoped to the user's list(s),
   editor role) and hand its value back as the OAuth2 access token — this is the one open
   design point worth a quick spike before committing, since it's the one place two systems
@@ -355,7 +362,7 @@ there's no structural reason to split it out.
   deployed via `ask-cli`, not the AdonisJS app.
 - `alexa/README.md` (new) — leads with the two plain-English requirements above (no
   Lambda/needs a real cert; Authentik required for linking) before any setup instructions,
-  then walks through the SWAG/Authentik config change and skill setup.
+  then walks through the SWAG carve-out for EveryList's own two Alexa endpoints and skill setup.
 
 ### Sequencing
 
