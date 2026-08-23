@@ -1,0 +1,91 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "every list",
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AddItemIntent",
+          "slots": [
+            { "name": "ItemName", "type": "AMAZON.SearchQuery" },
+            { "name": "ListName", "type": "AMAZON.SearchQuery" }
+          ],
+          "samples": [
+            "add {ItemName}",
+            "add {ItemName} to my list",
+            "add {ItemName} to {ListName}",
+            "add {ItemName} to the {ListName} list",
+            "put {ItemName} on my list",
+            "put {ItemName} on the {ListName} list",
+            "i need {ItemName}",
+            "we need {ItemName}"
+          ]
+        },
+        {
+          "name": "RemoveItemIntent",
+          "slots": [
+            { "name": "ItemName", "type": "AMAZON.SearchQuery" },
+            { "name": "ListName", "type": "AMAZON.SearchQuery" }
+          ],
+          "samples": [
+            "remove {ItemName}",
+            "remove {ItemName} from my list",
+            "remove {ItemName} from {ListName}",
+            "remove {ItemName} from the {ListName} list",
+            "delete {ItemName} from my list",
+            "take {ItemName} off my list",
+            "take {ItemName} off the {ListName} list"
+          ]
+        },
+        {
+          "name": "CompleteItemIntent",
+          "slots": [
+            { "name": "ItemName", "type": "AMAZON.SearchQuery" },
+            { "name": "ListName", "type": "AMAZON.SearchQuery" }
+          ],
+          "samples": [
+            "check off {ItemName}",
+            "mark {ItemName} as done",
+            "mark {ItemName} off my list",
+            "i got {ItemName}",
+            "i already have {ItemName}",
+            "cross {ItemName} off my list",
+            "cross {ItemName} off the {ListName} list"
+          ]
+        },
+        {
+          "name": "ReadListIntent",
+          "slots": [{ "name": "ListName", "type": "AMAZON.SearchQuery" }],
+          "samples": [
+            "what's on my list",
+            "what's on {ListName}",
+            "what's on the {ListName} list",
+            "what do i need to buy",
+            "read my list",
+            "read the {ListName} list",
+            "what's left on my list"
+          ]
+        }
+      ]
+    }
+  }
+}

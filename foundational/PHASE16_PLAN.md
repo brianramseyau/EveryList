@@ -278,6 +278,17 @@ Hard dependency on Stage 0. No dependency on Stage 2 — ships and is usable sta
 
 ## Stage 2 — Alexa custom skill
 
+**Status: application code implemented and verified (100% coverage, typecheck/lint green) —
+awaiting deployment.** What's left is inherently manual/account-specific and can't be done from
+this repo: registering an Authentik OAuth2 provider, creating the skill under a real Amazon
+developer account, and running the Alexa console/`ask-cli` setup end to end — see
+[`alexa/README.md`](../alexa/README.md) for the full walkthrough. One deviation from the design
+below worth flagging: Alexa's account-linking config carries only **one** client id/secret pair,
+presented both at the `/authorize` redirect straight to Authentik and at this skill's own token
+endpoint — so `alexa_oauth_controller.ts` authenticates Amazon's call against the same
+`AUTHENTIK_CLIENT_ID`/`SECRET` the server-side exchange uses, not a second invented pair as an
+earlier draft of this stage assumed.
+
 ### Design
 
 Stays in the monorepo (`apps/api`) — unlike HACS, Alexa doesn't pull code from a repo, so

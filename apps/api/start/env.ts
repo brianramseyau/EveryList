@@ -52,4 +52,27 @@ export default await Env.create(new URL('../', import.meta.url), {
   |----------------------------------------------------------
   */
   LIMITER_STORE: Env.schema.enum(['database', 'memory'] as const),
+
+  // Alexa custom skill (PHASE16_PLAN.md Stage 2) — all optional: the skill
+  // endpoint responds with "link your account" until account linking is
+  // configured, and app/ boots with no Alexa config at all otherwise (see
+  // PLAN.md's zero-config startup rule).
+  //
+  // The skill's own Alexa developer-console application id, checked against
+  // every request as a defense-in-depth measure alongside signature
+  // verification (skips the check when unset).
+  ALEXA_SKILL_ID: Env.schema.string.optional(),
+  // Authentik's OAuth2/OIDC endpoints and the confidential client EveryList
+  // registers with it for account linking — used both for the server-side
+  // half of the exchange (app/services/alexa/authentik_client.ts) and to
+  // authenticate Amazon's own call to our token-bridge endpoint
+  // (alexa_oauth_controller.ts): Alexa's account-linking config carries only
+  // one client id/secret pair, presented at both the `/authorize` redirect
+  // straight to Authentik and the "Access Token URI" call to us, so it must
+  // be this same Authentik-registered client rather than a second invented
+  // one — see alexa/README.md.
+  AUTHENTIK_TOKEN_URL: Env.schema.string.optional(),
+  AUTHENTIK_USERINFO_URL: Env.schema.string.optional(),
+  AUTHENTIK_CLIENT_ID: Env.schema.string.optional(),
+  AUTHENTIK_CLIENT_SECRET: Env.schema.string.optional(),
 })

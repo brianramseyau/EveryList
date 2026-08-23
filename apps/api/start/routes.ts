@@ -158,6 +158,23 @@ router
       .get('tokens/me', [controllers.PersonalAccessTokens, 'me'])
       .use(middleware.auth({ guards: ['pat'] }))
 
+    router
+      .group(() => {
+        // Reached directly by Amazon's servers with a signed request, not a
+        // login/PAT bearer token — auth is handled inside the controller by
+        // verifying the account-linked PAT embedded in the request body
+        // (see alexa_controller.ts). Amazon requires signature verification
+        // instead of Lambda's free IAM check, since this skill uses a direct
+        // HTTPS endpoint (PHASE16_PLAN.md Stage 2).
+        router.post('/', [controllers.Alexa, 'handle']).use(middleware.alexaSignature())
+        // Amazon's account-linking "Access Token URI" — a plain OAuth2
+        // client-credentials-style exchange bridging to Authentik, not
+        // signed the way skill requests are.
+        router.post('oauth/token', [controllers.AlexaOauth, 'token'])
+      })
+      .prefix('alexa')
+      .as('alexa')
+
     router.get('invites/:token', [controllers.InviteAccept, 'preview'])
     router
       .post('invites/:token/accept', [controllers.InviteAccept, 'accept'])
