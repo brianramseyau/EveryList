@@ -17,6 +17,9 @@ type Envelope = {
   slots?: Record<string, string | undefined>
   /** Declares `Alexa.Presentation.APL` support on the requesting device (PHASE16_PLAN.md Stage 3). */
   hasDisplay?: boolean
+  /** How `hasDisplay` is declared — real Echo Hub devices use `Viewports`, leaving
+   * `supportedInterfaces` empty; defaults to the legacy `supportedInterfaces` convention. */
+  displayVia?: 'supportedInterfaces' | 'viewports'
   /** `request.arguments` for an `Alexa.Presentation.APL.UserEvent` (a tap on-screen). */
   args?: unknown[]
 }
@@ -28,15 +31,23 @@ function buildEnvelope(options: Envelope) {
       ? { user: { accessToken: options.accessToken } }
       : { user: {} }
 
+  const displayVia = options.displayVia ?? 'supportedInterfaces'
+
   return {
     version: '1.0',
     session: accessTokenLocation === 'session' ? userWithToken : { user: {} },
     context: {
+      ...(options.hasDisplay && displayVia === 'viewports'
+        ? { Viewports: [{ type: 'APL', id: 'medHub' }] }
+        : {}),
       System: {
         application: { applicationId: options.applicationId ?? 'test-skill-id' },
         ...(accessTokenLocation === 'context' ? userWithToken : { user: {} }),
         device: {
-          supportedInterfaces: options.hasDisplay ? { 'Alexa.Presentation.APL': {} } : {},
+          supportedInterfaces:
+            options.hasDisplay && displayVia === 'supportedInterfaces'
+              ? { 'Alexa.Presentation.APL': {} }
+              : {},
         },
       },
     },
@@ -699,6 +710,29 @@ test.group('Alexa skill endpoint', (group) => {
     assert.equal(directives[0].type, 'Alexa.Presentation.APL.RenderDocument')
     assert.equal(directives[0].token, `list-${listId}`)
     assert.equal(directives[0].datasources.listData.properties.listName, 'Groceries')
+  })
+
+  test('LaunchRequest on an Echo Hub-style device declaring APL via Viewports (not supportedInterfaces) also shows the list', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'LaunchRequest',
+        accessToken: pat,
+        hasDisplay: true,
+        displayVia: 'viewports',
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, "Here's Groceries")
+    const directives = response.body().response.directives
+    assert.lengthOf(directives, 1)
+    assert.equal(directives[0].type, 'Alexa.Presentation.APL.RenderDocument')
   })
 
   test('LaunchRequest on a screen device with several lists asks to disambiguate and shows nothing', async ({
