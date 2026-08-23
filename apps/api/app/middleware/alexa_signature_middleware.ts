@@ -28,7 +28,17 @@ export default class AlexaSignatureMiddleware {
     try {
       await alexaSignatureVerifier.verify(certUrl, signature, rawBody)
     } catch (error) {
-      ctx.logger.warn({ err: error, certUrl }, 'Alexa request signature verification failed')
+      ctx.logger.warn(
+        {
+          err: error,
+          certUrl,
+          rawBodyLength: Buffer.byteLength(rawBody, 'utf8'),
+          contentLengthHeader: ctx.request.header('content-length'),
+          contentEncodingHeader: ctx.request.header('content-encoding'),
+          transferEncodingHeader: ctx.request.header('transfer-encoding'),
+        },
+        'Alexa request signature verification failed'
+      )
       return ctx.response.unauthorized({ message: 'Invalid Alexa request signature' })
     }
 
