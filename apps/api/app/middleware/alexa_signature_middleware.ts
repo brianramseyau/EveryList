@@ -46,7 +46,7 @@ export default class AlexaSignatureMiddleware {
       if (process.env.ALEXA_DEBUG_DUMP_SIGNATURE_FAILURES === 'true') {
         await writeFile(
           '/tmp/alexa-signature-failure.json',
-          JSON.stringify({ certUrl, signature, rawBody })
+          JSON.stringify({ certUrl, signature, rawBody, headers: ctx.request.headers() })
           /* c8 ignore next -- disk-write failure isn't worth a contrived test for throwaway debug code */
         ).catch(() => {})
       }
