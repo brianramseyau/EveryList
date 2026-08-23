@@ -1,0 +1,14 @@
+{
+  "accountLinkingRequest": {
+    "skipOnEnablement": false,
+    "type": "AUTH_CODE",
+    "authorizationUrl": "https://your-authentik-domain.example.com/application/o/authorize/",
+    "domains": [],
+    "clientId": "REPLACE_WITH_AUTHENTIK_CLIENT_ID",
+    "scopes": ["openid", "email"],
+    "accessTokenUrl": "https://your-everylist-domain.example.com/api/v1/alexa/oauth/token",
+    "accessTokenScheme": "HTTP_BASIC",
+    "clientSecret": "REPLACE_WITH_AUTHENTIK_CLIENT_SECRET",
+    "defaultTokenExpirationInSeconds": 3600
+  }
+}

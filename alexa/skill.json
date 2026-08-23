@@ -1,0 +1,48 @@
+{
+  "manifest": {
+    "publishingInformation": {
+      "locales": {
+        "en-US": {
+          "name": "EveryList",
+          "summary": "Add, remove, and check off items on your self-hosted EveryList lists.",
+          "description": "A private skill for a self-hosted EveryList instance. Add items, mark them done, remove them, and hear (or, on a screen device, see) what's on a list.",
+          "examplePhrases": [
+            "Alexa, ask every list to add milk",
+            "Alexa, tell every list I got eggs",
+            "Alexa, ask every list what's on my list"
+          ],
+          "keywords": ["shopping list", "todo", "groceries", "self-hosted"]
+        }
+      },
+      "isAvailableWorldwide": false,
+      "testingInstructions": "Requires account linking against a self-hosted EveryList instance fronted by Authentik — see alexa/README.md.",
+      "category": "SHOPPING",
+      "distributionCountries": []
+    },
+    "apis": {
+      "custom": {
+        "endpoint": {
+          "uri": "https://your-everylist-domain.example.com/api/v1/alexa"
+        },
+        "interfaces": [
+          {
+            "type": "ALEXA_PRESENTATION_APL"
+          }
+        ]
+      }
+    },
+    "manifestVersion": "1.0",
+    "privacyAndCompliance": {
+      "allowsPurchases": false,
+      "usesPersonalInfo": false,
+      "isChildDirected": false,
+      "isExportCompliant": true,
+      "containsAds": false,
+      "locales": {
+        "en-US": {
+          "privacyPolicyUrl": ""
+        }
+      }
+    }
+  }
+}

@@ -278,6 +278,17 @@ Hard dependency on Stage 0. No dependency on Stage 2 — ships and is usable sta
 
 ## Stage 2 — Alexa custom skill
 
+**Status: application code implemented and verified (100% coverage, typecheck/lint green) —
+awaiting deployment.** What's left is inherently manual/account-specific and can't be done from
+this repo: registering an Authentik OAuth2 provider, creating the skill under a real Amazon
+developer account, and running the Alexa console/`ask-cli` setup end to end — see
+[`alexa/README.md`](../alexa/README.md) for the full walkthrough. One deviation from the design
+below worth flagging: Alexa's account-linking config carries only **one** client id/secret pair,
+presented both at the `/authorize` redirect straight to Authentik and at this skill's own token
+endpoint — so `alexa_oauth_controller.ts` authenticates Amazon's call against the same
+`AUTHENTIK_CLIENT_ID`/`SECRET` the server-side exchange uses, not a second invented pair as an
+earlier draft of this stage assumed.
+
 ### Design
 
 Stays in the monorepo (`apps/api`) — unlike HACS, Alexa doesn't pull code from a repo, so
@@ -293,10 +304,17 @@ there's no structural reason to split it out.
   deploy step required — this is the first thing someone evaluating the skill needs to know,
   not an implementation detail buried later in the doc.
 - **Account linking reuses Stage 0, not a second auth system, and Authentik is a hard
-  requirement, not one option among several.** Authentik (already the household's IdP,
-  already fronted by SWAG) becomes the skill's OAuth2 provider — carve out only its
-  `/authorize` and `/token` endpoints from SWAG's forward-auth (everything else stays
-  protected, as today; this is a SWAG/Authentik config change, not application code). On
+  requirement, not one option among several.** Authentik (already the household's IdP) becomes
+  the skill's OAuth2 provider — Authentik itself sits in front of nothing (it can't be behind
+  its own forward-auth check) so its `/authorize`/`/token`/`/userinfo` endpoints are already
+  directly reachable, no proxy change needed there. **The actual carve-out is on EveryList's own
+  domain**: it's SWAG-fronted with forward-auth covering the whole domain, which today only
+  "works" for the SPA because the browser already carries a valid Authentik session cookie —
+  Alexa's servers never will, for either the signed skill endpoint (`POST /api/v1/alexa`) or the
+  OAuth token-bridge endpoint (`POST /api/v1/alexa/oauth/token`), so both must bypass
+  forward-auth at the proxy (everything else on the domain stays protected, as today; this is a
+  SWAG config change, not application code — each endpoint authenticates itself, via Alexa's
+  request signature and the account-linking client credentials respectively). On
   successful auth-code exchange, mint a Stage-0 PAT server-side (scoped to the user's list(s),
   editor role) and hand its value back as the OAuth2 access token — this is the one open
   design point worth a quick spike before committing, since it's the one place two systems
@@ -344,7 +362,7 @@ there's no structural reason to split it out.
   deployed via `ask-cli`, not the AdonisJS app.
 - `alexa/README.md` (new) — leads with the two plain-English requirements above (no
   Lambda/needs a real cert; Authentik required for linking) before any setup instructions,
-  then walks through the SWAG/Authentik config change and skill setup.
+  then walks through the SWAG carve-out for EveryList's own two Alexa endpoints and skill setup.
 
 ### Sequencing
 
@@ -369,3 +387,143 @@ stalls on anything HA-specific.
   against the real Cloudflare-tunneled URL — call this out as this stage's one true "no
   staging environment" risk, mitigated by keeping the skill private/personal-account-only and
   the linking PAT narrowly scoped.
+
+---
+
+## Stage 3 — APL visual display for screen devices (Echo Show/Hub)
+
+**Status: application code implemented and verified (100% coverage, typecheck/lint green) —
+awaiting deployment alongside Stage 2.** One deviation from the design below worth flagging: the
+APL document lives at `apps/api/app/services/alexa/apl_document.ts` (a plain TS object), not a
+standalone `alexa/apl/list-view.json` file — the production Docker image's build stage only
+copies `apps/api/` (see `docker/Dockerfile`), not the repo-root `alexa/` deployment-assets
+directory, so anything the running server needs at request time has to live inside `apps/api`.
+
+Stage 2 shipped voice-only: every response is
+`PlainText` speech plus a plain "Simple" card, which only shows in the Alexa app's interaction
+history — never on-device. On a screen device like the household's Echo Hub, opening "every
+list" or asking what's on it today just talks; the screen shows Alexa's generic
+listening/speaking chrome, not the list itself. This was identified as a gap right after Stage 2
+shipped and is called out here as its own stage — rather than folded into Stage 2 after the
+fact — since it's a distinct capability (APL) with its own interaction model
+(`Alexa.Presentation.APL.UserEvent`) and its own device-capability branching. Purely additive:
+devices without a screen (Echo Dot, etc.) are completely unaffected — every new code path is
+gated on the request declaring `Alexa.Presentation.APL` support, and falls through to Stage 2's
+existing voice-only behavior otherwise.
+
+Scope decisions: the visual list is **interactive** (tapping an item on-screen marks it done, not
+just a read-only mirror of speech), and items are **grouped by category**, matching how the
+EveryList app itself presents a list, rather than a flat list.
+
+### Design
+
+- **Device detection.** `alexa_controller.ts` reads
+  `context.System.device.supportedInterfaces['Alexa.Presentation.APL']` off the incoming request
+  and threads a `hasDisplay: boolean` into intent handling. Nothing renders unless this is true.
+- **LaunchRequest gets smarter on a screen.** Today, opening the skill always returns the
+  generic "Welcome to EveryList..." speech regardless of device. On a screen device,
+  `LaunchRequest` should instead behave like `ReadListIntent` with no `ListName` slot: resolve
+  the single accessible list (or ask which one, same disambiguation `list_resolution.ts` already
+  does) and show it immediately — this is the natural "smart display" experience and directly
+  answers "does opening the skill open a list on the display." Devices without a screen keep
+  exactly today's welcome-only behavior, unchanged.
+- **The list stays current after voice actions, not just when first shown.** After
+  `AddItemIntent`/`RemoveItemIntent`/`CompleteItemIntent`/`ReadListIntent` on a screen device, the
+  response re-renders the affected list's current state (post-mutation) as a fresh
+  `RenderDocument` directive alongside the spoken reply, so the screen doesn't go stale until the
+  next utterance.
+- **Tap-to-complete is a new, separate request type, not a slot-filled intent.** APL's
+  `SendEvent` command fires an `Alexa.Presentation.APL.UserEvent` request (not `IntentRequest`)
+  at the same `/api/v1/alexa` endpoint, carrying whatever arguments the document's `onPress`
+  command declared — here, the tapped item's id and its list id. This mutates by id directly (no
+  fuzzy name matching needed, unlike the voice path) but must still enforce the same
+  `editor`-role check `roleFor()` already does for voice mutations — a viewer-scoped token's tap
+  is rejected the same way its voice command would be.
+- **Category grouping reuses `getEffectiveCategories`** (`app/services/category_service.ts`) —
+  the same list-scoped, `sortOrder`-ordered category list the rest of the app already uses.
+  Items are bucketed by `categoryId`, with an "Other" bucket for `categoryId: null`, ordered
+  last.
+- **Checked items are shown, not hidden** — mirroring the main app's list view (which keeps
+  checked items visible with a struck-through style rather than disappearing them), the APL
+  datasource includes both unchecked and checked active items, checked ones rendered
+  struck-through and grouped after unchecked ones within each category. An equally-valid
+  alternative worth reconsidering at implementation time: chase parity with the existing spoken
+  summary instead (which only speaks unchecked items) and hide checked items entirely.
+- **A key internal refactor**: today, `intent_router.ts`'s handlers (`handleAddItem`,
+  `handleRemoveOrComplete`, `handleReadList`) each return a bare Alexa response object built by
+  `say()`. To let `alexa_controller.ts` decide whether to attach a display directive, they
+  instead return `{ response, list? }` — `list` being the resolved list the handler acted on
+  (undefined for a not-found/ambiguous/no-slot-provided outcome, where there's nothing to
+  render). The controller, after calling a handler, attaches a `RenderDocument` directive built
+  from `list`'s fresh items/categories only when `hasDisplay` is true. `response_builder.ts`
+  (`say()`, `linkAccountRequired()`) stays completely device-agnostic — directive-merging
+  happens in the controller, not inside the speech-building helpers.
+- **Shared mutation helper.** `handleRemoveOrComplete`'s "mark checked" branch (version bump,
+  `checked`/`checkedAt`, `broadcastSync`) is extracted into a small `completeItemRow(list, item)`
+  function in `intent_router.ts`, reused by both the voice `CompleteItemIntent` path and the new
+  touch-driven completion path — avoiding two copies of that mutation.
+
+### Files
+
+**New:**
+
+- `apps/api/app/services/alexa/apl_view.ts` — builds the `Alexa.Presentation.APL.RenderDocument`
+  directive + datasource for a given list: fetches active items via a query shaped like
+  `ReadListIntent`'s existing one (dropping its `.where('checked', false)` filter per the design
+  above) and categories via `getEffectiveCategories(list)`, groups items per category (+
+  "Other"), and shapes the datasource APL's `Sequence`/`AlexaTextList`-style layouts expect.
+  Exports one function, `buildListDisplay(list, items, categories)`, returning the directive
+  object to splice into an Alexa response's `response.directives` array.
+- `apps/api/app/services/alexa/apl_touch_handler.ts` — handles an incoming
+  `Alexa.Presentation.APL.UserEvent` request: extracts `itemId`/`listId` from
+  `request.arguments`, re-verifies the token's `editor` grant on that list via `roleFor()`, loads
+  and completes the item via the shared `completeItemRow` helper, and returns a spoken
+  confirmation plus a refreshed `RenderDocument` (via `apl_view.ts`) so the screen updates
+  without another utterance.
+- `alexa/apl/list-view.json` — the APL document itself (JSON-templated UI), using Alexa's
+  `alexa-layouts` responsive component package rather than hand-rolled primitives where it fits:
+  a scrollable, category-grouped item list, each row a `TouchWrapper` whose `onPress` fires
+  `SendEvent` with `{action: "complete", itemId, listId}`.
+
+**Modified:**
+
+- `apps/api/app/controllers/alexa_controller.ts` — device-capability detection; new
+  `Alexa.Presentation.APL.UserEvent` case in the request-type switch, delegating to
+  `apl_touch_handler.ts`; `LaunchRequest` branches to screen-aware list resolution when
+  `hasDisplay`; directive-attachment after `IntentRequest` handlers return.
+- `apps/api/app/services/alexa/intent_router.ts` — handler return-type change to
+  `{ response, list? }`; new `completeItemRow` extraction; a `handleLaunch`-style entry point
+  (or reuse of `handleReadList` with no slot) for the screen-aware `LaunchRequest` path.
+- `alexa/skill.json` — add `"interfaces": [{"type": "ALEXA_PRESENTATION_APL"}]` under
+  `apis.custom`.
+- `alexa/interaction-model.json` — broaden `ReadListIntent`'s sample utterances to include "show
+  me my list" / "open my list" / "display my list" phrasing, since the intent's behavior now
+  unifies "read" and "show."
+- `alexa/README.md` — new section: screen support is automatic once this stage ships (no extra
+  per-device setup), what tap-to-complete does and how it's authorized, and a note that APL
+  rendering itself can only be verified via the Alexa Developer Console's simulator or a real
+  device, not Japa.
+
+### Sequencing
+
+Depends entirely on Stage 2 (reuses its whole request-handling pipeline, the account-linked PAT,
+`list_resolution.ts`, and `roleFor()`). Independent of Stage 1 (Home Assistant). Purely additive
+— ships with zero behavior change for non-screen devices.
+
+### Verification
+
+- Extend `apps/api/tests/functional/alexa.spec.ts` (same 100%-coverage gate as the rest of
+  `apps/api`): craft request envelopes with/without `context.System.device.supportedInterfaces`
+  declaring APL support, and assert — a non-screen device never gets a `directives` key; a
+  screen device's `LaunchRequest` with exactly one accessible list renders it immediately, and
+  with several asks to disambiguate exactly like the voice path; `ReadListIntent`/
+  `AddItemIntent`/`RemoveItemIntent`/`CompleteItemIntent` on a screen device return an updated
+  `RenderDocument` reflecting post-mutation state; items land in the correct category bucket
+  (including the "Other" bucket for `categoryId: null`) in category `sortOrder`; a `UserEvent`
+  touch payload completes the right item by id and is rejected for a viewer-scoped token exactly
+  like a voice completion would be.
+- Real on-screen rendering can't be exercised via Japa at all — verify the actual document
+  layout and touch behavior using the Alexa Developer Console's built-in APL simulator (renders
+  visually against a `development`-stage skill, no device or certification needed) before
+  trusting it on the real Echo Hub, same discipline Stage 2 used for its voice simulator
+  testing.
