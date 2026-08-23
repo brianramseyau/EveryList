@@ -60,11 +60,13 @@ async function withDisplay(result: IntentResult, hasDisplay: boolean): Promise<A
  * events (Stage 3). Reached only after `AlexaSignatureMiddleware` has confirmed the request
  * actually came from Amazon. */
 export default class AlexaController {
-  async handle({ request, response }: HttpContext) {
+  async handle({ request, response, logger }: HttpContext) {
     const body = request.body() as AlexaRequestBody
 
     const skillId = process.env.ALEXA_SKILL_ID
-    if (skillId && body.context?.System?.application?.applicationId !== skillId) {
+    const requestSkillId = body.context?.System?.application?.applicationId
+    if (skillId && requestSkillId !== skillId) {
+      logger.warn({ expected: skillId, actual: requestSkillId }, 'Alexa skill id mismatch')
       return response.unauthorized({ message: 'Unrecognized skill application id' })
     }
 

@@ -26,8 +26,8 @@
         {
           "name": "AddItemIntent",
           "slots": [
-            { "name": "ItemName", "type": "AMAZON.SearchQuery" },
-            { "name": "ListName", "type": "AMAZON.SearchQuery" }
+            { "name": "ItemName", "type": "ItemNameType" },
+            { "name": "ListName", "type": "ListNameType" }
           ],
           "samples": [
             "add {ItemName}",
@@ -43,8 +43,8 @@
         {
           "name": "RemoveItemIntent",
           "slots": [
-            { "name": "ItemName", "type": "AMAZON.SearchQuery" },
-            { "name": "ListName", "type": "AMAZON.SearchQuery" }
+            { "name": "ItemName", "type": "ItemNameType" },
+            { "name": "ListName", "type": "ListNameType" }
           ],
           "samples": [
             "remove {ItemName}",
@@ -59,8 +59,8 @@
         {
           "name": "CompleteItemIntent",
           "slots": [
-            { "name": "ItemName", "type": "AMAZON.SearchQuery" },
-            { "name": "ListName", "type": "AMAZON.SearchQuery" }
+            { "name": "ItemName", "type": "ItemNameType" },
+            { "name": "ListName", "type": "ListNameType" }
           ],
           "samples": [
             "check off {ItemName}",
@@ -74,7 +74,7 @@
         },
         {
           "name": "ReadListIntent",
-          "slots": [{ "name": "ListName", "type": "AMAZON.SearchQuery" }],
+          "slots": [{ "name": "ListName", "type": "ListNameType" }],
           "samples": [
             "what's on my list",
             "what's on {ListName}",
@@ -90,6 +90,46 @@
             "open the {ListName} list",
             "display my list",
             "display the {ListName} list"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "ItemNameType",
+          "values": [
+            { "name": { "value": "milk" } },
+            { "name": { "value": "eggs" } },
+            { "name": { "value": "bread" } },
+            { "name": { "value": "butter" } },
+            { "name": { "value": "cheese" } },
+            { "name": { "value": "chicken" } },
+            { "name": { "value": "rice" } },
+            { "name": { "value": "pasta" } },
+            { "name": { "value": "apples" } },
+            { "name": { "value": "bananas" } },
+            { "name": { "value": "coffee" } },
+            { "name": { "value": "paper towels" } },
+            { "name": { "value": "toilet paper" } },
+            { "name": { "value": "batteries" } },
+            { "name": { "value": "light bulbs" } },
+            { "name": { "value": "dish soap" } },
+            { "name": { "value": "laundry detergent" } },
+            { "name": { "value": "toothpaste" } }
+          ]
+        },
+        {
+          "name": "ListNameType",
+          "values": [
+            { "name": { "value": "groceries" } },
+            { "name": { "value": "grocery" } },
+            { "name": { "value": "shopping" } },
+            { "name": { "value": "shopping list" } },
+            { "name": { "value": "hardware" } },
+            { "name": { "value": "hardware store" } },
+            { "name": { "value": "pharmacy" } },
+            { "name": { "value": "wish list" } },
+            { "name": { "value": "to do list" } },
+            { "name": { "value": "chores" } }
           ]
         }
       ]

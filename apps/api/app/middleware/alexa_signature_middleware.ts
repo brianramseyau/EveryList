@@ -18,12 +18,17 @@ export default class AlexaSignatureMiddleware {
     const rawBody = ctx.request.raw()
 
     if (!certUrl || !signature || !rawBody) {
+      ctx.logger.warn(
+        { certUrl: Boolean(certUrl), signature: Boolean(signature), rawBody: Boolean(rawBody) },
+        'Alexa request missing signature headers'
+      )
       return ctx.response.unauthorized({ message: 'Missing Alexa request signature headers' })
     }
 
     try {
       await alexaSignatureVerifier.verify(certUrl, signature, rawBody)
-    } catch {
+    } catch (error) {
+      ctx.logger.warn({ err: error, certUrl }, 'Alexa request signature verification failed')
       return ctx.response.unauthorized({ message: 'Invalid Alexa request signature' })
     }
 
