@@ -371,6 +371,16 @@ describe('Settings +page.svelte', () => {
 		await expect.element(page.getByText('Server')).not.toBeInTheDocument();
 	});
 
+	it('does not show the Troubleshooting section on native builds', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Troubleshooting')).not.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Reset app' })).not.toBeInTheDocument();
+	});
+
 	it('shows the configured server URL and changing it clears the token, server URL, and navigates', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);

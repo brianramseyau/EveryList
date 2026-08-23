@@ -380,25 +380,27 @@
 		</a>
 	</section>
 
-	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-		<h2
-			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
-		>
-			Troubleshooting
-		</h2>
-		<div class="flex items-center justify-between gap-4 px-4 py-3">
-			<span class="text-sm text-gray-600 dark:text-gray-300">
-				If the app looks broken or stuck after an update, this clears cached app data and reloads —
-				the on-device fix for a home-screen install with no devtools access.
-			</span>
-			<button
-				type="button"
-				onclick={handleResetApp}
-				disabled={resetting}
-				class="shrink-0 text-sm text-gray-600 hover:underline disabled:opacity-50 dark:text-gray-400"
+	{#if !isNative}
+		<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+			<h2
+				class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
 			>
-				{resetting ? 'Resetting…' : 'Reset app'}
-			</button>
-		</div>
-	</section>
+				Troubleshooting
+			</h2>
+			<div class="flex items-center justify-between gap-4 px-4 py-3">
+				<span class="text-sm text-gray-600 dark:text-gray-300">
+					If the app looks broken or stuck after an update, this clears cached app data and reloads
+					— the on-device fix for a home-screen install with no devtools access.
+				</span>
+				<button
+					type="button"
+					onclick={handleResetApp}
+					disabled={resetting}
+					class="shrink-0 text-sm text-gray-600 hover:underline disabled:opacity-50 dark:text-gray-400"
+				>
+					{resetting ? 'Resetting…' : 'Reset app'}
+				</button>
+			</div>
+		</section>
+	{/if}
 </main>
