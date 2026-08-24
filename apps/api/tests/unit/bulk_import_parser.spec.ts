@@ -9,9 +9,9 @@ test.group('parseBulkImport — plain one-item-per-line format', () => {
         {
           header: null,
           items: [
-            { name: 'Milk', notes: [] },
-            { name: 'Bread', notes: [] },
-            { name: 'Chicken breast', notes: [] },
+            { name: 'Milk', notes: [], price: null },
+            { name: 'Bread', notes: [], price: null },
+            { name: 'Chicken breast', notes: [], price: null },
           ],
         },
       ],
@@ -93,9 +93,11 @@ FROZEN
       ]
     )
 
-    assert.deepEqual(result.sections[0]!.items, [{ name: 'Amber Meds', notes: ['Prescription'] }])
+    assert.deepEqual(result.sections[0]!.items, [
+      { name: 'Amber Meds', notes: ['Prescription'], price: null },
+    ])
     assert.deepEqual(result.sections[1]!.items, [
-      { name: 'Glass container credits (149)', notes: [] },
+      { name: 'Glass container credits (149)', notes: [], price: null },
     ])
     assert.deepEqual(
       result.sections[8]!.items.map((item) => item.name),
@@ -220,5 +222,84 @@ FROZEN
         ['PRODUCE', 'Blueberries'],
       ]
     )
+  })
+
+  test('a link continues as a note across a blank paragraph break instead of becoming its own item', ({
+    assert,
+  }) => {
+    const result = parseBulkImport(
+      '• Wildfire Offset\nhttps://wildfiresmokers.com.au/products/offset\n\nhttps://wildfiresmokers.com.au/products/cover\n• Askar SQA55'
+    )
+    assert.deepEqual(
+      result.sections[0]!.items.map((item) => item.name),
+      ['Wildfire Offset', 'Askar SQA55']
+    )
+    assert.deepEqual(result.sections[0]!.items[0]!.notes, [
+      'https://wildfiresmokers.com.au/products/offset',
+      'https://wildfiresmokers.com.au/products/cover',
+    ])
+  })
+
+  test('a price-only line continues as a note across a blank paragraph break', ({ assert }) => {
+    const result = parseBulkImport('• ASI2600MC Air\n\n$3,060? $3,366?\n• Sigma lens')
+    assert.deepEqual(
+      result.sections[0]!.items.map((item) => item.name),
+      ['ASI2600MC Air', 'Sigma lens']
+    )
+    assert.deepEqual(result.sections[0]!.items[0]!.notes, ['$3,060? $3,366?'])
+  })
+
+  test('extracts a trailing "[$price]" tag from an item name into its price field', ({
+    assert,
+  }) => {
+    const result = parseBulkImport('• Wildfire Offset [$1,588]\n• Askar SQA55 [$1,400]')
+    assert.deepEqual(
+      result.sections[0]!.items.map((item) => [item.name, item.price]),
+      [
+        ['Wildfire Offset', 158800],
+        ['Askar SQA55', 140000],
+      ]
+    )
+  })
+
+  test('lifts a bare unhedged price line under an item into its price field, not a note', ({
+    assert,
+  }) => {
+    const result = parseBulkImport('• ZWO CAA\n$480.00/ea\nhttps://www.zwoastro.com/product/caa/')
+    const item = result.sections[0]!.items[0]!
+    assert.equal(item.price, 48000)
+    assert.deepEqual(item.notes, ['https://www.zwoastro.com/product/caa/'])
+  })
+
+  test('keeps a hedged multi-price line as a note rather than picking one as the price', ({
+    assert,
+  }) => {
+    const result = parseBulkImport('• ASI2600MC Air\n$3,060? $3,366?')
+    const item = result.sections[0]!.items[0]!
+    assert.isNull(item.price)
+    assert.deepEqual(item.notes, ['$3,060? $3,366?'])
+  })
+
+  test('a name-tag price wins over a later bare price line for the same item', ({ assert }) => {
+    const result = parseBulkImport('• ASI2600MC Air [$3,549]\n$2,250.00/ea')
+    const item = result.sections[0]!.items[0]!
+    assert.equal(item.price, 354900)
+    assert.deepEqual(item.notes, ['$2,250.00/ea'])
+  })
+
+  test('leaves the name untouched when a "[$...]" tag has no digits to extract a price from', ({
+    assert,
+  }) => {
+    const result = parseBulkImport('• [$,]')
+    assert.deepEqual(result.sections[0]!.items[0], { name: '[$,]', notes: [], price: null })
+  })
+
+  test('drops a price tag that has no name in front of it, keeping the bracket as the name', ({
+    assert,
+  }) => {
+    const result = parseBulkImport('• Odd item [$,]')
+    const item = result.sections[0]!.items[0]!
+    assert.equal(item.name, 'Odd item')
+    assert.isNull(item.price)
   })
 })

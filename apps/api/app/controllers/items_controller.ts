@@ -337,6 +337,7 @@ export default class ItemsController {
             quantity: null,
             notes: parsedItem.notes.length > 0 ? parsedItem.notes.join('\n').slice(0, 1000) : null,
             categoryId,
+            price: parsedItem.price,
             checked: false,
             sortOrder: sortOrder++,
             createdBy: user.id,
