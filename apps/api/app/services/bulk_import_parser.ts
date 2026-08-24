@@ -177,9 +177,11 @@ export function parseBulkImport(text: string): ParsedBulkImport {
     const precedesNewEntry =
       nextNonBlank !== undefined && (isBulletLine(nextNonBlank) || isCategoryHeader(nextNonBlank))
     if (item && (!blankSinceItem || isUrlLine(line) || isPriceOnlyLine(line) || precedesNewEntry)) {
-      const singlePrice = item.price === null ? SINGLE_PRICE_PATTERN.exec(line) : null
+      const singlePrice = SINGLE_PRICE_PATTERN.exec(line)
       if (singlePrice) {
-        item.price = parsePriceCents(singlePrice[1]!)
+        // An unhedged price is either lifted into the price field or, once one is already set,
+        // dropped silently instead of duplicating the price as a raw dollar figure in the notes.
+        if (item.price === null) item.price = parsePriceCents(singlePrice[1]!)
       } else {
         const note = cleanItemName(line)
         if (note.length > 0) item.notes.push(note)

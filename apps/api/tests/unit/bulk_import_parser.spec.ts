@@ -309,11 +309,13 @@ FROZEN
     assert.deepEqual(item.notes, ['$3,060? $3,366?'])
   })
 
-  test('a name-tag price wins over a later bare price line for the same item', ({ assert }) => {
+  test('a name-tag price wins over a later bare price line, which is dropped rather than noted', ({
+    assert,
+  }) => {
     const result = parseBulkImport('• ASI2600MC Air [$3,549]\n$2,250.00/ea')
     const item = result.sections[0]!.items[0]!
     assert.equal(item.price, 354900)
-    assert.deepEqual(item.notes, ['$2,250.00/ea'])
+    assert.deepEqual(item.notes, [])
   })
 
   test('leaves the name untouched when a "[$...]" tag has no digits to extract a price from', ({
