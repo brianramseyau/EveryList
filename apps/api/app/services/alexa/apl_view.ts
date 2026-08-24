@@ -113,7 +113,14 @@ export async function buildListDisplay(list: List) {
 
   return {
     type: 'Alexa.Presentation.APL.RenderDocument' as const,
-    token: `list-${list.id}`,
+    // Unique per render, not just per list (`apl_touch_handler.ts` never reads this token back —
+    // `SendEvent`'s `arguments` array carries everything a touch handler needs) — a constant
+    // `list-${id}` token was suspected of letting some Echo Show firmware treat repeat
+    // RenderDocument directives for the same list as an update to the already-rendered instance
+    // rather than a fresh one, which would explain literal style constants (fontSize,
+    // checkbox spacing) appearing frozen across real-device tests despite data-bound content
+    // (item names, checked state) updating correctly turn to turn.
+    token: `list-${list.id}-${Date.now()}`,
     document: LIST_VIEW_DOCUMENT,
     datasources: {
       listData: {

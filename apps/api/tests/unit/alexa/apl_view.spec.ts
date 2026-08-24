@@ -77,7 +77,7 @@ test.group('buildListDisplay', (group) => {
 
     const directive = await buildListDisplay(list)
     assert.equal(directive.type, 'Alexa.Presentation.APL.RenderDocument')
-    assert.equal(directive.token, `list-${list.id}`)
+    assert.isTrue(directive.token.startsWith(`list-${list.id}-`))
     assert.equal(directive.datasources.listData.properties.listName, 'Groceries')
     assert.equal(directive.datasources.listData.properties.listColor, DEFAULT_COLOR)
     assert.equal(directive.datasources.listData.properties.listIconUrl, '')
