@@ -273,6 +273,34 @@ test.group('Alexa skill endpoint', (group) => {
     assert.lengthOf(bodyData<unknown[]>(items), 1)
   })
 
+  test('AddItemIntent title-cases a lower-case, multi-word spoken item name', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'cheese kranskies' },
+      })
+    )
+    assert.include(
+      response.body().response.outputSpeech.text,
+      'Added Cheese Kranskies to Groceries'
+    )
+
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    assert.equal(bodyData<{ name: string }[]>(items)[0]!.name, 'Cheese Kranskies')
+  })
+
   test('AddItemIntent restores a deleted item and un-checks a checked one', async ({
     client,
     assert,
@@ -845,6 +873,7 @@ test.group('Alexa skill endpoint', (group) => {
       })
     )
     assert.include(response.body().response.outputSpeech.text, 'Added Milk to Groceries')
+    assert.isFalse(response.body().response.shouldEndSession)
     const rows = response.body().response.directives[0].datasources.listData.properties.rows
     assert.isTrue(
       rows.some(
