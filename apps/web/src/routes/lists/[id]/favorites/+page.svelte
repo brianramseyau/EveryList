@@ -146,7 +146,7 @@
 					<button
 						type="button"
 						aria-label={`Add ${favorite.name} to list`}
-						class="flex flex-1 items-center gap-2 text-left disabled:opacity-50"
+						class="flex min-w-0 flex-1 items-center gap-2 text-left disabled:opacity-50"
 						disabled={onList || addingToList === favorite.id}
 						onclick={() => handleAddToList(favorite)}
 					>
@@ -158,9 +158,9 @@
 								/>
 							</span>
 						{/if}
-						<div class="flex flex-col">
-							<div class="flex items-center gap-1">
-								<span>{favorite.name}</span>
+						<div class="flex min-w-0 flex-col">
+							<div class="flex min-w-0 items-center gap-1">
+								<span class="wrap-anywhere">{favorite.name}</span>
 								{#if favorite.defaultQuantity}
 									<span class="text-gray-600 dark:text-gray-400"
 										>(<span class="font-mono tabular-nums">{favorite.defaultQuantity}</span>)</span
