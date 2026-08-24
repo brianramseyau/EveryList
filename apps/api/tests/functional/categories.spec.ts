@@ -506,3 +506,168 @@ test.group('Categories import', (group) => {
     assert.lengthOf(bodyData<CategoryDto[]>(importResponse), 0)
   })
 })
+
+test.group('Categories bulk-import (paste)', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('creates a category per pasted line, matching a relatable icon by name', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const bulkImport = await client
+      .post(`/api/v1/lists/${listId}/categories/bulk-import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ text: 'Produce\nDairy\nSome Weird Custom Aisle' })
+    bulkImport.assertStatus(200)
+    const created = bodyData<CategoryDto[]>(bulkImport)
+    assert.deepEqual(
+      created.map((c) => c.name),
+      ['Produce', 'Dairy', 'Some Weird Custom Aisle']
+    )
+    assert.deepEqual(
+      created.map((c) => c.icon),
+      ['fruitCherries', 'cheese', 'tag']
+    )
+    for (const category of created) {
+      assert.equal(category.listId, listId)
+      assert.isFalse(category.isDefault)
+      assert.equal(category.version, 1)
+    }
+    assert.deepEqual(
+      created.map((c) => c.sortOrder),
+      [0, 1, 2]
+    )
+  })
+
+  test('title-cases all-caps names but leaves mixed-case names as pasted', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const bulkImport = await client
+      .post(`/api/v1/lists/${listId}/categories/bulk-import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ text: 'SNACKS\nBaby Care' })
+    const created = bodyData<CategoryDto[]>(bulkImport)
+    assert.deepEqual(
+      created.map((c) => c.name),
+      ['Snacks', 'Baby Care']
+    )
+  })
+
+  test('strips leading bullet markers from pasted lines', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const bulkImport = await client
+      .post(`/api/v1/lists/${listId}/categories/bulk-import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ text: '• Produce\n- Dairy' })
+    const created = bodyData<CategoryDto[]>(bulkImport)
+    assert.deepEqual(
+      created.map((c) => c.name),
+      ['Produce', 'Dairy']
+    )
+  })
+
+  test('appends after existing categories and skips names that already exist, case-insensitively', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    await createCategory(client, token, listId, 'Produce', 'fruitCherries')
+
+    const bulkImport = await client
+      .post(`/api/v1/lists/${listId}/categories/bulk-import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ text: 'produce\nDairy' })
+    const created = bodyData<CategoryDto[]>(bulkImport)
+    assert.deepEqual(
+      created.map((c) => c.name),
+      ['Dairy']
+    )
+    assert.equal(created[0]!.sortOrder, 1)
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+    assert.deepEqual(
+      index.body().data.map((c: CategoryDto) => c.name),
+      ['Produce', 'Dairy']
+    )
+  })
+
+  test('a duplicate name pasted twice in the same batch is only created once', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const bulkImport = await client
+      .post(`/api/v1/lists/${listId}/categories/bulk-import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ text: 'Produce\nproduce\nPRODUCE' })
+    const created = bodyData<CategoryDto[]>(bulkImport)
+    assert.lengthOf(created, 1)
+  })
+
+  test('rejects blank pasted text', async ({ client }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const bulkImport = await client
+      .post(`/api/v1/lists/${listId}/categories/bulk-import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ text: '   ' })
+    bulkImport.assertStatus(422)
+  })
+
+  test('a viewer cannot bulk-import categories', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const viewer = await signupAndGetUser(client)
+    await addMember(listId, viewer.id, 'viewer')
+
+    const bulkImport = await client
+      .post(`/api/v1/lists/${listId}/categories/bulk-import`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+      .json({ text: 'Produce' })
+    bulkImport.assertStatus(403)
+  })
+
+  test('an editor can bulk-import categories into a list they do not own', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const editor = await signupAndGetUser(client)
+    await addMember(listId, editor.id, 'editor')
+
+    const bulkImport = await client
+      .post(`/api/v1/lists/${listId}/categories/bulk-import`)
+      .header('Authorization', `Bearer ${editor.token}`)
+      .json({ text: 'Produce' })
+    bulkImport.assertStatus(200)
+    assert.equal(bodyData<CategoryDto[]>(bulkImport)[0]!.name, 'Produce')
+  })
+
+  test('a stranger gets a 404 trying to bulk-import categories', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    const stranger = await signupAndGetUser(client)
+
+    const bulkImport = await client
+      .post(`/api/v1/lists/${listId}/categories/bulk-import`)
+      .header('Authorization', `Bearer ${stranger.token}`)
+      .json({ text: 'Produce' })
+    bulkImport.assertStatus(404)
+  })
+})

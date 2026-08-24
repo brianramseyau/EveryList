@@ -160,6 +160,12 @@
 				>
 					Import
 				</a>
+				<a
+					href={resolve('/lists/[id]/categories/paste', { id: String(listId) })}
+					class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+				>
+					Paste
+				</a>
 			</PopoutMenu>
 		{/snippet}
 	</PageHeader>
