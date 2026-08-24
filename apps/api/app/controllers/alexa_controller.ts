@@ -7,6 +7,7 @@ import {
   handleAddItem,
   handleRemoveOrComplete,
   handleReadList,
+  handleSetDefaultList,
   handleLaunchWithDisplay,
   type IntentResult,
 } from '#services/alexa/intent_router'
@@ -151,11 +152,14 @@ export default class AlexaController {
         return handleRemoveOrComplete(token, slots, 'complete')
       case 'ReadListIntent':
         return handleReadList(token, slots)
+      case 'SetDefaultListIntent':
+        return handleSetDefaultList(token, slots)
       case 'AMAZON.HelpIntent':
         return {
-          response: say("You can say 'add milk to my list' or 'what's on my list'.", {
-            reprompt: 'What would you like to do?',
-          }),
+          response: say(
+            "You can say 'add milk to my list', 'what's on my list', or 'set groceries as my default list'.",
+            { reprompt: 'What would you like to do?' }
+          ),
         }
       case 'AMAZON.CancelIntent':
       case 'AMAZON.StopIntent':

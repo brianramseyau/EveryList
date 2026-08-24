@@ -1,4 +1,5 @@
 import List from '#models/list'
+import AlexaPreference from '#models/alexa_preference'
 import type { AccessToken } from '@adonisjs/auth/access_tokens'
 import type { ListRole } from '#models/list_member'
 import { closestMatch } from '#services/alexa/fuzzy_match'
@@ -40,7 +41,22 @@ export async function resolveList(
   }
 
   if (accessible.length === 1) return { kind: 'found', list: accessible[0]! }
+
+  const preference = await AlexaPreference.findBy('userId', Number(token.tokenableId))
+  const defaultList = preference && accessible.find((list) => list.id === preference.defaultListId)
+  if (defaultList) return { kind: 'found', list: defaultList }
+
   return { kind: 'ambiguous', options: accessible }
+}
+
+/**
+ * `SetDefaultListIntent` — upserts the user's Alexa default list, used above
+ * to resolve a request that names no list once there's more than one
+ * accessible (rather than always asking "which list did you mean?").
+ */
+export async function setDefaultList(token: AccessToken, listId: number): Promise<void> {
+  const userId = Number(token.tokenableId)
+  await AlexaPreference.updateOrCreate({ userId }, { userId, defaultListId: listId })
 }
 
 /** The role (never exceeding what the token itself grants for `listId`) an Alexa request may act
