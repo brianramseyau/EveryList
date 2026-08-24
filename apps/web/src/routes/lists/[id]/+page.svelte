@@ -750,233 +750,235 @@
 	</div>
 
 	<div class="pt-36">
-	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
-	{:else if list}
-		{#if list.passcodeHash && !unlocked}
-			<PasscodeGate {list} onunlock={() => (unlocked = true)} />
-		{:else}
-			{#if confirmMessage}
-				<div
-					class="flex items-center justify-between gap-2 rounded-lg border border-red-200 p-3 text-sm dark:border-red-900 print:hidden"
-				>
-					<p class="text-red-600 dark:text-red-400">{confirmMessage}</p>
-					<div class="flex shrink-0 gap-2">
-						<button
-							type="button"
-							class="rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700"
-							onclick={handleConfirm}
-						>
-							Confirm
-						</button>
-						<button
-							type="button"
-							class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-							onclick={() => (confirmAction = null)}
-						>
-							Cancel
-						</button>
-					</div>
-				</div>
-			{/if}
-
-			{#if error}
-				<p class="text-sm text-red-600 dark:text-red-400 print:hidden">{error}</p>
-			{/if}
-
-			{#if items.length === 0}
-				<div class="flex flex-col items-center gap-2 py-8 text-center">
-					<span style:color={list.color}>
-						<Icon name={list.icon ?? 'formatListChecks'} class="h-10 w-10" />
-					</span>
-					<p class="text-gray-600 dark:text-gray-400">
-						Nothing here yet. Add your first item above.
-					</p>
-				</div>
-			{:else if visibleItems.length === 0}
-				<div
-					class="flex flex-col items-center gap-2 py-8 text-center text-gray-400 dark:text-gray-500"
-				>
-					<Icon name="filterOutline" class="h-8 w-8" />
-					<p class="text-sm">
-						{`No items are tagged for ${selectedStore!.name}. Change which items are shown from the store icon above to see the rest of this list.`}
-					</p>
-				</div>
+		{#if loading}
+			<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		{:else if list}
+			{#if list.passcodeHash && !unlocked}
+				<PasscodeGate {list} onunlock={() => (unlocked = true)} />
 			{:else}
-				<div class="flex flex-col gap-6 pb-16">
-					{#each groups as group (group.category?.id ?? 'uncategorized')}
-						<section>
-							{#if list.useCategories !== false}
-								<h2
-									class="sticky z-10 mb-2 flex items-center gap-2 border-b bg-paper pb-1 text-sm font-semibold {group.category
-										? ''
-										: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
-									use:stickyTop={stickyHeaderHeight}
-									style:touch-action="pan-x pan-y"
-									style:color={group.category ? list.color : undefined}
-									style:border-bottom-color={group.category ? list.color : undefined}
-								>
-									{#if group.category}
-										<Icon name={group.category.icon} class="h-4 w-4" />
-									{/if}
-									<span>
-										{group.category?.name ?? 'Uncategorized'}
-									</span>
-								</h2>
-							{/if}
-							<ul
-								class="flex flex-col gap-1"
-								data-container-id={group.category?.id ?? 'null'}
-								use:sortableReorder={{ group: 'list-items', onDrop: handleItemDrop }}
+				{#if confirmMessage}
+					<div
+						class="flex items-center justify-between gap-2 rounded-lg border border-red-200 p-3 text-sm dark:border-red-900 print:hidden"
+					>
+						<p class="text-red-600 dark:text-red-400">{confirmMessage}</p>
+						<div class="flex shrink-0 gap-2">
+							<button
+								type="button"
+								class="rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700"
+								onclick={handleConfirm}
 							>
-								{#each group.items as item (item.id)}
-									<li class="relative overflow-hidden rounded-lg" data-item-id={item.id}>
-										<div
-											class="absolute inset-y-0 left-0 flex w-20 items-center justify-center bg-red-600 text-white print:hidden"
-											aria-hidden="true"
-										>
-											<Icon name="trashCanOutline" class="h-5 w-5" />
-										</div>
-										<div
-											class="absolute inset-y-0 right-0 flex w-20 items-center justify-center bg-blue-600 text-white print:hidden"
-											aria-hidden="true"
-										>
-											<Icon name="pencil" class="h-5 w-5" />
-										</div>
-										<div
-											class="item-row relative flex items-center gap-2 bg-paper {highlightedItemId ===
-											item.id
-												? 'item-row-highlight'
-												: ''}"
-											style="touch-action: pan-y;"
-											use:swipeReveal={{
-												disabled: !isCoarsePointer,
-												onCommitRight: () => removeItem(item),
-												onCommitLeft: () =>
-													goto(
-														resolve('/lists/[id]/items/[itemId]', {
-															id: String(listId),
-															itemId: String(item.id)
-														})
-													)
-											}}
-										>
-											<button
-												type="button"
-												role="checkbox"
-												aria-checked={item.checked}
-												aria-label={item.name}
-												data-reorder-ignore
-												onclick={() => toggleChecked(item)}
-												class="check-glyph flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 {item.checked
-													? 'border-signal bg-signal'
-													: 'border-gray-300 bg-transparent dark:border-gray-600'}"
-											>
-												{#if item.checked}
-													<svg
-														class="h-3.5 w-3.5 text-white"
-														viewBox="0 0 16 16"
-														fill="none"
-														stroke="currentColor"
-														stroke-width="2.5"
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														aria-hidden="true"
-													>
-														<path d="M3 8.5l3.2 3.2L13 4.5" />
-													</svg>
-												{/if}
-											</button>
+								Confirm
+							</button>
+							<button
+								type="button"
+								class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+								onclick={() => (confirmAction = null)}
+							>
+								Cancel
+							</button>
+						</div>
+					</div>
+				{/if}
+
+				{#if error}
+					<p class="text-sm text-red-600 dark:text-red-400 print:hidden">{error}</p>
+				{/if}
+
+				{#if items.length === 0}
+					<div class="flex flex-col items-center gap-2 py-8 text-center">
+						<span style:color={list.color}>
+							<Icon name={list.icon ?? 'formatListChecks'} class="h-10 w-10" />
+						</span>
+						<p class="text-gray-600 dark:text-gray-400">
+							Nothing here yet. Add your first item above.
+						</p>
+					</div>
+				{:else if visibleItems.length === 0}
+					<div
+						class="flex flex-col items-center gap-2 py-8 text-center text-gray-400 dark:text-gray-500"
+					>
+						<Icon name="filterOutline" class="h-8 w-8" />
+						<p class="text-sm">
+							{`No items are tagged for ${selectedStore!.name}. Change which items are shown from the store icon above to see the rest of this list.`}
+						</p>
+					</div>
+				{:else}
+					<div class="flex flex-col gap-6 pb-16">
+						{#each groups as group (group.category?.id ?? 'uncategorized')}
+							<section>
+								{#if list.useCategories !== false}
+									<h2
+										class="sticky z-10 mb-2 flex items-center gap-2 border-b bg-paper pb-1 text-sm font-semibold {group.category
+											? ''
+											: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
+										use:stickyTop={stickyHeaderHeight}
+										style:touch-action="pan-x pan-y"
+										style:color={group.category ? list.color : undefined}
+										style:border-bottom-color={group.category ? list.color : undefined}
+									>
+										{#if group.category}
+											<Icon name={group.category.icon} class="h-4 w-4" />
+										{/if}
+										<span>
+											{group.category?.name ?? 'Uncategorized'}
+										</span>
+									</h2>
+								{/if}
+								<ul
+									class="flex flex-col gap-1"
+									data-container-id={group.category?.id ?? 'null'}
+									use:sortableReorder={{ group: 'list-items', onDrop: handleItemDrop }}
+								>
+									{#each group.items as item (item.id)}
+										<li class="relative overflow-hidden rounded-lg" data-item-id={item.id}>
 											<div
-												class="item-name flex min-w-0 flex-1 flex-col"
-												style="touch-action: manipulation; -webkit-touch-callout: none;"
+												class="absolute inset-y-0 left-0 flex w-20 items-center justify-center bg-red-600 text-white print:hidden"
+												aria-hidden="true"
 											>
-												<div class="flex min-w-0 items-center gap-2">
-													<span
-														class="wrap-anywhere {item.checked ? 'text-gray-400 line-through' : ''}"
-													>
-														{item.name}
-													</span>
-													{#if item.quantity}
-														<span class="text-gray-600 dark:text-gray-400"
-															>(<span>{item.quantity}</span>)</span
-														>
-													{/if}
-												</div>
-												{#if item.storeId}
-													{@const itemStore = stores.find((store) => store.id === item.storeId)}
-													{#if itemStore}
-														<span class="text-xs" style:color={itemStore.color}>
-															{itemStore.name}
-														</span>
-													{/if}
-												{/if}
-												{#if item.notes}
-													<p
-														class="text-xs whitespace-pre-line text-gray-500 italic dark:text-gray-400"
-													>
-														{#each splitTextWithLinks(item.notes) as segment, i (i)}
-															{#if segment.type === 'link'}<NoteLink
-																	url={segment.value}
-																/>{:else}{segment.value}{/if}
-														{/each}
-													</p>
-												{/if}
+												<Icon name="trashCanOutline" class="h-5 w-5" />
 											</div>
-											{#if !isCoarsePointer}
-												<span
-													aria-hidden="true"
-													class="ml-auto flex h-11 w-11 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
-												>
-													<Icon name="dragVertical" class="h-5 w-5" />
-												</span>
-												<a
-													href={resolve('/lists/[id]/items/[itemId]', {
-														id: String(listId),
-														itemId: String(item.id)
-													})}
-													aria-label={`Edit ${item.name}`}
-													data-reorder-ignore
-													class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 print:hidden"
-												>
-													<Icon name="pencil" class="h-5 w-5" />
-												</a>
+											<div
+												class="absolute inset-y-0 right-0 flex w-20 items-center justify-center bg-blue-600 text-white print:hidden"
+												aria-hidden="true"
+											>
+												<Icon name="pencil" class="h-5 w-5" />
+											</div>
+											<div
+												class="item-row relative flex items-center gap-2 bg-paper {highlightedItemId ===
+												item.id
+													? 'item-row-highlight'
+													: ''}"
+												style="touch-action: pan-y;"
+												use:swipeReveal={{
+													disabled: !isCoarsePointer,
+													onCommitRight: () => removeItem(item),
+													onCommitLeft: () =>
+														goto(
+															resolve('/lists/[id]/items/[itemId]', {
+																id: String(listId),
+																itemId: String(item.id)
+															})
+														)
+												}}
+											>
 												<button
 													type="button"
-													aria-label={`Delete ${item.name}`}
+													role="checkbox"
+													aria-checked={item.checked}
+													aria-label={item.name}
 													data-reorder-ignore
-													class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-red-600 dark:hover:text-red-400 print:hidden"
-													onclick={() => removeItem(item)}
+													onclick={() => toggleChecked(item)}
+													class="check-glyph flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 {item.checked
+														? 'border-signal bg-signal'
+														: 'border-gray-300 bg-transparent dark:border-gray-600'}"
 												>
-													<Icon name="close" class="h-5 w-5" />
+													{#if item.checked}
+														<svg
+															class="h-3.5 w-3.5 text-white"
+															viewBox="0 0 16 16"
+															fill="none"
+															stroke="currentColor"
+															stroke-width="2.5"
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															aria-hidden="true"
+														>
+															<path d="M3 8.5l3.2 3.2L13 4.5" />
+														</svg>
+													{/if}
 												</button>
-											{/if}
-										</div>
-									</li>
-								{/each}
-							</ul>
-						</section>
-					{/each}
-				</div>
+												<div
+													class="item-name flex min-w-0 flex-1 flex-col"
+													style="touch-action: manipulation; -webkit-touch-callout: none;"
+												>
+													<div class="flex min-w-0 items-center gap-2">
+														<span
+															class="wrap-anywhere {item.checked
+																? 'text-gray-400 line-through'
+																: ''}"
+														>
+															{item.name}
+														</span>
+														{#if item.quantity}
+															<span class="text-gray-600 dark:text-gray-400"
+																>(<span>{item.quantity}</span>)</span
+															>
+														{/if}
+													</div>
+													{#if item.storeId}
+														{@const itemStore = stores.find((store) => store.id === item.storeId)}
+														{#if itemStore}
+															<span class="text-xs" style:color={itemStore.color}>
+																{itemStore.name}
+															</span>
+														{/if}
+													{/if}
+													{#if item.notes}
+														<p
+															class="text-xs whitespace-pre-line text-gray-500 italic dark:text-gray-400"
+														>
+															{#each splitTextWithLinks(item.notes) as segment, i (i)}
+																{#if segment.type === 'link'}<NoteLink
+																		url={segment.value}
+																	/>{:else}{segment.value}{/if}
+															{/each}
+														</p>
+													{/if}
+												</div>
+												{#if !isCoarsePointer}
+													<span
+														aria-hidden="true"
+														class="ml-auto flex h-11 w-11 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
+													>
+														<Icon name="dragVertical" class="h-5 w-5" />
+													</span>
+													<a
+														href={resolve('/lists/[id]/items/[itemId]', {
+															id: String(listId),
+															itemId: String(item.id)
+														})}
+														aria-label={`Edit ${item.name}`}
+														data-reorder-ignore
+														class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 print:hidden"
+													>
+														<Icon name="pencil" class="h-5 w-5" />
+													</a>
+													<button
+														type="button"
+														aria-label={`Delete ${item.name}`}
+														data-reorder-ignore
+														class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-red-600 dark:hover:text-red-400 print:hidden"
+														onclick={() => removeItem(item)}
+													>
+														<Icon name="close" class="h-5 w-5" />
+													</button>
+												{/if}
+											</div>
+										</li>
+									{/each}
+								</ul>
+							</section>
+						{/each}
+					</div>
 
-				<div
-					class="fixed inset-x-4 z-10 mx-auto flex max-w-lg items-center justify-between rounded-t-xl border border-b-0 border-gray-200 bg-paper px-4 py-2 text-sm shadow-sm dark:border-gray-700 print:hidden"
-					style="bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));"
-				>
-					<span class="text-gray-600 dark:text-gray-400">
-						{progressText}
-					</span>
-					{#if totalCents > 0}
-						<span class="font-mono font-semibold tabular-nums">{totalText}</span>
-					{/if}
-				</div>
+					<div
+						class="fixed inset-x-4 z-10 mx-auto flex max-w-lg items-center justify-between rounded-t-xl border border-b-0 border-gray-200 bg-paper px-4 py-2 text-sm shadow-sm dark:border-gray-700 print:hidden"
+						style="bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));"
+					>
+						<span class="text-gray-600 dark:text-gray-400">
+							{progressText}
+						</span>
+						{#if totalCents > 0}
+							<span class="font-mono font-semibold tabular-nums">{totalText}</span>
+						{/if}
+					</div>
+				{/if}
 			{/if}
-		{/if}
-	{:else}
-		<!-- Reachable only once loadAll's finally has run: loading is false, and
+		{:else}
+			<!-- Reachable only once loadAll's finally has run: loading is false, and
 		     its catch always sets `error` when it leaves `list` unset. -->
-		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
-	{/if}
+			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
+		{/if}
 	</div>
 </main>
 
