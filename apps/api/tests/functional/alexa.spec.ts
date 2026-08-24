@@ -816,7 +816,7 @@ test.group('Alexa skill endpoint', (group) => {
     const directives = response.body().response.directives
     assert.lengthOf(directives, 1)
     assert.equal(directives[0].type, 'Alexa.Presentation.APL.RenderDocument')
-    assert.equal(directives[0].token, `list-${listId}`)
+    assert.isTrue(directives[0].token.startsWith(`list-${listId}-`))
     assert.equal(directives[0].datasources.listData.properties.listName, 'Groceries')
   })
 

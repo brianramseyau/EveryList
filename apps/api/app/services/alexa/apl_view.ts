@@ -2,6 +2,7 @@ import Item from '#models/item'
 import type Category from '#models/category'
 import type List from '#models/list'
 import logger from '@adonisjs/core/services/logger'
+import env from '#start/env'
 import { appUrl } from '#config/app'
 import { getEffectiveCategories } from '#services/category_service'
 import { LIST_VIEW_DOCUMENT } from '#services/alexa/apl_document'
@@ -113,7 +114,17 @@ export async function buildListDisplay(list: List) {
 
   return {
     type: 'Alexa.Presentation.APL.RenderDocument' as const,
-    token: `list-${list.id}`,
+    // Keyed by the running build's commit, not just the list id (`apl_touch_handler.ts` never
+    // reads this token back — `SendEvent`'s `arguments` array carries everything a touch handler
+    // needs) — a constant `list-${id}` token was suspected of letting some Echo Show firmware
+    // treat repeat RenderDocument directives for the same list as an update to the
+    // already-rendered instance rather than a fresh one, which would explain literal style
+    // constants (fontSize, checkbox spacing) appearing frozen across real-device tests despite
+    // data-bound content (item names, checked state) updating correctly turn to turn. Keying on
+    // the commit rather than something per-render (e.g. a timestamp) still invalidates any
+    // on-device cache whenever this document's content actually changes (a new deploy), while
+    // letting repeat turns on the same build reuse whatever compiled layout the device cached.
+    token: `list-${list.id}-${env.get('GIT_SHA', 'unknown')}`,
     document: LIST_VIEW_DOCUMENT,
     datasources: {
       listData: {
