@@ -62,6 +62,10 @@ async function withDisplay(result: IntentResult, hasDisplay: boolean): Promise<A
 export default class AlexaController {
   async handle({ request, response, logger }: HttpContext) {
     const body = request.body() as AlexaRequestBody
+    logger.debug(
+      { requestType: body.request.type, intentName: body.request.intent?.name },
+      'Alexa request received'
+    )
 
     const skillId = process.env.ALEXA_SKILL_ID
     const requestSkillId = body.context?.System?.application?.applicationId
@@ -73,11 +77,17 @@ export default class AlexaController {
     const accessTokenValue =
       body.context?.System?.user?.accessToken ?? body.session?.user?.accessToken
     if (!accessTokenValue) {
+      logger.debug('Alexa request has no linked-account access token, prompting to link account')
       return response.ok(linkAccountRequired())
     }
 
     const token = await User.personalAccessTokens.verify(new Secret(accessTokenValue))
     if (!token || token.isExpired()) {
+      // Not distinguishing "not found" from "expired" in the log: Alexa PATs
+      // are minted with no `expiresIn` (see `user.ts`), so `isExpired()` is a
+      // defensive check with no real path to `true` today — computing which
+      // case this is would add a branch with no way to exercise it.
+      logger.warn('Alexa request access token is missing or expired, prompting to re-link account')
       return response.ok(linkAccountRequired())
     }
 
@@ -110,7 +120,7 @@ export default class AlexaController {
 
       case 'IntentRequest':
         return response.ok(
-          await withDisplay(await this.#routeIntent(token, body.request), hasDisplay)
+          await withDisplay(await this.#routeIntent(token, body.request, logger), hasDisplay)
         )
 
       case 'Alexa.Presentation.APL.UserEvent':
@@ -126,7 +136,8 @@ export default class AlexaController {
 
   async #routeIntent(
     token: AccessToken,
-    alexaRequest: AlexaRequestBody['request']
+    alexaRequest: AlexaRequestBody['request'],
+    logger: HttpContext['logger']
   ): Promise<IntentResult> {
     const intentName = alexaRequest.intent?.name ?? ''
     const slots = slotValues(alexaRequest.intent)
@@ -150,6 +161,12 @@ export default class AlexaController {
       case 'AMAZON.StopIntent':
         return { response: say('Goodbye.') }
       default:
+        // A real Alexa request never sends a name outside the interaction
+        // model (Amazon validates that server-side before the request ever
+        // reaches us), so hitting this branch means our own model and this
+        // switch have drifted apart — see #88's "interaction model slot
+        // conflicts" fix, which was found the hard way without this log.
+        logger.warn({ intentName }, 'Alexa request named an unrecognized intent')
         return {
           response: say(
             "Sorry, I didn't understand that. You can say 'add milk' or 'what's on my list'."

@@ -23,7 +23,7 @@ export default class InviteAcceptController {
   }
 
   /** Authenticated — creates or upgrades the caller's membership on the invite's list. */
-  async accept({ auth, params, response, serialize }: HttpContext) {
+  async accept({ auth, params, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const invite = await findActiveInvite(params.token)
     if (!invite) return response.notFound({ message: 'Invite not found' })
@@ -49,9 +49,17 @@ export default class InviteAcceptController {
         acceptedAt: now,
         sortOrder: await nextListMemberSortOrder(user.id),
       })
+      logger.debug(
+        { listId: invite.listId, userId: user.id, role: inviteRole },
+        'accepted list invite, created new membership'
+      )
     } else if (ROLE_RANK[inviteRole] > ROLE_RANK[existing.role]) {
       existing.role = inviteRole
       await existing.save()
+      logger.debug(
+        { listId: invite.listId, userId: user.id, role: inviteRole },
+        'accepted list invite, upgraded existing membership role'
+      )
     }
 
     await broadcastSync({

@@ -1,5 +1,6 @@
 import * as mdi from '@mdi/js'
 import { Resvg } from '@resvg/resvg-js'
+import logger from '@adonisjs/core/services/logger'
 
 /**
  * Same fallback glyph `apps/web/src/lib/components/Icon.svelte` draws for an icon name that
@@ -34,7 +35,11 @@ export function renderIcon(iconName: string, colorHex: string): Buffer {
   if (cached) return cached
 
   const icons = mdi as unknown as Record<string, string | undefined>
-  const path = icons[toMdiExportName(iconName)] ?? FALLBACK_PATH
+  const resolved = icons[toMdiExportName(iconName)]
+  if (!resolved) {
+    logger.warn({ iconName }, 'Alexa icon render: unknown icon name, using fallback glyph')
+  }
+  const path = resolved ?? FALLBACK_PATH
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${SIZE}" height="${SIZE}"><path d="${path}" fill="#${colorHex}"/></svg>`
   const png = new Resvg(svg, { fitTo: { mode: 'width', value: SIZE } }).render().asPng()
 

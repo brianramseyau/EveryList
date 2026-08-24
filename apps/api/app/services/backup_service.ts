@@ -3,6 +3,7 @@ import path from 'node:path'
 import Database from 'better-sqlite3'
 import { DateTime } from 'luxon'
 import app from '@adonisjs/core/services/app'
+import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import BackupSetting, { type BackupFrequency } from '#models/backup_setting'
 
@@ -69,7 +70,14 @@ export function pruneToCount(backupDir: string, kind: BackupKind, count: number)
   if (!fs.existsSync(backupDir)) return
 
   const matching = listBackups(backupDir).filter((file) => file.kind === kind)
-  for (const file of matching.slice(count)) {
+  const toDelete = matching.slice(count)
+  if (toDelete.length === 0) return
+
+  logger.debug(
+    { kind, count, deleting: toDelete.map((file) => file.filename) },
+    'pruning old backups'
+  )
+  for (const file of toDelete) {
     fs.unlinkSync(path.join(backupDir, file.filename))
   }
 }
@@ -95,6 +103,9 @@ export async function performBackup(
   const source = new Database(dbFilename, { readonly: true })
   try {
     await source.backup(destination)
+  } catch (error) {
+    logger.error({ err: error, kind, destination }, 'database backup failed')
+    throw error
   } finally {
     source.close()
   }
@@ -106,6 +117,10 @@ export async function performBackup(
   const timestampDate = now.toJSDate()
   fs.utimesSync(destination, timestampDate, timestampDate)
 
+  logger.info(
+    { kind, destination, sizeBytes: fs.statSync(destination).size },
+    'database backup completed'
+  )
   return destination
 }
 
@@ -178,6 +193,7 @@ export function isBackupDue(
  * never touches that file and so can never affect it.
  */
 export async function runManualBackup(): Promise<string> {
+  logger.debug('manual backup requested')
   const settings = await BackupSetting.current()
   const backupDir = backupDirectory()
 
@@ -194,11 +210,16 @@ export async function runScheduledBackupIfDue(now: DateTime = DateTime.now()): P
   const settings = await BackupSetting.current()
   const backupDir = backupDirectory()
 
+  const lastAt = lastAutomaticBackupAt(backupDir)
   const due = isBackupDue(
     { frequency: settings.frequency as BackupFrequency, timeOfDay: settings.timeOfDay },
-    lastAutomaticBackupAt(backupDir),
+    lastAt,
     now,
     settings.createdAt
+  )
+  logger.debug(
+    { due, frequency: settings.frequency, timeOfDay: settings.timeOfDay, lastAt, now },
+    'scheduled backup due-check'
   )
   if (!due) return false
 

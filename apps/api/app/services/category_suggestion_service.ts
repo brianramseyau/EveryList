@@ -2,6 +2,7 @@ import type List from '#models/list'
 import Item from '#models/item'
 import { suggestCategoryName } from '@everylist/shared'
 import { getEffectiveCategories } from '#services/category_service'
+import logger from '@adonisjs/core/services/logger'
 
 /**
  * Frequency-based personalization on top of the static keyword table — see
@@ -29,11 +30,22 @@ async function personalizedCategoryId(list: List, itemName: string): Promise<num
 /** Personalized history first, falling back to the shared static keyword table. */
 export async function suggestCategoryId(list: List, itemName: string): Promise<number | null> {
   const personalized = await personalizedCategoryId(list, itemName)
-  if (personalized) return personalized
+  if (personalized) {
+    logger.debug(
+      { listId: list.id, categoryId: personalized, source: 'personalized' },
+      'suggested category for item'
+    )
+    return personalized
+  }
 
   const suggestedName = suggestCategoryName(itemName)
-  if (!suggestedName) return null
+  if (!suggestedName) {
+    logger.debug({ listId: list.id }, 'no category suggestion matched item')
+    return null
+  }
 
   const categories = await getEffectiveCategories(list)
-  return categories.find((category) => category.name === suggestedName)?.id ?? null
+  const categoryId = categories.find((category) => category.name === suggestedName)?.id ?? null
+  logger.debug({ listId: list.id, categoryId, source: 'keyword' }, 'suggested category for item')
+  return categoryId
 }

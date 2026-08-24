@@ -1,6 +1,7 @@
 import Item from '#models/item'
 import List from '#models/list'
 import type { AccessToken } from '@adonisjs/auth/access_tokens'
+import logger from '@adonisjs/core/services/logger'
 import { roleFor } from '#services/alexa/list_resolution'
 import { completeItemRow, uncheckItemRow, type IntentResult } from '#services/alexa/intent_router'
 import { say } from '#services/alexa/response_builder'
@@ -22,17 +23,24 @@ const ACTIONS = {
  */
 export async function handleTouchEvent(token: AccessToken, args: unknown[]): Promise<IntentResult> {
   const [action, rawItemId, rawListId] = args
+  logger.debug({ action, rawItemId, rawListId }, 'Alexa APL touch event received')
+
   if (action !== 'complete' && action !== 'uncheck') {
+    logger.warn({ action }, 'Alexa APL touch event named an unrecognized action')
     return { response: say("Sorry, I didn't understand that.") }
   }
 
   const listId = Number(rawListId)
   if (roleFor(token, listId) !== 'editor') {
+    logger.debug({ listId }, 'Alexa APL touch event denied: token only grants viewer access')
     return { response: say("You don't have permission to change that list.") }
   }
 
   const list = await List.query().where('id', listId).whereNull('deletedAt').first()
-  if (!list) return { response: say("I couldn't find that list.") }
+  if (!list) {
+    logger.debug({ listId }, 'Alexa APL touch event: list not found')
+    return { response: say("I couldn't find that list.") }
+  }
 
   const itemId = Number(rawItemId)
   const item = await Item.query()
@@ -40,7 +48,10 @@ export async function handleTouchEvent(token: AccessToken, args: unknown[]): Pro
     .where('listId', list.id)
     .whereNull('deletedAt')
     .first()
-  if (!item) return { response: say("I couldn't find that item."), list }
+  if (!item) {
+    logger.debug({ listId, itemId }, 'Alexa APL touch event: item not found')
+    return { response: say("I couldn't find that item."), list }
+  }
 
   const { mutate, speak } = ACTIONS[action]
   await mutate(list, item)

@@ -16,13 +16,14 @@ import { createOwnedList } from '#services/list_creation'
 const STARTER_LIST = { name: 'Shopping List', icon: 'basket', color: '#c2410c' } as const
 
 export default class NewAccountController {
-  async store({ request, response, serialize }: HttpContext) {
+  async store({ request, response, serialize, logger }: HttpContext) {
     const { fullName, email, password, inviteToken } = await request.validateUsing(signupValidator)
 
     const publicSignupEnabled = env.get('PUBLIC_SIGNUP_ENABLED', true)
     if (!publicSignupEnabled) {
       const invite = inviteToken ? await findActiveInvite(inviteToken) : null
       if (!invite) {
+        logger.warn('signup rejected: public signup disabled and no valid invite token')
         return response.forbidden({ message: 'Public signup is currently disabled' })
       }
     }
@@ -30,6 +31,8 @@ export default class NewAccountController {
     const user = await User.create({ fullName, email, password })
     const token = await User.accessTokens.create(user)
     await createOwnedList({ ownerId: user.id, ...STARTER_LIST, seedStarterCategories: true })
+
+    logger.debug({ userId: user.id }, 'created new account')
 
     return serialize({
       user: UserTransformer.transform(user),

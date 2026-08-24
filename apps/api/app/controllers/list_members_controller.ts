@@ -32,10 +32,15 @@ export default class ListMembersController {
   }
 
   /** Users the requester could directly add: people they already share another list with. */
-  async candidates({ auth, params, serialize }: HttpContext) {
+  async candidates({ auth, params, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const candidates = await findMemberCandidates(user.id, list)
+
+    logger.debug(
+      { listId: list.id, userId: user.id, candidateCount: candidates.length },
+      'listed direct-add member candidates'
+    )
 
     return serialize(MemberCandidateTransformer.transform(candidates))
   }
@@ -46,7 +51,7 @@ export default class ListMembersController {
    * sharing lists with. The membership is created already-accepted, matching
    * the join-link flow's behavior (see invite_accept_controller.ts).
    */
-  async store({ auth, params, request, response, serialize }: HttpContext) {
+  async store({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createListMemberValidator)
@@ -84,10 +89,15 @@ export default class ListMembersController {
 
     await broadcastSync({ listId: list.id, entityType: 'list', entityId: list.id, op: 'update' })
 
+    logger.debug(
+      { listId: list.id, userId: target.id, role: payload.role },
+      'directly added list member'
+    )
+
     return serialize(ListMemberTransformer.transform(member))
   }
 
-  async update({ auth, params, request, serialize, response }: HttpContext) {
+  async update({ auth, params, request, serialize, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'owner')
     const member = await ListMember.query()
@@ -106,10 +116,15 @@ export default class ListMembersController {
 
     await broadcastSync({ listId: list.id, entityType: 'list', entityId: list.id, op: 'update' })
 
+    logger.debug(
+      { listId: list.id, memberId: member.id, role: member.role },
+      'updated list member role'
+    )
+
     return serialize(ListMemberTransformer.transform(member))
   }
 
-  async destroy({ auth, params, response }: HttpContext) {
+  async destroy({ auth, params, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'owner')
     const member = await ListMember.query()
@@ -123,6 +138,8 @@ export default class ListMembersController {
 
     await member.delete()
     await broadcastSync({ listId: list.id, entityType: 'list', entityId: list.id, op: 'update' })
+
+    logger.debug({ listId: list.id, memberId: member.id }, 'removed list member')
 
     return response.noContent()
   }

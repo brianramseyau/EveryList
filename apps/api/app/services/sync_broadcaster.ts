@@ -3,6 +3,7 @@ import SyncEvent from '#models/sync_event'
 import type { SyncEntityType, SyncOp } from '#models/sync_event'
 import type Store from '#models/store'
 import transmit from '@adonisjs/transmit/services/main'
+import logger from '@adonisjs/core/services/logger'
 
 type BroadcastPayload = NonNullable<Parameters<typeof transmit.broadcast>[1]>
 
@@ -32,7 +33,25 @@ export class TransmitSyncBroadcaster implements SyncBroadcaster {
       payload: input.payload ?? null,
     })
 
-    transmit.broadcast(`list/${input.listId}`, {
+    const channel = `list/${input.listId}`
+    // Subscriber count is captured *before* the broadcast call for
+    // debugging the "first write after boot" gap noted in AGENTS.md — the
+    // theory under investigation is a subscriber that's registered but
+    // still doesn't receive the message, so knowing whether it was even
+    // registered at broadcast time is the useful signal here, not proof of
+    // delivery (`transmit.broadcast` doesn't report that either way).
+    logger.debug(
+      {
+        channel,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        op: input.op,
+        subscriberCount: transmit.getSubscribersFor(channel).length,
+      },
+      'broadcasting sync event'
+    )
+
+    transmit.broadcast(channel, {
       entityType: input.entityType,
       entityId: input.entityId,
       op: input.op,

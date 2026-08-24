@@ -26,7 +26,7 @@ export default class CategoriesController {
     return serialize(CategoryTransformer.transform(categories))
   }
 
-  async store({ auth, params, request, serialize }: HttpContext) {
+  async store({ auth, params, request, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createCategoryValidator)
@@ -54,6 +54,8 @@ export default class CategoriesController {
       version: category.version,
     })
 
+    logger.debug({ listId: list.id, categoryId: category.id }, 'category created')
+
     return serialize(CategoryTransformer.transform(category))
   }
 
@@ -64,7 +66,7 @@ export default class CategoriesController {
    * on the target (case-insensitive) are skipped, so importing the same source
    * twice is idempotent. Online-only, like items/import.
    */
-  async import({ auth, params, request, response, serialize }: HttpContext) {
+  async import({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const { sourceListId, categoryIds } = await request.validateUsing(importCategoriesValidator)
@@ -116,6 +118,11 @@ export default class CategoriesController {
       payload: { count: created.length },
     })
 
+    logger.debug(
+      { listId: list.id, sourceListId, createdCount: created.length },
+      'categories imported'
+    )
+
     return serialize(CategoryTransformer.transform(created))
   }
 
@@ -157,6 +164,11 @@ export default class CategoriesController {
       version: category.version,
     })
 
+    logger.debug(
+      { listId: list.id, categoryId: category.id, version: category.version },
+      'category updated'
+    )
+
     return serialize(CategoryTransformer.transform(category))
   }
 
@@ -196,10 +208,12 @@ export default class CategoriesController {
       version: category.version,
     })
 
+    logger.debug({ listId: list.id, categoryId: category.id }, 'category deleted')
+
     return response.noContent()
   }
 
-  async reorder({ auth, params, request, serialize }: HttpContext) {
+  async reorder({ auth, params, request, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const { order } = await request.validateUsing(reorderCategoriesValidator)
@@ -227,6 +241,8 @@ export default class CategoriesController {
       op: 'update',
       payload: { categoryIds: order },
     })
+
+    logger.debug({ listId: list.id, count: order.length }, 'categories reordered')
 
     return serialize(CategoryTransformer.transform(await getEffectiveCategories(list)))
   }

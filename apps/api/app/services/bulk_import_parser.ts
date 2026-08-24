@@ -1,3 +1,5 @@
+import logger from '@adonisjs/core/services/logger'
+
 export interface ParsedImportItem {
   name: string
   notes: string[]
@@ -66,6 +68,7 @@ export function parseBulkImport(text: string): ParsedBulkImport {
       .map((line) => cleanItemName(line))
       .filter((name) => name.length > 0)
       .map((name) => ({ name, notes: [] }))
+    logger.debug({ format: 'plain', itemCount: items.length }, 'parsed bulk import')
     return { sections: [{ header: null, items }] }
   }
 
@@ -127,5 +130,14 @@ export function parseBulkImport(text: string): ParsedBulkImport {
     section.items.push(item)
   }
 
-  return { sections: sections.filter((entry) => entry.items.length > 0) }
+  const result = { sections: sections.filter((entry) => entry.items.length > 0) }
+  logger.debug(
+    {
+      format: 'structured',
+      sectionCount: result.sections.length,
+      itemCount: result.sections.reduce((total, entry) => total + entry.items.length, 0),
+    },
+    'parsed bulk import'
+  )
+  return result
 }

@@ -27,7 +27,7 @@ export default class StoresController {
    * Attaches an existing store (by id) to this list, or creates a new
    * store and attaches it in one call — see PLAN.md §8.
    */
-  async store({ auth, params, request, response, serialize }: HttpContext) {
+  async store({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(attachStoreValidator)
@@ -54,6 +54,8 @@ export default class StoresController {
       op: 'create',
       version: store.version,
     })
+
+    logger.debug({ listId: list.id, storeId: store.id }, 'store attached to list')
 
     return serialize(StoreTransformer.transform(store))
   }
@@ -89,10 +91,12 @@ export default class StoresController {
       version: store.version,
     })
 
+    logger.debug({ storeId: store.id, version: store.version }, 'store updated')
+
     return serialize(StoreTransformer.transform(store))
   }
 
-  async detach({ auth, params, response }: HttpContext) {
+  async detach({ auth, params, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     await ListStore.query().where('listId', list.id).where('storeId', params.storeId).delete()
@@ -103,6 +107,8 @@ export default class StoresController {
       entityId: Number(params.storeId),
       op: 'delete',
     })
+
+    logger.debug({ listId: list.id, storeId: Number(params.storeId) }, 'store detached from list')
 
     return response.noContent()
   }
@@ -118,7 +124,7 @@ export default class StoresController {
     return serialize(StoreCategoryOrderTransformer.transform(orders))
   }
 
-  async reorderCategories({ auth, params, request, serialize }: HttpContext) {
+  async reorderCategories({ auth, params, request, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const store = await ListPolicy.requireStoreRole(user, params.id, 'editor')
     const { categories } = await request.validateUsing(reorderStoreCategoriesValidator)
@@ -159,6 +165,8 @@ export default class StoresController {
       op: 'update',
       payload: { categoryIds: categories.map((entry) => entry.categoryId) },
     })
+
+    logger.debug({ storeId: store.id, count: categories.length }, 'store categories reordered')
 
     return serialize(StoreCategoryOrderTransformer.transform(orders))
   }

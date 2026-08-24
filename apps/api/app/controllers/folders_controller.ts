@@ -28,7 +28,7 @@ export default class FoldersController {
     return serialize(FolderTransformer.transform(folders))
   }
 
-  async store({ auth, request, serialize }: HttpContext) {
+  async store({ auth, request, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const payload = await request.validateUsing(createFolderValidator)
 
@@ -39,6 +39,8 @@ export default class FoldersController {
       sortOrder: await nextSortOrder(user.id),
       version: 1,
     })
+
+    logger.debug({ userId: user.id, folderId: folder.id }, 'folder created')
 
     return serialize(FolderTransformer.transform(folder))
   }
@@ -71,6 +73,8 @@ export default class FoldersController {
     folder.version += 1
     await folder.save()
 
+    logger.debug({ folderId: folder.id, version: folder.version }, 'folder updated')
+
     return serialize(FolderTransformer.transform(folder))
   }
 
@@ -93,12 +97,15 @@ export default class FoldersController {
       return response.conflict({ conflict: true })
     }
 
+    const folderId = folder.id
     await folder.delete()
+
+    logger.debug({ folderId }, 'folder deleted')
 
     return response.noContent()
   }
 
-  async reorder({ auth, request, serialize }: HttpContext) {
+  async reorder({ auth, request, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const { order } = await request.validateUsing(reorderFoldersValidator)
 
@@ -115,6 +122,9 @@ export default class FoldersController {
     }
 
     const allFolders = await Folder.query().where('userId', user.id).orderBy('sortOrder', 'asc')
+
+    logger.debug({ userId: user.id, count: order.length }, 'folders reordered')
+
     return serialize(FolderTransformer.transform(allFolders))
   }
 }

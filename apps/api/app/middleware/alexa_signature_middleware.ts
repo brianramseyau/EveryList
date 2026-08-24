@@ -42,6 +42,7 @@ export default class AlexaSignatureMiddleware {
       return ctx.response.badRequest({ message: 'Invalid Alexa request signature' })
     }
 
+    ctx.logger.debug('Alexa request signature verified')
     return next()
   }
 }

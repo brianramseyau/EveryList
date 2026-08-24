@@ -195,6 +195,19 @@ test.group('performBackup', () => {
     assert.equal(row.name, 'gizmo')
     restored.close()
   })
+
+  test('logs and rethrows when the native backup call itself fails', async ({ assert }) => {
+    const dir = tempDir()
+    // better-sqlite3 opens the file lazily enough that a plain readonly open
+    // of a non-database file succeeds — it only errors once `.backup()`
+    // actually tries to read pages from it, which is the failure mode this
+    // covers (as opposed to a missing/unreadable source file, which throws
+    // before the code under test's own try/catch is ever entered).
+    const sourcePath = path.join(dir, 'not-a-database.sqlite3')
+    fs.writeFileSync(sourcePath, 'not a real sqlite file')
+
+    await assert.rejects(() => performBackup(sourcePath, path.join(dir, 'backups'), 'automatic'))
+  })
 })
 
 test.group('runManualBackup / runScheduledBackupIfDue', (group) => {

@@ -7,12 +7,14 @@ export default class ProfileController {
     return serialize(UserTransformer.transform(auth.getUserOrFail()))
   }
 
-  async update({ auth, request, serialize }: HttpContext) {
+  async update({ auth, request, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const payload = await request.validateUsing(updateProfileValidator)
 
     user.merge(payload)
     await user.save()
+
+    logger.debug({ userId: user.id }, 'updated profile')
 
     return serialize(UserTransformer.transform(user))
   }

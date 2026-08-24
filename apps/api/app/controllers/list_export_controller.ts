@@ -13,11 +13,12 @@ function formatItemLine(item: Item): string {
 }
 
 export default class ListExportController {
-  async email({ auth, params, request, response }: HttpContext) {
+  async email({ auth, params, request, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     await ListPolicy.requireList(user, params.listId, 'viewer')
 
     if (!isMailConfigured()) {
+      logger.debug('list export email requested but mail is not configured')
       return response.serviceUnavailable({
         message: 'Email export is not configured on this server.',
       })
@@ -32,6 +33,7 @@ export default class ListExportController {
       .orderBy('sortOrder', 'asc')
 
     await mail.send(new ListExportMail(list, items.map(formatItemLine), payload.email))
+    logger.debug({ listId: list.id, itemCount: items.length }, 'list export email sent')
 
     return response.noContent()
   }

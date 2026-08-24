@@ -25,21 +25,34 @@ export default class BackupSettingsController {
     return response.ok({ data: toState(setting) })
   }
 
-  async update({ request, response }: HttpContext) {
+  async update({ request, response, logger }: HttpContext) {
     const payload = await request.validateUsing(updateBackupSettingValidator)
     const setting = await BackupSetting.current()
     setting.merge(payload)
     await setting.save()
+
+    logger.debug(
+      {
+        frequency: setting.frequency,
+        timeOfDay: setting.timeOfDay,
+        retentionCount: setting.retentionCount,
+      },
+      'updated backup settings'
+    )
 
     return response.ok({ data: toState(setting) })
   }
 
   /** Takes an immediate backup outside the schedule — writes a `manual`-kind
    * file, which never affects the next scheduled run (see runManualBackup). */
-  async run({ response }: HttpContext) {
+  async run({ response, logger }: HttpContext) {
+    logger.debug('starting manual backup')
     await runManualBackup()
     const setting = await BackupSetting.current()
+    const state = toState(setting)
 
-    return response.ok({ data: toState(setting) })
+    logger.debug({ fileCount: state.files.length }, 'manual backup completed')
+
+    return response.ok({ data: state })
   }
 }

@@ -37,8 +37,38 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    * the a third party error monitoring service.
    *
    * @note You should not attempt to send a response from this method.
+   *
+   * Two adjustments to the base handler's default reporting, both discovered
+   * by reading `shouldReport`/`toHttpError` rather than from an incident:
+   *
+   * 1. A raw `SqliteError` from a unique-constraint hit has no `.status`, so
+   *    `toHttpError` defaults it to 500 — meaning every "that name is already
+   *    in use" 422 (handled above, a routine and expected case) was actually
+   *    being logged as an `error`-level 500 with a full stack trace. Report
+   *    it at `debug` instead so real 500s aren't buried in that noise.
+   * 2. `shouldReport` ignores status 400 outright, which silently swallows
+   *    failed-login attempts (`E_INVALID_CREDENTIALS` is a 400) — the one
+   *    unauthenticated, internet-facing endpoint group `start/limiter.ts`
+   *    already calls out as "the actual brute-force/credential-stuffing
+   *    target". Log those explicitly at `warn` so a spike is visible.
    */
   async report(error: unknown, ctx: HttpContext) {
+    if (isUniqueConstraintError(error)) {
+      ctx.logger.debug(
+        { method: ctx.request.method(), url: ctx.request.url() },
+        'unique constraint violation, responding 422'
+      )
+      return
+    }
+
+    const code = (error as { code?: unknown })?.code
+    if (code === 'E_INVALID_CREDENTIALS') {
+      ctx.logger.warn(
+        { email: ctx.request.input('email'), ip: ctx.request.ip() },
+        'login attempt with invalid credentials'
+      )
+    }
+
     return super.report(error, ctx)
   }
 }

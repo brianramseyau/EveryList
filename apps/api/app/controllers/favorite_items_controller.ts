@@ -25,7 +25,7 @@ export default class FavoriteItemsController {
     return serialize(FavoriteItemTransformer.transform(favorites))
   }
 
-  async store({ auth, params, request, serialize }: HttpContext) {
+  async store({ auth, params, request, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createFavoriteItemValidator)
@@ -62,6 +62,11 @@ export default class FavoriteItemsController {
         version: existing.version,
       })
 
+      logger.debug(
+        { listId: list.id, favoriteItemId: existing.id, wasDeleted },
+        'favorite item store matched existing name'
+      )
+
       return serialize(FavoriteItemTransformer.transform(existing))
     }
 
@@ -84,6 +89,8 @@ export default class FavoriteItemsController {
       op: 'create',
       version: favorite.version,
     })
+
+    logger.debug({ listId: list.id, favoriteItemId: favorite.id }, 'favorite item created')
 
     return serialize(FavoriteItemTransformer.transform(favorite))
   }
@@ -126,6 +133,8 @@ export default class FavoriteItemsController {
       version: favorite.version,
     })
 
+    logger.debug({ listId: list.id, favoriteItemId: favorite.id }, 'favorite item updated')
+
     return serialize(FavoriteItemTransformer.transform(favorite))
   }
 
@@ -165,6 +174,8 @@ export default class FavoriteItemsController {
       version: favorite.version,
     })
 
+    logger.debug({ listId: list.id, favoriteItemId: favorite.id }, 'favorite item deleted')
+
     return response.noContent()
   }
 
@@ -173,7 +184,7 @@ export default class FavoriteItemsController {
    * seeded with its default category/quantity — the "master list" loop
    * from PLAN.md §3, now scoped to a single list.
    */
-  async addToList({ auth, params, serialize }: HttpContext) {
+  async addToList({ auth, params, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const favorite = await FavoriteItem.query()
@@ -203,6 +214,11 @@ export default class FavoriteItemsController {
           version: existing.version,
         })
       }
+
+      logger.debug(
+        { listId: list.id, favoriteItemId: favorite.id, itemId: existing.id },
+        'favorite item addToList matched existing item'
+      )
 
       return serialize(ItemTransformer.transform(existing))
     }
@@ -234,6 +250,11 @@ export default class FavoriteItemsController {
       op: 'create',
       version: item.version,
     })
+
+    logger.debug(
+      { listId: list.id, favoriteItemId: favorite.id, itemId: item.id },
+      'favorite item added to list as new item'
+    )
 
     return serialize(ItemTransformer.transform(item))
   }

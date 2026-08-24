@@ -40,7 +40,7 @@ export default class AlexaOAuthController {
    * configured" case is a plain runtime check the test suite can toggle per-call — same
    * convention as `mail_configured.ts`'s SMTP2GO check.
    */
-  async token({ request, response }: HttpContext) {
+  async token({ request, response, logger }: HttpContext) {
     const { clientId, clientSecret } = extractClientCredentials(request)
     const expectedId = process.env.AUTHENTIK_CLIENT_ID
     if (
@@ -48,6 +48,7 @@ export default class AlexaOAuthController {
       clientId !== expectedId ||
       clientSecret !== process.env.AUTHENTIK_CLIENT_SECRET
     ) {
+      logger.warn({ clientId }, 'Alexa OAuth token request had invalid client credentials')
       return response.unauthorized({ error: 'invalid_client' })
     }
 
@@ -57,12 +58,25 @@ export default class AlexaOAuthController {
     try {
       const authentikToken = await authentikClient.exchangeCode(payload.code, payload.redirect_uri)
       email = await authentikClient.fetchEmail(authentikToken)
-    } catch {
+    } catch (error) {
+      // This was previously a bare `catch { ... }` — whatever Authentik
+      // rejected the exchange for (expired code, redirect_uri mismatch,
+      // Authentik itself down) was indistinguishable from any other cause
+      // once it reached this 400, matching the disposable-logging pattern
+      // this pass is meant to replace: `authentikClient` now logs the
+      // specific HTTP failure itself, but log here too so a failed
+      // account-link attempt is visible even if it fails before reaching
+      // either of those calls.
+      logger.warn({ err: error }, 'Alexa account-link token exchange failed')
       return response.badRequest({ error: 'invalid_grant' })
     }
 
     const user = await User.query().where('email', email.trim().toLowerCase()).first()
     if (!user) {
+      logger.warn(
+        { email },
+        'Alexa account-link succeeded with Authentik but no matching EveryList user exists'
+      )
       return response.badRequest({ error: 'invalid_grant' })
     }
 
@@ -76,6 +90,7 @@ export default class AlexaOAuthController {
     })
 
     const token = await User.personalAccessTokens.create(user, abilities, { name: 'Alexa' })
+    logger.debug({ userId: user.id, listCount: abilities.length }, 'Alexa account-link completed')
 
     return response.ok({ access_token: token.value!.release(), token_type: 'bearer' })
   }
