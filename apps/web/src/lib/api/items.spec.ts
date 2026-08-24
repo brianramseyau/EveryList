@@ -23,6 +23,7 @@ const {
 	fetchRecentItems,
 	importItems,
 	moveItem,
+	moveItemToList,
 	purgeItem,
 	restoreItem,
 	updateItem
@@ -61,6 +62,13 @@ describe('items api', () => {
 		moveItem(1, 100, null);
 		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/items/100/move', {
 			previousItemId: null
+		});
+	});
+
+	it('moveItemToList POSTs the destination list id', () => {
+		moveItemToList(1, 100, 2);
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items/100/move-to-list', {
+			destinationListId: 2
 		});
 	});
 

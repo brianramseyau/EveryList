@@ -1,15 +1,19 @@
 import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import type { CategoryDto, FavoriteItemDto, ItemDto, StoreDto } from '@everylist/shared';
+import type { CategoryDto, FavoriteItemDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1', itemId: '100' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn() }));
+vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn(), fetchLists: vi.fn() }));
 vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
-vi.mock('$lib/api/items', () => ({ fetchItems: vi.fn(), updateItem: vi.fn() }));
+vi.mock('$lib/api/items', () => ({
+	fetchItems: vi.fn(),
+	updateItem: vi.fn(),
+	moveItemToList: vi.fn()
+}));
 vi.mock('$lib/api/stores', () => ({ fetchStores: vi.fn() }));
 vi.mock('$lib/api/favorites', () => ({
 	fetchFavorites: vi.fn(),
@@ -21,13 +25,16 @@ vi.mock('$lib/offline/db', async (importOriginal) => {
 	return { ...actual, getDb: vi.fn(actual.getDb) };
 });
 
-const { fetchList } = await import('$lib/api/lists');
+const { fetchList, fetchLists } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
-const { fetchItems, updateItem } = await import('$lib/api/items');
+const { fetchItems, updateItem, moveItemToList } = await import('$lib/api/items');
 const { fetchStores } = await import('$lib/api/stores');
 const { fetchFavorites, createFavorite, deleteFavorite } = await import('$lib/api/favorites');
 const { goto } = await import('$app/navigation');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
+const { setServerUnavailableForTesting, resetConnectivityForTesting } = await import(
+	'$lib/offline/connectivity.svelte'
+);
 const ItemDetailPage = (await import('./+page.svelte')).default;
 
 const TS = '2026-08-01T00:00:00.000Z';
@@ -60,6 +67,9 @@ const produce: CategoryDto = {
 	deletedAt: null,
 	version: 1
 };
+
+const otherOwnedList: ListDto = { ...list, id: 2, name: 'Camping', role: 'owner' };
+const viewerOnlyList: ListDto = { ...list, id: 3, name: 'Shared Read-Only', role: 'viewer' };
 
 const corner: StoreDto = {
 	id: 20,
@@ -115,6 +125,7 @@ describe('Item detail +page.svelte', () => {
 	beforeEach(() => {
 		setToken('test-token');
 		vi.mocked(fetchList).mockResolvedValue(list);
+		vi.mocked(fetchLists).mockResolvedValue([list]);
 		vi.mocked(fetchCategories).mockResolvedValue([produce]);
 		vi.mocked(fetchStores).mockResolvedValue([]);
 		vi.mocked(fetchItems).mockResolvedValue([]);
@@ -126,6 +137,7 @@ describe('Item detail +page.svelte', () => {
 		vi.clearAllMocks();
 		clearToken();
 		await resetDbForTesting();
+		resetConnectivityForTesting();
 	});
 
 	it('redirects to /login when there is no token', async () => {
@@ -510,5 +522,89 @@ describe('Item detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'Add to favorites' }).click();
 
 		await expect.element(page.getByText('Failed to update favorites.')).toBeInTheDocument();
+	});
+
+	it('offers only lists the user owns or can edit as move targets, excluding the current list', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchLists).mockResolvedValue([list, otherOwnedList, viewerOnlyList]);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		const select = page.getByLabelText('Move to list').element() as HTMLSelectElement;
+		const optionLabels = Array.from(select.options).map((option) => option.textContent);
+		expect(optionLabels).toContain('Camping');
+		expect(optionLabels).not.toContain('Shared Read-Only');
+		expect(optionLabels).not.toContain('Groceries');
+	});
+
+	it('hides the move-to-list control when there is nowhere to move the item', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchLists).mockResolvedValue([list, viewerOnlyList]);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await expect.element(page.getByLabelText('Move to list')).not.toBeInTheDocument();
+	});
+
+	it('moves the item to the chosen list, then navigates there', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchLists).mockResolvedValue([list, otherOwnedList]);
+		vi.mocked(moveItemToList).mockResolvedValue(makeItem({ id: 100, name: 'Bananas', listId: 2 }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await page.getByLabelText('Move to list').selectOptions('2');
+		await page.getByRole('button', { name: 'Move' }).click();
+
+		expect(moveItemToList).toHaveBeenCalledWith(1, 100, 2);
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(vi.mocked(goto).mock.calls[0]?.[0]).toBe('/lists/2');
+	});
+
+	it('disables the Move button until a destination list is chosen', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchLists).mockResolvedValue([list, otherOwnedList]);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await expect.element(page.getByRole('button', { name: 'Move' })).toBeDisabled();
+		await page.getByLabelText('Move to list').selectOptions('2');
+		await expect.element(page.getByRole('button', { name: 'Move' })).not.toBeDisabled();
+	});
+
+	it('shows the ApiError message when moving fails', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchLists).mockResolvedValue([list, otherOwnedList]);
+		vi.mocked(moveItemToList).mockRejectedValue(new ApiError(403, 'No edit access to that list'));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await page.getByLabelText('Move to list').selectOptions('2');
+		await page.getByRole('button', { name: 'Move' }).click();
+
+		await expect.element(page.getByText('No edit access to that list')).toBeInTheDocument();
+	});
+
+	it('disables move-to-list while the server is unavailable', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchLists).mockResolvedValue([list, otherOwnedList]);
+		setServerUnavailableForTesting(true);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await expect.element(page.getByLabelText('Move to list')).toBeDisabled();
+		await expect.element(page.getByRole('button', { name: 'Move' })).toBeDisabled();
 	});
 });

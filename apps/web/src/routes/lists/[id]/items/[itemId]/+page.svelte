@@ -3,16 +3,17 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button } from 'flowbite-svelte';
+	import { Button, Label, Select } from 'flowbite-svelte';
 	import type { CategoryDto, FavoriteItemDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { fetchList } from '$lib/api/lists';
+	import { fetchList, fetchLists } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
-	import { fetchItems, updateItem } from '$lib/api/items';
+	import { fetchItems, moveItemToList, updateItem } from '$lib/api/items';
 	import { fetchStores } from '$lib/api/stores';
 	import { createFavorite, deleteFavorite, fetchFavorites } from '$lib/api/favorites';
 	import { getDb } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
+	import { connectivity } from '$lib/offline/connectivity.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import ItemFields from '$lib/components/ItemFields.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -29,6 +30,15 @@
 	let saving = $state(false);
 	let favorites = $state<FavoriteItemDto[]>([]);
 	let togglingFavorite = $state(false);
+	let allLists = $state<ListDto[]>([]);
+	let draftMoveTargetId = $state<number | null>(null);
+	let moving = $state(false);
+
+	// Only lists the user can actually write to — matches the "owner or editor" bar the server
+	// enforces on the destination in ItemsController#moveToList.
+	const moveTargets = $derived(
+		allLists.filter((l) => l.id !== listId && (l.role === 'owner' || l.role === 'editor'))
+	);
 
 	// Only read while `item` is loaded — the heart button that reads this is
 	// gated behind `{#if item}` in the template, so `item!` is always safe here.
@@ -60,19 +70,21 @@
 	async function loadAll() {
 		loading = true;
 		try {
-			const [listResult, itemResult, categoriesResult, storesResult, favoritesResult] =
+			const [listResult, itemResult, categoriesResult, storesResult, favoritesResult, listsResult] =
 				await Promise.all([
 					fetchList(listId),
 					loadItem(),
 					fetchCategories(listId),
 					fetchStores(listId),
-					fetchFavorites(listId)
+					fetchFavorites(listId),
+					fetchLists()
 				]);
 			list = listResult;
 			item = itemResult;
 			categories = categoriesResult;
 			stores = storesResult;
 			favorites = favoritesResult;
+			allLists = listsResult;
 
 			if (item) {
 				draftName = item.name;
@@ -120,6 +132,18 @@
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to save item.';
 			saving = false;
+		}
+	}
+
+	async function moveToList() {
+		if (!draftMoveTargetId || moving || connectivity.serverUnavailable) return;
+		moving = true;
+		try {
+			await moveItemToList(listId, itemId, draftMoveTargetId);
+			await goto(resolve('/lists/[id]', { id: String(draftMoveTargetId) }));
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to move item.';
+			moving = false;
 		}
 	}
 
@@ -206,6 +230,45 @@
 				showCategory={list?.useCategories !== false}
 			/>
 		</form>
+
+		{#if moveTargets.length > 0}
+			<div class="flex flex-col gap-1 border-t border-gray-200 pt-4 dark:border-gray-700">
+				<Label for="item-move-target" class="flex items-center gap-1">
+					<Icon name="folderMoveOutline" class="h-4 w-4" />
+					Move to list
+					{#if connectivity.serverUnavailable}
+						<span title="Move requires a connection">
+							<Icon name="cloudOffOutline" class="h-4 w-4 text-amber-600 dark:text-amber-400" />
+						</span>
+					{/if}
+				</Label>
+				<div class="flex gap-2">
+					<Select
+						id="item-move-target"
+						size="sm"
+						items={moveTargets.map((l) => ({ value: l.id, name: l.name }))}
+						placeholder="Choose a list…"
+						value={draftMoveTargetId ?? ''}
+						disabled={connectivity.serverUnavailable}
+						onchange={(event) => {
+							const raw = (event.target as HTMLSelectElement).value;
+							draftMoveTargetId = raw === '' ? null : Number(raw);
+						}}
+					/>
+					<Button
+						type="button"
+						size="sm"
+						color="alternative"
+						class="shrink-0"
+						disabled={!draftMoveTargetId || moving || connectivity.serverUnavailable}
+						onclick={moveToList}
+						title={connectivity.serverUnavailable ? 'Move requires a connection' : undefined}
+					>
+						{moving ? 'Moving…' : 'Move'}
+					</Button>
+				</div>
+			</div>
+		{/if}
 	{:else}
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 	{/if}
