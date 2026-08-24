@@ -129,7 +129,7 @@
 	     them visually pinned frame-to-frame. -->
 	<div
 		class="pointer-events-none fixed inset-x-0 top-0 z-50 bg-paper"
-		style="height: env(safe-area-inset-top); transform: translateZ(0); will-change: transform;"
+		style="padding-top: env(safe-area-inset-top); transform: translateZ(0); will-change: transform;"
 		aria-hidden="true"
 	></div>
 	<div class={showNav ? 'pb-16' : ''}>
