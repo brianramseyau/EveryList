@@ -249,6 +249,35 @@ FROZEN
     assert.deepEqual(result.sections[0]!.items[0]!.notes, ['$3,060? $3,366?'])
   })
 
+  test('a plain remark continues as a note across a blank line when a new bulleted item follows it', ({
+    assert,
+  }) => {
+    // Regression: "Cuiv100 for $100 off" was splitting off into its own bogus item instead of
+    // staying a note on the camera above it, since it's neither a link nor a price-only line.
+    const result = parseBulkImport(
+      '• SvBony APS-C Cooled Camera\nhttps://www.svbony.com/products/camera\n\nCuiv100 for $100 off\n• ZBT-2 Thread/Zigbee Router'
+    )
+    assert.deepEqual(
+      result.sections[0]!.items.map((item) => item.name),
+      ['SvBony APS-C Cooled Camera', 'ZBT-2 Thread/Zigbee Router']
+    )
+    assert.deepEqual(result.sections[0]!.items[0]!.notes, [
+      'https://www.svbony.com/products/camera',
+      'Cuiv100 for $100 off',
+    ])
+  })
+
+  test('a trailing plain remark with nothing recognizable after it still becomes its own item', ({
+    assert,
+  }) => {
+    const result = parseBulkImport('• Amber Meds\nPrescription\n\nMore meds, unrelated')
+    assert.deepEqual(
+      result.sections[0]!.items.map((item) => item.name),
+      ['Amber Meds', 'More meds, unrelated']
+    )
+    assert.deepEqual(result.sections[0]!.items[0]!.notes, ['Prescription'])
+  })
+
   test('extracts a trailing "[$price]" tag from an item name into its price field', ({
     assert,
   }) => {

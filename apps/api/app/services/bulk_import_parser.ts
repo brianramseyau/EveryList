@@ -98,12 +98,15 @@ function extractTrailingPrice(name: string): { name: string; price: number | nul
  *   that item's note.
  *
  * Some sources (e.g. a personal wishlist pasted from a notes app) put a
- * product's extra links or price mentions on their own paragraph, separated
- * from the item by a blank line. Since a bare line is normally read as a new
- * item once a blank line has intervened, a link or price-only line would
- * otherwise be split off into a bogus item named after the URL. Those two
- * shapes are special-cased to always continue as notes on the prior item,
- * blank line or not — see `isUrlLine`/`isPriceOnlyLine` below.
+ * product's extra links, price mentions, or other remarks on their own
+ * paragraph, separated from the item by a blank line. A bare line normally
+ * reads as a new item once a blank line has intervened — but only when that
+ * reading is actually plausible: if a bullet or category header follows it,
+ * the bare line was clearly just trailing commentary on the item above, not
+ * a new un-bulleted entry, so it's kept as a note instead of being split off
+ * into a bogus item named after a URL or stray remark (see `precedesNewEntry`
+ * below). A bare line with nothing recognizable coming after it — including
+ * end of input — still becomes its own item, same as before.
  */
 export function parseBulkImport(text: string): ParsedBulkImport {
   const lines = text.split(/\r?\n/).map((line) => line.trim())
@@ -137,7 +140,8 @@ export function parseBulkImport(text: string): ParsedBulkImport {
   // reads as a new item, but a link or price-only line still continues the prior item's notes.
   let blankSinceItem = false
 
-  for (const line of body) {
+  for (let index = 0; index < body.length; index++) {
+    const line = body[index]!
     if (line.length === 0) {
       blankSinceItem = true
       continue
@@ -165,9 +169,14 @@ export function parseBulkImport(text: string): ParsedBulkImport {
       blankSinceItem = false
       continue
     }
-    // A bare line straight under an item — or a link/price mention that continues that item's
-    // notes even across a blank paragraph break — is AnyList's item note...
-    if (item && (!blankSinceItem || isUrlLine(line) || isPriceOnlyLine(line))) {
+    // A bare line straight under an item — or a link/price mention, or a stray remark that's
+    // trailing off before the next clearly-marked entry — continues that item's notes even
+    // across a blank paragraph break. Only a bare line with nothing (recognizably) new coming
+    // after it reads as its own item — see the module doc comment above.
+    const nextNonBlank = body.slice(index + 1).find((candidate) => candidate.length > 0)
+    const precedesNewEntry =
+      nextNonBlank !== undefined && (isBulletLine(nextNonBlank) || isCategoryHeader(nextNonBlank))
+    if (item && (!blankSinceItem || isUrlLine(line) || isPriceOnlyLine(line) || precedesNewEntry)) {
       const singlePrice = item.price === null ? SINGLE_PRICE_PATTERN.exec(line) : null
       if (singlePrice) {
         item.price = parsePriceCents(singlePrice[1]!)
