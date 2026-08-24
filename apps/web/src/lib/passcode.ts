@@ -7,13 +7,14 @@
  * the server never sees the raw PIN and unlocking works fully offline —
  * `GET /api/v1/lists/:id` already rides the service worker's
  * stale-while-revalidate cache (§9), so the hash is available offline too.
+ *
+ * Unlock state itself is intentionally *not* persisted anywhere here (no
+ * storage of any kind) — it's plain component state owned by
+ * `routes/lists/[id]/+page.svelte`, scoped to the current view of that list.
+ * Leaving the list, backgrounding the app, or closing it all drop that state,
+ * so the PIN is required again next time — see that page's `unlocked` state
+ * and its `visibilitychange` handling.
  */
-
-const SESSION_PREFIX = 'everylist:unlocked:';
-
-function hasWindow(): boolean {
-	return typeof window !== 'undefined';
-}
 
 function toHex(bytes: Uint8Array): string {
 	return Array.from(bytes)
@@ -42,15 +43,4 @@ export async function verifyPasscode(pin: string, storedHash: string): Promise<b
 	const [salt, hash] = storedHash.split(':');
 	if (!salt || !hash) return false;
 	return (await digest(salt, pin)) === hash;
-}
-
-/** Session-scoped (per tab-session, not per device) — resets on a fresh app open. */
-export function isListUnlocked(listId: number): boolean {
-	if (!hasWindow()) return false;
-	return window.sessionStorage.getItem(SESSION_PREFIX + listId) === '1';
-}
-
-export function unlockList(listId: number): void {
-	if (!hasWindow()) return;
-	window.sessionStorage.setItem(SESSION_PREFIX + listId, '1');
 }

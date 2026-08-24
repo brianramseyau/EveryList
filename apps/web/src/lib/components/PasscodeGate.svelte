@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button, Input } from 'flowbite-svelte';
 	import type { ListDto } from '@everylist/shared';
-	import { unlockList, verifyPasscode } from '$lib/passcode';
+	import { verifyPasscode } from '$lib/passcode';
 	import Icon from './Icon.svelte';
 
 	let { list, onunlock }: { list: ListDto; onunlock: () => void } = $props();
@@ -23,7 +23,6 @@
 		try {
 			const ok = await verifyPasscode(pin.trim(), list.passcodeHash);
 			if (ok) {
-				unlockList(list.id);
 				onunlock();
 			} else {
 				error = true;

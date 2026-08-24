@@ -18,7 +18,6 @@
 	import { subscribeToList } from '$lib/realtime';
 	import { onConflict, onFlushOutcome } from '$lib/offline/flush';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
-	import { isListUnlocked } from '$lib/passcode';
 	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { computeMidpointSortOrder } from '$lib/item-sort-order';
@@ -34,6 +33,10 @@
 	const listId = $derived(Number(page.params.id));
 
 	let list = $state<ListDto | null>(null);
+	// Not persisted anywhere — only lives for as long as this page stays mounted
+	// and foregrounded. Navigating away (e.g. back to the lists page), the tab
+	// going to the background, or closing the app all drop it, so the passcode
+	// is required again next time (see the `visibilitychange` handling below).
 	let unlocked = $state(false);
 	let categories = $state<CategoryDto[]>([]);
 	let items = $state<ItemDto[]>([]);
@@ -221,7 +224,6 @@
 				fetchItems(listId),
 				fetchStores(listId)
 			]);
-			unlocked = isListUnlocked(listId);
 
 			const settings = await getSelectedStoreSettings(listId);
 			selectedStoreId = settings.storeId;
@@ -240,6 +242,14 @@
 		}
 	}
 
+	// Backgrounding the app/tab re-locks a passcode-protected list even though
+	// this page stays mounted — leaving/closing already re-locks it for free
+	// since `unlocked` is plain, unpersisted component state that starts false
+	// on every fresh mount.
+	function lockOnHide() {
+		if (document.hidden) unlocked = false;
+	}
+
 	onMount(() => {
 		if (!getToken()) {
 			void goto(resolve('/login'));
@@ -247,6 +257,7 @@
 		}
 		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		showChecked = getShowChecked(listId);
+		document.addEventListener('visibilitychange', lockOnHide);
 		void loadAll();
 		unsubscribeRealtime = subscribeToList(listId, (event) => {
 			// Our own edit's broadcast (sent right after the flush clears `_dirty`)
@@ -280,6 +291,7 @@
 	});
 
 	onDestroy(() => {
+		document.removeEventListener('visibilitychange', lockOnHide);
 		unsubscribeRealtime?.();
 		unsubscribeConflict?.();
 		unsubscribeFlushOutcome?.();
