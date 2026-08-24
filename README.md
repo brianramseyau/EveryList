@@ -71,8 +71,10 @@ Full rationale for each choice is in [§4 of the plan](foundational/PLAN.md#4-te
 ```
 EveryList/
 ├── apps/
-│   ├── web/          # SvelteKit PWA + Capacitor native shell
-│   └── api/           # AdonisJS backend
+│   ├── android/    # Capacitor native shell
+│   ├── api/           # AdonisJS backend
+│   ├── ios/            # Capacitor native shell
+│   └── web/          # SvelteKit PWA
 ├── packages/
 │   └── shared/         # shared TS types, DTOs, validation contracts
 ├── docker/              # production + dev Dockerfiles, Unraid template
