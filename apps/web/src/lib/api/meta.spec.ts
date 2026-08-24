@@ -19,6 +19,6 @@ describe('fetchMeta', () => {
 	it('throws when the response is not ok', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
-		await expect(fetchMeta()).rejects.toThrow('GET /api/v1/meta failed: 500');
+		await expect(fetchMeta()).rejects.toThrow('Request failed with status 500');
 	});
 });

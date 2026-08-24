@@ -16,6 +16,9 @@ vi.mock('$lib/pwa/reset', () => ({ resetApp: vi.fn() }));
 vi.mock('@capacitor/core', () => ({
 	Capacitor: { isNativePlatform: vi.fn().mockReturnValue(false) }
 }));
+vi.mock('@capacitor/app', () => ({
+	App: { getInfo: vi.fn().mockRejectedValue(new Error('web')) }
+}));
 vi.mock('$lib/api/server-url', () => ({
 	getServerUrl: vi.fn().mockReturnValue(''),
 	clearServerUrl: vi.fn()
@@ -26,6 +29,7 @@ const { logout, fetchProfile, updateProfile } = await import('$lib/api/auth');
 const { resetApp } = await import('$lib/pwa/reset');
 const { ApiError } = await import('$lib/api/client');
 const { Capacitor } = await import('@capacitor/core');
+const { App } = await import('@capacitor/app');
 const { getServerUrl, clearServerUrl } = await import('$lib/api/server-url');
 const { getToken, setToken } = await import('$lib/api/token');
 const SettingsPage = (await import('./+page.svelte')).default;
@@ -44,6 +48,7 @@ describe('Settings +page.svelte', () => {
 		vi.unstubAllGlobals();
 		vi.clearAllMocks();
 		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+		vi.mocked(App.getInfo).mockRejectedValue(new Error('web'));
 		vi.mocked(getServerUrl).mockReturnValue('');
 		resetConnectivityForTesting();
 	});
@@ -77,7 +82,34 @@ describe('Settings +page.svelte', () => {
 
 		render(SettingsPage);
 
-		await expect.element(page.getByText(/EveryList v1\.2\.3 \(abc123\)/)).toBeInTheDocument();
+		await expect.element(page.getByText(/Server v1\.2\.3 \(abc123\)/)).toBeInTheDocument();
+	});
+
+	it('shows the native app version alongside the server version for comparison', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						version: 'v1.2.3',
+						commit: 'abc123',
+						builtAt: '2026-08-12T00:00:00.000Z'
+					})
+			})
+		);
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+		vi.mocked(App.getInfo).mockResolvedValue({
+			name: 'EveryList',
+			id: 'au.brianramsey.everylist',
+			build: '42',
+			version: '1.4.0'
+		});
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText(/App 1\.4\.0 \(42\)/)).toBeInTheDocument();
+		await expect.element(page.getByText(/Server v1\.2\.3 \(abc123\)/)).toBeInTheDocument();
 	});
 
 	it('shows a fallback message when the request fails', async () => {
