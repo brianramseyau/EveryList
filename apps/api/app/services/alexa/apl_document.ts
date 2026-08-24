@@ -135,28 +135,26 @@ export const LIST_VIEW_DOCUMENT = {
                     items: [
                       {
                         type: 'Frame',
-                        width: '26dp',
-                        height: '26dp',
-                        borderRadius: '6dp',
+                        width: '${payload.listData.properties.checkboxSize}',
+                        height: '${payload.listData.properties.checkboxSize}',
+                        borderRadius: '${payload.listData.properties.checkboxRadius}',
                         borderWidth: '${data.checked ? 0 : 2}dp',
                         borderColor: '#6d6d6d',
                         backgroundColor: "${data.checked ? '#2e8b57' : 'transparent'}",
                       },
                       {
-                        // Explicit spacer, not a `marginRight` on the checkbox `Frame` above —
-                        // real-device testing (Echo Show) showed `marginRight` values up to 36dp
-                        // on that Frame producing no visible gap at all, while sibling `fontSize`
-                        // changes in the same document did render, so this sidesteps whatever
-                        // margin-support gap that device/firmware has by using a component that
-                        // must occupy layout space to render at all.
+                        // Explicit spacer, not a `marginRight` on the checkbox `Frame` above — see
+                        // `apl_view.ts`'s `itemFontSize`/`checkboxSize`/`checkboxGap` comment for
+                        // why this and the sizes above are bound from datasources rather than
+                        // literal here.
                         type: 'Frame',
-                        width: '36dp',
+                        width: '${payload.listData.properties.checkboxGap}',
                         height: '1dp',
                       },
                       {
                         type: 'Text',
                         text: "${data.checked ? '<s>' + data.name + '</s>' : data.name}",
-                        fontSize: '32dp',
+                        fontSize: '${payload.listData.properties.itemFontSize}',
                         color: "${data.checked ? '#6d6d6d' : '#edeae3'}",
                       },
                     ],
