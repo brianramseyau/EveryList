@@ -179,11 +179,13 @@ export default class ItemsController {
     return response.ok({ data: names })
   }
 
-  async store({ auth, params, request, serialize }: HttpContext) {
+  async store({ auth, params, request, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createItemValidator)
     const normalizedName = payload.name.trim().toLowerCase()
+
+    logger.debug({ listId: list.id, name: payload.name }, 'item store requested')
 
     const existing = await Item.query()
       .where('listId', list.id)
@@ -205,6 +207,11 @@ export default class ItemsController {
           op: 'update',
           version: existing.version,
         })
+
+        logger.debug(
+          { listId: list.id, itemId: existing.id },
+          'item store matched existing checked item, reactivated'
+        )
       }
 
       return serialize(ItemTransformer.transform(existing))
@@ -222,6 +229,10 @@ export default class ItemsController {
 
     if (deletedMatch) {
       await restoreItemRow(list, deletedMatch)
+      logger.debug(
+        { listId: list.id, itemId: deletedMatch.id },
+        'item store matched deleted item, restored'
+      )
       return serialize(ItemTransformer.transform(deletedMatch))
     }
 
@@ -249,15 +260,21 @@ export default class ItemsController {
       version: item.version,
     })
 
+    logger.debug({ listId: list.id, itemId: item.id }, 'item created')
+
     return serialize(ItemTransformer.transform(item))
   }
 
-  async import({ auth, params, request, serialize }: HttpContext) {
+  async import({ auth, params, request, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const { text } = await request.validateUsing(importItemsValidator)
 
     const parsed = parseBulkImport(text)
+    logger.debug(
+      { listId: list.id, sectionCount: parsed.sections.length },
+      'item bulk import requested'
+    )
 
     // Section headers become the item's category — an existing category with
     // the same name (case-insensitive) is reused, otherwise a new one is
@@ -299,6 +316,10 @@ export default class ItemsController {
         op: 'create',
         version: category.version,
       })
+      logger.debug(
+        { listId: list.id, categoryId: category.id, header },
+        'created category from import section header'
+      )
       categoryIdsByHeader.set(key, category.id)
       return category.id
     }
@@ -332,6 +353,8 @@ export default class ItemsController {
       op: 'create',
       payload: { count: items.length },
     })
+
+    logger.debug({ listId: list.id, itemCount: items.length }, 'item bulk import completed')
 
     return serialize(ItemTransformer.transform(items))
   }
@@ -377,6 +400,8 @@ export default class ItemsController {
       op: 'update',
       version: item.version,
     })
+
+    logger.debug({ listId: list.id, itemId: item.id, version: item.version }, 'item updated')
 
     return serialize(ItemTransformer.transform(item))
   }
@@ -443,6 +468,8 @@ export default class ItemsController {
       version: item.version,
     })
 
+    logger.debug({ listId: list.id, itemId: item.id, sortOrder: item.sortOrder }, 'item moved')
+
     return serialize(ItemTransformer.transform(item))
   }
 
@@ -482,10 +509,12 @@ export default class ItemsController {
       version: item.version,
     })
 
+    logger.debug({ listId: list.id, itemId: item.id }, 'item deleted')
+
     return response.noContent()
   }
 
-  async restore({ auth, params, serialize }: HttpContext) {
+  async restore({ auth, params, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const item = await Item.query()
@@ -496,6 +525,8 @@ export default class ItemsController {
 
     await restoreItemRow(list, item)
 
+    logger.debug({ listId: list.id, itemId: item.id }, 'item restored')
+
     return serialize(ItemTransformer.transform(item))
   }
 
@@ -503,7 +534,7 @@ export default class ItemsController {
    * action, for a test item or typo that shouldn't be kept around waiting to be restored. Only
    * reachable for a row that's already soft-deleted, so an active item can't be purged without
    * going through `destroy` first. */
-  async purge({ auth, params, response }: HttpContext) {
+  async purge({ auth, params, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const item = await Item.query()
@@ -521,6 +552,8 @@ export default class ItemsController {
       entityId: itemId,
       op: 'purge',
     })
+
+    logger.debug({ listId: list.id, itemId }, 'item purged')
 
     return response.noContent()
   }

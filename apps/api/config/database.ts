@@ -1,6 +1,7 @@
 import app from '@adonisjs/core/services/app'
 import { defineConfig } from '@adonisjs/lucid'
 import env from '#start/env'
+import logger from '@adonisjs/core/services/logger'
 
 const dbConfig = defineConfig({
   /**
@@ -50,6 +51,16 @@ const dbConfig = defineConfig({
         ) => {
           const enforceForeignKeys = app.getEnvironment() !== 'console'
           connection.pragma(`foreign_keys = ${enforceForeignKeys ? 'ON' : 'OFF'}`)
+          // Logged unconditionally at debug (not just on the console/OFF
+          // case) so a regression is visible either direction — this pragma
+          // is what caused the folder_id migration to cascade-delete
+          // production data (see AGENTS.md's writeup), so its actual state
+          // on every new connection is worth being able to confirm from logs
+          // alone rather than re-deriving it by reading this file again.
+          logger.debug(
+            { environment: app.getEnvironment(), foreignKeys: enforceForeignKeys ? 'ON' : 'OFF' },
+            'sqlite connection created'
+          )
           done(null, connection)
         },
       },

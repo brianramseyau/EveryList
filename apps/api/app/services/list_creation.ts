@@ -4,6 +4,7 @@ import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { seedStarterCategories } from '#services/category_service'
 import { nextListMemberSortOrder } from '#services/list_member_sort'
+import logger from '@adonisjs/core/services/logger'
 
 export interface CreateOwnedListInput {
   ownerId: number
@@ -48,6 +49,11 @@ export async function createOwnedList(input: CreateOwnedListInput) {
   if (input.seedStarterCategories) {
     await seedStarterCategories(list)
   }
+
+  logger.debug(
+    { listId: list.id, ownerId: input.ownerId, seeded: Boolean(input.seedStarterCategories) },
+    'created owned list'
+  )
 
   return list
 }

@@ -44,7 +44,7 @@ export default class PersonalAccessTokensController {
   }
 
   /** Mints a token scoped to every list in `listIds` — minting requires being an owner of all of them. */
-  async store({ auth, request, response }: HttpContext) {
+  async store({ auth, request, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const payload = await request.validateUsing(createPersonalAccessTokenValidator)
     const listIds = [...new Set(payload.listIds)]
@@ -56,6 +56,11 @@ export default class PersonalAccessTokensController {
     const abilities = lists.map((list) => `list:${list.id}:${payload.role}`)
     const token = await User.personalAccessTokens.create(user, abilities, { name: payload.name })
     const view = toView(token)
+
+    logger.debug(
+      { userId: user.id, tokenId: token.identifier, listIds, role: payload.role },
+      'created personal access token'
+    )
 
     // The plaintext value only ever exists here — DbAccessTokensProvider
     // never persists it, only its hash, so there's nothing to "hide later"
@@ -83,7 +88,7 @@ export default class PersonalAccessTokensController {
    * re-mint — DbAccessTokensProvider only exposes create/find/delete, so this
    * writes the `abilities` column directly rather than going through it.
    */
-  async update({ auth, params, request, response }: HttpContext) {
+  async update({ auth, params, request, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const existing = await User.personalAccessTokens.find(user, params.tokenId)
     if (!existing) {
@@ -110,11 +115,16 @@ export default class PersonalAccessTokensController {
         updated_at: new Date(),
       })
 
+    logger.debug(
+      { userId: user.id, tokenId: params.tokenId, listIds, role: payload.role },
+      'updated personal access token grants'
+    )
+
     const updated = await User.personalAccessTokens.find(user, params.tokenId)
     return response.ok({ data: toView(updated!) })
   }
 
-  async destroy({ auth, params, response }: HttpContext) {
+  async destroy({ auth, params, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const token = await User.personalAccessTokens.find(user, params.tokenId)
     if (!token) {
@@ -122,6 +132,7 @@ export default class PersonalAccessTokensController {
     }
 
     await User.personalAccessTokens.delete(user, params.tokenId)
+    logger.debug({ userId: user.id, tokenId: params.tokenId }, 'revoked personal access token')
     return response.noContent()
   }
 }

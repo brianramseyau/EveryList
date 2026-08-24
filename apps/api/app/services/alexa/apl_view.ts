@@ -1,6 +1,7 @@
 import Item from '#models/item'
 import type Category from '#models/category'
 import type List from '#models/list'
+import logger from '@adonisjs/core/services/logger'
 import { appUrl } from '#config/app'
 import { getEffectiveCategories } from '#services/category_service'
 import { LIST_VIEW_DOCUMENT } from '#services/alexa/apl_document'
@@ -99,6 +100,16 @@ export async function buildListDisplay(list: List) {
   ])
 
   const listColor = list.color ?? DEFAULT_LIST_COLOR
+  const rows = buildRows(items, categories, listColor)
+  logger.debug(
+    {
+      listId: list.id,
+      itemCount: items.length,
+      categoryCount: categories.length,
+      rowCount: rows.length,
+    },
+    'built Alexa APL list display'
+  )
 
   return {
     type: 'Alexa.Presentation.APL.RenderDocument' as const,
@@ -114,7 +125,7 @@ export async function buildListDisplay(list: List) {
           // `list.icon` can be null (no icon chosen) — the document only renders the
           // `Image` when this is non-empty, so an empty string is the "nothing to show" state.
           listIconUrl: list.icon ? buildIconUrl(list.icon, listColor) : '',
-          rows: buildRows(items, categories, listColor),
+          rows,
         },
       },
     },

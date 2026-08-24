@@ -22,7 +22,7 @@ export default class ListInvitesController {
     return serialize(ListInviteTransformer.transform(invites))
   }
 
-  async store({ auth, params, request, serialize }: HttpContext) {
+  async store({ auth, params, request, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createListInviteValidator)
@@ -36,10 +36,12 @@ export default class ListInvitesController {
       revokedAt: null,
     })
 
+    logger.debug({ listId: list.id, inviteId: invite.id, role: invite.role }, 'created list invite')
+
     return serialize(ListInviteTransformer.transform(invite))
   }
 
-  async destroy({ auth, params, response }: HttpContext) {
+  async destroy({ auth, params, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const invite = await ListInvite.query()
@@ -49,6 +51,8 @@ export default class ListInvitesController {
 
     invite.revokedAt = DateTime.now()
     await invite.save()
+
+    logger.debug({ listId: list.id, inviteId: invite.id }, 'revoked list invite')
 
     return response.noContent()
   }

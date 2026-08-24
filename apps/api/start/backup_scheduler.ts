@@ -16,14 +16,17 @@
 */
 
 import app from '@adonisjs/core/services/app'
+import logger from '@adonisjs/core/services/logger'
 import { runScheduledBackupIfDue } from '#services/backup_service'
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000
 
 if (!app.inTest && app.getEnvironment() !== 'console') {
+  logger.debug({ intervalMs: CHECK_INTERVAL_MS }, 'starting backup scheduler')
+
   const check = () => {
     runScheduledBackupIfDue().catch((error: unknown) => {
-      console.error('Scheduled database backup failed:', error)
+      logger.error({ err: error }, 'scheduled database backup failed')
     })
   }
 

@@ -2,6 +2,7 @@ import Item from '#models/item'
 import type List from '#models/list'
 import type { AccessToken } from '@adonisjs/auth/access_tokens'
 import { DateTime } from 'luxon'
+import logger from '@adonisjs/core/services/logger'
 import { suggestCategoryId } from '#services/category_suggestion_service'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { closestMatch } from '#services/alexa/fuzzy_match'
@@ -49,6 +50,11 @@ async function resolveListOrRespond(
 ): Promise<{ list: List } | { response: AlexaResponse }> {
   const resolution = await resolveList(token, listNameSlot)
   if (resolution.kind === 'found') return { list: resolution.list }
+
+  logger.debug(
+    { listNameSlot, kind: resolution.kind },
+    'Alexa list resolution did not find one list'
+  )
   if (resolution.kind === 'ambiguous') return { response: speakAmbiguousLists(resolution.options) }
   return { response: say("I couldn't find that list.") }
 }
@@ -112,6 +118,7 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots): Prom
   const list = resolved.list
 
   if (roleFor(token, list.id) !== 'editor') {
+    logger.debug({ listId: list.id }, 'Alexa add-item denied: token only grants viewer access')
     return respond(say(`You only have view access to ${list.name}, so I can't add to it.`), list)
   }
 
@@ -204,12 +211,19 @@ export async function handleRemoveOrComplete(
   const list = resolved.list
 
   if (roleFor(token, list.id) !== 'editor') {
+    logger.debug({ listId: list.id }, 'Alexa item mutation denied: token only grants viewer access')
     return respond(say(`You only have view access to ${list.name}, so I can't change it.`), list)
   }
 
   const items = await activeItems(list.id)
   const match = closestMatch(itemName, items, (item) => item.name)
-  if (!match) return respond(say(`I couldn't find ${itemName} on ${list.name}.`), list)
+  if (!match) {
+    logger.debug(
+      { listId: list.id, itemName, action, activeItemCount: items.length },
+      'Alexa item fuzzy-match found no candidate'
+    )
+    return respond(say(`I couldn't find ${itemName} on ${list.name}.`), list)
+  }
 
   if (action === 'remove') {
     match.deletedAt = DateTime.now()

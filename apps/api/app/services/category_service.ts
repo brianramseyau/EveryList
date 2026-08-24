@@ -1,6 +1,7 @@
 import type List from '#models/list'
 import Category from '#models/category'
 import { broadcastSync } from '#services/sync_broadcaster'
+import logger from '@adonisjs/core/services/logger'
 
 /** A list's own categories, in display order. */
 export async function getEffectiveCategories(list: List): Promise<Category[]> {
@@ -50,6 +51,8 @@ export async function seedStarterCategories(list: List): Promise<Category[]> {
       version: category.version,
     })
   }
+
+  logger.debug({ listId: list.id, categoryCount: categories.length }, 'seeded starter categories')
 
   return categories
 }

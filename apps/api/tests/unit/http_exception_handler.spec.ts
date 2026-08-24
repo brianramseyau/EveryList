@@ -24,6 +24,15 @@ function fakeContext() {
   return { ctx: { response } as unknown as HttpContext, sent }
 }
 
+function fakeReportContext() {
+  const debugCalls: unknown[][] = []
+  const ctx = {
+    logger: { debug: (...args: unknown[]) => debugCalls.push(args) },
+    request: { method: () => 'POST', url: () => '/api/v1/favorites' },
+  } as unknown as HttpContext
+  return { ctx, debugCalls }
+}
+
 test.group('HttpExceptionHandler', () => {
   test('maps a SQLite unique-constraint error to a friendly 422', async ({ assert }) => {
     const handler = new HttpExceptionHandler()
@@ -33,5 +42,24 @@ test.group('HttpExceptionHandler', () => {
 
     assert.equal(sent.status, 422)
     assert.deepEqual(sent.body, { errors: [{ message: 'That name is already in use.' }] })
+  })
+
+  /**
+   * `report()` runs before `handle()` on the same raw `SqliteError`, which
+   * has no `.status` — the base handler would otherwise default it to 500
+   * and log the routine, already-handled 422 as an `error`-level crash. This
+   * confirms it's reported at `debug` and short-circuits before the base
+   * handler's own logging runs.
+   */
+  test('reports a SQLite unique-constraint error at debug level, not as a 500', async ({
+    assert,
+  }) => {
+    const handler = new HttpExceptionHandler()
+    const { ctx, debugCalls } = fakeReportContext()
+
+    await handler.report({ code: 'SQLITE_CONSTRAINT_UNIQUE' }, ctx)
+
+    assert.lengthOf(debugCalls, 1)
+    assert.equal(debugCalls[0]![1], 'unique constraint violation, responding 422')
   })
 })

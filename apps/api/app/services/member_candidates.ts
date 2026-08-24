@@ -1,6 +1,7 @@
 import ListMember from '#models/list_member'
 import type List from '#models/list'
 import type { MemberCandidateResource } from '#transformers/member_candidate_transformer'
+import logger from '@adonisjs/core/services/logger'
 
 /**
  * Direct-add candidates for a list: users the requester already shares
@@ -46,11 +47,18 @@ export async function findMemberCandidates(userId: number, list: List) {
     }
   }
 
-  return [...byUser.values()].sort((a, b) => {
+  const result = [...byUser.values()].sort((a, b) => {
     const aName = a.user.fullName ?? a.user.email
     const bName = b.user.fullName ?? b.user.email
     return aName.localeCompare(bName)
   })
+
+  logger.debug(
+    { listId: list.id, userId, candidateCount: result.length },
+    'found direct-add member candidates'
+  )
+
+  return result
 }
 
 /** True when both users are accepted members of some common list. */
@@ -65,5 +73,7 @@ export async function sharesAListWith(userId: number, otherUserId: number): Prom
     )
     .first()
 
-  return membership !== null
+  const shared = membership !== null
+  logger.debug({ userId, otherUserId, shared }, 'checked shared list membership')
+  return shared
 }

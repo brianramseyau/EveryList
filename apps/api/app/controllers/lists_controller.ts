@@ -57,9 +57,11 @@ export default class ListsController {
   /** Reorders the requesting user's own view of their lists — a per-user
    * preference stored on `list_members`, not shared list state, so it never
    * touches other members' rows or broadcasts a sync event. */
-  async reorder({ auth, request, serialize }: HttpContext) {
+  async reorder({ auth, request, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const { order } = await request.validateUsing(reorderListsValidator)
+
+    logger.debug({ userId: user.id, count: order.length }, 'reordering lists')
 
     const memberships = await ListMember.query()
       .whereIn('listId', order)
@@ -81,7 +83,7 @@ export default class ListsController {
     return serialize(ListTransformer.transform(await loadListsForUser(user.id)))
   }
 
-  async store({ auth, request, response, serialize }: HttpContext) {
+  async store({ auth, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const payload = await request.validateUsing(createListValidator)
 
@@ -98,6 +100,8 @@ export default class ListsController {
       icon: payload.icon ?? null,
       useCategories: payload.useCategories,
     })
+
+    logger.debug({ userId: user.id, listId: list.id }, 'list created')
 
     return serialize(ListTransformer.transform(list))
   }
@@ -165,6 +169,8 @@ export default class ListsController {
       version: list.version,
     })
 
+    logger.debug({ listId: list.id, version: list.version }, 'list updated')
+
     return serialize(ListTransformer.transform(list))
   }
 
@@ -199,6 +205,8 @@ export default class ListsController {
       op: 'delete',
       version: list.version,
     })
+
+    logger.debug({ listId: list.id }, 'list deleted')
 
     return response.noContent()
   }
