@@ -680,6 +680,187 @@ TOILETRIES
   })
 })
 
+test.group('Move item to another list', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('moves an item to another list, re-resolving its category by name and clearing an unattached store', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token, 'Source')
+    const destinationId = await createList(client, token, 'Destination')
+    await seedStarterCategories(client, token, destinationId)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const store = bodyData<{ id: number }>(
+      await auth(client.post(`/api/v1/lists/${listId}/stores`).json({ name: 'Corner Shop' }))
+    )
+    const item = bodyData<ItemDto>(
+      await auth(
+        client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bananas', storeId: store.id })
+      )
+    )
+    assert.equal(item.storeId, store.id)
+
+    const move = await auth(
+      client
+        .post(`/api/v1/lists/${listId}/items/${item.id}/move-to-list`)
+        .json({ destinationListId: destinationId })
+    )
+    move.assertStatus(200)
+    const moved = move.body().data
+    assert.equal(moved.id, item.id)
+    assert.equal(moved.listId, destinationId)
+    assert.equal(moved.version, item.version + 1)
+    // The store wasn't attached to the destination list, so it's cleared rather than carried over.
+    assert.isNull(moved.storeId)
+
+    const destinationCategories = bodyData<CategoryDto[]>(
+      await auth(client.get(`/api/v1/lists/${destinationId}/categories`))
+    )
+    const produce = destinationCategories.find((category) => category.name === 'Produce')
+    assert.equal(moved.categoryId, produce?.id, 'category re-resolved against destination list')
+
+    const sourceItems = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.lengthOf(sourceItems.body().data, 0, 'item no longer appears in the source list')
+
+    const destinationItems = await auth(client.get(`/api/v1/lists/${destinationId}/items`))
+    assert.lengthOf(destinationItems.body().data, 1)
+    assert.equal(destinationItems.body().data[0].id, item.id)
+  })
+
+  test('keeps the store when it is attached to the destination list too', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token, 'Source')
+    const destinationId = await createList(client, token, 'Destination')
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const store = bodyData<{ id: number }>(
+      await auth(client.post(`/api/v1/lists/${listId}/stores`).json({ name: 'Corner Shop' }))
+    )
+    await auth(client.post(`/api/v1/lists/${destinationId}/stores`).json({ storeId: store.id }))
+
+    const item = bodyData<ItemDto>(
+      await auth(
+        client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk', storeId: store.id })
+      )
+    )
+
+    const move = await auth(
+      client
+        .post(`/api/v1/lists/${listId}/items/${item.id}/move-to-list`)
+        .json({ destinationListId: destinationId })
+    )
+    move.assertStatus(200)
+    assert.equal(move.body().data.storeId, store.id)
+  })
+
+  test('rejects moving an item to its own list', async ({ client }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const item = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk' }))
+    )
+
+    const move = await auth(
+      client
+        .post(`/api/v1/lists/${listId}/items/${item.id}/move-to-list`)
+        .json({ destinationListId: listId })
+    )
+    move.assertStatus(400)
+  })
+
+  test('honors expectedVersion — stale conflicts with 409 without moving the item', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const destinationId = await createList(client, token, 'Destination')
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const item = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk' }))
+    )
+
+    const stale = await auth(
+      client
+        .post(`/api/v1/lists/${listId}/items/${item.id}/move-to-list`)
+        .json({ destinationListId: destinationId, expectedVersion: 99 })
+    )
+    stale.assertStatus(409)
+    assert.isTrue(stale.body().conflict)
+
+    const stillThere = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.lengthOf(stillThere.body().data, 1, 'item was not moved on a version conflict')
+  })
+
+  test('requires editor (or better) on both the source and destination lists', async ({
+    client,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Source')
+    const destinationId = await createList(client, owner.token, 'Destination')
+    const auth = (token: string) => (req: ApiRequest) =>
+      req.header('Authorization', `Bearer ${token}`)
+    const asOwner = auth(owner.token)
+
+    const item = bodyData<ItemDto>(
+      await asOwner(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk' }))
+    )
+
+    // Editor on the source but no membership at all on the destination: 404 (existence hidden),
+    // matching ListPolicy.requireList's usual not-a-member behavior.
+    const outsider = await signupAndGetUser(client)
+    await addMember(listId, outsider.id, 'editor')
+    const noAccess = await auth(outsider.token)(
+      client
+        .post(`/api/v1/lists/${listId}/items/${item.id}/move-to-list`)
+        .json({ destinationListId: destinationId })
+    )
+    noAccess.assertStatus(404)
+
+    // Editor on the source, only viewer on the destination: 403.
+    const viewerOnDestination = await signupAndGetUser(client)
+    await addMember(listId, viewerOnDestination.id, 'editor')
+    await addMember(destinationId, viewerOnDestination.id, 'viewer')
+    const forbidden = await auth(viewerOnDestination.token)(
+      client
+        .post(`/api/v1/lists/${listId}/items/${item.id}/move-to-list`)
+        .json({ destinationListId: destinationId })
+    )
+    forbidden.assertStatus(403)
+
+    // Only viewer on the source: 403 before the destination is even checked.
+    const viewerOnSource = await signupAndGetUser(client)
+    await addMember(listId, viewerOnSource.id, 'viewer')
+    await addMember(destinationId, viewerOnSource.id, 'editor')
+    const forbiddenSource = await auth(viewerOnSource.token)(
+      client
+        .post(`/api/v1/lists/${listId}/items/${item.id}/move-to-list`)
+        .json({ destinationListId: destinationId })
+    )
+    forbiddenSource.assertStatus(403)
+
+    // Editor on both: succeeds.
+    const editorOnBoth = await signupAndGetUser(client)
+    await addMember(listId, editorOnBoth.id, 'editor')
+    await addMember(destinationId, editorOnBoth.id, 'editor')
+    const ok = await auth(editorOnBoth.token)(
+      client
+        .post(`/api/v1/lists/${listId}/items/${item.id}/move-to-list`)
+        .json({ destinationListId: destinationId })
+    )
+    ok.assertStatus(200)
+  })
+})
+
 test.group('Category suggestion (personalized + keyword fallback)', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
 

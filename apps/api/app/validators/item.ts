@@ -31,3 +31,8 @@ export const moveItemValidator = vine.create({
   previousItemId: vine.number().positive().nullable().optional(),
   expectedVersion: vine.number().optional(),
 })
+
+export const moveItemToListValidator = vine.create({
+  destinationListId: vine.number().positive(),
+  expectedVersion: vine.number().optional(),
+})

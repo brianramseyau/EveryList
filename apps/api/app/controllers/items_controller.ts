@@ -7,6 +7,7 @@ import {
   updateItemValidator,
   importItemsValidator,
   moveItemValidator,
+  moveItemToListValidator,
 } from '#validators/item'
 import type { HttpContext } from '@adonisjs/core/http'
 import ItemTransformer from '#transformers/item_transformer'
@@ -432,6 +433,86 @@ export default class ItemsController {
     })
 
     logger.debug({ listId: list.id, itemId: item.id, sortOrder: item.sortOrder }, 'item moved')
+
+    return serialize(ItemTransformer.transform(item))
+  }
+
+  /** Moves an item to a different list. Categories and stores are list-scoped (each list owns
+   * its own category rows, and `list_stores` is a per-list many-to-many), so unlike `update`'s
+   * `categoryId`/`storeId` merge, both are always re-resolved against the destination rather than
+   * carried over from the source — the old ids are meaningless in a different list's rows. */
+  async moveToList({ auth, params, request, response, serialize, logger }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
+    const item = await Item.query()
+      .where('id', params.itemId)
+      .where('listId', list.id)
+      .whereNull('deletedAt')
+      .firstOrFail()
+
+    const { destinationListId, expectedVersion } =
+      await request.validateUsing(moveItemToListValidator)
+
+    if (destinationListId === list.id) {
+      return response.badRequest({ message: 'Item is already in this list' })
+    }
+
+    // Requiring 'editor' here is what enforces "owner or editor permission to write to a list"
+    // on the destination — same bar as every other item mutation, just checked against the
+    // second list instead of (or in addition to) the source one above.
+    const destination = await ListPolicy.requireList(user, destinationListId, 'editor')
+
+    if (hasVersionConflict(item, expectedVersion)) {
+      reportVersionConflict(request, logger, {
+        entity: 'item',
+        id: item.id,
+        expectedVersion,
+        actualVersion: item.version,
+        userId: user.id,
+      })
+      return response.conflict({
+        ...(await serialize(ItemTransformer.transform(item))),
+        conflict: true,
+      })
+    }
+
+    const categoryId = await suggestCategoryId(destination, item.name)
+    let storeId: number | null = null
+    if (item.storeId !== null) {
+      const attached = await destination
+        .related('stores')
+        .query()
+        .where('stores.id', item.storeId)
+        .first()
+      storeId = attached ? item.storeId : null
+    }
+
+    const sourceListId = list.id
+    item.listId = destination.id
+    item.categoryId = categoryId
+    item.storeId = storeId
+    item.sortOrder = await nextSortOrder(destination.id)
+    item.version += 1
+    await item.save()
+
+    await broadcastSync({
+      listId: sourceListId,
+      entityType: 'item',
+      entityId: item.id,
+      op: 'delete',
+    })
+    await broadcastSync({
+      listId: destination.id,
+      entityType: 'item',
+      entityId: item.id,
+      op: 'create',
+      version: item.version,
+    })
+
+    logger.debug(
+      { sourceListId, destinationListId: destination.id, itemId: item.id },
+      'item moved to another list'
+    )
 
     return serialize(ItemTransformer.transform(item))
   }

@@ -67,6 +67,18 @@ export function purgeItem(listId: number, itemId: number): Promise<void> {
 	return apiDelete(`/api/v1/lists/${listId}/items/${itemId}/purge`);
 }
 
+/** Moves an item to a different list, re-resolving its category/store against the destination
+ * (categories are list-scoped, and a store only carries over if it's attached to the destination
+ * too — see apps/api's ItemsController#moveToList). Not offline-queueable, same as `purgeItem`:
+ * it touches two lists' data at once, a poor fit for the offline queue's per-row optimistic model. */
+export function moveItemToList(
+	listId: number,
+	itemId: number,
+	destinationListId: number
+): Promise<ItemDto> {
+	return apiPost(`/api/v1/lists/${listId}/items/${itemId}/move-to-list`, { destinationListId });
+}
+
 /** Purely local category guess against the static keyword table and whatever
  * categories are already cached in Dexie for this list — the offline fallback
  * for `fetchCategorySuggestion` below (PHASE7_PLAN.md §3), and mirrors the
