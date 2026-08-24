@@ -116,14 +116,7 @@ export async function buildListDisplay(list: List) {
     type: 'Alexa.Presentation.APL.RenderDocument' as const,
     // Keyed by the running build's commit, not just the list id (`apl_touch_handler.ts` never
     // reads this token back — `SendEvent`'s `arguments` array carries everything a touch handler
-    // needs) — a constant `list-${id}` token was suspected of letting some Echo Show firmware
-    // treat repeat RenderDocument directives for the same list as an update to the
-    // already-rendered instance rather than a fresh one, which would explain literal style
-    // constants (fontSize, checkbox spacing) appearing frozen across real-device tests despite
-    // data-bound content (item names, checked state) updating correctly turn to turn. Keying on
-    // the commit rather than something per-render (e.g. a timestamp) still invalidates any
-    // on-device cache whenever this document's content actually changes (a new deploy), while
-    // letting repeat turns on the same build reuse whatever compiled layout the device cached.
+    // needs), so any on-device cache is invalidated whenever this document actually changes.
     token: `list-${list.id}-${env.get('GIT_SHA', 'unknown')}`,
     document: LIST_VIEW_DOCUMENT,
     datasources: {
@@ -136,6 +129,18 @@ export async function buildListDisplay(list: List) {
           // `list.icon` can be null (no icon chosen) — the document only renders the
           // `Image` when this is non-empty, so an empty string is the "nothing to show" state.
           listIconUrl: list.icon ? buildIconUrl(list.icon, listColor) : '',
+          // Item-row sizing, bound rather than literal in `apl_document.ts` — real-device testing
+          // (Echo Show) showed literal style constants on already-declared components (fontSize,
+          // a checkbox Frame's marginRight) not visibly updating across several redeploys, while
+          // genuinely data-bound values (item names, checked state) reliably updated every turn,
+          // and a brand-new sibling component's own literal properties rendered correctly the
+          // first time it appeared. Routing these through datasources instead sidesteps whatever
+          // that device-side staleness is by putting them on the same update path already proven
+          // to work turn to turn.
+          itemFontSize: '30dp',
+          checkboxSize: '22dp',
+          checkboxRadius: '5dp',
+          checkboxGap: '16dp',
           rows,
         },
       },
