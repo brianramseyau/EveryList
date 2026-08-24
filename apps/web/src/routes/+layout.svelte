@@ -112,6 +112,16 @@
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 
 <div class="min-h-screen bg-paper text-ink">
+	<!-- Belt-and-suspenders opaque fill for the status-bar/notch strip itself (see
+	     layout.css's overscroll-behavior-y comment for why that area can otherwise
+	     show scrolled content through it on iOS) — sits above every other
+	     fixed/sticky layer (BottomNav, SyncStatusIcon, list header, both z-20) so
+	     it always wins regardless of what's scrolled underneath. -->
+	<div
+		class="pointer-events-none fixed inset-x-0 top-0 z-50 bg-paper"
+		style="height: env(safe-area-inset-top);"
+		aria-hidden="true"
+	></div>
 	<div class={showNav ? 'pb-16' : ''}>
 		{@render children()}
 	</div>
