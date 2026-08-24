@@ -52,7 +52,12 @@ async function withDisplay(result: IntentResult, hasDisplay: boolean): Promise<A
   const directive = await buildListDisplay(result.list)
   return {
     ...result.response,
-    response: { ...result.response.response, directives: [directive] },
+    // `shouldEndSession: false` on a screen response with APL content keeps the extended
+    // session Alexa grants screen devices: the display (and a mic re-open via wake word, no
+    // relaunch needed) stays live for up to 30s instead of the screen clearing as soon as the
+    // spoken response finishes, which is what `shouldEndSession: true` (response_builder.ts's
+    // `say()` default with no reprompt) causes.
+    response: { ...result.response.response, directives: [directive], shouldEndSession: false },
   }
 }
 

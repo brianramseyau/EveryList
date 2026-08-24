@@ -24,6 +24,13 @@ function respond(response: AlexaResponse, list?: List): IntentResult {
   return list ? { response, list } : { response }
 }
 
+function toTitleCase(name: string): string {
+  return name
+    .split(' ')
+    .map((word) => word[0]!.toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
 // Mirrors items_controller.ts's own private copy — see that file's comment on
 // why this five-line helper isn't shared through packages/shared.
 async function nextSortOrder(listId: number): Promise<number> {
@@ -172,7 +179,7 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots): Prom
 
   const item = await Item.create({
     listId: list.id,
-    name: itemName,
+    name: toTitleCase(itemName),
     quantity: null,
     notes: null,
     categoryId: await suggestCategoryId(list, itemName),
