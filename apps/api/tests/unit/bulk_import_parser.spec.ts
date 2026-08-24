@@ -249,6 +249,59 @@ FROZEN
     assert.deepEqual(result.sections[0]!.items[0]!.notes, ['$3,060? $3,366?'])
   })
 
+  test('a plain remark continues as a note across a blank line when a new bulleted item follows it', ({
+    assert,
+  }) => {
+    // Regression: "Cuiv100 for $100 off" was splitting off into its own bogus item instead of
+    // staying a note on the camera above it, since it's neither a link nor a price-only line.
+    const result = parseBulkImport(
+      '• SvBony APS-C Cooled Camera\nhttps://www.svbony.com/products/camera\n\nCuiv100 for $100 off\n• ZBT-2 Thread/Zigbee Router'
+    )
+    assert.deepEqual(
+      result.sections[0]!.items.map((item) => item.name),
+      ['SvBony APS-C Cooled Camera', 'ZBT-2 Thread/Zigbee Router']
+    )
+    assert.deepEqual(result.sections[0]!.items[0]!.notes, [
+      'https://www.svbony.com/products/camera',
+      'Cuiv100 for $100 off',
+    ])
+  })
+
+  test('a trailing plain remark with nothing recognizable after it still becomes its own item', ({
+    assert,
+  }) => {
+    const result = parseBulkImport('• Amber Meds\nPrescription\n\nMore meds, unrelated')
+    assert.deepEqual(
+      result.sections[0]!.items.map((item) => item.name),
+      ['Amber Meds', 'More meds, unrelated']
+    )
+    assert.deepEqual(result.sections[0]!.items[0]!.notes, ['Prescription'])
+  })
+
+  test('a remark between two alternative links stays a note across two separate blank breaks', ({
+    assert,
+  }) => {
+    // Regression: "Or" between two alternative product links for the same item was splitting
+    // off into its own bogus item, since the one-line lookahead only saw the next URL (not a
+    // bullet/header) immediately after it — the real bullet was one paragraph further out.
+    const result = parseBulkImport(
+      '• Transfer pump\nhttps://example.com/pump-a\n\nOr\n\nhttps://example.com/pump-b\n\nGENERAL\n• Kindling King'
+    )
+    assert.deepEqual(
+      result.sections[0]!.items.map((item) => item.name),
+      ['Transfer pump']
+    )
+    assert.deepEqual(result.sections[0]!.items[0]!.notes, [
+      'https://example.com/pump-a',
+      'Or',
+      'https://example.com/pump-b',
+    ])
+    assert.deepEqual(
+      result.sections[1]!.items.map((item) => item.name),
+      ['Kindling King']
+    )
+  })
+
   test('extracts a trailing "[$price]" tag from an item name into its price field', ({
     assert,
   }) => {
@@ -280,11 +333,13 @@ FROZEN
     assert.deepEqual(item.notes, ['$3,060? $3,366?'])
   })
 
-  test('a name-tag price wins over a later bare price line for the same item', ({ assert }) => {
+  test('a name-tag price wins over a later bare price line, which is dropped rather than noted', ({
+    assert,
+  }) => {
     const result = parseBulkImport('• ASI2600MC Air [$3,549]\n$2,250.00/ea')
     const item = result.sections[0]!.items[0]!
     assert.equal(item.price, 354900)
-    assert.deepEqual(item.notes, ['$2,250.00/ea'])
+    assert.deepEqual(item.notes, [])
   })
 
   test('leaves the name untouched when a "[$...]" tag has no digits to extract a price from', ({
