@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Capacitor } from '@capacitor/core';
+	import { App } from '@capacitor/app';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Input } from 'flowbite-svelte';
@@ -39,6 +40,7 @@
 	let canLockOrientationNow = $state(false);
 	let isNative = $state(false);
 	let serverUrl = $state('');
+	let nativeInfo = $state<{ version: string; build: string } | null>(null);
 
 	const themeOptions: { value: ThemePreference; label: string }[] = [
 		{ value: 'automatic', label: 'Automatic' },
@@ -125,6 +127,14 @@
 		canLockOrientationNow = canLockOrientation();
 		isNative = Capacitor.isNativePlatform();
 		serverUrl = getServerUrl();
+		if (isNative) {
+			try {
+				const info = await App.getInfo();
+				nativeInfo = { version: info.version, build: info.build };
+			} catch {
+				nativeInfo = null;
+			}
+		}
 		try {
 			meta = await fetchMeta();
 		} catch {
@@ -296,9 +306,16 @@
 			About
 		</h2>
 		<div class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+			{#if isNative && nativeInfo}
+				<div>
+					App <span>{nativeInfo.version}</span> (<span>{nativeInfo.build}</span>)
+				</div>
+			{/if}
 			{#if meta}
-				EveryList <span>{meta.version}</span> (<span>{meta.commit}</span>) · built
-				<span>{formatBuildDate(meta.builtAt)}</span>
+				<div>
+					Server <span>{meta.version}</span> (<span>{meta.commit}</span>) · built
+					<span>{formatBuildDate(meta.builtAt)}</span>
+				</div>
 			{:else if loadFailed}
 				EveryList — build info unavailable
 			{:else}
