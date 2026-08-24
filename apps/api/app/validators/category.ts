@@ -20,3 +20,7 @@ export const importCategoriesValidator = vine.create({
   /** Omit to import every category on the source list. */
   categoryIds: vine.array(vine.number().positive()).optional(),
 })
+
+export const bulkImportCategoriesValidator = vine.create({
+  text: vine.string().trim().minLength(1).maxLength(5_000),
+})

@@ -16,6 +16,7 @@ vi.mock('./client', () => ({
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
 const {
+	bulkImportCategories,
 	createCategory,
 	deleteCategory,
 	fetchCategories,
@@ -66,6 +67,13 @@ describe('categories api', () => {
 		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/categories/import', {
 			sourceListId: 2,
 			categoryIds: [10, 11]
+		});
+	});
+
+	it('bulkImportCategories POSTs the pasted text', () => {
+		bulkImportCategories(1, 'Produce\nDairy');
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/categories/bulk-import', {
+			text: 'Produce\nDairy'
 		});
 	});
 });

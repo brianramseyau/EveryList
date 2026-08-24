@@ -12,6 +12,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import ItemTransformer from '#transformers/item_transformer'
 import { suggestCategoryId } from '#services/category_suggestion_service'
 import { parseBulkImport } from '#services/bulk_import_parser'
+import { matchCategoryIcon, titleCaseCategoryName } from '#services/category_bulk_import'
 import type { CategorizeSuggestionDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
@@ -20,45 +21,6 @@ import {
   parseExpectedVersion,
   reportVersionConflict,
 } from '#services/version_conflict'
-
-/** Matches common AnyList category headers to an existing @mdi/js icon; unknown headers get the generic 'tag'. */
-const IMPORTED_CATEGORY_ICONS: Record<string, string> = {
-  'produce': 'fruitCherries',
-  'fruit & veg': 'fruitCherries',
-  'meat': 'foodDrumstick',
-  'seafood': 'fish',
-  'fish': 'fish',
-  'bakery': 'breadSlice',
-  'dairy': 'cheese',
-  'cheese': 'cheese',
-  'frozen': 'snowflake',
-  'beverages': 'bottleSoda',
-  'drinks': 'bottleSoda',
-  'snacks': 'foodApple',
-  'breakfast': 'egg',
-  'breakfast & cereal': 'egg',
-  'cooking': 'potSteam',
-  'household': 'spray',
-  'chemist': 'pill',
-  'chemists': 'pill',
-  'pharmacy': 'pill',
-  'medication': 'pill',
-  'specials': 'sale',
-}
-
-function categoryIconFor(header: string): string {
-  return IMPORTED_CATEGORY_ICONS[header.trim().toLowerCase()] ?? 'tag'
-}
-
-/** "BREAKFAST & CEREAL" -> "Breakfast & Cereal", matching EveryList's title-cased category names. */
-function titleCase(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(
-      /(^|[\s&/\\-])([a-z])/g,
-      (_match, separator: string, letter: string) => separator + letter.toUpperCase()
-    )
-}
 
 async function resolveCategoryId(
   list: List,
@@ -303,8 +265,8 @@ export default class ItemsController {
 
       const category = await Category.create({
         listId: list.id,
-        name: titleCase(header),
-        icon: categoryIconFor(header),
+        name: titleCaseCategoryName(header),
+        icon: matchCategoryIcon(header),
         sortOrder: categorySortOrder++,
         isDefault: false,
         version: 1,

@@ -5,10 +5,16 @@ import {
   updateCategoryValidator,
   reorderCategoriesValidator,
   importCategoriesValidator,
+  bulkImportCategoriesValidator,
 } from '#validators/category'
 import type { HttpContext } from '@adonisjs/core/http'
 import CategoryTransformer from '#transformers/category_transformer'
 import { getEffectiveCategories } from '#services/category_service'
+import {
+  matchCategoryIcon,
+  normalizeCategoryName,
+  parseCategoryNames,
+} from '#services/category_bulk_import'
 import { broadcastSync } from '#services/sync_broadcaster'
 import {
   hasVersionConflict,
@@ -121,6 +127,62 @@ export default class CategoriesController {
     logger.debug(
       { listId: list.id, sourceListId, createdCount: created.length },
       'categories imported'
+    )
+
+    return serialize(CategoryTransformer.transform(created))
+  }
+
+  /**
+   * Creates categories from a pasted list of names, one per line (an optional leading bullet is
+   * stripped) — the same "paste a list, get it turned into rows" shape as bulk item import, and
+   * reusing that feature's header→icon matching (`category_bulk_import.ts`) to guess a relatable
+   * icon per name instead of dumping everything under the generic 'tag'. A pasted name that
+   * matches an existing category (case-insensitive) is skipped, so pasting the same list twice —
+   * or a list with repeated lines — is idempotent, mirroring `import`'s dedup-by-name behavior.
+   */
+  async bulkImport({ auth, params, request, serialize, logger }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const list = await ListPolicy.requireList(user, params.listId, 'editor')
+    const { text } = await request.validateUsing(bulkImportCategoriesValidator)
+
+    const existing = await Category.query().where('listId', list.id).whereNull('deletedAt')
+    const seen = new Set(existing.map((category) => category.name.trim().toLowerCase()))
+
+    const maxSortOrder = await Category.query()
+      .where('listId', list.id)
+      .max('sort_order as maxSortOrder')
+      .first()
+    let sortOrder = Number(maxSortOrder?.$extras.maxSortOrder ?? -1) + 1
+
+    const created: Category[] = []
+    for (const rawName of parseCategoryNames(text)) {
+      const name = normalizeCategoryName(rawName)
+      const key = name.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+
+      const category = await Category.create({
+        listId: list.id,
+        name,
+        icon: matchCategoryIcon(rawName),
+        sortOrder: sortOrder++,
+        isDefault: false,
+        version: 1,
+      })
+      created.push(category)
+    }
+
+    await broadcastSync({
+      listId: list.id,
+      entityType: 'category',
+      entityId: list.id,
+      op: 'create',
+      payload: { count: created.length },
+    })
+
+    logger.debug(
+      { listId: list.id, createdCount: created.length },
+      'categories bulk imported from pasted text'
     )
 
     return serialize(CategoryTransformer.transform(created))

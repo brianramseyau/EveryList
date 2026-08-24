@@ -86,6 +86,7 @@ router
         router.get(':listId/categories', [controllers.Categories, 'index'])
         router.post(':listId/categories', [controllers.Categories, 'store'])
         router.post(':listId/categories/import', [controllers.Categories, 'import'])
+        router.post(':listId/categories/bulk-import', [controllers.Categories, 'bulkImport'])
         router.patch(':listId/categories/reorder', [controllers.Categories, 'reorder'])
         router.patch(':listId/categories/:categoryId', [controllers.Categories, 'update'])
         router.delete(':listId/categories/:categoryId', [controllers.Categories, 'destroy'])

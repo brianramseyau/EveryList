@@ -145,3 +145,11 @@ export function importCategories(
 ): Promise<CategoryDto[]> {
 	return apiPost(`/api/v1/lists/${listId}/categories/import`, input);
 }
+
+/** Creates categories from a pasted list of names, one per line — the server matches each name to
+ * a relatable icon (see the API's `category_bulk_import.ts`), same as bulk item import does for
+ * AnyList category headers. Skips any name that already exists on this list. Online-only, like
+ * `importItems`. */
+export function bulkImportCategories(listId: number, text: string): Promise<CategoryDto[]> {
+	return apiPost(`/api/v1/lists/${listId}/categories/bulk-import`, { text });
+}
