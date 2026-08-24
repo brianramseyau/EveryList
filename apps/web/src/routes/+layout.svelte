@@ -116,10 +116,20 @@
 	     layout.css's overscroll-behavior-y comment for why that area can otherwise
 	     show scrolled content through it on iOS) — sits above every other
 	     fixed/sticky layer (BottomNav, SyncStatusIcon, list header, both z-20) so
-	     it always wins regardless of what's scrolled underneath. -->
+	     it always wins regardless of what's scrolled underneath.
+
+	     overscroll-behavior-y alone wasn't enough: WebKit paints `position: fixed`
+	     elements on the main thread but scrolls content on the compositor thread,
+	     so during an ordinary (non-bounce) momentum scroll/fling — not just at the
+	     top edge — this strip can lag a frame or two behind the content racing
+	     past underneath it, letting a list item flash through the notch exactly
+	     like the sticky list header did before it stuck. `translateZ(0)` forces
+	     both onto their own compositor layer up front instead of promoting (and
+	     re-rastering) them reactively mid-scroll, which is what actually keeps
+	     them visually pinned frame-to-frame. -->
 	<div
 		class="pointer-events-none fixed inset-x-0 top-0 z-50 bg-paper"
-		style="height: env(safe-area-inset-top);"
+		style="height: env(safe-area-inset-top); transform: translateZ(0); will-change: transform;"
 		aria-hidden="true"
 	></div>
 	<div class={showNav ? 'pb-16' : ''}>
