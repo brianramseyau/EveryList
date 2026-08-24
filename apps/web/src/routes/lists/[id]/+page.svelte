@@ -875,11 +875,13 @@
 												{/if}
 											</button>
 											<div
-												class="item-name flex flex-1 flex-col"
+												class="item-name flex min-w-0 flex-1 flex-col"
 												style="touch-action: manipulation; -webkit-touch-callout: none;"
 											>
-												<div class="flex items-center gap-2">
-													<span class={item.checked ? 'text-gray-400 line-through' : ''}>
+												<div class="flex min-w-0 items-center gap-2">
+													<span
+														class="wrap-anywhere {item.checked ? 'text-gray-400 line-through' : ''}"
+													>
 														{item.name}
 													</span>
 													{#if item.quantity}
