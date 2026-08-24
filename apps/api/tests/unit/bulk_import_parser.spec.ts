@@ -278,6 +278,30 @@ FROZEN
     assert.deepEqual(result.sections[0]!.items[0]!.notes, ['Prescription'])
   })
 
+  test('a remark between two alternative links stays a note across two separate blank breaks', ({
+    assert,
+  }) => {
+    // Regression: "Or" between two alternative product links for the same item was splitting
+    // off into its own bogus item, since the one-line lookahead only saw the next URL (not a
+    // bullet/header) immediately after it — the real bullet was one paragraph further out.
+    const result = parseBulkImport(
+      '• Transfer pump\nhttps://example.com/pump-a\n\nOr\n\nhttps://example.com/pump-b\n\nGENERAL\n• Kindling King'
+    )
+    assert.deepEqual(
+      result.sections[0]!.items.map((item) => item.name),
+      ['Transfer pump']
+    )
+    assert.deepEqual(result.sections[0]!.items[0]!.notes, [
+      'https://example.com/pump-a',
+      'Or',
+      'https://example.com/pump-b',
+    ])
+    assert.deepEqual(
+      result.sections[1]!.items.map((item) => item.name),
+      ['Kindling King']
+    )
+  })
+
   test('extracts a trailing "[$price]" tag from an item name into its price field', ({
     assert,
   }) => {

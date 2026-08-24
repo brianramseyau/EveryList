@@ -171,11 +171,14 @@ export function parseBulkImport(text: string): ParsedBulkImport {
     }
     // A bare line straight under an item — or a link/price mention, or a stray remark that's
     // trailing off before the next clearly-marked entry — continues that item's notes even
-    // across a blank paragraph break. Only a bare line with nothing (recognizably) new coming
-    // after it reads as its own item — see the module doc comment above.
-    const nextNonBlank = body.slice(index + 1).find((candidate) => candidate.length > 0)
-    const precedesNewEntry =
-      nextNonBlank !== undefined && (isBulletLine(nextNonBlank) || isCategoryHeader(nextNonBlank))
+    // across a blank paragraph break. This looks past any number of further blank lines and bare
+    // lines (e.g. "Or" between two alternative product links) to the next bullet/header, since a
+    // whole run of bare lines is either all notes or all new items together — only a bare line
+    // with nothing (recognizably) new anywhere after it reads as its own item — see the module
+    // doc comment above.
+    const precedesNewEntry = body
+      .slice(index + 1)
+      .some((candidate) => isBulletLine(candidate) || isCategoryHeader(candidate))
     if (item && (!blankSinceItem || isUrlLine(line) || isPriceOnlyLine(line) || precedesNewEntry)) {
       const singlePrice = SINGLE_PRICE_PATTERN.exec(line)
       if (singlePrice) {
