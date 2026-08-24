@@ -1,6 +1,6 @@
 import env from '#start/env'
 import app from '@adonisjs/core/services/app'
-import { defineConfig, syncDestination, targets } from '@adonisjs/core/logger'
+import { defineConfig, syncDestination, destination } from '@adonisjs/core/logger'
 
 const loggerConfig = defineConfig({
   /**
@@ -38,16 +38,15 @@ const loggerConfig = defineConfig({
       },
 
       /**
-       * Use sync destination in non-production for immediate flush.
+       * Non-production gets a sync destination for immediate flush.
+       * Production writes straight to stdout via a plain pino destination
+       * stream rather than `transport.targets` — pino's worker-thread
+       * transports can't accept the `formatters.level` function above
+       * ("option.transport.targets do not allow custom level formatters"),
+       * so a plain destination is the only way to get human-readable
+       * levels in production too.
        */
-      destination: !app.inProduction ? await syncDestination() : undefined,
-
-      /**
-       * Configure where logs are written.
-       */
-      transport: {
-        targets: [targets.file({ destination: 1 })],
-      },
+      destination: !app.inProduction ? await syncDestination() : destination(1),
     },
   },
 })
