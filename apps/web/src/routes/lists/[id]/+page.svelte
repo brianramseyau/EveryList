@@ -548,7 +548,7 @@
 
 <main class="mx-auto flex max-w-lg flex-col gap-4 px-8 pb-8">
 	<div
-		class="sticky top-0 z-20 flex flex-col gap-4 bg-paper pt-[max(env(safe-area-inset-top),2rem)]"
+		class="fixed top-0 z-20 flex flex-col gap-4 bg-paper pt-[max(env(safe-area-inset-top),2rem)]"
 		style="touch-action: pan-x pan-y; transform: translateZ(0); will-change: transform;"
 		bind:clientHeight={stickyHeaderHeight}
 	>
@@ -749,6 +749,7 @@
 		{/if}
 	</div>
 
+	<div class="pt-36">
 	{#if loading}
 		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 	{:else if list}
@@ -976,6 +977,7 @@
 		     its catch always sets `error` when it leaves `list` unset. -->
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 	{/if}
+	</div>
 </main>
 
 <style>
