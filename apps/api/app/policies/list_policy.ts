@@ -75,10 +75,10 @@ export default class ListPolicy {
    */
   static async requireList(user: User, listId: number | string, minRole: ListRole): Promise<List> {
     const list = await List.query().where('id', listId).whereNull('deletedAt').first()
-    if (!list) throw new ListNotFoundException()
+    if (!list) throw new ListNotFoundException({ userId: user.id, listId, reason: 'not_found' })
 
     const role = await ListPolicy.roleFor(user, list.id)
-    if (!role) throw new ListNotFoundException()
+    if (!role) throw new ListNotFoundException({ userId: user.id, listId, reason: 'no_access' })
     if (ROLE_RANK[role] < ROLE_RANK[minRole]) throw new ListForbiddenException()
 
     return list
@@ -117,10 +117,10 @@ export default class ListPolicy {
     minRole: ListRole
   ): Promise<Store> {
     const store = await Store.query().where('id', storeId).whereNull('deletedAt').first()
-    if (!store) throw new ListNotFoundException()
+    if (!store) throw new ListNotFoundException({ userId: user.id, storeId, reason: 'not_found' })
 
     const role = await ListPolicy.storeRoleFor(user, store.id)
-    if (!role) throw new ListNotFoundException()
+    if (!role) throw new ListNotFoundException({ userId: user.id, storeId, reason: 'no_access' })
     if (ROLE_RANK[role] < ROLE_RANK[minRole]) throw new ListForbiddenException()
 
     return store

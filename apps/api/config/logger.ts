@@ -26,6 +26,18 @@ const loggerConfig = defineConfig({
       level: env.get('LOG_LEVEL'),
 
       /**
+       * ISO8601 timestamps instead of pino's default epoch milliseconds.
+       */
+      timestamp: 'iso',
+
+      /**
+       * Log the level's label ("warn") instead of its numeric value (40).
+       */
+      formatters: {
+        level: (label) => ({ level: label }),
+      },
+
+      /**
        * Use sync destination in non-production for immediate flush.
        */
       destination: !app.inProduction ? await syncDestination() : undefined,

@@ -1,5 +1,6 @@
 import app from '@adonisjs/core/services/app'
 import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
+import { ListNotFoundException } from '#exceptions/list_access_exceptions'
 
 /**
  * better-sqlite3 surfaces a unique-constraint violation as `SqliteError` with
@@ -51,6 +52,12 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    *    unauthenticated, internet-facing endpoint group `start/limiter.ts`
    *    already calls out as "the actual brute-force/credential-stuffing
    *    target". Log those explicitly at `warn` so a spike is visible.
+   * 3. The base handler logs a bare "List not found" with nothing but the
+   *    request id, so a recurring one can't be traced to a user or list.
+   *    `ListNotFoundException` now carries that context (see
+   *    `list_access_exceptions.ts`) — log it explicitly and skip the base
+   *    logging (status 404 isn't in `ignoreStatuses`, so it would otherwise
+   *    also get logged bare).
    */
   async report(error: unknown, ctx: HttpContext) {
     if (isUniqueConstraintError(error)) {
@@ -58,6 +65,11 @@ export default class HttpExceptionHandler extends ExceptionHandler {
         { method: ctx.request.method(), url: ctx.request.url() },
         'unique constraint violation, responding 422'
       )
+      return
+    }
+
+    if (error instanceof ListNotFoundException) {
+      ctx.logger.warn(error.context, 'List not found')
       return
     }
 
