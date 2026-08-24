@@ -16,6 +16,15 @@
 		/>
 		<meta name="text-scale" content="scale" />
 		<meta name="theme-color" content="#33404f" />
+		<!-- Makes the edge-to-edge design (viewport-fit=cover + safe-area-inset-top
+		     padding throughout the app) explicit for iOS's "Add to Home Screen" PWA
+		     rather than relying on version-dependent default behavior: capable=yes
+		     launches standalone (no Safari chrome), and black-translucent is what
+		     lets the page draw under the status bar/notch at all — the app is then
+		     responsible for painting that strip itself, which it does via the
+		     layout.css/+layout.svelte overscroll+overlay fix for exactly this area. -->
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 		<link rel="manifest" href="/manifest.webmanifest" />
 		<script>
 			// Blocking (non-module) script, runs before first paint, so the app
