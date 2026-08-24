@@ -1911,16 +1911,62 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
-	it('skips the passcode gate on a later visit within the same session', async () => {
-		const { unlockList } = await import('$lib/passcode');
-		unlockList(1);
-		vi.mocked(fetchList).mockResolvedValue({ ...list, passcodeHash: 'abc:def' });
+	it('re-locks the list on a later visit after leaving it', async () => {
+		const { buildPasscodeHash } = await import('$lib/passcode');
+		const passcodeHash = await buildPasscodeHash('1234');
+		vi.mocked(fetchList).mockResolvedValue({ ...list, passcodeHash });
 
-		render(ListDetailPage);
-
+		const { unmount } = render(ListDetailPage);
+		await expect.element(page.getByText('This list is locked')).toBeInTheDocument();
+		await page.getByLabelText('Passcode').fill('1234');
+		await page.getByRole('button', { name: 'Unlock' }).click();
 		await expect
 			.element(page.getByText('Nothing here yet. Add your first item above.'))
 			.toBeInTheDocument();
+
+		// Leaving the list (unmounting the page) and coming back later must not
+		// remember the unlock — unlike list-scoped display prefs, this is an
+		// access gate, not persisted anywhere.
+		unmount();
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('This list is locked')).toBeInTheDocument();
+	});
+
+	it('re-locks the list when the tab is sent to the background', async () => {
+		const { buildPasscodeHash } = await import('$lib/passcode');
+		const passcodeHash = await buildPasscodeHash('1234');
+		vi.mocked(fetchList).mockResolvedValue({ ...list, passcodeHash });
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('This list is locked')).toBeInTheDocument();
+		await page.getByLabelText('Passcode').fill('1234');
+		await page.getByRole('button', { name: 'Unlock' }).click();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+		document.dispatchEvent(new Event('visibilitychange'));
+
+		await expect.element(page.getByText('This list is locked')).toBeInTheDocument();
+		Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+	});
+
+	it('stays unlocked on a visibilitychange while the tab is still visible', async () => {
+		const { buildPasscodeHash } = await import('$lib/passcode');
+		const passcodeHash = await buildPasscodeHash('1234');
+		vi.mocked(fetchList).mockResolvedValue({ ...list, passcodeHash });
+
+		render(ListDetailPage);
+		await page.getByLabelText('Passcode').fill('1234');
+		await page.getByRole('button', { name: 'Unlock' }).click();
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		document.dispatchEvent(new Event('visibilitychange'));
+
 		await expect.element(page.getByText('This list is locked')).not.toBeInTheDocument();
 	});
 });

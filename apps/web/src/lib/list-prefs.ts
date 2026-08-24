@@ -1,7 +1,7 @@
 /**
  * Per-list, per-device display preferences — local only, not synced via the
- * API (mirrors the storage approach in `$lib/passcode.ts`, but persists
- * across sessions since it's just a display toggle, not an access gate).
+ * API. Persists across sessions (unlike `$lib/passcode.ts`'s unlock state)
+ * since it's just a display toggle, not an access gate.
  */
 
 const SHOW_CHECKED_PREFIX = 'everylist:showChecked:';

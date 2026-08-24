@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildPasscodeHash, isListUnlocked, unlockList, verifyPasscode } from './passcode';
+import { buildPasscodeHash, verifyPasscode } from './passcode';
 
 // Hashing runs in Node (Web Crypto is a global here too) as well as the
-// browser — see passcode.svelte.spec.ts for the sessionStorage-backed
-// unlock state, which needs the real browser environment.
+// browser. Unlock state itself lives as plain component state in
+// routes/lists/[id]/+page.svelte, not in this module — see that page's spec.
 describe('passcode (hashing)', () => {
 	it('buildPasscodeHash produces a "<salt>:<hash>" pair a matching PIN verifies against', async () => {
 		const hash = await buildPasscodeHash('1234');
@@ -27,14 +27,5 @@ describe('passcode (hashing)', () => {
 	it('verifyPasscode returns false for a malformed stored hash', async () => {
 		expect(await verifyPasscode('1234', 'not-a-valid-hash')).toBe(false);
 		expect(await verifyPasscode('1234', '')).toBe(false);
-	});
-});
-
-// Runs in the "server" (node) project, which has no `window` — exercises
-// the SSR guard on the sessionStorage-backed unlock state.
-describe('passcode (no window)', () => {
-	it('isListUnlocked defaults to false and unlockList is a no-op', () => {
-		expect(isListUnlocked(1)).toBe(false);
-		expect(() => unlockList(1)).not.toThrow();
 	});
 });
