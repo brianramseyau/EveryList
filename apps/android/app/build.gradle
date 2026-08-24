@@ -7,8 +7,12 @@ android {
         applicationId "au.brianramsey.everylist"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // CI passes these from the release tag (see native-build.yml) so every tagged
+        // build has a higher versionCode than the last, which Android requires to treat
+        // a new APK as an update rather than a downgrade. Defaults here only cover local
+        // dev builds, which are never distributed as updates to anyone.
+        versionCode project.hasProperty('appVersionCode') ? (appVersionCode as Integer) : 1
+        versionName project.hasProperty('appVersionName') ? appVersionName : "0.0.0-dev"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,7 +20,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        debug {
+            // Checked-in debug keystore (standard debug credentials, not a secret) so every
+            // build - local or CI - signs with the same key. Without this, AGP falls back to
+            // ~/.android/debug.keystore, which doesn't persist between GitHub Actions runs and
+            // was silently getting regenerated with a random key on every tagged release,
+            // making each release's APK sign-incompatible with the last and breaking in-place
+            // updates ("App not installed").
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
