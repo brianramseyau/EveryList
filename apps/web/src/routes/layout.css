@@ -153,18 +153,6 @@ html {
 	overflow-x: clip;
 }
 
-/* Without this, pulling down past the top of the page (rubber-band/elastic
-   overscroll) shifts the whole rendered layer — including position:sticky/fixed
-   elements — down with it, which on a notched/Dynamic-Island iPhone running as
-   an installed PWA (viewport-fit=cover, so the layout viewport already extends
-   under the status bar) transiently exposes whatever content sits just above
-   the normal scroll position through that translucent status-bar area instead
-   of a solid color. Safari 16+ honors overscroll-behavior on the root
-   scroller, so this stops the bounce itself rather than papering over it. */
-html {
-	overscroll-behavior-y: none;
-}
-
 /* App-wide pinch-zoom baseline for Blink (Android Chrome etc.): Blink derives
    the page's pinch-zoom behavior from the touch-action of whatever's under
    each touch point, so without a restrictive default here, any area of the
