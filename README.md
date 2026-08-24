@@ -5,7 +5,7 @@
 <h1 align="center">EveryList</h1>
 
 <p align="center">
-  A narrower, sharper shopping-list PWA — the 20% of AnyList's feature set that covers 90% of real usage, done well, free, and self-hosted.
+  A narrower, sharper shopping-list app — the 20% of AnyList's feature set that covers 90% of real usage, done well, free, and self-hosted.
 </p>
 
 <p align="center">
@@ -16,9 +16,18 @@
 
 ---
 
-AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasing feature parity — it's a **mobile-first, offline-first, one-tier** PWA that does the everyday list workflow well: create, share in real time, auto-categorize by aisle, check off, and keep working with zero signal. No premium tier, ever. See [`foundational/PLAN.md`](foundational/PLAN.md) for the full product plan, architecture, and decision rationale behind everything below.
+AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasing feature parity — it's a **mobile-first, offline-first, one-tier** app that does the everyday list workflow well: create, share in real time, auto-categorize by aisle, check off, and keep working with zero signal. No premium tier, ever. It ships as an installable PWA and as native iOS/Android apps, and can be controlled by voice through Alexa or Home Assistant. See [`foundational/PLAN.md`](foundational/PLAN.md) for the full product plan, architecture, and decision rationale behind everything below.
 
 EveryList is feature-complete and self-hostable today.
+
+## Screenshots
+
+<p align="center">
+  <img src="branding/screenshots/lists.png" width="200" alt="Lists screen">
+  <img src="branding/screenshots/list-detail.png" width="200" alt="List detail screen, grouped by category">
+  <img src="branding/screenshots/sharing.png" width="200" alt="List sharing / members screen">
+  <img src="branding/screenshots/settings.png" width="200" alt="Settings screen">
+</p>
 
 ## Features
 
@@ -34,10 +43,13 @@ EveryList is feature-complete and self-hostable today.
 - **Print & email export** — a print-friendly stylesheet plus one-click email export of any list.
 - **Light/dark/automatic theme + accent palettes** — four accent themes on top of a real, flash-free light/dark/automatic mode.
 - **Installable PWA** — add to your home screen on any device, no app store required.
+- **Native iOS & Android apps** — the same app wrapped via [Capacitor](https://capacitorjs.com), with a runtime-configurable server URL (point it at your own instance from a `/server-setup` screen, no rebuild needed), pull-to-refresh, and the same offline-first sync as the PWA. Debug-signed/simulator builds are attached to every [GitHub Release](https://github.com/brianramseyau/EveryList/releases) — see [Native apps](#native-apps-iosandroid) below.
+- **Voice control** — a private [Alexa custom skill](alexa/README.md) (add/remove/complete items, read a list back, plus an on-screen [APL](https://developer.amazon.com/en-US/docs/alexa/alexa-presentation-language/apl-overview.html) visual list on an Echo Show/Hub) and a [Home Assistant HACS integration](https://github.com/brianramseyau/everylist-hass) exposing each list as a native `todo.*` entity for Voice Assist — both authenticate via scoped Personal Access Tokens, not your login.
+- **Personal Access Tokens** — scoped, per-list, editor/viewer-capped API tokens (`Settings → Access Tokens`) for third-party integrations like the two above, independent of your login session.
 - **Self-hosted, single container** — one Docker image, one process, one SQLite file under `/config`; trivial to back up.
 - **Automated backups** — configurable daily/weekly/monthly schedule with a chosen time of day and retention window, taken via SQLite's native online backup API so it's safe to run while the app is live; also triggerable on demand from `Settings → Backups`.
 
-Deliberately out of scope: native Watch apps, Siri/Alexa, home-screen widgets, and third-party fulfillment integrations (Instacart, etc.) — see the [feature decision matrix](foundational/PLAN.md#3-feature-decision-matrix) in the plan for the full reasoning.
+Deliberately out of scope: native Watch apps, Siri voice control, home-screen widgets, and third-party fulfillment integrations (Instacart, etc.) — see the [feature decision matrix](foundational/PLAN.md#3-feature-decision-matrix) in the plan for the full reasoning.
 
 ## Tech stack
 
@@ -50,6 +62,7 @@ Deliberately out of scope: native Watch apps, Siri/Alexa, home-screen widgets, a
 | Shared types | `packages/shared` — DTOs/contracts shared between API and web |
 | Testing | Japa + c8 (backend), Vitest + Testing Library + Playwright (frontend) — 100% coverage policy on unit/integration |
 | Deployment | Single Docker image, LinuxServer.io-style (`s6-overlay`, `PUID`/`PGID`), published to GHCR |
+| Native shell | [Capacitor](https://capacitorjs.com) (iOS + Android) — wraps the same SvelteKit build, no separate native codebase |
 
 Full rationale for each choice is in [§4 of the plan](foundational/PLAN.md#4-technology-stack).
 
@@ -58,15 +71,18 @@ Full rationale for each choice is in [§4 of the plan](foundational/PLAN.md#4-te
 ```
 EveryList/
 ├── apps/
-│   ├── web/          # SvelteKit PWA
+│   ├── web/          # SvelteKit PWA + Capacitor native shell
 │   └── api/           # AdonisJS backend
 ├── packages/
 │   └── shared/         # shared TS types, DTOs, validation contracts
 ├── docker/              # production + dev Dockerfiles, Unraid template
-├── branding/             # app icon source + generated exports
+├── branding/             # app icon source + generated exports, screenshots
+├── alexa/                # Alexa custom skill deployment assets (interaction model, account linking)
 └── foundational/
     └── PLAN.md            # single source of truth for scope & architecture
 ```
+
+The Home Assistant HACS integration lives in its own repo, [`everylist-hass`](https://github.com/brianramseyau/everylist-hass) — separate from this monorepo because HACS requires `custom_components/<domain>/` at the repo root and versions the integration via that repo's own GitHub releases.
 
 ## Getting started
 
@@ -140,6 +156,21 @@ Available image tags:
 | `vX.Y.Z` | Exact release, never moves |
 | `vX` | Latest release within major version `X` |
 | `latest` | Latest stable release |
+
+### Native apps (iOS/Android)
+
+Every `vX.Y.Z` tag also builds and attaches native app packages to the corresponding [GitHub Release](https://github.com/brianramseyau/EveryList/releases): a debug-signed Android APK (sideload-ready as-is) and an unsigned iOS Simulator build. Neither is store-signed yet — there's no release keystore or Apple Developer Program enrollment behind this build — so today this is a "build it yourself a real release, or sideload/simulate the CI one" situation, not an App/Play Store listing. The app itself doesn't care: on first launch it sends you to a `/server-setup` screen to enter your own instance's URL, so one build works against anyone's self-hosted server with no rebuild.
+
+## Voice control & integrations
+
+EveryList lists can be read and edited by voice through two paths, both authenticated by a scoped [Personal Access Token](#personal-access-tokens) rather than your login — mint one from `Settings → Access Tokens`, capped at `editor` role and scoped to only the list(s) you want an integration to reach.
+
+- **Alexa** — a private custom skill for your own household (see [`alexa/README.md`](alexa/README.md) for the full setup, including the Authentik account-linking requirement). "Alexa, ask every list to add milk", "tell every list I got eggs", "what's on my list" — plus an interactive, category-grouped [APL](https://developer.amazon.com/en-US/docs/alexa/alexa-presentation-language/apl-overview.html) visual list on screen devices like an Echo Show or Echo Hub, with tap-to-complete.
+- **Home Assistant** — a [HACS](https://hacs.xyz) custom integration ([`everylist-hass`](https://github.com/brianramseyau/everylist-hass)) exposing each list as a native `todo.*` entity, so Voice Assist's built-in add/complete intents work with no custom NLU. Reads, writes, and reorders round-trip live via realtime subscription, with a polling fallback.
+
+### Personal Access Tokens
+
+`Settings → Access Tokens` mints tokens like the ones above by hand, for any other script or integration you want to write against the API — see the self-hosted [API docs](#api-docs) for the full surface. A token can cover multiple lists, is capped below `owner` (never full access), and is revocable at any time with immediate effect — no redeploy needed.
 
 ## Testing
 
