@@ -32,9 +32,8 @@ const { fetchStores } = await import('$lib/api/stores');
 const { fetchFavorites, createFavorite, deleteFavorite } = await import('$lib/api/favorites');
 const { goto } = await import('$app/navigation');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { setServerUnavailableForTesting, resetConnectivityForTesting } = await import(
-	'$lib/offline/connectivity.svelte'
-);
+const { setServerUnavailableForTesting, resetConnectivityForTesting } =
+	await import('$lib/offline/connectivity.svelte');
 const ItemDetailPage = (await import('./+page.svelte')).default;
 
 const TS = '2026-08-01T00:00:00.000Z';

@@ -698,9 +698,7 @@ test.group('Move item to another list', (group) => {
     )
     const item = bodyData<ItemDto>(
       await auth(
-        client
-          .post(`/api/v1/lists/${listId}/items`)
-          .json({ name: 'Bananas', storeId: store.id })
+        client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bananas', storeId: store.id })
       )
     )
     assert.equal(item.storeId, store.id)
@@ -748,9 +746,7 @@ test.group('Move item to another list', (group) => {
 
     const item = bodyData<ItemDto>(
       await auth(
-        client
-          .post(`/api/v1/lists/${listId}/items`)
-          .json({ name: 'Milk', storeId: store.id })
+        client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk', storeId: store.id })
       )
     )
 
