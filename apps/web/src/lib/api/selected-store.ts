@@ -14,7 +14,10 @@ export async function getSelectedStoreSettings(listId: number): Promise<Selected
 
 	const row = await db.selectedStore.get(listId);
 	return {
-		storeId: row?.storeId ?? null,
+		// Defensive: a since-fixed bug (the "no store" radio's `bind:group` value) could persist
+		// `''` here instead of `null` — normalize so an already-corrupted row self-heals on read
+		// rather than repeatedly firing `GET /stores//categories` every background sync.
+		storeId: row?.storeId || null,
 		// Legacy rows persisted `includeUnassigned`; new rows persist `filter`.
 		filter:
 			row?.filter ??

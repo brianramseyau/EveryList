@@ -24,7 +24,11 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
-	let selectedStoreId = $state<number | null>(null);
+	// A bare `null` doesn't survive Svelte's radio `bind:group` — the DOM's `value` IDL setter
+	// coerces `null` to `""`, so the "no store" option's underlying value ends up `""` either way.
+	// Use `''` as the in-component sentinel to match that, and convert to/from `null` only at the
+	// storage boundary (loadAll/persist effect below).
+	let selectedStoreId = $state<number | ''>('');
 	let storeFilter = $state<StoreFilter>('store');
 
 	let editingStoreId = $state<number | null>(null);
@@ -37,7 +41,7 @@
 		try {
 			[list, stores] = await Promise.all([fetchList(listId), fetchStores(listId)]);
 			const settings = await getSelectedStoreSettings(listId);
-			selectedStoreId = settings.storeId;
+			selectedStoreId = settings.storeId ?? '';
 			storeFilter = settings.filter;
 			error = null;
 		} catch (err) {
@@ -86,7 +90,7 @@
 
 	async function removeStore(store: StoreDto) {
 		stores = stores.filter((current) => current.id !== store.id);
-		if (selectedStoreId === store.id) selectedStoreId = null;
+		if (selectedStoreId === store.id) selectedStoreId = '';
 		try {
 			await detachStore(listId, store.id);
 		} catch (err) {
@@ -99,7 +103,10 @@
 	// whenever the selection changes, including the initial load's restore.
 	$effect(() => {
 		if (!loading)
-			void setSelectedStoreSettings(listId, { storeId: selectedStoreId, filter: storeFilter });
+			void setSelectedStoreSettings(listId, {
+				storeId: selectedStoreId === '' ? null : selectedStoreId,
+				filter: storeFilter
+			});
 	});
 </script>
 
@@ -143,7 +150,7 @@
 		{:else}
 			<ul class="flex flex-col gap-2">
 				<li>
-					<Radio bind:group={selectedStoreId} value={null}>No store selected (default order)</Radio>
+					<Radio bind:group={selectedStoreId} value="">No store selected (default order)</Radio>
 				</li>
 				{#each stores as store (store.id)}
 					<li class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
@@ -211,7 +218,7 @@
 			</ul>
 		{/if}
 
-		{#if selectedStoreId !== null}
+		{#if selectedStoreId !== ''}
 			<div class="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
 				<h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">Items shown</h2>
 				<Radio bind:group={storeFilter} value="store">Only this store's items</Radio>
