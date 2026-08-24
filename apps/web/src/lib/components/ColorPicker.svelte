@@ -8,9 +8,8 @@
 	const id = Symbol('color-picker');
 	let containerEl: HTMLDivElement | undefined = $state();
 
-	// A fixed Tailwind-500 swatch set rather than a raw <input type="color"> —
-	// keeps every list/store color visually consistent instead of arbitrary
-	// user-picked hues, matching IconPicker.svelte's curated-picker pattern.
+	// Curated Tailwind-500 swatches for one-click consistency, plus a native
+	// color input + hex field below for anyone who wants an arbitrary hue.
 	const PALETTE = [
 		'#ef4444',
 		'#f97316',
@@ -33,10 +32,26 @@
 	];
 
 	let open = $derived(pickerCoordinator.activeId === id);
+	const isValidHex = (color: string) => /^#[0-9a-f]{6}$/i.test(color);
+
+	let customHex = $derived(value);
 
 	function pick(color: string) {
 		onselect(color);
 		pickerCoordinator.close(id);
+	}
+
+	function handleCustomInput(color: string) {
+		customHex = color;
+		if (isValidHex(color)) onselect(color);
+	}
+
+	function handleHexBlur() {
+		if (isValidHex(customHex)) {
+			onselect(customHex);
+		} else {
+			customHex = value;
+		}
 	}
 </script>
 
@@ -55,7 +70,7 @@
 	{#if open && containerEl}
 		<div
 			use:anchorPanel={containerEl}
-			class="fixed z-10 w-48 max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+			class="fixed z-10 w-56 max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-800"
 		>
 			<div class="grid grid-cols-6 gap-2">
 				{#each PALETTE as color (color)}
@@ -71,6 +86,34 @@
 						onclick={() => pick(color)}
 					></button>
 				{/each}
+			</div>
+
+			<div class="mt-3 flex items-center gap-2 border-t border-gray-200 pt-3 dark:border-gray-700">
+				<label class="relative h-6 w-6 shrink-0 cursor-pointer" title="Custom color">
+					<span
+						class="pointer-events-none absolute inset-0 rounded-full ring-1 ring-gray-300 ring-inset dark:ring-gray-600"
+						style:background-color={isValidHex(customHex) ? customHex : value}
+						aria-hidden="true"
+					></span>
+					<input
+						type="color"
+						class="h-full w-full cursor-pointer opacity-0"
+						value={isValidHex(customHex) ? customHex : value}
+						oninput={(e) => handleCustomInput(e.currentTarget.value)}
+						aria-label="Pick a custom color"
+					/>
+				</label>
+				<input
+					type="text"
+					class="w-full min-w-0 rounded-md border border-gray-300 bg-transparent px-2 py-1 text-sm text-gray-900 outline-none focus:border-primary-500 dark:border-gray-600 dark:text-white"
+					value={customHex}
+					maxlength={7}
+					spellcheck="false"
+					oninput={(e) => (customHex = e.currentTarget.value)}
+					onblur={handleHexBlur}
+					onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+					aria-label="Custom hex color"
+				/>
 			</div>
 		</div>
 	{/if}
