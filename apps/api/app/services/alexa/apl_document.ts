@@ -135,18 +135,18 @@ export const LIST_VIEW_DOCUMENT = {
                     items: [
                       {
                         type: 'Frame',
-                        width: '24dp',
-                        height: '24dp',
-                        borderRadius: '5dp',
+                        width: '26dp',
+                        height: '26dp',
+                        borderRadius: '6dp',
                         borderWidth: '${data.checked ? 0 : 2}dp',
                         borderColor: '#6d6d6d',
                         backgroundColor: "${data.checked ? '#2e8b57' : 'transparent'}",
-                        marginRight: '20dp',
+                        marginRight: '36dp',
                       },
                       {
                         type: 'Text',
                         text: "${data.checked ? '<s>' + data.name + '</s>' : data.name}",
-                        fontSize: '30dp',
+                        fontSize: '32dp',
                         color: "${data.checked ? '#6d6d6d' : '#edeae3'}",
                       },
                     ],
