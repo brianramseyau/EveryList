@@ -61,9 +61,23 @@ jobs:
         # licenses for those packages have been accepted.
         run: yes | sdkmanager --licenses >/dev/null || true
 
+      - name: Compute Android version code/name from the tag
+        # versionCode must strictly increase release over release or Android refuses to
+        # treat a new APK as an update. This job only runs on vX.Y.Z tag pushes (see the
+        # `on:` trigger above), so github.ref_name is always a tag here.
+        id: androidver
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$TAG"
+          echo "code=$((MAJOR * 10000 + MINOR * 100 + PATCH))" >> "$GITHUB_OUTPUT"
+          echo "name=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Assemble debug APK
         working-directory: apps/android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          ./gradlew assembleDebug --no-daemon \
+            -PappVersionCode=${{ steps.androidver.outputs.code }} \
+            -PappVersionName=${{ steps.androidver.outputs.name }}
 
       - uses: actions/upload-artifact@v4
         with:
