@@ -566,6 +566,60 @@ describe('Item detail +page.svelte', () => {
 		expect(vi.mocked(goto).mock.calls[0]?.[0]).toBe('/lists/2');
 	});
 
+	it('clears the chosen destination back to unset, disabling the Move button again', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchLists).mockResolvedValue([list, otherOwnedList]);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await page.getByLabelText('Move to list').selectOptions('2');
+		await expect.element(page.getByRole('button', { name: 'Move' })).not.toBeDisabled();
+
+		await page.getByRole('button', { name: 'Close' }).click();
+
+		await expect.element(page.getByRole('button', { name: 'Move' })).toBeDisabled();
+	});
+
+	it('ignores a second click while a move is already in flight', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchLists).mockResolvedValue([list, otherOwnedList]);
+		let resolveMove: (item: ItemDto) => void = () => {};
+		vi.mocked(moveItemToList).mockReturnValue(
+			new Promise((resolve) => {
+				resolveMove = resolve;
+			})
+		);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+		await page.getByLabelText('Move to list').selectOptions('2');
+
+		const moveButtonEl = page.getByRole('button', { name: 'Move' }).element();
+		moveButtonEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		moveButtonEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		resolveMove(makeItem({ id: 100, name: 'Bananas', listId: 2 }));
+
+		await expect.poll(() => vi.mocked(moveItemToList).mock.calls.length).toBe(1);
+	});
+
+	it('shows a generic error message when moving fails without an ApiError', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchLists).mockResolvedValue([list, otherOwnedList]);
+		vi.mocked(moveItemToList).mockRejectedValue(new TypeError('network down'));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await page.getByLabelText('Move to list').selectOptions('2');
+		await page.getByRole('button', { name: 'Move' }).click();
+
+		await expect.element(page.getByText('Failed to move item.')).toBeInTheDocument();
+	});
+
 	it('disables the Move button until a destination list is chosen', async () => {
 		const db = getDb()!;
 		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));

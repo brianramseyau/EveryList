@@ -248,6 +248,7 @@
 						size="sm"
 						items={moveTargets.map((l) => ({ value: l.id, name: l.name }))}
 						placeholder="Choose a list…"
+						clearable
 						value={draftMoveTargetId ?? ''}
 						disabled={connectivity.serverUnavailable}
 						onchange={(event) => {
