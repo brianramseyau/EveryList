@@ -598,6 +598,97 @@ test.group('Alexa skill endpoint', (group) => {
     assert.include(response.body().response.outputSpeech.text, "couldn't find that list")
   })
 
+  test('SetDefaultListIntent sets the default, then it resolves an otherwise-ambiguous request', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listAId = await createList(client, owner.token, 'Groceries')
+    const listBId = await createList(client, owner.token, 'Hardware')
+    const pat = await mintPat(client, owner.token, [listAId, listBId])
+
+    const setDefault = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'SetDefaultListIntent',
+        slots: { ListName: 'Groceries' },
+      })
+    )
+    assert.include(setDefault.body().response.outputSpeech.text, 'Groceries is now your default')
+
+    const read = await postAlexa(
+      client,
+      buildEnvelope({ type: 'IntentRequest', accessToken: pat, intentName: 'ReadListIntent' })
+    )
+    assert.include(read.body().response.outputSpeech.text, 'Groceries')
+    assert.notInclude(read.body().response.outputSpeech.text, 'Which list did you mean')
+
+    const addToOther = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Hammer', ListName: 'Hardware' },
+      })
+    )
+    assert.include(addToOther.body().response.outputSpeech.text, 'Added Hammer to Hardware')
+  })
+
+  test('SetDefaultListIntent with no ListName slot asks for clarification', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'IntentRequest', accessToken: pat, intentName: 'SetDefaultListIntent' })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'Tell me which list')
+  })
+
+  test('SetDefaultListIntent with an unmatched list name reports not found', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'SetDefaultListIntent',
+        slots: { ListName: 'Nonexistent' },
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, "couldn't find that list")
+  })
+
+  test('a viewer-scoped token can still set a default list', async ({ client, assert }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId], 'viewer')
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'SetDefaultListIntent',
+        slots: { ListName: 'Groceries' },
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'Groceries is now your default')
+  })
+
   test('a viewer accessing a shared list (not just their own) can still use voice control', async ({
     client,
     assert,

@@ -202,11 +202,17 @@ instance, run by whoever set it up.
 | "remove milk", "take milk off my list"          | `RemoveItemIntent`     |
 | "I got milk", "mark milk as done"               | `CompleteItemIntent`   |
 | "what's on my list", "what's on the groceries list" | `ReadListIntent`   |
+| "set groceries as my default list"              | `SetDefaultListIntent` |
 
-If you have more than one list and don't name one, Alexa asks which list you meant. Item and list
-names tolerate near-miss transcriptions ("miilk" still matches "Milk"). A token linked with
-`viewer`-only access to a list can hear what's on it but can't add, remove, or complete items on
-it.
+If you have more than one list and don't name one, Alexa asks which list you meant — unless you've
+set a default (say "Alexa, ask every list to set groceries as my default list" once), in which case
+that list is used instead of asking, until you change it. Naming a list explicitly in a request
+("add milk to the hardware list") still always overrides the default for that one request. This
+default is stored per EveryList account and is specific to the Alexa skill — it has no effect on
+the EveryList web/mobile app. Item and list names tolerate near-miss transcriptions ("miilk" still
+matches "Milk"). A token linked with `viewer`-only access to a list can hear what's on it but can't
+add, remove, or complete items on it (setting a default list has no role requirement, since it's
+just a personal preference).
 
 ## Screen devices (Echo Show/Hub)
 

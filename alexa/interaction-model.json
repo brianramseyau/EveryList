@@ -73,6 +73,20 @@
           ]
         },
         {
+          "name": "SetDefaultListIntent",
+          "slots": [{ "name": "ListName", "type": "ListNameType" }],
+          "samples": [
+            "set {ListName} as my default list",
+            "set {ListName} as default",
+            "set the {ListName} list as default",
+            "set the {ListName} list as my default list",
+            "make {ListName} my default list",
+            "make the {ListName} list my default",
+            "set my default list to {ListName}",
+            "change my default list to {ListName}"
+          ]
+        },
+        {
           "name": "ReadListIntent",
           "slots": [{ "name": "ListName", "type": "ListNameType" }],
           "samples": [

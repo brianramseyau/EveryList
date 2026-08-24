@@ -6,7 +6,7 @@ import logger from '@adonisjs/core/services/logger'
 import { suggestCategoryId } from '#services/category_suggestion_service'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { closestMatch } from '#services/alexa/fuzzy_match'
-import { resolveList, roleFor } from '#services/alexa/list_resolution'
+import { resolveList, roleFor, setDefaultList } from '#services/alexa/list_resolution'
 import { say, type AlexaResponse } from '#services/alexa/response_builder'
 
 type AlexaSlots = Record<string, string | undefined>
@@ -270,6 +270,28 @@ export async function handleReadList(token: AccessToken, slots: AlexaSlots): Pro
       : `On ${list.name}, you have ${spoken.join(', ')}.`
 
   return respond(say(summary), list)
+}
+
+/**
+ * `SetDefaultListIntent` — always requires a spoken `ListName`; unlike the other intents, falling
+ * through to `resolveList`'s own no-slot handling here would just silently reuse whatever default
+ * is already set (or ask to disambiguate) instead of prompting for the list being *changed to*.
+ */
+export async function handleSetDefaultList(
+  token: AccessToken,
+  slots: AlexaSlots
+): Promise<IntentResult> {
+  const listNameSlot = slots.ListName?.trim()
+  if (!listNameSlot) {
+    return respond(say("Tell me which list, like 'set groceries as my default list.'"))
+  }
+
+  const resolved = await resolveListOrRespond(token, listNameSlot)
+  if ('response' in resolved) return respond(resolved.response)
+  const list = resolved.list
+
+  await setDefaultList(token, list.id)
+  return respond(say(`Okay, ${list.name} is now your default list.`), list)
 }
 
 /**

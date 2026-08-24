@@ -3,7 +3,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import { DateTime } from 'luxon'
 import User from '#models/user'
 import List from '#models/list'
-import { resolveList, roleFor } from '#services/alexa/list_resolution'
+import { resolveList, roleFor, setDefaultList } from '#services/alexa/list_resolution'
 
 async function makeUser(email: string) {
   return User.create({ fullName: 'Test User', email, password: 'password123' })
@@ -76,6 +76,78 @@ test.group('Alexa list resolution', (group) => {
 
     const result = await resolveList(token, 'Something Else Entirely')
     assert.equal(result.kind, 'not-found')
+  })
+
+  test('with several accessible lists and no slot, a set default resolves instead of asking', async ({
+    assert,
+  }) => {
+    const user = await makeUser('default@example.com')
+    const listA = await List.create({ name: 'Groceries', ownerId: user.id })
+    const listB = await List.create({ name: 'Hardware', ownerId: user.id })
+    const token = await User.personalAccessTokens.create(user, [
+      `list:${listA.id}:editor`,
+      `list:${listB.id}:editor`,
+    ])
+
+    await setDefaultList(token, listB.id)
+
+    const result = await resolveList(token, undefined)
+    assert.equal(result.kind, 'found')
+    assert.equal(result.kind === 'found' && result.list.id, listB.id)
+  })
+
+  test('a set default is ignored once the token no longer grants that list', async ({ assert }) => {
+    const user = await makeUser('stale-default@example.com')
+    const listA = await List.create({ name: 'Groceries', ownerId: user.id })
+    const listB = await List.create({ name: 'Hardware', ownerId: user.id })
+    const tokenWithBoth = await User.personalAccessTokens.create(user, [
+      `list:${listA.id}:editor`,
+      `list:${listB.id}:editor`,
+    ])
+    await setDefaultList(tokenWithBoth, listB.id)
+
+    const listC = await List.create({ name: 'Pharmacy', ownerId: user.id })
+    const narrowerToken = await User.personalAccessTokens.create(user, [
+      `list:${listA.id}:editor`,
+      `list:${listC.id}:editor`,
+    ])
+
+    const result = await resolveList(narrowerToken, undefined)
+    assert.equal(result.kind, 'ambiguous')
+  })
+
+  test('an explicit ListName slot overrides a set default', async ({ assert }) => {
+    const user = await makeUser('override-default@example.com')
+    const listA = await List.create({ name: 'Groceries', ownerId: user.id })
+    const listB = await List.create({ name: 'Hardware', ownerId: user.id })
+    const token = await User.personalAccessTokens.create(user, [
+      `list:${listA.id}:editor`,
+      `list:${listB.id}:editor`,
+    ])
+    await setDefaultList(token, listB.id)
+
+    const result = await resolveList(token, 'Groceries')
+    assert.equal(result.kind, 'found')
+    assert.equal(result.kind === 'found' && result.list.id, listA.id)
+  })
+
+  test('setDefaultList replaces a previously set default rather than duplicating it', async ({
+    assert,
+  }) => {
+    const user = await makeUser('replace-default@example.com')
+    const listA = await List.create({ name: 'Groceries', ownerId: user.id })
+    const listB = await List.create({ name: 'Hardware', ownerId: user.id })
+    const token = await User.personalAccessTokens.create(user, [
+      `list:${listA.id}:editor`,
+      `list:${listB.id}:editor`,
+    ])
+
+    await setDefaultList(token, listA.id)
+    await setDefaultList(token, listB.id)
+
+    const result = await resolveList(token, undefined)
+    assert.equal(result.kind, 'found')
+    assert.equal(result.kind === 'found' && result.list.id, listB.id)
   })
 
   test('roleFor returns the granted role, or null when ungranted', async ({ assert }) => {
