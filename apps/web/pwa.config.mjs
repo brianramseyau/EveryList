@@ -22,11 +22,17 @@ export const pwaManifest = {
 export const workboxOptions = {
 	navigateFallback: '/200.html',
 	// Workbox's own default denylist only excludes URLs whose last path segment
-	// contains a dot (so it doesn't hijack requests for actual files) — `/docs`
-	// and `/openapi` don't match that, so without this they get swept into the
-	// SPA fallback and served the app shell instead of reaching AdonisJS, which
-	// renders as a client-side 404 until a hard reload bypasses the SW.
-	navigateFallbackDenylist: [/^\/docs/, /^\/openapi/],
+	// contains a dot (so it doesn't hijack requests for actual files) — `/docs`,
+	// `/openapi`, and `/api/*` (e.g. an Alexa icon URL like
+	// `/api/v1/alexa/icons/cheese`, whose last segment has no extension either)
+	// don't match that, so without this they get swept into the SPA fallback and
+	// served the app shell instead of reaching AdonisJS, which renders as a
+	// client-side 404 until a hard reload bypasses the SW. Only bites a direct
+	// browser-tab navigation to one of these URLs (`request.mode === 'navigate'`
+	// — pasting a link, following a redirect) — normal in-app `fetch()` calls
+	// aren't navigation requests and were never affected, which is why this
+	// only surfaces when manually poking a URL rather than through regular use.
+	navigateFallbackDenylist: [/^\/docs/, /^\/openapi/, /^\/api\//],
 	// `@vite-pwa/sveltekit` globs `.svelte-kit/output/` (client build + SvelteKit's
 	// own prerendered output), not the final flat `build/` directory adapter-static
 	// produces later — hence the `client/`/`prerendered/` prefixes. It auto-adds its
