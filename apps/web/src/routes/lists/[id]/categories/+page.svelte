@@ -196,6 +196,7 @@
 						<IconPicker
 							value={category.icon}
 							onselect={(name) => handleIconSelect(category, name)}
+							hint={category.name}
 						/>
 					</div>
 
