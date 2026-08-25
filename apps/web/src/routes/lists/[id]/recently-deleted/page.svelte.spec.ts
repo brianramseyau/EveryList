@@ -78,6 +78,23 @@ describe('Recently Deleted +page.svelte', () => {
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 	});
 
+	it('sets the document title to the loading fallback before the list resolves, then to the list recently-deleted title', async () => {
+		let resolveFetch!: (value: typeof list) => void;
+		vi.mocked(fetchList).mockReturnValue(
+			new Promise((resolve) => {
+				resolveFetch = resolve;
+			})
+		);
+
+		render(RecentlyDeletedPage);
+
+		expect(document.title).toBe('Recently Deleted — EveryList');
+
+		resolveFetch(list);
+
+		await expect.poll(() => document.title).toBe('Groceries recently deleted — EveryList');
+	});
+
 	it('shows a generic error message when loading fails without an ApiError', async () => {
 		vi.mocked(fetchRecentItems).mockRejectedValue(new TypeError('network down'));
 

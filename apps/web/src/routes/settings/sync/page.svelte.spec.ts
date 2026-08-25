@@ -43,6 +43,16 @@ describe('Sync status +page.svelte', () => {
 		vi.clearAllMocks();
 	});
 
+	it('sets the document title', async () => {
+		vi.mocked(queueCounts).mockResolvedValue({ pending: 0, failed: 0, conflict: 0 });
+		vi.mocked(pendingMutations).mockResolvedValue([]);
+		vi.mocked(failedMutations).mockResolvedValue([]);
+
+		render(SyncStatusPage);
+
+		await expect.poll(() => document.title).toBe('Sync Status — EveryList');
+	});
+
 	it('shows the connected empty state', async () => {
 		vi.mocked(queueCounts).mockResolvedValue({ pending: 0, failed: 0, conflict: 0 });
 		vi.mocked(pendingMutations).mockResolvedValue([]);

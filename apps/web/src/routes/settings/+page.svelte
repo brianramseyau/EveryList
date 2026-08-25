@@ -148,10 +148,6 @@
 	});
 </script>
 
-<svelte:head>
-	<title>Settings — EveryList</title>
-</svelte:head>
-
 <main
 	class="mx-auto flex max-w-lg flex-col gap-6 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
 >

@@ -75,6 +75,12 @@ describe('New Favorite +page.svelte', () => {
 		clearToken();
 	});
 
+	it('sets the document title', async () => {
+		render(NewFavoritePage);
+
+		await expect.poll(() => document.title).toBe('New Favorite — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		clearToken();
 

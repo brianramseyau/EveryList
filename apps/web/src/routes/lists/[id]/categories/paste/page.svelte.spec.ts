@@ -42,6 +42,12 @@ describe('Paste Categories +page.svelte', () => {
 		clearToken();
 	});
 
+	it('sets the document title', async () => {
+		render(PastePage);
+
+		await expect.poll(() => document.title).toBe('Paste Categories — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		clearToken();
 

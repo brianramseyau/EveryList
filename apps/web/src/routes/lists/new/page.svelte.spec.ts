@@ -24,6 +24,12 @@ describe('New List +page.svelte', () => {
 		clearToken();
 	});
 
+	it('sets the document title', async () => {
+		render(NewListPage);
+
+		await expect.poll(() => document.title).toBe('New List — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		clearToken();
 

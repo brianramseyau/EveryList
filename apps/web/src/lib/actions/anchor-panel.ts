@@ -26,6 +26,21 @@ export function anchorPanel(node: HTMLElement, anchor: HTMLElement) {
 		}
 		top = Math.max(top, MARGIN);
 
+		// `node` is `position: fixed`, normally positioned relative to the
+		// viewport — but per the CSS spec, a transformed ancestor (e.g. the
+		// pinned list-detail header's `translateZ(0)`, used for its own
+		// compositing reasons) becomes the containing block instead, which
+		// would otherwise double-offset left/top computed above as if
+		// viewport-relative. `offsetParent` correctly resolves to that
+		// ancestor when one exists (null otherwise), so subtract its own
+		// viewport offset to land at the intended position either way.
+		const containingBlock = node.offsetParent as HTMLElement | null;
+		if (containingBlock) {
+			const containingRect = containingBlock.getBoundingClientRect();
+			left -= containingRect.left;
+			top -= containingRect.top;
+		}
+
 		node.style.left = `${left}px`;
 		node.style.top = `${top}px`;
 	}

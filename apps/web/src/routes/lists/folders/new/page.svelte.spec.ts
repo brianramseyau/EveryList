@@ -22,6 +22,12 @@ describe('New Folder +page.svelte', () => {
 		clearToken();
 	});
 
+	it('sets the document title', async () => {
+		render(NewFolderPage);
+
+		await expect.poll(() => document.title).toBe('New Folder — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		clearToken();
 

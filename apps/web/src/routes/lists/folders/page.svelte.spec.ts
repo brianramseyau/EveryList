@@ -79,6 +79,12 @@ describe('Manage Folders +page.svelte', () => {
 		clearToken();
 	});
 
+	it('sets the document title', async () => {
+		render(FoldersPage);
+
+		await expect.poll(() => document.title).toBe('Manage Folders — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		clearToken();
 

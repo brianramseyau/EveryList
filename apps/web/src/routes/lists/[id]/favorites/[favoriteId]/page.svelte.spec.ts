@@ -100,6 +100,23 @@ describe('Edit Favorite +page.svelte', () => {
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 	});
 
+	it('sets the document title to the loading fallback before the favorite resolves, then to the favorite name', async () => {
+		let resolveFetch!: (value: FavoriteItemDto[]) => void;
+		vi.mocked(fetchFavorites).mockReturnValue(
+			new Promise((resolve) => {
+				resolveFetch = resolve;
+			})
+		);
+
+		render(EditFavoritePage);
+
+		expect(document.title).toBe('Edit Favorite — EveryList');
+
+		resolveFetch([bananas]);
+
+		await expect.poll(() => document.title).toBe('Bananas — EveryList');
+	});
+
 	it('prefills the form with the favorite being edited', async () => {
 		render(EditFavoritePage);
 

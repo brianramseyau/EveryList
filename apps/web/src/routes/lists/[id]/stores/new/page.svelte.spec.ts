@@ -23,6 +23,12 @@ describe('New Store +page.svelte', () => {
 		clearToken();
 	});
 
+	it('sets the document title', async () => {
+		render(NewStorePage);
+
+		await expect.poll(() => document.title).toBe('New Store — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		clearToken();
 

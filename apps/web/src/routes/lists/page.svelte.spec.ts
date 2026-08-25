@@ -89,6 +89,12 @@ describe('Lists +page.svelte', () => {
 		await resetDbForTesting();
 	});
 
+	it('sets the document title', async () => {
+		render(ListsPage);
+
+		await expect.poll(() => document.title).toBe('My Lists — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		render(ListsPage);
 

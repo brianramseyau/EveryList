@@ -77,6 +77,23 @@ describe('Favorites +page.svelte', () => {
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 	});
 
+	it('sets the document title to the loading fallback before the list resolves, then to the list favorites title', async () => {
+		let resolveFetch!: (value: typeof groceries) => void;
+		vi.mocked(fetchList).mockReturnValue(
+			new Promise((resolve) => {
+				resolveFetch = resolve;
+			})
+		);
+
+		render(FavoritesPage);
+
+		expect(document.title).toBe('Favorites — EveryList');
+
+		resolveFetch(groceries);
+
+		await expect.poll(() => document.title).toBe('Groceries favorites — EveryList');
+	});
+
 	it('shows a generic error message when loading fails without an ApiError', async () => {
 		vi.mocked(fetchFavorites).mockRejectedValue(new TypeError('network down'));
 

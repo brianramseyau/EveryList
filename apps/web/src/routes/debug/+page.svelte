@@ -60,10 +60,6 @@
 	});
 </script>
 
-<svelte:head>
-	<title>Debug — EveryList</title>
-</svelte:head>
-
 <main
 	class="mx-auto flex max-w-2xl flex-col gap-6 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
 >
