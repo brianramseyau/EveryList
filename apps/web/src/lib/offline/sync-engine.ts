@@ -86,7 +86,7 @@ export async function offlineCreate<T>(opts: OfflineCreateOptions<T>): Promise<T
 
 export interface OfflineMutateOptions<T> {
 	entityType: SyncEntityType;
-	op: 'update' | 'delete';
+	op: 'update' | 'delete' | 'restore';
 	targetId: number;
 	/** Reads the row, applies the change to Dexie immediately (merge for
 	 * update, `deletedAt` for delete), and returns the row's last-known

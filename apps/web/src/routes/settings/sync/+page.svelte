@@ -69,7 +69,8 @@
 		update: 'Update',
 		delete: 'Delete',
 		reorder: 'Reorder',
-		attach: 'Attach'
+		attach: 'Attach',
+		restore: 'Restore'
 	};
 
 	function describeMutation(mutation: QueuedMutation): string {

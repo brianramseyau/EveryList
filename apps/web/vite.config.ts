@@ -1,4 +1,6 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { resolve } from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
@@ -23,8 +25,42 @@ const chromiumLaunchOptions = existsSync(sandboxChromiumPath)
 // hot reload, and production builds never set it.
 const devSW = process.env.PWA_DEV === 'true';
 
+/**
+ * `vite preview` serves `.svelte-kit/output/{client,prerendered,server}` (see
+ * `@sveltejs/kit`'s own preview middleware) — it never reads adapter-static's final `build/`
+ * output at all, since adapters only run as a post-processing step of `vite build`, not
+ * `preview`. `@vite-pwa/sveltekit` relocates the generated `sw.js`/`workbox-*.js` into
+ * `output/client` early enough that `preview` serves those correctly (see the SvelteKitPWA
+ * call below), but `200.html` — written directly into `build/` by adapter-static's own
+ * `adapt()`, which runs later still — has no such relocation. `preview` 404s on it, Workbox's
+ * install step treats any 404'd precache entry as fatal (`bad-precaching-response`), and the
+ * SW never finishes precaching. This plugin serves `build/200.html` directly at that one path
+ * so `vite preview` — the documented way to test the real production SW/offline behavior
+ * locally (see the `preview` config below) — actually works. `enforce: 'pre'` so this
+ * middleware registers ahead of SvelteKit's own preview middleware chain and intercepts the
+ * request before it falls through to SvelteKit's SSR handler and 404s as an unmatched route.
+ */
+function serve200FallbackInPreview() {
+	return {
+		name: 'serve-200-fallback-in-preview',
+		enforce: 'pre' as const,
+		configurePreviewServer(server: {
+			middlewares: {
+				use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void;
+			};
+		}) {
+			server.middlewares.use((req, res, next) => {
+				if (req.url !== '/200.html') return next();
+				res.setHeader('content-type', 'text/html');
+				res.end(readFileSync(resolve(import.meta.dirname, 'build/200.html')));
+			});
+		}
+	};
+}
+
 export default defineConfig({
 	plugins: [
+		serve200FallbackInPreview(),
 		tailwindcss(),
 		sveltekit({
 			compilerOptions: {
@@ -142,10 +178,11 @@ export default defineConfig({
 			'/__transmit': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3334'
 		}
 	},
-	// `vite preview` serves the production `build/` (with the real sw.js) — the
-	// correct way to test offline/PWA behavior locally, since `vite dev` serves
-	// modules dynamically and its dev SW can't precache the app shell. Mirror
-	// the dev proxy so the API resolves against a running API dev server.
+	// `vite preview` serves the real production SW (plus, courtesy of
+	// `serve200FallbackInPreview` above, `200.html`) — the correct way to test
+	// offline/PWA behavior locally, since `vite dev` serves modules dynamically
+	// and its dev SW can't precache the app shell. Mirror the dev proxy so the
+	// API resolves against a running API dev server.
 	preview: {
 		port: 4173,
 		strictPort: true,

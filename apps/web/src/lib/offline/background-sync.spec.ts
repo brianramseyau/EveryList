@@ -4,7 +4,8 @@ import type { ListDto } from '@everylist/shared';
 vi.mock('$lib/api/lists', () => ({ fetchLists: vi.fn(), fetchList: vi.fn() }));
 vi.mock('$lib/api/folders', () => ({ fetchFolders: vi.fn() }));
 vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
-vi.mock('$lib/api/items', () => ({ fetchItems: vi.fn() }));
+vi.mock('$lib/api/items', () => ({ fetchItems: vi.fn(), fetchRecentItems: vi.fn() }));
+vi.mock('$lib/api/favorites', () => ({ fetchFavorites: vi.fn() }));
 vi.mock('$lib/api/stores', () => ({
 	fetchStores: vi.fn(),
 	fetchStoreCategoryOrder: vi.fn()
@@ -25,7 +26,8 @@ vi.mock('@capacitor/app', () => ({ App: { addListener: vi.fn() } }));
 const { fetchLists, fetchList } = await import('$lib/api/lists');
 const { fetchFolders } = await import('$lib/api/folders');
 const { fetchCategories } = await import('$lib/api/categories');
-const { fetchItems } = await import('$lib/api/items');
+const { fetchItems, fetchRecentItems } = await import('$lib/api/items');
+const { fetchFavorites } = await import('$lib/api/favorites');
 const { fetchStores, fetchStoreCategoryOrder } = await import('$lib/api/stores');
 const { getSelectedStoreSettings } = await import('$lib/api/selected-store');
 const { Capacitor } = await import('@capacitor/core');
@@ -60,6 +62,8 @@ describe('background-sync', () => {
 		vi.mocked(fetchList).mockResolvedValue(listDto(1));
 		vi.mocked(fetchCategories).mockResolvedValue([]);
 		vi.mocked(fetchItems).mockResolvedValue([]);
+		vi.mocked(fetchRecentItems).mockResolvedValue([]);
+		vi.mocked(fetchFavorites).mockResolvedValue([]);
 		vi.mocked(fetchStores).mockResolvedValue([]);
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([]);
 		vi.mocked(getSelectedStoreSettings).mockResolvedValue({ storeId: null, filter: 'store' });
@@ -86,6 +90,8 @@ describe('background-sync', () => {
 		expect(fetchCategories).toHaveBeenCalledWith(1);
 		expect(fetchItems).toHaveBeenCalledWith(1);
 		expect(fetchStores).toHaveBeenCalledWith(1);
+		expect(fetchFavorites).toHaveBeenCalledWith(1);
+		expect(fetchRecentItems).toHaveBeenCalledWith(1);
 	});
 
 	it('fetches the store category order only when a store is selected', async () => {

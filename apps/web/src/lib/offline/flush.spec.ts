@@ -59,6 +59,47 @@ describe('flushQueue', () => {
 		expect(await db.items.get(-1)).toBeUndefined();
 	});
 
+	it('replays a queued restore via POST and adopts the server response, with no expectedVersion guard', async () => {
+		vi.mocked(apiPost).mockResolvedValue({ id: 5, deletedAt: null, version: 2 });
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Bananas',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 0,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: '2026-08-20T00:00:00.000Z',
+			version: 1,
+			_dirty: true
+		});
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'restore',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5/restore'
+		});
+
+		await flushQueue();
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items/5/restore', {});
+		expect(await pendingMutations()).toHaveLength(0);
+		const cached = await db.items.get(5);
+		expect(cached?.deletedAt).toBeNull();
+		expect(cached?.version).toBe(2);
+		expect(cached?._dirty).toBe(false);
+	});
+
 	it('sends expectedVersion in the body when replaying a queued update', async () => {
 		vi.mocked(apiPatch).mockResolvedValue({ id: 5, version: 2 });
 		await enqueueMutation({
@@ -122,6 +163,22 @@ describe('flushQueue', () => {
 		const cached = await db.items.get(5);
 		expect(cached?.version).toBe(2);
 		expect(cached?._dirty).toBe(false);
+	});
+
+	it('does not touch the cache when a queued restore succeeds without a response body', async () => {
+		vi.mocked(apiPost).mockResolvedValue(undefined);
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'restore',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5/restore'
+		});
+
+		await flushQueue();
+
+		expect(await pendingMutations()).toHaveLength(0);
 	});
 
 	it('does not touch the cache when a queued update succeeds without a response body', async () => {

@@ -51,13 +51,61 @@ export async function fetchItems(listId: number): Promise<ItemDto[]> {
 	);
 }
 
-/** Soft-deleted items still within their recovery window, most recent first. */
+/** Soft-deleted items still within their recovery window, most recent first. Cached into the same
+ * Dexie `items` table `fetchItems` uses (soft-deleted rows already live there — `deleteItem`'s
+ * optimistic write sets `deletedAt` in place rather than moving the row elsewhere) so the
+ * background sync loop can warm this list's "recently deleted" screen the same way it warms
+ * everything else, and a later offline visit reads local data instead of erroring. */
 export function fetchRecentItems(listId: number): Promise<ItemDto[]> {
-	return apiGet(`/api/v1/lists/${listId}/items/recent`);
+	return withCacheFallback(
+		async () => {
+			const items = await apiGet<ItemDto[]>(`/api/v1/lists/${listId}/items/recent`);
+			const db = getDb();
+			if (db) {
+				const ids = items.map((item) => item.id);
+				const existing = await db.items.bulkGet(ids);
+				const toPut = items.filter((_item, index) => !existing[index]?._dirty);
+				if (toPut.length > 0) await db.items.bulkPut(toPut);
+			}
+			return items;
+		},
+		async () => {
+			const db = getDb();
+			if (!db) return undefined;
+			const rows = await db.items
+				.filter((item) => item.listId === listId && Boolean(item.deletedAt))
+				.toArray();
+			// The filter above already guarantees a truthy `deletedAt` on every row.
+			return rows
+				.sort((a, b) => (b.deletedAt as string).localeCompare(a.deletedAt as string))
+				.slice(0, 50);
+		}
+	);
 }
 
-export function restoreItem(listId: number, itemId: number): Promise<ItemDto> {
-	return apiPost(`/api/v1/lists/${listId}/items/${itemId}/restore`);
+/** Clears a soft-deleted item's `deletedAt` — the "Recently Deleted" page's restore action.
+ * Offline-queued like the other item mutations: a soft delete sets `deletedAt` in place on the
+ * same cached row (see `deleteItem`) rather than moving it elsewhere, so the row is already
+ * there to restore optimistically, replayed later via the flush loop's `restore` op (POST, not
+ * PATCH — the item's regular update endpoint only operates on non-deleted rows). */
+export async function restoreItem(listId: number, itemId: number): Promise<ItemDto | void> {
+	return offlineMutate<ItemDto>({
+		entityType: 'item',
+		op: 'restore',
+		targetId: itemId,
+		payload: {},
+		url: `/api/v1/lists/${listId}/items/${itemId}/restore`,
+		applyOptimistically: async (db) => {
+			const existing = await db.items.get(itemId);
+			if (!existing) return 0;
+			await db.items.put({ ...existing, deletedAt: null, _dirty: true });
+			return existing.version;
+		},
+		onSuccess: async (db, result) => {
+			if (result) await db.items.update(itemId, { ...result, _dirty: false });
+		},
+		request: () => apiPost<ItemDto>(`/api/v1/lists/${listId}/items/${itemId}/restore`)
+	});
 }
 
 /** Hard-deletes an already soft-deleted row — the "Recently Deleted" page's permanent-delete
