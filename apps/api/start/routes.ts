@@ -58,6 +58,11 @@ router
 
     router.get('meta', [controllers.Metas, 'show'])
 
+    // Runtime/environment diagnostics — see debug_controller.ts. Any authenticated user can
+    // reach the route; the controller itself hard-codes the user id 1 check, since this app has
+    // no admin role to gate on instead.
+    router.get('debug', [controllers.Debug, 'show']).use(middleware.auth())
+
     // Liveness probe for the frontend connectivity check (PHASE14_PLAN.md): no
     // auth, no cache — the client treats 2xx + application/json as "reachable".
     router.get('ping', ({ response }) => response.ok({ pong: true }))

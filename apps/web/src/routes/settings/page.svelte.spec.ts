@@ -137,6 +137,25 @@ describe('Settings +page.svelte', () => {
 		await expect.element(page.getByText('Server unavailable')).toBeInTheDocument();
 	});
 
+	it("links to the debug page for the instance's primary account (user id 1)", async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(fetchProfile).mockResolvedValue(profile);
+
+		render(SettingsPage);
+
+		await expect.element(page.getByRole('link', { name: 'Debug info' })).toBeInTheDocument();
+	});
+
+	it('hides the debug link for any other account', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(fetchProfile).mockResolvedValue({ ...profile, id: 2 });
+
+		render(SettingsPage);
+		await expect.element(page.getByText('Reset app')).toBeInTheDocument();
+
+		await expect.element(page.getByRole('link', { name: 'Debug info' })).not.toBeInTheDocument();
+	});
+
 	it('switches the app theme preference and reflects the choice in the radio group', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
