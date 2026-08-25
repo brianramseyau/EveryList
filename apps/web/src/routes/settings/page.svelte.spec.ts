@@ -13,6 +13,7 @@ vi.mock('$lib/api/auth', () => ({
 	updateProfile: vi.fn()
 }));
 vi.mock('$lib/pwa/reset', () => ({ resetApp: vi.fn() }));
+vi.mock('$lib/pwa/update', () => ({ checkForUpdate: vi.fn() }));
 vi.mock('@capacitor/core', () => ({
 	Capacitor: { isNativePlatform: vi.fn().mockReturnValue(false) }
 }));
@@ -27,6 +28,7 @@ vi.mock('$lib/api/server-url', () => ({
 const { goto } = await import('$app/navigation');
 const { logout, fetchProfile, updateProfile } = await import('$lib/api/auth');
 const { resetApp } = await import('$lib/pwa/reset');
+const { checkForUpdate } = await import('$lib/pwa/update');
 const { ApiError } = await import('$lib/api/client');
 const { Capacitor } = await import('@capacitor/core');
 const { App } = await import('@capacitor/app');
@@ -269,6 +271,53 @@ describe('Settings +page.svelte', () => {
 		await expect.element(page.getByRole('button', { name: 'Resetting…' })).toBeDisabled();
 
 		resolveReset();
+	});
+
+	it('shows "up to date" after a check finds no new version', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(checkForUpdate).mockResolvedValue('up-to-date');
+
+		render(SettingsPage);
+
+		const checkButton = page.getByRole('button', { name: 'Check for update' });
+		await checkButton.click();
+
+		expect(checkForUpdate).toHaveBeenCalled();
+		await expect.element(page.getByText("You're on the latest version.")).toBeInTheDocument();
+	});
+
+	it('shows an unavailable message when the update check cannot run', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(checkForUpdate).mockResolvedValue('unavailable');
+
+		render(SettingsPage);
+
+		const checkButton = page.getByRole('button', { name: 'Check for update' });
+		await checkButton.click();
+
+		expect(checkForUpdate).toHaveBeenCalled();
+		await expect
+			.element(page.getByText('Update check unavailable right now — try again in a moment.'))
+			.toBeInTheDocument();
+	});
+
+	it('leaves the "Checking…" button disabled while an update is found and applied', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		let resolveCheck!: (result: 'updating') => void;
+		vi.mocked(checkForUpdate).mockReturnValue(
+			new Promise((resolve) => {
+				resolveCheck = resolve;
+			})
+		);
+
+		render(SettingsPage);
+
+		const checkButton = page.getByRole('button', { name: 'Check for update' });
+		await checkButton.click();
+
+		await expect.element(page.getByRole('button', { name: 'Checking…' })).toBeDisabled();
+
+		resolveCheck('updating');
 	});
 
 	it('shows the signed-in account email and current name as text with an edit button', async () => {

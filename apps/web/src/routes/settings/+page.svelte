@@ -21,6 +21,7 @@
 	import { fetchProfile, logout, updateProfile } from '$lib/api/auth';
 	import { ApiError } from '$lib/api/client';
 	import { resetApp } from '$lib/pwa/reset';
+	import { checkForUpdate } from '$lib/pwa/update';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
@@ -109,6 +110,20 @@
 	async function handleResetApp() {
 		resetting = true;
 		await resetApp();
+	}
+
+	let checkingUpdate = $state(false);
+	let updateStatus = $state<'idle' | 'up-to-date' | 'unavailable'>('idle');
+
+	async function handleCheckForUpdate() {
+		checkingUpdate = true;
+		updateStatus = 'idle';
+		const result = await checkForUpdate();
+		// 'updating' means a new service worker was found — it activates and reloads the page on
+		// its own (see +layout.svelte's onNeedReload), so there's nothing further to show here.
+		if (result === 'updating') return;
+		checkingUpdate = false;
+		updateStatus = result;
 	}
 
 	/** Changing servers invalidates the current session (a token from one server means nothing to
@@ -400,6 +415,28 @@
 			>
 				Troubleshooting
 			</h2>
+			<div
+				class="flex items-center justify-between gap-4 border-b border-gray-200 px-4 py-3 dark:border-gray-700"
+			>
+				<span class="text-sm text-gray-600 dark:text-gray-300">
+					{#if updateStatus === 'up-to-date'}
+						You're on the latest version.
+					{:else if updateStatus === 'unavailable'}
+						Update check unavailable right now — try again in a moment.
+					{:else}
+						Check for a newer version of the app right now, instead of waiting for it to update on
+						its own.
+					{/if}
+				</span>
+				<button
+					type="button"
+					onclick={handleCheckForUpdate}
+					disabled={checkingUpdate}
+					class="shrink-0 text-sm text-gray-600 hover:underline disabled:opacity-50 dark:text-gray-400"
+				>
+					{checkingUpdate ? 'Checking…' : 'Check for update'}
+				</button>
+			</div>
 			<div class="flex items-center justify-between gap-4 px-4 py-3">
 				<span class="text-sm text-gray-600 dark:text-gray-300">
 					If the app looks broken or stuck after an update, this clears cached app data and reloads
