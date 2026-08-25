@@ -97,7 +97,9 @@ export function swipeReveal(node: HTMLElement, params: SwipeRevealParams) {
 			event.type === 'pointerup' && dragging && Math.abs(dx) >= REVEAL_PX * COMMIT_RATIO;
 		const committedRight = dx > 0;
 		const isTap =
-			event.type === 'pointerup' && !directionLocked && Date.now() - startTime < TAP_MAX_DURATION_MS;
+			event.type === 'pointerup' &&
+			!directionLocked &&
+			Date.now() - startTime < TAP_MAX_DURATION_MS;
 		reset();
 		if (shouldCommit) {
 			if (committedRight) current.onCommitRight();
