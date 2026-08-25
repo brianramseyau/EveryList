@@ -1791,6 +1791,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
 		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
 
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
@@ -1822,6 +1823,7 @@ describe('List detail +page.svelte', () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
 		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
 
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
