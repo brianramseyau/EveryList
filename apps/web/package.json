@@ -29,6 +29,7 @@
 		"@capacitor/browser": "^8.0.4",
 		"@capacitor/core": "^8.5.0",
 		"@capacitor/ios": "^8.5.0",
+		"@capacitor/screen-orientation": "^8.0.1",
 		"@capawesome/capacitor-badge": "^8.0.2",
 		"@everylist/shared": "workspace:*",
 		"@fontsource-variable/public-sans": "^5.3.0",

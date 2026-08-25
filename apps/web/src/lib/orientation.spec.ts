@@ -4,7 +4,8 @@ import {
 	canLockOrientation,
 	getOrientationPreference,
 	initOrientation,
-	setOrientationPreference
+	setOrientationPreference,
+	supportsScreenOrientationLock
 } from './orientation';
 
 // Runs in the "server" (node) project, which has no `window` — exercises the
@@ -17,6 +18,10 @@ describe('orientation (no window)', () => {
 
 	it('canLockOrientation is false', () => {
 		expect(canLockOrientation()).toBe(false);
+	});
+
+	it('supportsScreenOrientationLock is false', () => {
+		expect(supportsScreenOrientationLock()).toBe(false);
 	});
 
 	it('applyOrientation, setOrientationPreference, and initOrientation are no-ops without throwing', async () => {

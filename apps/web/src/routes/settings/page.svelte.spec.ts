@@ -20,6 +20,9 @@ vi.mock('@capacitor/core', () => ({
 vi.mock('@capacitor/app', () => ({
 	App: { getInfo: vi.fn().mockRejectedValue(new Error('web')) }
 }));
+vi.mock('@capacitor/screen-orientation', () => ({
+	ScreenOrientation: { lock: vi.fn(), unlock: vi.fn() }
+}));
 vi.mock('$lib/api/server-url', () => ({
 	getServerUrl: vi.fn().mockReturnValue(''),
 	clearServerUrl: vi.fn()
@@ -251,6 +254,22 @@ describe('Settings +page.svelte', () => {
 			.not.toBeInTheDocument();
 
 		matchMediaSpy.mockRestore();
+	});
+
+	it('shows a not-supported note when the Screen Orientation lock API is absent (e.g. Safari)', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.stubGlobal('screen', { orientation: { type: 'landscape-primary', angle: 0 } });
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Screen Orientation', { exact: true })).toBeInTheDocument();
+		await expect
+			.element(
+				page.getByText("Screen orientation lock isn't supported in this browser", {
+					exact: false
+				})
+			)
+			.toBeInTheDocument();
 	});
 
 	it('clears cached app data via the Reset app button', async () => {

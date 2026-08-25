@@ -16,6 +16,7 @@
 		canLockOrientation,
 		getOrientationPreference,
 		setOrientationPreference,
+		supportsScreenOrientationLock,
 		type OrientationPreference
 	} from '$lib/orientation';
 	import { fetchProfile, logout, updateProfile } from '$lib/api/auth';
@@ -39,6 +40,7 @@
 	let accentPreference = $state<AccentPreference>('slate');
 	let orientationPreference = $state<OrientationPreference>('automatic');
 	let canLockOrientationNow = $state(false);
+	let supportsOrientationLock = $state(false);
 	let isNative = $state(false);
 	let serverUrl = $state('');
 	let nativeInfo = $state<{ version: string; build: string } | null>(null);
@@ -140,6 +142,7 @@
 		accentPreference = getAccentPreference();
 		orientationPreference = getOrientationPreference();
 		canLockOrientationNow = canLockOrientation();
+		supportsOrientationLock = supportsScreenOrientationLock();
 		isNative = Capacitor.isNativePlatform();
 		serverUrl = getServerUrl();
 		if (isNative) {
@@ -304,8 +307,12 @@
 		</div>
 		{#if !canLockOrientationNow}
 			<p class="px-4 pb-3 text-xs text-gray-500 dark:text-gray-400">
-				Install EveryList to your home screen to lock orientation — it only takes effect once
-				running as an installed app.
+				{#if supportsOrientationLock}
+					Install EveryList to your home screen to lock orientation — it only takes effect once
+					running as an installed app.
+				{:else}
+					Screen orientation lock isn't supported in this browser — it only works in the native app.
+				{/if}
 			</p>
 		{/if}
 	</section>

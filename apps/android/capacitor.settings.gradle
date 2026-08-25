@@ -5,5 +5,11 @@ project(':capacitor-android').projectDir = new File('../../node_modules/.pnpm/@c
 include ':capacitor-app'
 project(':capacitor-app').projectDir = new File('../../node_modules/.pnpm/@capacitor+app@8.1.1_@capacitor+core@8.5.0/node_modules/@capacitor/app/android')
 
+include ':capacitor-browser'
+project(':capacitor-browser').projectDir = new File('../../node_modules/.pnpm/@capacitor+browser@8.0.4_@capacitor+core@8.5.0/node_modules/@capacitor/browser/android')
+
+include ':capacitor-screen-orientation'
+project(':capacitor-screen-orientation').projectDir = new File('../../node_modules/.pnpm/@capacitor+screen-orientation@8.0.1_@capacitor+core@8.5.0/node_modules/@capacitor/screen-orientation/android')
+
 include ':capawesome-capacitor-badge'
 project(':capawesome-capacitor-badge').projectDir = new File('../../node_modules/.pnpm/@capawesome+capacitor-badge@8.0.2_@capacitor+core@8.5.0/node_modules/@capawesome/capacitor-badge/android')
