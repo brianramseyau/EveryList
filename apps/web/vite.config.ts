@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { resolve } from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
@@ -43,14 +44,16 @@ function serve200FallbackInPreview() {
 	return {
 		name: 'serve-200-fallback-in-preview',
 		enforce: 'pre' as const,
-		configurePreviewServer(server: { middlewares: { use: (fn: Function) => void } }) {
-			server.middlewares.use(
-				(req: { url?: string }, res: { setHeader: Function; end: Function }, next: () => void) => {
-					if (req.url !== '/200.html') return next();
-					res.setHeader('content-type', 'text/html');
-					res.end(readFileSync(resolve(import.meta.dirname, 'build/200.html')));
-				}
-			);
+		configurePreviewServer(server: {
+			middlewares: {
+				use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void;
+			};
+		}) {
+			server.middlewares.use((req, res, next) => {
+				if (req.url !== '/200.html') return next();
+				res.setHeader('content-type', 'text/html');
+				res.end(readFileSync(resolve(import.meta.dirname, 'build/200.html')));
+			});
 		}
 	};
 }

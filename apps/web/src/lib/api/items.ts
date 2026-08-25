@@ -75,9 +75,7 @@ export function fetchRecentItems(listId: number): Promise<ItemDto[]> {
 			const rows = await db.items
 				.filter((item) => item.listId === listId && Boolean(item.deletedAt))
 				.toArray();
-			return rows
-				.sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''))
-				.slice(0, 50);
+			return rows.sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? '')).slice(0, 50);
 		}
 	);
 }
