@@ -104,6 +104,23 @@ describe('Categories +page.svelte', () => {
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 	});
 
+	it('sets the document title to the loading fallback before the list resolves, then to the list categories title', async () => {
+		let resolveFetch!: (value: typeof list) => void;
+		vi.mocked(fetchList).mockReturnValue(
+			new Promise((resolve) => {
+				resolveFetch = resolve;
+			})
+		);
+
+		render(CategoriesPage);
+
+		expect(document.title).toBe('Categories — EveryList');
+
+		resolveFetch(list);
+
+		await expect.poll(() => document.title).toBe('Groceries categories — EveryList');
+	});
+
 	it('shows a generic error message when loading fails without an ApiError', async () => {
 		vi.mocked(fetchList).mockRejectedValue(new TypeError('network down'));
 

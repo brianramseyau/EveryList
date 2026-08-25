@@ -47,6 +47,12 @@ describe('Debug +page.svelte', () => {
 		clearToken();
 	});
 
+	it('sets the document title', async () => {
+		render(DebugPage);
+
+		await expect.poll(() => document.title).toBe('Debug — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		clearToken();
 

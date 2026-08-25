@@ -72,6 +72,12 @@ describe('Import Categories +page.svelte', () => {
 		clearToken();
 	});
 
+	it('sets the document title', async () => {
+		render(ImportPage);
+
+		await expect.poll(() => document.title).toBe('Import Categories — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		clearToken();
 

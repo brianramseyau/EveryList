@@ -70,6 +70,23 @@ describe('Stores +page.svelte', () => {
 		await resetDbForTesting();
 	});
 
+	it('sets the document title to the loading fallback before the list resolves, then to the list stores title', async () => {
+		let resolveFetch!: (value: typeof list) => void;
+		vi.mocked(fetchList).mockReturnValue(
+			new Promise((resolve) => {
+				resolveFetch = resolve;
+			})
+		);
+
+		render(StoresPage);
+
+		expect(document.title).toBe('Stores — EveryList');
+
+		resolveFetch(list);
+
+		await expect.poll(() => document.title).toBe('Groceries stores — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		clearToken();
 

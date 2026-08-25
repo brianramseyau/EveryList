@@ -46,6 +46,12 @@ describe('Paste Items +page.svelte', () => {
 		clearToken();
 	});
 
+	it('sets the document title', async () => {
+		render(ImportPage);
+
+		await expect.poll(() => document.title).toBe('Paste Items — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		clearToken();
 

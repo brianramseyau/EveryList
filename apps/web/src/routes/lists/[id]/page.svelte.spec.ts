@@ -180,6 +180,46 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Failed to load list.')).toBeInTheDocument();
 	});
 
+	it('sets the document title to the loading fallback before the list resolves, then to the list name', async () => {
+		let resolveFetch!: (value: typeof list) => void;
+		vi.mocked(fetchList).mockReturnValue(
+			new Promise((resolve) => {
+				resolveFetch = resolve;
+			})
+		);
+
+		render(ListDetailPage);
+
+		expect(document.title).toBe('List — EveryList');
+
+		resolveFetch(list);
+
+		await expect.poll(() => document.title).toBe('Groceries — EveryList');
+	});
+
+	it("pins each category's sticky sub-heading at the fixed header's measured height, and pads the item list to match", async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 11 })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		const header = document.querySelector('div.fixed');
+		await expect.poll(() => header?.clientHeight ?? 0).toBeGreaterThan(0);
+		const headerHeight = header!.clientHeight;
+
+		const heading = [...document.querySelectorAll('h2')].find(
+			(h) => h.textContent?.trim() === 'Dairy'
+		)!;
+		expect(heading.style.top).toBe(`${headerHeight}px`);
+
+		const content = header!.nextElementSibling as HTMLElement;
+		expect(content.style.paddingTop).toBe(`${headerHeight}px`);
+	});
+
 	it('shows the ApiError message when loading fails', async () => {
 		vi.mocked(fetchList).mockRejectedValue(new ApiError(500, 'List not found'));
 

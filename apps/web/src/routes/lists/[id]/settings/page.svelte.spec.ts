@@ -60,6 +60,23 @@ describe('List settings +page.svelte', () => {
 		expect(goto).toHaveBeenCalledWith('/login');
 	});
 
+	it('sets the document title to the loading fallback before the list resolves, then to the list name', async () => {
+		let resolveFetch!: (value: typeof list) => void;
+		vi.mocked(fetchList).mockReturnValue(
+			new Promise((resolve) => {
+				resolveFetch = resolve;
+			})
+		);
+
+		render(SettingsPage);
+
+		expect(document.title).toBe('List settings — EveryList');
+
+		resolveFetch(list);
+
+		await expect.poll(() => document.title).toBe('Groceries — Settings — EveryList');
+	});
+
 	it('shows a generic error message when loading fails without an ApiError', async () => {
 		vi.mocked(fetchList).mockRejectedValue(new TypeError('network down'));
 

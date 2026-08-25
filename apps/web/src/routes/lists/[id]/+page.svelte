@@ -71,9 +71,12 @@
 	let copied = $state(false);
 	let copyTimeout: ReturnType<typeof setTimeout> | undefined;
 
-	// Measured height of the pinned header (title bar + item entry field), so
-	// category headings can stick just beneath it instead of overlapping it.
-	let stickyHeaderHeight = $state(0);
+	// Measured height of the pinned header (title bar + item entry field), fed
+	// by PageHeader's `fixed` mode — used both to stick category headings just
+	// beneath it and to pad the scrollable content below it. Seeded to 144
+	// (the old static `pt-36`) so first paint looks right before PageHeader's
+	// own clientHeight measurement corrects it.
+	let stickyHeaderHeight = $state(144);
 
 	// Briefly highlights a row when adding matched an existing item instead of
 	// creating a new one (PHASE10_PLAN.md #0.2) — both the local pre-check and
@@ -542,214 +545,212 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{list ? `${list.name} — EveryList` : 'List — EveryList'}</title>
-</svelte:head>
-
 <main class="mx-auto flex max-w-lg flex-col gap-4 px-8 pb-8">
-	<div
-		class="fixed top-0 z-20 flex flex-col gap-4 bg-paper pt-[max(env(safe-area-inset-top),2rem)]"
-		style="touch-action: pan-x pan-y; transform: translateZ(0); will-change: transform;"
-		bind:clientHeight={stickyHeaderHeight}
+	<PageHeader
+		title={list?.name}
+		htmlTitle={list ? list.name : 'List'}
+		backHref={resolve('/lists')}
+		backLabel="My Lists"
+		fixed
+		bind:height={stickyHeaderHeight}
 	>
-		<PageHeader title={list?.name} backHref={resolve('/lists')} backLabel="My Lists">
-			{#snippet actions()}
-				<a
-					href={resolve('/lists/[id]/stores', { id: String(listId) })}
-					aria-label="Stores"
-					class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-				>
-					<span style:color={selectedStore?.color}>
-						<Icon name="store" class="h-5 w-5" />
-					</span>
-				</a>
-				<PopoutMenu
-					label="List menu"
-					iconName="dotsVertical"
-					onOpenChange={(isOpen) => {
-						if (!isOpen) resetShareState();
-					}}
-				>
-					{#snippet children(close)}
-						{#if shareView}
-							<div
-								class="mb-1 flex items-center gap-1 border-b border-gray-200 pb-1.5 dark:border-gray-700"
-							>
-								<button
-									type="button"
-									aria-label="Back to list menu"
-									onclick={() => (shareView = false)}
-									class="flex h-6 w-6 items-center justify-center rounded text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-								>
-									<Icon name="chevronLeft" class="h-4 w-4" />
-								</button>
-								<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">Share</span>
-							</div>
+		{#snippet actions()}
+			<a
+				href={resolve('/lists/[id]/stores', { id: String(listId) })}
+				aria-label="Stores"
+				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+			>
+				<span style:color={selectedStore?.color}>
+					<Icon name="store" class="h-5 w-5" />
+				</span>
+			</a>
+			<PopoutMenu
+				label="List menu"
+				iconName="dotsVertical"
+				onOpenChange={(isOpen) => {
+					if (!isOpen) resetShareState();
+				}}
+			>
+				{#snippet children(close)}
+					{#if shareView}
+						<div
+							class="mb-1 flex items-center gap-1 border-b border-gray-200 pb-1.5 dark:border-gray-700"
+						>
 							<button
 								type="button"
-								onclick={() => printList(close)}
-								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+								aria-label="Back to list menu"
+								onclick={() => (shareView = false)}
+								class="flex h-6 w-6 items-center justify-center rounded text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
 							>
-								Print list
+								<Icon name="chevronLeft" class="h-4 w-4" />
 							</button>
-							<button
-								type="button"
-								onclick={copyListToClipboard}
-								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-							>
-								{copied ? 'Copied!' : 'Copy to Clipboard'}
-							</button>
-							{#if exportingEmail}
-								<form class="flex flex-col gap-2 px-2 py-1.5" onsubmit={sendEmailExport}>
-									<Input
-										type="email"
-										placeholder="you@example.com"
-										bind:value={exportEmail}
-										required
-									/>
-									<div class="flex items-center gap-2">
-										<Button type="submit" size="sm" disabled={!exportEmail.trim()}>Send</Button>
-										<Button
-											type="button"
-											size="sm"
-											color="alternative"
-											onclick={() => (exportingEmail = false)}
-										>
-											Cancel
-										</Button>
-									</div>
-									{#if exportStatus === 'sent'}
-										<p class="text-xs text-green-600 dark:text-green-400">Export sent.</p>
-									{:else if exportStatus === 'error'}
-										<p class="text-xs text-red-600 dark:text-red-400">{exportErrorMessage}</p>
-									{/if}
-								</form>
-							{:else}
-								<button
-									type="button"
-									onclick={() => (exportingEmail = true)}
-									class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-								>
-									Email export…
-								</button>
-							{/if}
+							<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">Share</span>
+						</div>
+						<button
+							type="button"
+							onclick={() => printList(close)}
+							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+						>
+							Print list
+						</button>
+						<button
+							type="button"
+							onclick={copyListToClipboard}
+							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+						>
+							{copied ? 'Copied!' : 'Copy to Clipboard'}
+						</button>
+						{#if exportingEmail}
+							<form class="flex flex-col gap-2 px-2 py-1.5" onsubmit={sendEmailExport}>
+								<Input
+									type="email"
+									placeholder="you@example.com"
+									bind:value={exportEmail}
+									required
+								/>
+								<div class="flex items-center gap-2">
+									<Button type="submit" size="sm" disabled={!exportEmail.trim()}>Send</Button>
+									<Button
+										type="button"
+										size="sm"
+										color="alternative"
+										onclick={() => (exportingEmail = false)}
+									>
+										Cancel
+									</Button>
+								</div>
+								{#if exportStatus === 'sent'}
+									<p class="text-xs text-green-600 dark:text-green-400">Export sent.</p>
+								{:else if exportStatus === 'error'}
+									<p class="text-xs text-red-600 dark:text-red-400">{exportErrorMessage}</p>
+								{/if}
+							</form>
 						{:else}
 							<button
 								type="button"
-								disabled={checkedItems.length === 0}
-								onclick={() => {
-									confirmAction = 'clearChecked';
-									close();
-								}}
-								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
+								onclick={() => (exportingEmail = true)}
+								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
 							>
-								Clear Checked Off Items
+								Email export…
 							</button>
-							<button
-								type="button"
-								disabled={checkedItems.length === 0}
-								onclick={() => {
-									confirmAction = 'uncheckAll';
-									close();
-								}}
-								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
-							>
-								Uncheck All Items
-							</button>
-							<button
-								type="button"
-								disabled={items.length === 0}
-								onclick={() => {
-									confirmAction = 'clearAll';
-									close();
-								}}
-								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
-							>
-								Clear ALL List Items
-							</button>
-							<button
-								type="button"
-								onclick={() => (shareView = true)}
-								class="mt-1 block w-full rounded border-t border-gray-200 px-2 pt-2 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:border-gray-700 dark:text-primary-400 dark:hover:bg-gray-700"
-							>
-								Share
-							</button>
-							<a
-								href={resolve('/lists/[id]/settings', { id: String(listId) })}
-								class="block rounded px-2 py-1.5 text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-							>
-								List Settings
-							</a>
 						{/if}
-					{/snippet}
-				</PopoutMenu>
-			{/snippet}
-		</PageHeader>
-
-		{#snippet pasteIcon()}
-			<a
-				href={resolve('/lists/[id]/import', { id: String(listId) })}
-				aria-label="Paste in a list"
-				class="pointer-events-auto flex h-6 w-6 items-center justify-center transition-opacity {itemInputFocused
-					? 'opacity-100'
-					: 'pointer-events-none opacity-0'}"
-			>
-				<Icon name="clipboardText" class="h-5 w-5" />
-			</a>
+					{:else}
+						<button
+							type="button"
+							disabled={checkedItems.length === 0}
+							onclick={() => {
+								confirmAction = 'clearChecked';
+								close();
+							}}
+							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
+						>
+							Clear Checked Off Items
+						</button>
+						<button
+							type="button"
+							disabled={checkedItems.length === 0}
+							onclick={() => {
+								confirmAction = 'uncheckAll';
+								close();
+							}}
+							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
+						>
+							Uncheck All Items
+						</button>
+						<button
+							type="button"
+							disabled={items.length === 0}
+							onclick={() => {
+								confirmAction = 'clearAll';
+								close();
+							}}
+							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
+						>
+							Clear ALL List Items
+						</button>
+						<button
+							type="button"
+							onclick={() => (shareView = true)}
+							class="mt-1 block w-full rounded border-t border-gray-200 px-2 pt-2 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:border-gray-700 dark:text-primary-400 dark:hover:bg-gray-700"
+						>
+							Share
+						</button>
+						<a
+							href={resolve('/lists/[id]/settings', { id: String(listId) })}
+							class="block rounded px-2 py-1.5 text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+						>
+							List Settings
+						</a>
+					{/if}
+				{/snippet}
+			</PopoutMenu>
 		{/snippet}
-
-		{#if list && !(list.passcodeHash && !unlocked)}
-			<form class="flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
-				<div
-					class="flex shrink-0 items-center gap-2 overflow-hidden transition-all duration-200 {itemInputFocused
-						? 'pointer-events-none max-w-0 opacity-0'
-						: 'max-w-28 opacity-100'}"
+		{#snippet extra()}
+			{#snippet pasteIcon()}
+				<a
+					href={resolve('/lists/[id]/import', { id: String(listId) })}
+					aria-label="Paste in a list"
+					class="pointer-events-auto flex h-6 w-6 items-center justify-center transition-opacity {itemInputFocused
+						? 'opacity-100'
+						: 'pointer-events-none opacity-0'}"
 				>
-					<a
-						href={resolve('/lists/[id]/favorites', { id: String(listId) })}
-						aria-label="Favorites"
-						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
-					>
-						<Icon name="heart" class="h-5 w-5" />
-					</a>
-					<a
-						href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
-						aria-label="Recently deleted"
-						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
-					>
-						<Icon name="history" class="h-5 w-5" />
-					</a>
-				</div>
-				<ItemAutocomplete
-					{listId}
-					bind:value={newItemName}
-					existingNames={items.map((item) => item.name)}
-					onselect={(name) => void addItem(name)}
-					onfocuschange={(focused) => (itemInputFocused = focused)}
-					right={pasteIcon}
-				/>
-				<div
-					class="flex shrink-0 items-center overflow-hidden transition-all duration-200 {itemInputFocused
-						? 'max-w-0 opacity-0'
-						: 'max-w-11 opacity-100'}"
-				>
-					<button
-						type="button"
-						aria-label={showChecked ? 'Hide checked items' : 'Show checked items'}
-						onclick={() => {
-							showChecked = !showChecked;
-							setShowChecked(listId, showChecked);
-						}}
-						class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
-					>
-						<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
-					</button>
-				</div>
-			</form>
-		{/if}
-	</div>
+					<Icon name="clipboardText" class="h-5 w-5" />
+				</a>
+			{/snippet}
 
-	<div class="pt-36">
+			{#if list && !(list.passcodeHash && !unlocked)}
+				<form class="flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
+					<div
+						class="flex shrink-0 items-center gap-2 overflow-hidden transition-all duration-200 {itemInputFocused
+							? 'pointer-events-none max-w-0 opacity-0'
+							: 'max-w-28 opacity-100'}"
+					>
+						<a
+							href={resolve('/lists/[id]/favorites', { id: String(listId) })}
+							aria-label="Favorites"
+							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+						>
+							<Icon name="heart" class="h-5 w-5" />
+						</a>
+						<a
+							href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
+							aria-label="Recently deleted"
+							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+						>
+							<Icon name="history" class="h-5 w-5" />
+						</a>
+					</div>
+					<ItemAutocomplete
+						{listId}
+						bind:value={newItemName}
+						existingNames={items.map((item) => item.name)}
+						onselect={(name) => void addItem(name)}
+						onfocuschange={(focused) => (itemInputFocused = focused)}
+						right={pasteIcon}
+					/>
+					<div
+						class="flex shrink-0 items-center overflow-hidden transition-all duration-200 {itemInputFocused
+							? 'max-w-0 opacity-0'
+							: 'max-w-11 opacity-100'}"
+					>
+						<button
+							type="button"
+							aria-label={showChecked ? 'Hide checked items' : 'Show checked items'}
+							onclick={() => {
+								showChecked = !showChecked;
+								setShowChecked(listId, showChecked);
+							}}
+							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+						>
+							<Icon name={showChecked ? 'eyeOutline' : 'eyeOffOutline'} class="h-5 w-5" />
+						</button>
+					</div>
+				</form>
+			{/if}
+		{/snippet}
+	</PageHeader>
+
+	<div style:padding-top={`${stickyHeaderHeight}px`}>
 		{#if loading}
 			<p class="text-gray-600 dark:text-gray-400">Loading…</p>
 		{:else if list}

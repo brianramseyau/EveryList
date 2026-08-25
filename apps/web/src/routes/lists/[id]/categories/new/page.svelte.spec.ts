@@ -23,6 +23,12 @@ describe('New Category +page.svelte', () => {
 		clearToken();
 	});
 
+	it('sets the document title', async () => {
+		render(NewCategoryPage);
+
+		await expect.poll(() => document.title).toBe('New Category — EveryList');
+	});
+
 	it('redirects to /login when there is no token', async () => {
 		clearToken();
 

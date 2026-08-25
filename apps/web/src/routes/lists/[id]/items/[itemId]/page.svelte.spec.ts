@@ -147,6 +147,23 @@ describe('Item detail +page.svelte', () => {
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 	});
 
+	it('sets the document title to the loading fallback before the item resolves, then to the item name', async () => {
+		let resolveFetch!: (value: ItemDto[]) => void;
+		vi.mocked(fetchItems).mockReturnValue(
+			new Promise((resolve) => {
+				resolveFetch = resolve;
+			})
+		);
+
+		render(ItemDetailPage);
+
+		expect(document.title).toBe('Item — EveryList');
+
+		resolveFetch([makeItem({ id: 100, name: 'Bananas' })]);
+
+		await expect.poll(() => document.title).toBe('Bananas — EveryList');
+	});
+
 	it('reads the item from the offline cache when present, without a network fetch', async () => {
 		const db = getDb()!;
 		await db.items.put(makeItem({ id: 100, name: 'Bananas', quantity: '2' }));

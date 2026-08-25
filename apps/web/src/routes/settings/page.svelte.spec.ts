@@ -53,6 +53,12 @@ describe('Settings +page.svelte', () => {
 		resetConnectivityForTesting();
 	});
 
+	it('sets the document title', async () => {
+		render(SettingsPage);
+
+		await expect.poll(() => document.title).toBe('Settings — EveryList');
+	});
+
 	it('logs out and navigates to /login', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(logout).mockResolvedValue(undefined);

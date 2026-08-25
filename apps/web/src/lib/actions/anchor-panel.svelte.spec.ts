@@ -86,6 +86,35 @@ describe('anchorPanel', () => {
 		expect(panel.style.top).toBe('146px'); // 350 - 200 - 4
 	});
 
+	it('corrects for a transformed ancestor becoming the fixed-position containing block', () => {
+		// A `transform` on an ancestor (e.g. the pinned list-detail header's
+		// `translateZ(0)`, used for its own compositing reasons — see
+		// lists/[id]/+page.svelte) makes that ancestor the containing block
+		// for `position: fixed` descendants instead of the viewport, per the
+		// CSS spec — so naively using viewport-relative left/top would
+		// double-offset the panel. `offsetParent` correctly resolves to that
+		// ancestor here since this spec runs in a real browser, not jsdom.
+		stubViewport(1000, 1000);
+		const transformedAncestor = document.createElement('div');
+		transformedAncestor.style.transform = 'translateZ(0)';
+		const anchor = document.createElement('button');
+		const panel = document.createElement('div');
+		panel.style.position = 'fixed';
+		transformedAncestor.append(anchor, panel);
+		document.body.append(transformedAncestor);
+
+		stubRect(transformedAncestor, { top: 50, left: 300 });
+		stubRect(anchor, { top: 100, bottom: 130, left: 200, right: 400 });
+		stubRect(panel, { width: 288, height: 200 });
+
+		anchorPanel(panel, anchor);
+
+		// Viewport-relative target is left=112/top=134 (as in the first
+		// test), corrected by the ancestor's own (300, 50) offset.
+		expect(panel.style.left).toBe(`${112 - 300}px`);
+		expect(panel.style.top).toBe(`${134 - 50}px`);
+	});
+
 	it('repositions on window resize and stops once destroyed', () => {
 		stubViewport(1000, 1000);
 		const anchor = document.createElement('button');
