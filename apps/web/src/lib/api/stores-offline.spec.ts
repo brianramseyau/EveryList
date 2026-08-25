@@ -15,10 +15,16 @@ vi.mock('./client', () => ({
 	}
 }));
 
-const { apiGet, apiPost, apiPatch, ApiError } = await import('./client');
+const { apiGet, apiPost, apiPatch, apiDelete, ApiError } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { attachStore, updateStore, fetchStores, fetchStoreCategoryOrder, reorderStoreCategories } =
-	await import('./stores');
+const {
+	attachStore,
+	updateStore,
+	fetchStores,
+	fetchStoreCategoryOrder,
+	reorderStoreCategories,
+	resetStoreCategoryOrder
+} = await import('./stores');
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -306,6 +312,43 @@ describe('reorderStoreCategories (Dexie available)', () => {
 		const db = getDb()!;
 		expect((await db.storeCategoryOrders.get([20, 5]))?._dirty).toBe(true);
 		expect(apiPatch).not.toHaveBeenCalled();
+		setOnline(true);
+	});
+});
+
+describe('resetStoreCategoryOrder (Dexie available)', () => {
+	it('clears every cached row for the store immediately and dequeues on success', async () => {
+		const db = getDb()!;
+		await db.storeCategoryOrders.bulkPut([
+			{ id: 1, storeId: 20, categoryId: 5, sortOrder: 0, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 20, categoryId: 6, sortOrder: 1, deletedAt: null, version: 1 },
+			{ id: 3, storeId: 21, categoryId: 5, sortOrder: 0, deletedAt: null, version: 1 }
+		]);
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+
+		await resetStoreCategoryOrder(20);
+
+		expect(apiDelete).toHaveBeenCalledWith('/api/v1/stores/20/categories');
+		expect(await db.storeCategoryOrders.where('storeId').equals(20).count()).toBe(0);
+		expect(await db.storeCategoryOrders.get([21, 5])).toBeDefined();
+	});
+
+	it('clears cached rows and queues while offline', async () => {
+		setOnline(false);
+		const db = getDb()!;
+		await db.storeCategoryOrders.put({
+			id: 1,
+			storeId: 20,
+			categoryId: 5,
+			sortOrder: 0,
+			deletedAt: null,
+			version: 1
+		});
+
+		await resetStoreCategoryOrder(20);
+
+		expect(await db.storeCategoryOrders.where('storeId').equals(20).count()).toBe(0);
+		expect(apiDelete).not.toHaveBeenCalled();
 		setOnline(true);
 	});
 });

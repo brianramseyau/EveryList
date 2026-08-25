@@ -73,6 +73,17 @@ test.group('Stores', (group) => {
     assert.equal(bodyData<StoreCategoryOrderDto[]>(reorderAgain)[0]!.sortOrder, 9)
     assert.equal(bodyData<StoreCategoryOrderDto[]>(reorderAgain)[0]!.version, 2)
 
+    const reset = await client
+      .delete(`/api/v1/stores/${storeId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+    reset.assertStatus(204)
+
+    const afterReset = await client
+      .get(`/api/v1/stores/${storeId}/categories`)
+      .header('Authorization', `Bearer ${token}`)
+    afterReset.assertStatus(200)
+    assert.lengthOf(bodyData<StoreCategoryOrderDto[]>(afterReset), 0)
+
     const rename = await client
       .patch(`/api/v1/stores/${storeId}`)
       .header('Authorization', `Bearer ${token}`)
@@ -237,6 +248,11 @@ test.group('Stores', (group) => {
       .header('Authorization', `Bearer ${viewer.token}`)
       .json({ categories: [] })
     reorder.assertStatus(403)
+
+    const resetCategories = await client
+      .delete(`/api/v1/stores/${storeId}/categories`)
+      .header('Authorization', `Bearer ${viewer.token}`)
+    resetCategories.assertStatus(403)
 
     const detach = await client
       .delete(`/api/v1/lists/${listId}/stores/${storeId}`)

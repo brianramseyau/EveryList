@@ -7,7 +7,12 @@
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
-	import { fetchStoreCategoryOrder, fetchStores, reorderStoreCategories } from '$lib/api/stores';
+	import {
+		fetchStoreCategoryOrder,
+		fetchStores,
+		reorderStoreCategories,
+		resetStoreCategoryOrder
+	} from '$lib/api/stores';
 	import { ApiError } from '$lib/api/client';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import Icon from '$lib/components/Icon.svelte';
@@ -22,6 +27,8 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let reordering = $state(false);
+	let resetting = $state(false);
+	let hasCustomOrder = $state(false);
 
 	async function loadAll() {
 		loading = true;
@@ -41,6 +48,7 @@
 				const bOrder = overrides.get(b.id) ?? b.sortOrder;
 				return aOrder - bOrder;
 			});
+			hasCustomOrder = storeOrder.length > 0;
 			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to load store category order.';
@@ -80,6 +88,7 @@
 				: withoutDragged.length;
 		withoutDragged.splice(insertAt, 0, dragged);
 		orderedCategories = withoutDragged;
+		hasCustomOrder = true;
 
 		reordering = true;
 		try {
@@ -94,6 +103,21 @@
 			reordering = false;
 		}
 	}
+
+	// Clears every StoreCategoryOrder row for this store, so categories fall back to their
+	// default (list) order — the "start over" counterpart to handleDrop's per-drag reorders.
+	async function handleReset() {
+		resetting = true;
+		try {
+			await resetStoreCategoryOrder(storeId);
+			error = null;
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to reset the category order.';
+		} finally {
+			resetting = false;
+			void loadAll();
+		}
+	}
 </script>
 
 <main
@@ -104,7 +128,19 @@
 		htmlTitle={storeName ? `${storeName} aisle order` : 'Store'}
 		backHref={resolve('/lists/[id]/stores', { id: String(listId) })}
 		backLabel="Stores"
-	/>
+	>
+		{#snippet actions()}
+			<button
+				type="button"
+				aria-label="Reset to default order"
+				class="flex h-9 w-9 shrink-0 items-center justify-center text-gray-500 disabled:opacity-30 dark:text-gray-400"
+				disabled={resetting || !hasCustomOrder}
+				onclick={handleReset}
+			>
+				<Icon name="restore" class="h-5 w-5" />
+			</button>
+		{/snippet}
+	</PageHeader>
 
 	{#if loading}
 		<p class="text-gray-600 dark:text-gray-400">Loading…</p>

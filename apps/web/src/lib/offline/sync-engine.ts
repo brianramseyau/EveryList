@@ -220,3 +220,57 @@ export async function offlineReorder<T>(opts: OfflineReorderOptions<T>): Promise
 		return optimisticResult;
 	}
 }
+
+export interface OfflineResetOptions {
+	entityType: SyncEntityType;
+	/** The bulk operation's scope id — a store id for a store's category order. Matches the
+	 * `entityId` the corresponding realtime broadcast uses (stores_controller.ts's
+	 * `resetCategories`), so `markSelfMutation` correctly suppresses the echo of this client's
+	 * own reset. */
+	scopeId: number;
+	/** Clears every affected local Dexie row immediately (optimistic), marking each dirty — so a
+	 * realtime event racing the queued flush doesn't resurrect a row this client just cleared.
+	 * Only called once Dexie is confirmed available. */
+	applyOptimistically: (db: EveryListDB) => Promise<void>;
+	/** The request path to replay from the flush loop if this doesn't resolve immediately. */
+	url: string;
+	request: () => Promise<void>;
+}
+
+/**
+ * Write path for bulk resets — clearing every row in a scope (currently only a store's category
+ * order, see stores.ts's `resetStoreCategoryOrder`) rather than reordering them. Mirrors
+ * `offlineReorder`'s shape: no single row's version to guard, so the queued mutation carries
+ * `expectedVersion: null` and can't 409. Degrades to direct online-only behavior when Dexie isn't
+ * available, same as `offlineCreate`/`offlineMutate`/`offlineReorder`.
+ */
+export async function offlineReset(opts: OfflineResetOptions): Promise<void> {
+	const db = getDb();
+	if (!db) return opts.request();
+
+	markSelfMutation(opts.entityType, opts.scopeId);
+	await opts.applyOptimistically(db);
+
+	const queueId = await enqueueMutation({
+		entityType: opts.entityType,
+		op: 'reset',
+		targetId: opts.scopeId,
+		expectedVersion: null,
+		payload: {},
+		url: opts.url
+	});
+
+	if (!isOnline()) return;
+
+	try {
+		await opts.request();
+		if (queueId !== undefined) await dequeueMutation(queueId);
+	} catch (err) {
+		if (err instanceof ApiError) {
+			// A real server rejection can't be resolved by retrying the same payload later.
+			if (queueId !== undefined) await dequeueMutation(queueId);
+			throw err;
+		}
+		// Network error — stays queued for the flush loop; caller already sees the cleared rows.
+	}
+}

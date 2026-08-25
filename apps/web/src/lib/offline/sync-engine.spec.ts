@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api/client';
 import { getDb, resetDbForTesting } from './db';
 import { pendingMutations } from './sync-queue';
-import { offlineCreate, offlineMutate, offlineReorder } from './sync-engine';
+import { offlineCreate, offlineMutate, offlineReorder, offlineReset } from './sync-engine';
 
 function setOnline(online: boolean) {
 	Object.defineProperty(globalThis, 'navigator', {
@@ -395,6 +395,86 @@ describe('offlineReorder', () => {
 				request: async () => ({ ok: true })
 			});
 			expect(result).toEqual({ ok: true });
+		} finally {
+			globalThis.indexedDB = originalIndexedDb;
+		}
+	});
+});
+
+describe('offlineReset', () => {
+	it('applies optimistically and dequeues via an immediate request when online', async () => {
+		const applyOptimistically = vi.fn().mockResolvedValue(undefined);
+		await offlineReset({
+			entityType: 'store_category_order',
+			scopeId: 20,
+			url: '/api/v1/x',
+			applyOptimistically,
+			request: async () => {}
+		});
+
+		expect(applyOptimistically).toHaveBeenCalledWith(expect.anything());
+		expect(await pendingMutations()).toHaveLength(0);
+	});
+
+	it('leaves a queued mutation when offline', async () => {
+		setOnline(false);
+		await offlineReset({
+			entityType: 'store_category_order',
+			scopeId: 20,
+			url: '/api/v1/x',
+			applyOptimistically: async () => {},
+			request: async () => {}
+		});
+
+		const pending = await pendingMutations();
+		expect(pending).toMatchObject([{ op: 'reset', targetId: 20, expectedVersion: null }]);
+	});
+
+	it('keeps the queued mutation on a network error while online', async () => {
+		await offlineReset({
+			entityType: 'store_category_order',
+			scopeId: 20,
+			url: '/api/v1/x',
+			applyOptimistically: async () => {},
+			request: async () => {
+				throw new TypeError('network error');
+			}
+		});
+
+		expect(await pendingMutations()).toHaveLength(1);
+	});
+
+	it('dequeues and rethrows on a real ApiError', async () => {
+		await expect(
+			offlineReset({
+				entityType: 'store_category_order',
+				scopeId: 20,
+				url: '/api/v1/x',
+				applyOptimistically: async () => {},
+				request: async () => {
+					throw new ApiError(403, 'Forbidden');
+				}
+			})
+		).rejects.toThrow('Forbidden');
+
+		expect(await pendingMutations()).toHaveLength(0);
+	});
+
+	it('degrades to a direct request when Dexie is unavailable', async () => {
+		await resetDbForTesting();
+		const originalIndexedDb = globalThis.indexedDB;
+		// @ts-expect-error simulating no IndexedDB implementation
+		delete globalThis.indexedDB;
+		const request = vi.fn().mockResolvedValue(undefined);
+		try {
+			await offlineReset({
+				entityType: 'store_category_order',
+				scopeId: 20,
+				url: '/api/v1/x',
+				applyOptimistically: async () => {},
+				request
+			});
+			expect(request).toHaveBeenCalled();
 		} finally {
 			globalThis.indexedDB = originalIndexedDb;
 		}

@@ -64,6 +64,10 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 		await replayReorder(mutation);
 		return;
 	}
+	if (mutation.op === 'reset') {
+		await replayReset(mutation);
+		return;
+	}
 	const table = tableForEntity(mutation.entityType as QueueableEntityType);
 	if (mutation.op === 'restore') {
 		// No `expectedVersion` guard, matching the restore endpoint itself (items_controller.ts's
@@ -112,6 +116,15 @@ async function replayReorder(mutation: QueuedMutation): Promise<void> {
 	// `reorderStoreCategories`.
 	const result = await apiPatch<StoreCategoryOrderDto[]>(mutation.url, mutation.payload);
 	await db.storeCategoryOrders.bulkPut(result.map((row) => ({ ...row, _dirty: false })));
+}
+
+/** Replays a queued bulk reset (`offlineReset`'s only caller today — stores.ts's
+ * `resetStoreCategoryOrder`) — same compound-key rationale as `replayReorder` above: there's no
+ * single row to look up by `targetId`, just every `storeCategoryOrders` row for that store. */
+async function replayReset(mutation: QueuedMutation): Promise<void> {
+	const db = getDb()!;
+	await apiDelete(mutation.url);
+	await db.storeCategoryOrders.where('storeId').equals(mutation.targetId).delete();
 }
 
 /** Entity types the write paths in `$lib/api/{items,categories,favorites,stores}.ts` actually

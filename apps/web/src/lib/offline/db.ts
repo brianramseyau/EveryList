@@ -26,11 +26,14 @@ export interface QueuedMutation {
 	 * kept as a distinct label only so the sync-status page can describe it accurately.
 	 * `restore`: clears a soft-deleted row's `deletedAt` via its dedicated POST endpoint —
 	 * same single-row optimistic-then-replay shape as `update`, but a distinct label since it
-	 * replays via POST (the item's regular PATCH endpoint only operates on non-deleted rows). */
-	op: 'create' | 'update' | 'delete' | 'reorder' | 'attach' | 'restore';
+	 * replays via POST (the item's regular PATCH endpoint only operates on non-deleted rows).
+	 * `reset`: another bulk operation, like `reorder`, but clearing every row in the scope
+	 * rather than reordering them — currently only a store's category order (see
+	 * stores.ts's `resetStoreCategoryOrder`). */
+	op: 'create' | 'update' | 'delete' | 'reorder' | 'attach' | 'restore' | 'reset';
 	/** The real server id, or a negative client-generated temp id for a queued create/attach — or,
-	 * for `reorder`, the scope id (a list id for a category reorder, a store id for a store's
-	 * category order), since there's no single row to key a bulk operation on. */
+	 * for `reorder`/`reset`, the scope id (a list id for a category reorder, a store id for a
+	 * store's category order), since there's no single row to key a bulk operation on. */
 	targetId: number;
 	/** `null` for a queued create — there's nothing to conflict against yet. */
 	expectedVersion: number | null;

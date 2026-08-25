@@ -195,6 +195,7 @@ router
         router.patch(':id', [controllers.Stores, 'update'])
         router.get(':id/categories', [controllers.Stores, 'categories'])
         router.patch(':id/categories', [controllers.Stores, 'reorderCategories'])
+        router.delete(':id/categories', [controllers.Stores, 'resetCategories'])
       })
       .prefix('stores')
       .as('stores')

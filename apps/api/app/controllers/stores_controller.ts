@@ -13,6 +13,7 @@ import StoreTransformer from '#transformers/store_transformer'
 import StoreCategoryOrderTransformer from '#transformers/store_category_order_transformer'
 import { broadcastSync, broadcastToStoreLists } from '#services/sync_broadcaster'
 import { hasVersionConflict, reportVersionConflict } from '#services/version_conflict'
+import { DateTime } from 'luxon'
 
 export default class StoresController {
   async index({ auth, params, serialize }: HttpContext) {
@@ -169,5 +170,35 @@ export default class StoresController {
     logger.debug({ storeId: store.id, count: categories.length }, 'store categories reordered')
 
     return serialize(StoreCategoryOrderTransformer.transform(orders))
+  }
+
+  /**
+   * Clears this store's custom aisle order entirely — soft-deletes every
+   * `StoreCategoryOrder` row, so categories fall back to their default
+   * (list) sort order instead of the store-specific override.
+   */
+  async resetCategories({ auth, params, response, logger }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const store = await ListPolicy.requireStoreRole(user, params.id, 'editor')
+
+    const orders = await StoreCategoryOrder.query()
+      .where('storeId', store.id)
+      .whereNull('deletedAt')
+
+    for (const order of orders) {
+      order.deletedAt = DateTime.now()
+      order.version += 1
+      await order.save()
+    }
+
+    await broadcastToStoreLists(store, {
+      entityType: 'store_category_order',
+      entityId: store.id,
+      op: 'delete',
+    })
+
+    logger.debug({ storeId: store.id, count: orders.length }, 'store category order reset')
+
+    return response.noContent()
   }
 }
