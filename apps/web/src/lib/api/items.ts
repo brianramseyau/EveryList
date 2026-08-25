@@ -75,7 +75,10 @@ export function fetchRecentItems(listId: number): Promise<ItemDto[]> {
 			const rows = await db.items
 				.filter((item) => item.listId === listId && Boolean(item.deletedAt))
 				.toArray();
-			return rows.sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? '')).slice(0, 50);
+			// The filter above already guarantees a truthy `deletedAt` on every row.
+			return rows
+				.sort((a, b) => (b.deletedAt as string).localeCompare(a.deletedAt as string))
+				.slice(0, 50);
 		}
 	);
 }

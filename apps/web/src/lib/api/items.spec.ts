@@ -120,4 +120,9 @@ describe('items api', () => {
 		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
 		await expect(fetchItems(1)).rejects.toThrow('network down');
 	});
+
+	it('fetchRecentItems rethrows the network error when Dexie is not available', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+		await expect(fetchRecentItems(1)).rejects.toThrow('network down');
+	});
 });

@@ -18,8 +18,15 @@ vi.mock('./client', () => ({
 const { apiGet, apiPost, apiPatch, apiDelete, ApiError } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { pendingMutations } = await import('$lib/offline/sync-queue');
-const { createItem, updateItem, deleteItem, fetchItems, fetchRecentItemNames } =
-	await import('./items');
+const {
+	createItem,
+	updateItem,
+	deleteItem,
+	fetchItems,
+	fetchRecentItemNames,
+	fetchRecentItems,
+	restoreItem
+} = await import('./items');
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -319,6 +326,76 @@ describe('deleteItem (Dexie available)', () => {
 	});
 });
 
+describe('restoreItem (Dexie available)', () => {
+	it('clears the cached row deletedAt optimistically and adopts the server response on success', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: '2026-08-20T00:00:00.000Z',
+			version: 1
+		});
+		vi.mocked(apiPost).mockResolvedValue({ id: 5, deletedAt: null, version: 2 });
+
+		await restoreItem(1, 5);
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items/5/restore');
+		const cached = await db.items.get(5);
+		expect(cached?.deletedAt).toBeNull();
+		expect(cached?.version).toBe(2);
+		expect(cached?._dirty).toBe(false);
+	});
+
+	it('is a no-op against Dexie when the row was never cached', async () => {
+		vi.mocked(apiPost).mockResolvedValue({ id: 999, deletedAt: null, version: 1 });
+		await expect(restoreItem(1, 999)).resolves.toEqual({ id: 999, deletedAt: null, version: 1 });
+	});
+
+	it('skips cache reconciliation when the server response is empty', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: '2026-08-20T00:00:00.000Z',
+			version: 1
+		});
+		vi.mocked(apiPost).mockResolvedValue(undefined);
+
+		await expect(restoreItem(1, 5)).resolves.toBeUndefined();
+
+		// The optimistic write already cleared `deletedAt` before the request fired — an empty
+		// response just means there's no server row to reconcile onto it, not that the optimistic
+		// state gets rolled back.
+		const cached = await db.items.get(5);
+		expect(cached?.deletedAt).toBeNull();
+		expect(cached?.version).toBe(1);
+	});
+});
+
 describe('fetchRecentItemNames', () => {
 	it('returns the server response when the request succeeds', async () => {
 		vi.mocked(apiGet).mockResolvedValue(['Bananas', 'Bread']);
@@ -580,5 +657,118 @@ describe('fetchItems (cache hydration)', () => {
 		const items = await fetchItems(1);
 
 		expect(items).toHaveLength(0);
+	});
+});
+
+describe('fetchRecentItems (cache hydration)', () => {
+	it('caches fetched rows so a later offline restore reads their version', async () => {
+		vi.mocked(apiGet).mockResolvedValue([
+			{ id: 8, listId: 1, name: 'Milk', deletedAt: '2026-08-20T00:00:00.000Z', version: 7 }
+		]);
+
+		await fetchRecentItems(1);
+
+		expect((await getDb()!.items.get(8))?.version).toBe(7);
+	});
+
+	it('does not clobber a row with an unacked local edit during a re-fetch', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 8,
+			listId: 1,
+			name: 'Milk (edited)',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: '2026-08-20T00:00:00.000Z',
+			version: 2,
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([
+			{ id: 8, listId: 1, name: 'Milk', deletedAt: '2026-08-20T00:00:00.000Z', version: 2 }
+		]);
+
+		await fetchRecentItems(1);
+
+		expect((await db.items.get(8))?.name).toBe('Milk (edited)');
+	});
+
+	it('falls back to cached, soft-deleted rows for this list, most-recently-deleted first, when the network fails', async () => {
+		const db = getDb()!;
+		await db.items.bulkPut([
+			{
+				id: 8,
+				listId: 1,
+				name: 'Milk',
+				quantity: null,
+				notes: null,
+				categoryId: null,
+				storeId: null,
+				price: null,
+				checked: false,
+				checkedAt: null,
+				sortOrder: 0,
+				createdBy: 1,
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null,
+				deletedAt: '2026-08-19T00:00:00.000Z',
+				version: 1
+			},
+			{
+				id: 9,
+				listId: 1,
+				name: 'Bread',
+				quantity: null,
+				notes: null,
+				categoryId: null,
+				storeId: null,
+				price: null,
+				checked: false,
+				checkedAt: null,
+				sortOrder: 0,
+				createdBy: 1,
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null,
+				deletedAt: '2026-08-20T00:00:00.000Z',
+				version: 1
+			},
+			{
+				id: 10,
+				listId: 1,
+				name: 'Eggs',
+				quantity: null,
+				notes: null,
+				categoryId: null,
+				storeId: null,
+				price: null,
+				checked: false,
+				checkedAt: null,
+				sortOrder: 0,
+				createdBy: 1,
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null,
+				deletedAt: null,
+				version: 1
+			}
+		]);
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
+
+		const result = await fetchRecentItems(1);
+
+		expect(result.map((item) => item.id)).toEqual([9, 8]);
+	});
+
+	it('rethrows an ApiError without falling back to cache', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new ApiError(403, 'Forbidden'));
+
+		await expect(fetchRecentItems(1)).rejects.toThrow('Forbidden');
 	});
 });
