@@ -2,8 +2,9 @@ import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import type { ListDto } from '@everylist/shared';
 import { fetchCategories } from '$lib/api/categories';
+import { fetchFavorites } from '$lib/api/favorites';
 import { fetchFolders } from '$lib/api/folders';
-import { fetchItems } from '$lib/api/items';
+import { fetchItems, fetchRecentItems } from '$lib/api/items';
 import { fetchList, fetchLists } from '$lib/api/lists';
 import { getSelectedStoreSettings } from '$lib/api/selected-store';
 import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
@@ -18,8 +19,10 @@ let started = false;
 /**
  * Refreshes every list's offline cache, not just the one currently open — a follow-up to the
  * per-fetcher cache fallback (PHASE13_PLAN.md §8), which only helps a list that's already been
- * visited at least once. Mirrors `routes/lists/[id]/+page.svelte`'s own `loadAll()` per list so
- * the cache ends up in the same state a real visit would have left it in.
+ * visited at least once. Mirrors `routes/lists/[id]/+page.svelte`'s own `loadAll()` per list, plus
+ * favorites and recently-deleted items — screens reached from that page's own toolbar links but
+ * never warmed by visiting it — so the cache ends up in the same state a real visit to every one
+ * of those screens would have left it in.
  *
  * Deliberately sequential across lists (not `Promise.all` over the whole set) — with an unbounded
  * number of lists, firing every list's fetches at once on every interval would spike request
@@ -42,7 +45,9 @@ async function syncAllLists(): Promise<void> {
 				fetchList(list.id),
 				fetchCategories(list.id),
 				fetchItems(list.id),
-				fetchStores(list.id)
+				fetchStores(list.id),
+				fetchFavorites(list.id),
+				fetchRecentItems(list.id)
 			]);
 			const { storeId } = await getSelectedStoreSettings(list.id);
 			if (storeId !== null) await fetchStoreCategoryOrder(storeId);

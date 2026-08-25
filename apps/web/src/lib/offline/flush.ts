@@ -65,6 +65,13 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 		return;
 	}
 	const table = tableForEntity(mutation.entityType as QueueableEntityType);
+	if (mutation.op === 'restore') {
+		// No `expectedVersion` guard, matching the restore endpoint itself (items_controller.ts's
+		// `restore`) — it only requires the row still be soft-deleted, not a version match.
+		const result = await apiPost<Record<string, unknown>>(mutation.url, mutation.payload);
+		if (result) await table.update(mutation.targetId, { ...result, _dirty: false });
+		return;
+	}
 	if (mutation.op === 'update') {
 		const body =
 			mutation.expectedVersion === null
