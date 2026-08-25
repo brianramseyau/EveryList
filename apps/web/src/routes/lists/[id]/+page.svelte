@@ -29,6 +29,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PasscodeGate from '$lib/components/PasscodeGate.svelte';
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
+	import PopoutMenuItem from '$lib/components/PopoutMenuItem.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -580,28 +581,18 @@
 								type="button"
 								aria-label="Back to list menu"
 								onclick={() => (shareView = false)}
-								class="flex h-6 w-6 items-center justify-center rounded text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
+								class="flex h-8 w-8 items-center justify-center rounded text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
 							>
-								<Icon name="chevronLeft" class="h-4 w-4" />
+								<Icon name="chevronLeft" class="h-5 w-5" />
 							</button>
-							<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">Share</span>
+							<span class="text-sm font-semibold text-gray-600 dark:text-gray-400">Share</span>
 						</div>
-						<button
-							type="button"
-							onclick={() => printList(close)}
-							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-						>
-							Print list
-						</button>
-						<button
-							type="button"
-							onclick={copyListToClipboard}
-							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-						>
+						<PopoutMenuItem onclick={() => printList(close)}>Print list</PopoutMenuItem>
+						<PopoutMenuItem onclick={copyListToClipboard}>
 							{copied ? 'Copied!' : 'Copy to Clipboard'}
-						</button>
+						</PopoutMenuItem>
 						{#if exportingEmail}
-							<form class="flex flex-col gap-2 px-2 py-1.5" onsubmit={sendEmailExport}>
+							<form class="flex flex-col gap-2 px-3 py-2.5" onsubmit={sendEmailExport}>
 								<Input
 									type="email"
 									placeholder="you@example.com"
@@ -626,61 +617,40 @@
 								{/if}
 							</form>
 						{:else}
-							<button
-								type="button"
-								onclick={() => (exportingEmail = true)}
-								class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-							>
-								Email export…
-							</button>
+							<PopoutMenuItem onclick={() => (exportingEmail = true)}>Email export…</PopoutMenuItem>
 						{/if}
 					{:else}
-						<button
-							type="button"
+						<PopoutMenuItem
 							disabled={checkedItems.length === 0}
 							onclick={() => {
 								confirmAction = 'clearChecked';
 								close();
 							}}
-							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
 						>
 							Clear Checked Off Items
-						</button>
-						<button
-							type="button"
+						</PopoutMenuItem>
+						<PopoutMenuItem
 							disabled={checkedItems.length === 0}
 							onclick={() => {
 								confirmAction = 'uncheckAll';
 								close();
 							}}
-							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
 						>
 							Uncheck All Items
-						</button>
-						<button
-							type="button"
+						</PopoutMenuItem>
+						<PopoutMenuItem
 							disabled={items.length === 0}
 							onclick={() => {
 								confirmAction = 'clearAll';
 								close();
 							}}
-							class="block w-full rounded px-2 py-1.5 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-primary-400 dark:hover:bg-gray-700"
 						>
 							Clear ALL List Items
-						</button>
-						<button
-							type="button"
-							onclick={() => (shareView = true)}
-							class="mt-1 block w-full rounded border-t border-gray-200 px-2 pt-2 text-left text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:border-gray-700 dark:text-primary-400 dark:hover:bg-gray-700"
-						>
-							Share
-						</button>
-						<a
-							href={resolve('/lists/[id]/settings', { id: String(listId) })}
-							class="block rounded px-2 py-1.5 text-sm whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-						>
+						</PopoutMenuItem>
+						<PopoutMenuItem divider onclick={() => (shareView = true)}>Share</PopoutMenuItem>
+						<PopoutMenuItem href={resolve('/lists/[id]/settings', { id: String(listId) })}>
 							List Settings
-						</a>
+						</PopoutMenuItem>
 					{/if}
 				{/snippet}
 			</PopoutMenu>

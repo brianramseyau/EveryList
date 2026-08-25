@@ -11,6 +11,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
+	import PopoutMenuItem from '$lib/components/PopoutMenuItem.svelte';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 
 	let lists = $state<ListDto[]>([]);
@@ -172,18 +173,8 @@
 	<PageHeader title="My Lists">
 		{#snippet actions()}
 			<PopoutMenu label="Create" iconName="plus">
-				<a
-					href={resolve('/lists/new')}
-					class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-				>
-					Create List
-				</a>
-				<a
-					href={resolve('/lists/folders/new')}
-					class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-				>
-					Create Folder
-				</a>
+				<PopoutMenuItem href={resolve('/lists/new')}>Create List</PopoutMenuItem>
+				<PopoutMenuItem href={resolve('/lists/folders/new')}>Create Folder</PopoutMenuItem>
 			</PopoutMenu>
 			{#if folders.length > 0}
 				<a

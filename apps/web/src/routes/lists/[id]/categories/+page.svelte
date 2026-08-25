@@ -10,6 +10,7 @@
 	import IconPicker from '$lib/components/IconPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
+	import PopoutMenuItem from '$lib/components/PopoutMenuItem.svelte';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
@@ -145,24 +146,15 @@
 	>
 		{#snippet actions()}
 			<PopoutMenu label="Create" iconName="plus">
-				<a
-					href={resolve('/lists/[id]/categories/new', { id: String(listId) })}
-					class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-				>
+				<PopoutMenuItem href={resolve('/lists/[id]/categories/new', { id: String(listId) })}>
 					Create
-				</a>
-				<a
-					href={resolve('/lists/[id]/categories/import', { id: String(listId) })}
-					class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-				>
+				</PopoutMenuItem>
+				<PopoutMenuItem href={resolve('/lists/[id]/categories/import', { id: String(listId) })}>
 					Import
-				</a>
-				<a
-					href={resolve('/lists/[id]/categories/paste', { id: String(listId) })}
-					class="block rounded px-2 py-1.5 text-sm text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700"
-				>
+				</PopoutMenuItem>
+				<PopoutMenuItem href={resolve('/lists/[id]/categories/paste', { id: String(listId) })}>
 					Paste
-				</a>
+				</PopoutMenuItem>
 			</PopoutMenu>
 		{/snippet}
 	</PageHeader>
