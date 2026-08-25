@@ -195,6 +195,73 @@ describe('swipeReveal', () => {
 		expect(onCommitLeftB).toHaveBeenCalledOnce();
 	});
 
+	it('fires onTap on a quick release with no directional movement', () => {
+		const onTap = vi.fn();
+		swipeReveal(node, { onCommitRight: vi.fn(), onCommitLeft: vi.fn(), onTap });
+
+		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
+		firePointer(node, 'pointerup', { clientX: 0, clientY: 0 });
+
+		expect(onTap).toHaveBeenCalledOnce();
+	});
+
+	it('does not fire onTap once a directional swipe has been detected', () => {
+		const onTap = vi.fn();
+		swipeReveal(node, { onCommitRight: vi.fn(), onCommitLeft: vi.fn(), onTap });
+
+		const past = -Math.ceil(REVEAL_PX * COMMIT_RATIO) - 5;
+		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
+		firePointer(node, 'pointermove', { clientX: past, clientY: 0 });
+		firePointer(node, 'pointerup', { clientX: past, clientY: 0 });
+
+		expect(onTap).not.toHaveBeenCalled();
+	});
+
+	it('does not fire onTap when released past the long-press window, even without moving', () => {
+		vi.useFakeTimers();
+		try {
+			const onTap = vi.fn();
+			swipeReveal(node, { onCommitRight: vi.fn(), onCommitLeft: vi.fn(), onTap });
+
+			firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
+			vi.advanceTimersByTime(500);
+			firePointer(node, 'pointerup', { clientX: 0, clientY: 0 });
+
+			expect(onTap).not.toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('does not fire onTap on pointercancel', () => {
+		const onTap = vi.fn();
+		swipeReveal(node, { onCommitRight: vi.fn(), onCommitLeft: vi.fn(), onTap });
+
+		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
+		firePointer(node, 'pointercancel', { clientX: 0, clientY: 0 });
+
+		expect(onTap).not.toHaveBeenCalled();
+	});
+
+	it('does not track a gesture starting on a [data-reorder-ignore] element', () => {
+		const onTap = vi.fn();
+		const onCommitLeft = vi.fn();
+		const child = document.createElement('button');
+		child.setAttribute('data-reorder-ignore', '');
+		node.append(child);
+		swipeReveal(node, { onCommitRight: vi.fn(), onCommitLeft, onTap });
+
+		firePointer(child, 'pointerdown', { clientX: 0, clientY: 0 });
+		firePointer(child, 'pointerup', { clientX: 0, clientY: 0 });
+		const past = -Math.ceil(REVEAL_PX * COMMIT_RATIO) - 5;
+		firePointer(child, 'pointerdown', { clientX: 0, clientY: 0 });
+		firePointer(child, 'pointermove', { clientX: past, clientY: 0 });
+		firePointer(child, 'pointerup', { clientX: past, clientY: 0 });
+
+		expect(onTap).not.toHaveBeenCalled();
+		expect(onCommitLeft).not.toHaveBeenCalled();
+	});
+
 	it('removes its listeners on destroy', () => {
 		const onCommitRight = vi.fn();
 		const onCommitLeft = vi.fn();
