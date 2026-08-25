@@ -10,6 +10,7 @@ export const controllers = {
   AlexaOauth: () => import('#controllers/alexa_oauth_controller'),
   BackupSettings: () => import('#controllers/backup_settings_controller'),
   Categories: () => import('#controllers/categories_controller'),
+  Debug: () => import('#controllers/debug_controller'),
   FavoriteItems: () => import('#controllers/favorite_items_controller'),
   Folders: () => import('#controllers/folders_controller'),
   InviteAccept: () => import('#controllers/invite_accept_controller'),

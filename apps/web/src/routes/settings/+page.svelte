@@ -418,6 +418,15 @@
 					{resetting ? 'Resetting…' : 'Reset app'}
 				</button>
 			</div>
+			{#if profile?.id === 1}
+				<a
+					href={resolve('/debug')}
+					class="flex items-center justify-between border-t border-gray-200 px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+				>
+					<span>Debug info</span>
+					<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
+				</a>
+			{/if}
 		</section>
 	{/if}
 </main>
