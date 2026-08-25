@@ -1786,6 +1786,56 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByRole('link', { name: 'Edit Bananas' })).toBeInTheDocument();
 	});
 
+	it('toggles checked on a short tap anywhere on the row on a coarse-pointer device', async () => {
+		const matchMediaSpy = mockCoarsePointer();
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByRole('checkbox', { name: 'Bananas' })).not.toBeChecked();
+
+		// Tap on the item name, not the checkbox itself — the row is the
+		// touch target now, not just the small checkbox glyph.
+		const row = page
+			.getByText('Bananas')
+			.element()
+			.closest('li')!
+			.querySelector(':scope > div:last-of-type') as HTMLElement;
+		row.dispatchEvent(
+			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+		row.dispatchEvent(
+			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+		);
+
+		await expect.element(page.getByRole('checkbox', { name: 'Bananas' })).toBeChecked();
+		expect(deleteItem).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
+
+		matchMediaSpy.mockRestore();
+	});
+
+	it('does not double-toggle when the tap lands directly on the checkbox on a coarse-pointer device', async () => {
+		const matchMediaSpy = mockCoarsePointer();
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('checkbox', { name: 'Bananas' }).click();
+
+		await expect.element(page.getByRole('checkbox', { name: 'Bananas' })).toBeChecked();
+		expect(vi.mocked(updateItem).mock.calls.length).toBe(1);
+
+		matchMediaSpy.mockRestore();
+	});
+
 	it('subscribes to the list channel and silently refreshes on a non-dirty sync event', async () => {
 		let handler: (event: SyncEventDto) => void = () => {};
 		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {

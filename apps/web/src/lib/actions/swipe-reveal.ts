@@ -7,11 +7,21 @@
 export const REVEAL_PX = 80;
 export const COMMIT_RATIO = 0.5;
 const DIRECTION_DEAD_ZONE_PX = 10;
+// Matches sortable-reorder's own `delay: 400` — a release inside this window
+// without ever moving past the dead zone is a tap (toggle); holding past it
+// hands off to that action's long-press-to-drag affordance instead, even if
+// the hold never ends up moving anywhere.
+const TAP_MAX_DURATION_MS = 400;
 
 export interface SwipeRevealParams {
 	disabled?: boolean;
 	onCommitRight: () => void;
 	onCommitLeft: () => void;
+	/** Fired on a plain tap — pointerup with no directional movement, released
+	 * inside TAP_MAX_DURATION_MS. Not fired for a tap that started on a
+	 * `[data-reorder-ignore]` element (the checkbox, desktop edit/delete
+	 * controls), since those already handle their own tap/click. */
+	onTap?: () => void;
 }
 
 export function swipeReveal(node: HTMLElement, params: SwipeRevealParams) {
@@ -19,6 +29,7 @@ export function swipeReveal(node: HTMLElement, params: SwipeRevealParams) {
 	let pointerId: number | null = null;
 	let startX = 0;
 	let startY = 0;
+	let startTime = 0;
 	let dx = 0;
 	let directionLocked = false;
 	let dragging = false;
@@ -35,9 +46,13 @@ export function swipeReveal(node: HTMLElement, params: SwipeRevealParams) {
 		// Non-primary mouse buttons (right/middle-click) aren't a swipe gesture.
 		/* v8 ignore next */
 		if (event.pointerType === 'mouse' && event.button !== 0) return;
+		// Elements with their own tap behavior opt out here, so a release on
+		// them doesn't also fire onTap on top of their own handler.
+		if ((event.target as HTMLElement).closest('[data-reorder-ignore]')) return;
 		pointerId = event.pointerId;
 		startX = event.clientX;
 		startY = event.clientY;
+		startTime = Date.now();
 		dx = 0;
 		dragging = false;
 		directionLocked = false;
@@ -81,10 +96,16 @@ export function swipeReveal(node: HTMLElement, params: SwipeRevealParams) {
 		const shouldCommit =
 			event.type === 'pointerup' && dragging && Math.abs(dx) >= REVEAL_PX * COMMIT_RATIO;
 		const committedRight = dx > 0;
+		const isTap =
+			event.type === 'pointerup' &&
+			!directionLocked &&
+			Date.now() - startTime < TAP_MAX_DURATION_MS;
 		reset();
 		if (shouldCommit) {
 			if (committedRight) current.onCommitRight();
 			else current.onCommitLeft();
+		} else if (isTap) {
+			current.onTap?.();
 		}
 	}
 

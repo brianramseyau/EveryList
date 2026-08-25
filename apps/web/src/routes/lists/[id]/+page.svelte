@@ -829,7 +829,8 @@
 																id: String(listId),
 																itemId: String(item.id)
 															})
-														)
+														),
+													onTap: () => void toggleChecked(item)
 												}}
 											>
 												<button
