@@ -1,10 +1,17 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { ResolvedPathname } from '$app/types';
 
 	// Shared popout-menu item (PHASE9_PLAN.md #1/#10): a single link/button row
 	// inside a PopoutMenu panel. Renders an <a> when `href` is set, a <button>
 	// otherwise — centralising the touch-sized styling that used to be
 	// copy-pasted into every PopoutMenu call site.
+	//
+	// href must be the return value of $app/paths' resolve() — typed as
+	// ResolvedPathname rather than a plain string (same rationale as
+	// PageHeader.svelte's backHref) so eslint-plugin-svelte's
+	// no-navigation-without-resolve rule verifies that at each call site
+	// instead of only inside this component.
 	let {
 		href = undefined,
 		onclick = undefined,
@@ -12,7 +19,7 @@
 		divider = false,
 		children
 	}: {
-		href?: string;
+		href?: ResolvedPathname;
 		onclick?: () => void;
 		disabled?: boolean;
 		divider?: boolean;
