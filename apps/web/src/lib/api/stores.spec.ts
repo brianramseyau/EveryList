@@ -21,6 +21,7 @@ const {
 	fetchStoreCategoryOrder,
 	fetchStores,
 	reorderStoreCategories,
+	resetStoreCategoryOrder,
 	updateStore
 } = await import('./stores');
 
@@ -72,5 +73,10 @@ describe('stores api', () => {
 		expect(apiPatch).toHaveBeenCalledWith('/api/v1/stores/20/categories', {
 			categories: [{ categoryId: 10, sortOrder: 0 }]
 		});
+	});
+
+	it('resetStoreCategoryOrder DELETEs the store-scoped order', () => {
+		resetStoreCategoryOrder(20);
+		expect(apiDelete).toHaveBeenCalledWith('/api/v1/stores/20/categories');
 	});
 });

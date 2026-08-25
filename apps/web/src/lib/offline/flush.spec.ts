@@ -755,4 +755,29 @@ describe('flushQueue', () => {
 		expect(cached?.sortOrder).toBe(0);
 		expect(cached?._dirty).toBe(false);
 	});
+
+	it('replays a queued store-category-order reset, clearing every cached row for that store', async () => {
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+		const db = getDb()!;
+		await db.storeCategoryOrders.bulkPut([
+			{ id: 1, storeId: 20, categoryId: 5, sortOrder: 0, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 20, categoryId: 6, sortOrder: 1, deletedAt: null, version: 1 },
+			{ id: 3, storeId: 21, categoryId: 5, sortOrder: 0, deletedAt: null, version: 1 }
+		]);
+		await enqueueMutation({
+			entityType: 'store_category_order',
+			op: 'reset',
+			targetId: 20,
+			expectedVersion: null,
+			payload: {},
+			url: '/api/v1/stores/20/categories'
+		});
+
+		await flushQueue();
+
+		expect(apiDelete).toHaveBeenCalledWith('/api/v1/stores/20/categories');
+		expect(await pendingMutations()).toHaveLength(0);
+		expect(await db.storeCategoryOrders.where('storeId').equals(20).count()).toBe(0);
+		expect(await db.storeCategoryOrders.get([21, 5])).toBeDefined();
+	});
 });

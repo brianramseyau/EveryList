@@ -32,12 +32,13 @@ vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
 vi.mock('$lib/api/stores', () => ({
 	fetchStores: vi.fn(),
 	fetchStoreCategoryOrder: vi.fn(),
-	reorderStoreCategories: vi.fn()
+	reorderStoreCategories: vi.fn(),
+	resetStoreCategoryOrder: vi.fn()
 }));
 
 const { fetchList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
-const { fetchStores, fetchStoreCategoryOrder, reorderStoreCategories } =
+const { fetchStores, fetchStoreCategoryOrder, reorderStoreCategories, resetStoreCategoryOrder } =
 	await import('$lib/api/stores');
 const { goto } = await import('$app/navigation');
 const StoreOrderPage = (await import('./+page.svelte')).default;
@@ -101,6 +102,7 @@ describe('Store aisle order +page.svelte', () => {
 		vi.mocked(fetchStores).mockResolvedValue([walmart]);
 		vi.mocked(fetchCategories).mockResolvedValue([produce, dairy]);
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([]);
+		vi.mocked(resetStoreCategoryOrder).mockResolvedValue(undefined);
 		vi.mocked(goto).mockResolvedValue(undefined);
 	});
 
@@ -302,6 +304,75 @@ describe('Store aisle order +page.svelte', () => {
 		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+	});
+
+	it('disables the reset button when the store has no custom order', async () => {
+		render(StoreOrderPage);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+
+		await expect
+			.element(page.getByRole('button', { name: 'Reset to default order' }))
+			.toBeDisabled();
+	});
+
+	it('resets the custom order and reloads the default order', async () => {
+		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 },
+			{ id: 2, storeId: 20, categoryId: 10, sortOrder: 1, deletedAt: null, version: 1 }
+		]);
+
+		render(StoreOrderPage);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+
+		const resetButton = page.getByRole('button', { name: 'Reset to default order' });
+		await expect.element(resetButton).not.toBeDisabled();
+
+		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([]);
+		await resetButton.click();
+
+		expect(resetStoreCategoryOrder).toHaveBeenCalledWith(20);
+		await expect.poll(() => vi.mocked(fetchStoreCategoryOrder).mock.calls.length).toBe(2);
+
+		const names = document.querySelectorAll('li > span:last-child');
+		await expect.poll(() => [...names].map((el) => el.textContent)).toEqual(['Produce', 'Dairy']);
+		await expect
+			.element(page.getByRole('button', { name: 'Reset to default order' }))
+			.toBeDisabled();
+	});
+
+	it('reloads the list when resetting fails without an ApiError', async () => {
+		vi.mocked(fetchStoreCategoryOrder).mockResolvedValueOnce([
+			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 }
+		]);
+		vi.mocked(resetStoreCategoryOrder).mockRejectedValue(new TypeError('network down'));
+
+		render(StoreOrderPage);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Reset to default order' }).click();
+
+		await expect.poll(() => vi.mocked(fetchStoreCategoryOrder).mock.calls.length).toBe(2);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+	});
+
+	it('reloads the list when resetting fails, surfacing the reload error if that also fails', async () => {
+		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 }
+		]);
+		vi.mocked(resetStoreCategoryOrder).mockRejectedValue(new ApiError(500, 'Could not reset'));
+		vi.mocked(fetchList)
+			.mockResolvedValueOnce(list)
+			.mockRejectedValueOnce(new TypeError('reload failed'));
+
+		render(StoreOrderPage);
+		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Reset to default order' }).click();
+
+		await expect
+			.element(page.getByText('Failed to load store category order.'))
+			.toBeInTheDocument();
 		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
 	});
 });

@@ -1,6 +1,11 @@
 import type { StoreCategoryOrderDto, StoreDto } from '@everylist/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
-import { offlineCreate, offlineMutate, offlineReorder } from '$lib/offline/sync-engine';
+import {
+	offlineCreate,
+	offlineMutate,
+	offlineReorder,
+	offlineReset
+} from '$lib/offline/sync-engine';
 // `vi.mock('$lib/offline/db', …)` in the item-detail page spec corrupts this import's V8
 // attribution once merged into the full suite (see $lib/offline/flush.ts and sync-queue.ts).
 /* v8 ignore start */
@@ -143,6 +148,20 @@ export function fetchStoreCategoryOrder(storeId: number): Promise<StoreCategoryO
 				.toArray();
 		}
 	);
+}
+
+/** Clears this store's custom aisle order entirely, so its categories fall back to their default
+ * (list) sort order — the "start over" counterpart to `reorderStoreCategories`. */
+export function resetStoreCategoryOrder(storeId: number): Promise<void> {
+	return offlineReset({
+		entityType: 'store_category_order',
+		scopeId: storeId,
+		url: `/api/v1/stores/${storeId}/categories`,
+		applyOptimistically: async (db) => {
+			await db.storeCategoryOrders.where('storeId').equals(storeId).delete();
+		},
+		request: () => apiDelete(`/api/v1/stores/${storeId}/categories`)
+	});
 }
 
 export function reorderStoreCategories(

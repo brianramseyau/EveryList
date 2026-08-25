@@ -70,7 +70,8 @@
 		delete: 'Delete',
 		reorder: 'Reorder',
 		attach: 'Attach',
-		restore: 'Restore'
+		restore: 'Restore',
+		reset: 'Reset'
 	};
 
 	function describeMutation(mutation: QueuedMutation): string {
