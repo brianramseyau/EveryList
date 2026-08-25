@@ -18,6 +18,7 @@
 	import { startBackgroundSync } from '$lib/offline/background-sync';
 	import { initInstallPrompt } from '$lib/pwa/install-prompt';
 	import { clearBadge, refreshBadgeCount } from '$lib/pwa/badge';
+	import { setUpdateRegistration } from '$lib/pwa/update';
 	import BottomNav from '$lib/components/BottomNav.svelte';
 	import SyncStatusIcon from '$lib/components/SyncStatusIcon.svelte';
 
@@ -74,6 +75,12 @@
 						const reload = () => window.location.reload();
 						if (document.readyState === 'complete') reload();
 						else window.addEventListener('load', reload, { once: true });
+					},
+					// Hands the registration to $lib/pwa/update so Settings' "Check for update"
+					// button can force a check on demand, without waiting on the browser's own
+					// (on iOS, often very lazy) update heuristics.
+					onRegisteredSW(_swScriptUrl, reg) {
+						setUpdateRegistration(reg);
 					}
 				})
 			);
