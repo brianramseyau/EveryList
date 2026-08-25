@@ -415,27 +415,34 @@
 			>
 				Troubleshooting
 			</h2>
-			<div
-				class="flex items-center justify-between gap-4 border-b border-gray-200 px-4 py-3 dark:border-gray-700"
-			>
-				<span class="text-sm text-gray-600 dark:text-gray-300">
-					{#if updateStatus === 'up-to-date'}
+			<div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+				{#if updateStatus === 'up-to-date'}
+					<p
+						class="mb-3 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400"
+					>
 						You're on the latest version.
-					{:else if updateStatus === 'unavailable'}
+					</p>
+				{:else if updateStatus === 'unavailable'}
+					<p
+						class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+					>
 						Update check unavailable right now — try again in a moment.
-					{:else}
+					</p>
+				{/if}
+				<div class="flex items-center justify-between gap-4">
+					<span class="text-sm text-gray-600 dark:text-gray-300">
 						Check for a newer version of the app right now, instead of waiting for it to update on
 						its own.
-					{/if}
-				</span>
-				<button
-					type="button"
-					onclick={handleCheckForUpdate}
-					disabled={checkingUpdate}
-					class="shrink-0 text-sm text-gray-600 hover:underline disabled:opacity-50 dark:text-gray-400"
-				>
-					{checkingUpdate ? 'Checking…' : 'Check for update'}
-				</button>
+					</span>
+					<button
+						type="button"
+						onclick={handleCheckForUpdate}
+						disabled={checkingUpdate}
+						class="shrink-0 text-sm text-gray-600 hover:underline disabled:opacity-50 dark:text-gray-400"
+					>
+						{checkingUpdate ? 'Checking…' : 'Check for update'}
+					</button>
+				</div>
 			</div>
 			<div class="flex items-center justify-between gap-4 px-4 py-3">
 				<span class="text-sm text-gray-600 dark:text-gray-300">
