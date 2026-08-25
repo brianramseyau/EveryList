@@ -1,0 +1,37 @@
+<script lang="ts">
+	import type { Snippet } from 'svelte';
+
+	// Shared popout-menu item (PHASE9_PLAN.md #1/#10): a single link/button row
+	// inside a PopoutMenu panel. Renders an <a> when `href` is set, a <button>
+	// otherwise — centralising the touch-sized styling that used to be
+	// copy-pasted into every PopoutMenu call site.
+	let {
+		href = undefined,
+		onclick = undefined,
+		disabled = false,
+		divider = false,
+		children
+	}: {
+		href?: string;
+		onclick?: () => void;
+		disabled?: boolean;
+		divider?: boolean;
+		children: Snippet;
+	} = $props();
+
+	const base =
+		'block w-full rounded px-3 py-2.5 text-left text-base whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700';
+	const dividerClass = 'mt-1 border-t border-gray-200 dark:border-gray-700';
+	const linkClass = $derived([base, divider && dividerClass].filter(Boolean).join(' '));
+	const buttonClass = $derived(
+		[base, 'disabled:cursor-not-allowed disabled:opacity-40', divider && dividerClass]
+			.filter(Boolean)
+			.join(' ')
+	);
+</script>
+
+{#if href}
+	<a {href} class={linkClass}>{@render children()}</a>
+{:else}
+	<button type="button" {onclick} {disabled} class={buttonClass}>{@render children()}</button>
+{/if}
