@@ -22,11 +22,10 @@
 	const base =
 		'block w-full rounded px-3 py-2.5 text-left text-base whitespace-nowrap text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-700';
 	const dividerClass = 'mt-1 border-t border-gray-200 dark:border-gray-700';
-	const linkClass = $derived([base, divider && dividerClass].filter(Boolean).join(' '));
+	const dividerSuffix = $derived(divider ? ` ${dividerClass}` : '');
+	const linkClass = $derived(base + dividerSuffix);
 	const buttonClass = $derived(
-		[base, 'disabled:cursor-not-allowed disabled:opacity-40', divider && dividerClass]
-			.filter(Boolean)
-			.join(' ')
+		`${base} disabled:cursor-not-allowed disabled:opacity-40${dividerSuffix}`
 	);
 </script>
 
