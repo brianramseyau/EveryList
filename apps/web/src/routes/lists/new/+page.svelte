@@ -67,7 +67,7 @@
 
 		<div class="flex items-center justify-between">
 			<Label>Icon</Label>
-			<IconPicker value={icon} onselect={(selected) => (icon = selected)} />
+			<IconPicker value={icon} onselect={(selected) => (icon = selected)} hint={name} />
 		</div>
 
 		<div class="flex items-center justify-between">

@@ -204,7 +204,7 @@
 			<div class="flex gap-4">
 				<div class="flex flex-col gap-1">
 					<span class="text-xs text-gray-500 dark:text-gray-400">Icon</span>
-					<IconPicker value={draftIcon} onselect={(icon) => (draftIcon = icon)} />
+					<IconPicker value={draftIcon} onselect={(icon) => (draftIcon = icon)} hint={draftName} />
 				</div>
 				<div class="flex flex-col gap-1">
 					<span class="text-xs text-gray-500 dark:text-gray-400">Color</span>
