@@ -6,6 +6,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import FavoriteItemTransformer from '#transformers/favorite_item_transformer'
 import ItemTransformer from '#transformers/item_transformer'
 import { broadcastSync } from '#services/sync_broadcaster'
+import { learnCategory } from '#services/category_suggestion_service'
 import {
   hasVersionConflict,
   parseExpectedVersion,
@@ -242,6 +243,12 @@ export default class FavoriteItemsController {
       createdBy: user.id,
       version: 1,
     })
+
+    // A favorite's default category is an explicit assignment, so re-adding
+    // the favorite to its list teaches the model (PHASE17_PLAN.md).
+    if (favorite.defaultCategoryId !== null) {
+      await learnCategory(list, favorite.name, favorite.defaultCategoryId)
+    }
 
     await broadcastSync({
       listId: list.id,

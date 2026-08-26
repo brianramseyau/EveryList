@@ -28,6 +28,7 @@ describe('getDb', () => {
 		expect(tableNames).toEqual(
 			[
 				'categories',
+				'categoryLearnings',
 				'favoriteItems',
 				'folders',
 				'items',

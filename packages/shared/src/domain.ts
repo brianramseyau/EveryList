@@ -66,6 +66,17 @@ export interface CategorizeSuggestionDto {
   categoryId: number | null
 }
 
+/** One learned name→category association, synced read-only to the client for its
+ * offline suggestion fallback — see PHASE17_PLAN.md. `token` is a normalized
+ * name token (packages/shared's `tokenizeItemName`), `count` the number of
+ * explicit assignments that produced it, and `lastSeenAt` the most recent. */
+export interface CategoryLearningDto {
+  categoryId: number
+  token: string
+  count: number
+  lastSeenAt: string
+}
+
 export interface FavoriteItemDto {
   id: number
   userId: number

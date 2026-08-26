@@ -109,6 +109,8 @@ router
         router.post(':listId/items/:itemId/restore', [controllers.Items, 'restore'])
         router.delete(':listId/items/:itemId/purge', [controllers.Items, 'purge'])
 
+        router.get(':listId/category-learnings', [controllers.CategoryLearnings, 'index'])
+
         router.get(':listId/stores', [controllers.Stores, 'index'])
         router.post(':listId/stores', [controllers.Stores, 'store'])
         router.delete(':listId/stores/:storeId', [controllers.Stores, 'detach'])

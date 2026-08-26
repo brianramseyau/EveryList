@@ -1,5 +1,5 @@
 import type { CategorizeSuggestionDto, ItemDto } from '@everylist/shared';
-import { suggestCategoryName } from '@everylist/shared';
+import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared';
 /* v8 ignore start */
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 import { getDb, type EveryListDB } from '$lib/offline/db';
@@ -151,9 +151,10 @@ async function staticGuessCategoryId(
 }
 
 /** Personalized (frequency-based) suggestion from the real backend service —
- * see PHASE7_PLAN.md §3. Falls back to the local static-table guess when the
- * request fails (offline and this exact list+name was never cached by the
- * service worker's `StaleWhileRevalidate` rule for `/api/v1/*`). */
+ * see PHASE7_PLAN.md §3. Falls back to the local learned-then-static-table
+ * guess when the request fails (offline and this exact list+name was never
+ * cached by the service worker's `StaleWhileRevalidate` rule for
+ * `/api/v1/*`). */
 async function guessCategoryId(
 	db: EveryListDB,
 	listId: number,
@@ -165,6 +166,16 @@ async function guessCategoryId(
 		);
 		return suggestion.categoryId;
 	} catch {
+		// Offline: replay the server's two-tier guess from the cached learned
+		// model, then the static keyword table (PHASE17_PLAN.md).
+		const tokens = tokenizeItemName(name);
+		if (tokens.length > 0) {
+			const cached = await db.categoryLearnings.get(listId);
+			if (cached) {
+				const learned = pickLearnedCategoryId(tokens, cached.learnings, Date.now());
+				if (learned !== null) return learned;
+			}
+		}
 		return staticGuessCategoryId(db, listId, name);
 	}
 }

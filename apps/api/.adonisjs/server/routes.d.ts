@@ -47,6 +47,7 @@ export type ScannedRoutes = {
     'lists.items.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.items.restore': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.items.purge': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
+    'lists.category_learnings.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.detach': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'storeId': ParamValue} }
@@ -95,6 +96,7 @@ export type ScannedRoutes = {
     'lists.items.recent': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.recent_names': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.categorize': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.category_learnings.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.favorite_items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_members.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
@@ -120,6 +122,7 @@ export type ScannedRoutes = {
     'lists.items.recent': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.recent_names': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.categorize': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.category_learnings.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.favorite_items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_members.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }

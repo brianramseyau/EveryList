@@ -156,6 +156,71 @@ describe('createItem (Dexie available)', () => {
 		expect(captured).toBeNull();
 	});
 
+	it('uses the cached learned category before the static table when the categorize endpoint fails', async () => {
+		const db = getDb()!;
+		await db.categoryLearnings.put({
+			listId: 1,
+			learnings: [
+				{ categoryId: 99, token: 'banana', count: 3, lastSeenAt: '2026-08-20T00:00:00.000Z' }
+			]
+		});
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('Failed to fetch'));
+		let captured: number | null | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			captured = await capturedOptimisticCategoryId();
+			return { id: 42, name: 'Bananas', version: 1 };
+		});
+
+		await createItem(1, { name: 'Bananas' });
+
+		expect(captured).toBe(99);
+	});
+
+	it('falls back to the static table when the cached learned model has no matching token', async () => {
+		const db = getDb()!;
+		await db.categories.put({
+			id: 9,
+			name: 'Produce',
+			icon: 'fruit',
+			sortOrder: 0,
+			listId: 1,
+			isDefault: true,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		await db.categoryLearnings.put({
+			listId: 1,
+			learnings: [
+				{ categoryId: 99, token: 'apple', count: 3, lastSeenAt: '2026-08-20T00:00:00.000Z' }
+			]
+		});
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('Failed to fetch'));
+		let captured: number | null | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			captured = await capturedOptimisticCategoryId();
+			return { id: 42, name: 'Bananas', version: 1 };
+		});
+
+		await createItem(1, { name: 'Bananas' });
+
+		expect(captured).toBe(9);
+	});
+
+	it('leaves categoryId null when the name tokenizes to nothing and the request fails', async () => {
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('Failed to fetch'));
+		let captured: number | null | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			captured = await capturedOptimisticCategoryId();
+			return { id: 42, name: '123', version: 1 };
+		});
+
+		await createItem(1, { name: '123' });
+
+		expect(captured).toBeNull();
+	});
+
 	it('respects an explicit categoryId over the guess', async () => {
 		let captured: number | null | undefined;
 		vi.mocked(apiPost).mockImplementation(async () => {

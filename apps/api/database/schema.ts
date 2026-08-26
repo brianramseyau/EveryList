@@ -91,6 +91,27 @@ export class CategorySchema extends BaseModel {
   declare version: number
 }
 
+export class CategoryLearningSchema extends BaseModel {
+  static $columns = ['categoryId', 'count', 'createdAt', 'id', 'lastSeenAt', 'listId', 'token', 'updatedAt'] as const
+  $columns = CategoryLearningSchema.$columns
+  @column()
+  declare categoryId: number
+  @column()
+  declare count: number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column.dateTime()
+  declare lastSeenAt: DateTime
+  @column()
+  declare listId: number
+  @column()
+  declare token: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
 export class FavoriteItemSchema extends BaseModel {
   static $columns = ['createdAt', 'defaultCategoryId', 'defaultQuantity', 'deletedAt', 'id', 'listId', 'name', 'notes', 'price', 'storeId', 'updatedAt', 'userId', 'version'] as const
   $columns = FavoriteItemSchema.$columns

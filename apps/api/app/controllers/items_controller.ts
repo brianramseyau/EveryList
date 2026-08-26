@@ -11,7 +11,7 @@ import {
 } from '#validators/item'
 import type { HttpContext } from '@adonisjs/core/http'
 import ItemTransformer from '#transformers/item_transformer'
-import { suggestCategoryId } from '#services/category_suggestion_service'
+import { learnCategory, suggestCategoryId } from '#services/category_suggestion_service'
 import { parseBulkImport } from '#services/bulk_import_parser'
 import { matchCategoryIcon, titleCaseCategoryName } from '#services/category_bulk_import'
 import type { CategorizeSuggestionDto } from '@everylist/shared'
@@ -217,6 +217,12 @@ export default class ItemsController {
       version: 1,
     })
 
+    // Only an *explicit* category choice teaches the model — never the
+    // auto-suggestion itself (PHASE17_PLAN.md's self-reinforcement guard).
+    if (typeof payload.categoryId === 'number') {
+      await learnCategory(list, payload.name, payload.categoryId)
+    }
+
     await broadcastSync({
       listId: list.id,
       entityType: 'item',
@@ -309,6 +315,11 @@ export default class ItemsController {
             version: 1,
           })
         )
+        // Only a section header's category is an explicit assignment worth
+        // teaching — items auto-categorized without a header are not.
+        if (sectionCategoryId !== null) {
+          await learnCategory(list, parsedItem.name, sectionCategoryId)
+        }
       }
     }
 
@@ -351,6 +362,7 @@ export default class ItemsController {
       })
     }
 
+    const previousCategoryId = item.categoryId
     item.merge(rest)
     if (checked !== undefined) {
       item.checked = checked
@@ -358,6 +370,13 @@ export default class ItemsController {
     }
     item.version += 1
     await item.save()
+
+    // Covers the dropdown and drag-to-category paths: re-assigning an item to
+    // a *different* non-null category is an explicit choice, so it teaches the
+    // model. Setting the same category again (or clearing to null) does not.
+    if (typeof payload.categoryId === 'number' && payload.categoryId !== previousCategoryId) {
+      await learnCategory(list, item.name, payload.categoryId)
+    }
 
     await broadcastSync({
       listId: list.id,

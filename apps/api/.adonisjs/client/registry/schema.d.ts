@@ -523,6 +523,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['purge']>>>
     }
   }
+  'lists.category_learnings.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/category-learnings'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/category_learnings_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/category_learnings_controller').default['index']>>>
+    }
+  }
   'lists.stores.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/lists/:listId/stores'

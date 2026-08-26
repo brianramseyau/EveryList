@@ -264,6 +264,12 @@ const routes = {
     tokens: [{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":1,"val":"itemId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"purge","end":""}],
     types: placeholder as Registry['lists.items.purge']['types'],
   },
+  'lists.category_learnings.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/lists/:listId/category-learnings',
+    tokens: [{"old":"/api/v1/lists/:listId/category-learnings","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/category-learnings","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/category-learnings","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/category-learnings","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/category-learnings","type":0,"val":"category-learnings","end":""}],
+    types: placeholder as Registry['lists.category_learnings.index']['types'],
+  },
   'lists.stores.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/lists/:listId/stores',

@@ -10,6 +10,7 @@ import FavoriteItem from '#models/favorite_item'
 import StoreCategoryOrder from '#models/store_category_order'
 import ListMember from '#models/list_member'
 import Folder from '#models/folder'
+import CategoryLearning from '#models/category_learning'
 import { DateTime } from 'luxon'
 
 test.group('List/Category/Item domain models', (group) => {
@@ -194,6 +195,34 @@ test.group('List/Category/Item domain models', (group) => {
     assert.equal(member.user.id, owner.id)
     assert.lengthOf(list.members, 1)
     assert.equal(list.members[0]!.id, member.id)
+  })
+
+  test('a category learning belongs to its list and category', async ({ assert }) => {
+    const owner = await User.create({
+      fullName: 'Ada Lovelace',
+      email: 'ada7@example.com',
+      password: 'password123',
+    })
+    const list = await List.create({ name: 'Groceries', ownerId: owner.id })
+    const category = await Category.create({
+      name: 'Produce',
+      icon: 'fruitCherries',
+      listId: list.id,
+    })
+    const learning = await CategoryLearning.create({
+      listId: list.id,
+      categoryId: category.id,
+      token: 'apple',
+      count: 1,
+      lastSeenAt: DateTime.now(),
+    })
+
+    await learning.load('list')
+    await learning.load('category')
+
+    assert.equal(learning.list.id, list.id)
+    assert.equal(learning.category.id, category.id)
+    assert.equal(learning.count, 1)
   })
 
   test('a folder belongs to its owner and has many lists; a list belongs to its folder', async ({
