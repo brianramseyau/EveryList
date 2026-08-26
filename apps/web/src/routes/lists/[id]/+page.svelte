@@ -806,7 +806,11 @@
 								<ul
 									class="flex flex-col gap-1"
 									data-container-id={group.category?.id ?? 'null'}
-									use:sortableReorder={{ group: 'list-items', onDrop: handleItemDrop }}
+									use:sortableReorder={{
+										group: 'list-items',
+										fallbackAxis: 'y',
+										onDrop: handleItemDrop
+									}}
 								>
 									{#each group.items as item (item.id)}
 										<li class="relative overflow-hidden rounded-lg" data-item-id={item.id}>

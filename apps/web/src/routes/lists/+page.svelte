@@ -215,7 +215,12 @@
 							? 'rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700'
 							: ''}"
 						data-container-id={group.folder.id}
-						use:sortableReorder={{ group: LISTS_GROUP, disabled: reordering, onDrop: handleDrop }}
+						use:sortableReorder={{
+							group: LISTS_GROUP,
+							disabled: reordering,
+							fallbackAxis: 'y',
+							onDrop: handleDrop
+						}}
 					>
 						{#each group.lists as list (list.id)}
 							{@render listCard(list)}
@@ -242,7 +247,12 @@
 				<ul
 					class="flex min-h-14 flex-col gap-2"
 					data-container-id="null"
-					use:sortableReorder={{ group: LISTS_GROUP, disabled: reordering, onDrop: handleDrop }}
+					use:sortableReorder={{
+						group: LISTS_GROUP,
+						disabled: reordering,
+						fallbackAxis: 'y',
+						onDrop: handleDrop
+					}}
 				>
 					{#each unfiledLists as list (list.id)}
 						{@render listCard(list)}

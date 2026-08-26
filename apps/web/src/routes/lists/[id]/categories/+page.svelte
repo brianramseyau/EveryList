@@ -171,7 +171,12 @@
 
 		<ul
 			class="flex flex-col gap-2"
-			use:sortableReorder={{ group: 'categories', disabled: reordering, onDrop: handleDrop }}
+			use:sortableReorder={{
+				group: 'categories',
+				disabled: reordering,
+				fallbackAxis: 'y',
+				onDrop: handleDrop
+			}}
 		>
 			{#each categories as category (category.id)}
 				<li
