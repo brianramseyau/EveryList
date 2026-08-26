@@ -112,6 +112,21 @@
 	--color-primary-950: #451a03;
 }
 
+/* The single centered app-column width, stepped up from the mobile-first
+   max-w-lg so the app stops looking like a phone screen floating in a
+   desktop browser (PHASE8_PLAN.md §7). 512px on phones, 768px from md up
+   (fills a 768/820/834px iPad portrait), and 1024px from lg up — Chrome's
+   iPad portrait is 1024 wide and landscape 1366, so this fills those nicely
+   while capping well short of a desktop monitor: a 1920px screen still shows
+   a readable, scannable shopping column with generous margins instead of rows
+   stretched edge to edge, and 4K gets the same 1024px column, never
+   full-width. Every page's <main>, the fixed PageHeader, the fixed progress
+   strip, and BottomNav's items all share this so the whole app keeps one
+   column edge. */
+@utility app-max-w {
+	@apply max-w-lg md:max-w-3xl lg:max-w-5xl;
+}
+
 /* Matches the tokens applied to the root layout wrapper (bg-white /
    dark:bg-gray-900) so there's no white flash outside that wrapper (e.g.
    mobile overscroll) and native form controls/scrollbars pick the right
