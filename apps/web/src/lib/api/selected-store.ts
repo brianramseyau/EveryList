@@ -9,6 +9,10 @@ import { getDb, type SelectedStoreSettings } from '$lib/offline/db';
  * than the sync queue, since it's never sent to the server.
  */
 export async function getSelectedStoreSettings(listId: number): Promise<SelectedStoreSettings> {
+	// Same v8-attribution artifact as flush.ts/sync-queue.ts: the item-detail
+	// page spec's `vi.mock('$lib/offline/db')` makes this genuinely-covered
+	// `getDb()` call report 0 hits once merged into the full suite.
+	/* v8 ignore next */
 	const db = getDb();
 	if (!db) return { storeId: null, filter: 'store' };
 
