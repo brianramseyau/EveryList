@@ -6,7 +6,8 @@ import type {
 	FavoriteItemDto,
 	StoreDto,
 	StoreCategoryOrderDto,
-	FolderDto
+	FolderDto,
+	CategoryLearningDto
 } from '@everylist/shared';
 
 /**
@@ -100,6 +101,14 @@ export type OfflineStoreCategoryOrder = StoreCategoryOrderDto & OfflineBookkeepi
  * bookkeeping to carry, unlike the other cached entities above. */
 export type OfflineFolder = FolderDto;
 
+/** A list's learned categorization model, cached read-only (no `_dirty`, no sync queue). One
+ * row per list holding the whole `CategoryLearningDto[]`, since it's always full-replaced from
+ * the server's authoritative copy on fetch rather than edited in place — see PHASE17_PLAN.md. */
+export interface OfflineCategoryLearnings {
+	listId: number;
+	learnings: CategoryLearningDto[];
+}
+
 export class EveryListDB extends Dexie {
 	lists!: Table<OfflineList, number>;
 	categories!: Table<OfflineCategory, number>;
@@ -111,6 +120,7 @@ export class EveryListDB extends Dexie {
 	selectedStore!: Table<SelectedStoreRow, number>;
 	syncQueue!: Table<QueuedMutation, number>;
 	folders!: Table<OfflineFolder, number>;
+	categoryLearnings!: Table<OfflineCategoryLearnings, number>;
 
 	constructor() {
 		super('everylist');
@@ -129,6 +139,9 @@ export class EveryListDB extends Dexie {
 		});
 		this.version(3).stores({
 			folders: 'id'
+		});
+		this.version(4).stores({
+			categoryLearnings: 'listId'
 		});
 	}
 }

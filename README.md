@@ -32,7 +32,7 @@ EveryList is feature-complete and self-hostable today.
 ## Features
 
 - **Lists & items** — unlimited lists, quantities, notes, prices with a running budget total, soft-delete with recent-items recovery.
-- **Auto-categorization** — items sort into aisle-style categories (Produce, Dairy, Meat, ...) via keyword matching, personalized over time from each list's own item history, fully customizable per list.
+- **Auto-categorization** — items sort into aisle-style categories (Produce, Dairy, Meat, ...) via keyword matching plus a learned model that remembers each list's explicit category choices (with decay, so stale guesses age out), synced to the device so it keeps working offline, fully customizable per list.
 - **Store-aware aisle order** — pick the store you're shopping at and categories reorder to match its real layout; tag items to a store and filter the list down to just that store's items. Store data and aisle order are shared with everyone the list is shared with.
 - **Favorites** — go-to items for one-tap re-adding to the list they belong to; scoped per list, since a grocery list and a packing list don't share go-to items.
 - **Paste import** — paste a block of text and each line gets parsed and auto-categorized.

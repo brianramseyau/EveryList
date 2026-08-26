@@ -37,6 +37,47 @@ foundational/   PLAN.md and phase plans — the product/architecture spec
 - Before merging any migration that alters an existing (non-empty-in-prod) table, reproduce it against a seeded SQLite file locally first: build the schema at the pre-migration state, insert representative rows into parent + child tables, run just the new migration, and confirm child rows survive. Don't rely on the test suite alone — Japa tests run against a fresh empty schema every time and won't catch this class of bug.
 - There were no production backups configured as of this incident. **Update (2026-08-22): fixed** — see `app/services/backup_service.ts`, configurable from `Settings → Backups` (daily/weekly/monthly, a chosen time of day, and a retention window in days), taken via better-sqlite3's native online backup API so it's safe to run against a live database. Still treat schema changes conservatively — a restore is now possible, but is not the same as a schema change being risk-free.
 
+### `this.schema.createTable` is deferred — a same-migration data insert must run through `this.defer()`
+
+**Incident (2026-08-26):** migration `1787800000000_create_category_learnings_table.ts` created the
+`category_learnings` table and then, in the same `up()`, backfilled it with `await this.db.table('category_learnings').insert(...)`.
+That insert failed on container boot with `no such table: category_learnings`, because AdonisJS
+Lucid's `this.schema.createTable(...)` does **not** execute the DDL immediately. `this.schema` is a
+getter that pushes a *deferred* schema builder onto `BaseSchema`'s `trackedCalls` queue, and the whole
+queue only runs in `executeQueries()` **after `up()` returns**. The `this.db` backfill, in contrast,
+ran immediately during `up()` — before the table existed. Migrations are transactional, so the failure
+rolled the whole migration back cleanly (no data loss), but it meant the migration could never apply to
+a populated production DB.
+
+**Fix:** wrap any data writes that must follow a same-migration DDL change in `this.defer()`:
+
+```ts
+this.schema.createTable(this.tableName, (table) => { ... })
+
+// Runs after the createTable above, in the order the two were tracked.
+this.defer((db) => this.backfill(db))   // db: QueryClientContract
+```
+
+`defer` tracks a callback into the same queue as the schema builders, so it executes in tracked order
+(DDL first, then the callback) inside the migration's transaction. Only a `CREATE`-only migration that
+*also* seeds/backfills data from `this.db` hits this; pure-DDL migrations and `this.db`-only data
+migrations (e.g. `migrate_default_categories_to_lists.ts`) are unaffected.
+
+**What this means for future work:**
+
+- Any migration that needs to **insert/update data into a table it just created** (or just altered)
+  must do that data work inside `this.defer(...)`, never as a bare `await this.db...` after the
+  `this.schema` call. `this.schema.createTable`/`alterTable`/`dropTable` queue their DDL; `this.db`
+  executes immediately — mixing them in `up()` without `defer` is the exact shape that fails.
+- The existing test suite won't catch this: Japa's `testUtils.db().migrate()` runs against a *fresh*
+  empty schema, so a backfill loops over zero rows and never touches the insert path. Reproduce it
+  manually like the ALTER footgun above — migrate up to the pre-migration state, seed rows, then run
+  the new migration against that file (or unit-test an extracted, pure grouping helper the way
+  `category_learning_backfill.ts` does).
+- If a migration boots and fails with `no such table: X` where `X` is a table you create in the *same*
+  migration's `up()`, this is the bug — check whether the failing write is a bare `this.db` call that
+  should be wrapped in `this.defer()`.
+
 ### Realtime SSE broadcasts can silently miss the first write after a fresh server boot
 
 **Status (2026-08-22): open, unresolved — needs investigation, not yet reproduced to a root cause.**

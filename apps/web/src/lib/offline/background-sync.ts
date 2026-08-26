@@ -2,6 +2,7 @@ import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import type { ListDto } from '@everylist/shared';
 import { fetchCategories } from '$lib/api/categories';
+import { fetchCategoryLearnings } from '$lib/api/category-learnings';
 import { fetchFavorites } from '$lib/api/favorites';
 import { fetchFolders } from '$lib/api/folders';
 import { fetchItems, fetchRecentItems } from '$lib/api/items';
@@ -44,6 +45,7 @@ async function syncAllLists(): Promise<void> {
 			await Promise.all([
 				fetchList(list.id),
 				fetchCategories(list.id),
+				fetchCategoryLearnings(list.id),
 				fetchItems(list.id),
 				fetchStores(list.id),
 				fetchFavorites(list.id),

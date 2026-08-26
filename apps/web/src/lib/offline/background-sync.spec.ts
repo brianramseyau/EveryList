@@ -4,6 +4,7 @@ import type { ListDto } from '@everylist/shared';
 vi.mock('$lib/api/lists', () => ({ fetchLists: vi.fn(), fetchList: vi.fn() }));
 vi.mock('$lib/api/folders', () => ({ fetchFolders: vi.fn() }));
 vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
+vi.mock('$lib/api/category-learnings', () => ({ fetchCategoryLearnings: vi.fn() }));
 vi.mock('$lib/api/items', () => ({ fetchItems: vi.fn(), fetchRecentItems: vi.fn() }));
 vi.mock('$lib/api/favorites', () => ({ fetchFavorites: vi.fn() }));
 vi.mock('$lib/api/stores', () => ({
@@ -26,6 +27,7 @@ vi.mock('@capacitor/app', () => ({ App: { addListener: vi.fn() } }));
 const { fetchLists, fetchList } = await import('$lib/api/lists');
 const { fetchFolders } = await import('$lib/api/folders');
 const { fetchCategories } = await import('$lib/api/categories');
+const { fetchCategoryLearnings } = await import('$lib/api/category-learnings');
 const { fetchItems, fetchRecentItems } = await import('$lib/api/items');
 const { fetchFavorites } = await import('$lib/api/favorites');
 const { fetchStores, fetchStoreCategoryOrder } = await import('$lib/api/stores');
@@ -61,6 +63,7 @@ describe('background-sync', () => {
 		vi.mocked(fetchFolders).mockResolvedValue([]);
 		vi.mocked(fetchList).mockResolvedValue(listDto(1));
 		vi.mocked(fetchCategories).mockResolvedValue([]);
+		vi.mocked(fetchCategoryLearnings).mockResolvedValue([]);
 		vi.mocked(fetchItems).mockResolvedValue([]);
 		vi.mocked(fetchRecentItems).mockResolvedValue([]);
 		vi.mocked(fetchFavorites).mockResolvedValue([]);
@@ -88,6 +91,7 @@ describe('background-sync', () => {
 		expect(fetchList).toHaveBeenCalledWith(3);
 		expect(fetchList).not.toHaveBeenCalledWith(2);
 		expect(fetchCategories).toHaveBeenCalledWith(1);
+		expect(fetchCategoryLearnings).toHaveBeenCalledWith(1);
 		expect(fetchItems).toHaveBeenCalledWith(1);
 		expect(fetchStores).toHaveBeenCalledWith(1);
 		expect(fetchFavorites).toHaveBeenCalledWith(1);

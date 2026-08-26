@@ -9,6 +9,7 @@
 	import { getToken } from '$lib/api/token';
 	import { emailExportList, fetchList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
+	import { fetchCategoryLearnings } from '$lib/api/category-learnings';
 	import { createItem, deleteItem, fetchItems, updateItem } from '$lib/api/items';
 	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
 	import { getSelectedStoreSettings } from '$lib/api/selected-store';
@@ -236,6 +237,10 @@
 				fetchItems(listId),
 				fetchStores(listId)
 			]);
+			// Warm the read-only learned-model cache for this list's offline
+			// suggestion fallback (PHASE17_PLAN.md) — non-blocking, so a failure
+			// here doesn't fail the page load.
+			void fetchCategoryLearnings(listId);
 
 			const settings = await getSelectedStoreSettings(listId);
 			selectedStoreId = settings.storeId;

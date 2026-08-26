@@ -1,41 +1,88 @@
 import type List from '#models/list'
-import Item from '#models/item'
-import { suggestCategoryName } from '@everylist/shared'
+import CategoryLearning from '#models/category_learning'
+import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared'
+import type { CategoryLearningDto } from '@everylist/shared'
 import { getEffectiveCategories } from '#services/category_service'
 import logger from '@adonisjs/core/services/logger'
+import { DateTime } from 'luxon'
 
 /**
- * Frequency-based personalization on top of the static keyword table — see
- * PHASE7_PLAN.md §3. Scoped per-list (not per-user): a shared list's own
- * naming history is a better signal than a global one, and it benefits
- * every member equally without needing per-user profiles.
+ * Learned auto-categorization (PHASE17_PLAN.md): a persisted, decayed model
+ * that only learns from *explicit* user category assignments — never from the
+ * auto-suggestion itself, avoiding self-reinforcement. The static keyword
+ * table in packages/shared stays as the fallback. Server-authoritative: the
+ * web client caches a read-only copy for offline suggestions, but every
+ * write to the model happens here.
  */
-async function personalizedCategoryId(list: List, itemName: string): Promise<number | null> {
-  const normalized = itemName.trim().toLowerCase()
-  if (!normalized) return null
 
-  const row = await Item.query()
-    .where('listId', list.id)
-    .whereRaw('LOWER(name) = ?', [normalized])
-    .whereNotNull('categoryId')
-    .select('categoryId')
-    .count('* as count')
-    .groupBy('categoryId')
-    .orderBy('count', 'desc')
-    .first()
+/**
+ * Records one explicit assignment of `categoryId` to an item named `name`:
+ * each name token's count is incremented and its `lastSeenAt` bumped. Rows
+ * are never decremented or deleted, so a dormant-but-uncontested mapping
+ * still categorizes forever.
+ */
+export async function learnCategory(list: List, name: string, categoryId: number): Promise<void> {
+  const tokens = tokenizeItemName(name)
+  if (tokens.length === 0) return
 
-  return (row?.categoryId as number | undefined) ?? null
+  const now = DateTime.now()
+  for (const token of tokens) {
+    const existing = await CategoryLearning.query()
+      .where('listId', list.id)
+      .where('categoryId', categoryId)
+      .where('token', token)
+      .first()
+
+    if (existing) {
+      existing.count += 1
+      existing.lastSeenAt = now
+      await existing.save()
+    } else {
+      await CategoryLearning.create({
+        listId: list.id,
+        categoryId,
+        token,
+        count: 1,
+        lastSeenAt: now,
+      })
+    }
+  }
 }
 
-/** Personalized history first, falling back to the shared static keyword table. */
+/**
+ * Every learned association for a list, limited to *active* categories — a
+ * soft-deleted category's learned rows are dropped here so its stale id is
+ * never suggested (the bug the old item-derived heuristic had). Ordered most
+ * recently seen first.
+ */
+export async function getCategoryLearnings(list: List): Promise<CategoryLearningDto[]> {
+  const rows = await CategoryLearning.query()
+    .where('listId', list.id)
+    .whereHas('category', (query) => query.whereNull('deletedAt'))
+    .orderBy('lastSeenAt', 'desc')
+
+  return rows.map((row) => ({
+    categoryId: row.categoryId,
+    token: row.token,
+    count: row.count,
+    lastSeenAt: row.lastSeenAt.toISO()!,
+  }))
+}
+
+/** Learned model first, falling back to the shared static keyword table. */
 export async function suggestCategoryId(list: List, itemName: string): Promise<number | null> {
-  const personalized = await personalizedCategoryId(list, itemName)
-  if (personalized) {
-    logger.debug(
-      { listId: list.id, categoryId: personalized, source: 'personalized' },
-      'suggested category for item'
-    )
-    return personalized
+  const tokens = tokenizeItemName(itemName)
+
+  if (tokens.length > 0) {
+    const learnings = await getCategoryLearnings(list)
+    const learnedId = pickLearnedCategoryId(tokens, learnings, DateTime.now().toMillis())
+    if (learnedId !== null) {
+      logger.debug(
+        { listId: list.id, categoryId: learnedId, source: 'learned' },
+        'suggested category for item'
+      )
+      return learnedId
+    }
   }
 
   const suggestedName = suggestCategoryName(itemName)

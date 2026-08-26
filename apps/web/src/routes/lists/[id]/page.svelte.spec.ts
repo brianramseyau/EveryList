@@ -39,6 +39,7 @@ vi.mock('$lib/api/lists', () => ({
 	emailExportList: vi.fn()
 }));
 vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
+vi.mock('$lib/api/category-learnings', () => ({ fetchCategoryLearnings: vi.fn() }));
 vi.mock('$lib/api/items', () => ({
 	fetchItems: vi.fn(),
 	createItem: vi.fn(),
@@ -61,6 +62,7 @@ vi.mock('$lib/open-external-link', () => ({ openExternalLink: vi.fn() }));
 
 const { fetchList, emailExportList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
+const { fetchCategoryLearnings } = await import('$lib/api/category-learnings');
 const { fetchItems, createItem, deleteItem, updateItem, fetchRecentItemNames } =
 	await import('$lib/api/items');
 const { fetchFavorites } = await import('$lib/api/favorites');
@@ -141,6 +143,7 @@ describe('List detail +page.svelte', () => {
 		setToken('test-token');
 		vi.mocked(fetchList).mockResolvedValue(list);
 		vi.mocked(fetchCategories).mockResolvedValue([produce, dairy]);
+		vi.mocked(fetchCategoryLearnings).mockResolvedValue([]);
 		vi.mocked(fetchItems).mockResolvedValue([]);
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([]);
 		vi.mocked(fetchStores).mockResolvedValue([]);
