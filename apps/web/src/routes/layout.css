@@ -168,6 +168,14 @@ html {
 	touch-action: pan-x pan-y;
 }
 
+/* SortableJS's fallback drag ghost is a cloneNode of an <li> appended to
+   document.body (fallbackOnBody), outside the <ul> whose preflight reset
+   strips list markers — so the <li>'s default disc bullet would otherwise
+   render beside the dragged row. */
+.sortable-fallback {
+	list-style: none;
+}
+
 /* Page-transition slide (PHASE9_PLAN.md #11) — direction is set on <html>
    by +layout.svelte's onNavigate hook just before startViewTransition()
    runs. Kept short ("snappy, not drawn out") and, like the checkmark
