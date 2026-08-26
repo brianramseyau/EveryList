@@ -595,7 +595,7 @@
 
 <svelte:window onclick={handleStoreMenuWindowClick} onkeydown={handleStoreMenuWindowKeydown} />
 
-<main class="mx-auto flex max-w-lg flex-col gap-4 px-4 pb-8">
+<main class="mx-auto flex app-max-w flex-col gap-4 px-4 pb-8">
 	<PageHeader
 		title={list?.name}
 		htmlTitle={list ? list.name : 'List'}
@@ -895,13 +895,13 @@
 									{#each group.items as item (item.id)}
 										<li class="relative overflow-hidden rounded-lg" data-item-id={item.id}>
 											<div
-												class="absolute inset-y-0 left-0 flex w-20 items-center justify-center bg-red-600 text-white print:hidden"
+												class="absolute top-px bottom-px left-px flex w-20 items-center justify-center rounded-l-lg bg-red-600 text-white print:hidden"
 												aria-hidden="true"
 											>
 												<Icon name="trashCanOutline" class="h-5 w-5" />
 											</div>
 											<div
-												class="absolute inset-y-0 right-0 flex w-20 items-center justify-center bg-blue-600 text-white print:hidden"
+												class="absolute top-px right-px bottom-px flex w-20 items-center justify-center rounded-r-lg bg-blue-600 text-white print:hidden"
 												aria-hidden="true"
 											>
 												<Icon name="pencil" class="h-5 w-5" />
@@ -1026,7 +1026,7 @@
 					</div>
 
 					<div
-						class="fixed inset-x-4 z-10 mx-auto flex max-w-lg items-center justify-between rounded-t-xl border border-b-0 border-gray-200 bg-paper px-4 py-2 text-sm shadow-sm dark:border-gray-700 print:hidden"
+						class="fixed inset-x-4 z-10 mx-auto flex app-max-w items-center justify-between rounded-t-xl border border-b-0 border-gray-200 bg-paper px-4 py-2 text-sm shadow-sm dark:border-gray-700 print:hidden"
 						style="bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));"
 					>
 						<span class="text-gray-600 dark:text-gray-400">

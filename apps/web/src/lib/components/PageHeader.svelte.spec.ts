@@ -101,12 +101,12 @@ describe('PageHeader.svelte', () => {
 		await expect.element(page.getByText('Extra content')).toBeInTheDocument();
 	});
 
-	it('sizes the fixed wrapper to the same centered max-w-lg column every page uses, not a shrink-to-fit width', async () => {
+	it('sizes the fixed wrapper to the same centered app-max-w column every page uses, not a shrink-to-fit width', async () => {
 		// A `position: fixed` box with no explicit width shrinks to fit its
 		// content instead of matching the page's own centered column — which
 		// left scrolled list rows' right-hand edge (delete/edit buttons)
 		// uncovered by this header on lists/[id], visible bleeding through on
-		// scroll. inset-x-0 + mx-auto + max-w-lg + px-4 replicates the exact
+		// scroll. inset-x-0 + mx-auto + app-max-w + px-4 replicates the exact
 		// box every page's own <main> computes, independent of DOM position.
 		render(PageHeader, { title: 'List', fixed: true });
 
@@ -114,7 +114,7 @@ describe('PageHeader.svelte', () => {
 		const wrapper = heading.closest('div.fixed') as HTMLElement;
 		expect(wrapper.className).toContain('inset-x-0');
 		expect(wrapper.className).toContain('mx-auto');
-		expect(wrapper.className).toContain('max-w-lg');
+		expect(wrapper.className).toContain('app-max-w');
 		expect(wrapper.className).toContain('px-4');
 	});
 
