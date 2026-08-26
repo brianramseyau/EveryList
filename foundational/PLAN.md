@@ -274,7 +274,7 @@ Tag computation uses `docker/metadata-action`, which derives all of this from a 
 - **Performance:** Lighthouse PWA/Performance/Accessibility/Best-Practices scores ≥ 90 on the list-view route, checked in CI on the built app.
 - **Accessibility:** WCAG 2.1 AA target; Flowbite's components are a starting point, not a guarantee — verified with `axe-core` in both component tests and E2E.
 - **Security:** VineJS validation at every boundary, Adonis rate limiter on auth and mutation endpoints, hashed tokens/passwords, dependency audit in CI (`pnpm audit` or equivalent), CSRF protection if any cookie-based flows are introduced.
-- **Data ownership:** soft-delete (`deletedAt`) everywhere user-visible "recent/deleted" recovery depends on it; hard-delete only via an explicit purge job after a retention window (TBD, default 30 days).
+- **Data ownership:** soft-delete (`deletedAt`) everywhere user-visible "recent/deleted" recovery depends on it; hard-delete only via an explicit purge job after a retention window (180 days, see `apps/api/app/services/item_purge_service.ts` — anchored on `deletedAt` since Phase 17 moved category learning out of `items` history, so deleted rows have no reason to be kept forever).
 - **i18n:** not implemented in v1, but strings are kept out of component markup where cheap to do so, to avoid a costly later migration.
 
 ---
