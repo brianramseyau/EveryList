@@ -91,7 +91,7 @@
 
 {#if fixed}
 	<div
-		class="fixed inset-x-0 top-0 z-20 mx-auto flex max-w-lg flex-col gap-4 bg-paper px-8 pt-[max(env(safe-area-inset-top),2rem)]"
+		class="fixed inset-x-0 top-0 z-20 mx-auto flex max-w-lg flex-col gap-1 bg-paper px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-1"
 		style="touch-action: pan-x pan-y; transform: translateZ(0); will-change: transform;"
 		bind:clientHeight={height}
 	>

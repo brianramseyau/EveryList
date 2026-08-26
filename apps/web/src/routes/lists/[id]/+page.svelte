@@ -96,11 +96,19 @@
 	// Sets the sticky category heading's offset imperatively (rather than a
 	// templated style attribute) so it tracks stickyHeaderHeight without
 	// re-running the whole element's attribute diff on every resize.
+	//
+	// Tucked 1px up under the fixed header (its measured height minus one)
+	// rather than butting flush against it: on Android/Blink the header and the
+	// sticky heading are rasterized on separate compositor layers, and their
+	// shared edge rounds to different device-pixel boundaries during a fling,
+	// leaving a 1–2px seam where scrolled item text shows through (not seen on
+	// desktop or iOS). The header is opaque and z-20 above the heading's z-10,
+	// so the 1px overlap is hidden behind it and simply closes the seam.
 	function stickyTop(node: HTMLElement, top: number) {
-		node.style.top = `${top}px`;
+		node.style.top = `${top - 1}px`;
 		return {
 			update(newTop: number) {
-				node.style.top = `${newTop}px`;
+				node.style.top = `${newTop - 1}px`;
 			}
 		};
 	}
@@ -546,7 +554,7 @@
 	}
 </script>
 
-<main class="mx-auto flex max-w-lg flex-col gap-4 px-8 pb-8">
+<main class="mx-auto flex max-w-lg flex-col gap-4 px-4 pb-8">
 	<PageHeader
 		title={list?.name}
 		htmlTitle={list ? list.name : 'List'}
@@ -774,12 +782,12 @@
 						</p>
 					</div>
 				{:else}
-					<div class="flex flex-col gap-6 pb-16">
+					<div class="flex flex-col gap-2 pb-16">
 						{#each groups as group (group.category?.id ?? 'uncategorized')}
 							<section>
 								{#if list.useCategories !== false}
 									<h2
-										class="sticky z-10 mb-2 flex items-center gap-2 border-b bg-paper pb-1 text-sm font-semibold {group.category
+										class="sticky z-10 mb-1 flex items-center gap-2 border-b bg-paper pb-1 text-sm font-semibold {group.category
 											? ''
 											: 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-400'}"
 										use:stickyTop={stickyHeaderHeight}
@@ -972,8 +980,8 @@
 	}
 
 	.item-row {
-		min-height: 3.5rem;
-		padding-block: 0.5rem;
+		min-height: 3rem;
+		padding-block: 0.25rem;
 		transition: background-color 600ms ease-out;
 	}
 
