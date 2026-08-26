@@ -106,7 +106,7 @@ describe('PageHeader.svelte', () => {
 		// content instead of matching the page's own centered column — which
 		// left scrolled list rows' right-hand edge (delete/edit buttons)
 		// uncovered by this header on lists/[id], visible bleeding through on
-		// scroll. inset-x-0 + mx-auto + max-w-lg + px-8 replicates the exact
+		// scroll. inset-x-0 + mx-auto + max-w-lg + px-4 replicates the exact
 		// box every page's own <main> computes, independent of DOM position.
 		render(PageHeader, { title: 'List', fixed: true });
 
@@ -115,7 +115,7 @@ describe('PageHeader.svelte', () => {
 		expect(wrapper.className).toContain('inset-x-0');
 		expect(wrapper.className).toContain('mx-auto');
 		expect(wrapper.className).toContain('max-w-lg');
-		expect(wrapper.className).toContain('px-8');
+		expect(wrapper.className).toContain('px-4');
 	});
 
 	it('binds a positive `height` once the fixed wrapper mounts', async () => {
