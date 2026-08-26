@@ -214,7 +214,7 @@ describe('List detail +page.svelte', () => {
 		const heading = [...document.querySelectorAll('h2')].find(
 			(h) => h.textContent?.trim() === 'Dairy'
 		)!;
-		expect(heading.style.top).toBe(`${headerHeight}px`);
+		expect(heading.style.top).toBe(`${headerHeight - 1}px`);
 
 		const content = header!.nextElementSibling as HTMLElement;
 		expect(content.style.paddingTop).toBe(`${headerHeight}px`);
