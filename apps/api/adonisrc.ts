@@ -75,7 +75,7 @@ export default defineConfig({
     // top of #start/routes for why.
     () => import('#start/routes'),
     () => import('#start/backup_scheduler'),
-    () => import('#start/item_purge_scheduler'),
+    () => import('#start/pruner_scheduler'),
   ],
 
   /*
