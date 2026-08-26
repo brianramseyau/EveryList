@@ -6,6 +6,7 @@
 // handles the rest.
 
 import Sortable from 'sortablejs';
+import { SortableAxisLock, type FallbackAxis } from './sortable-axis-lock';
 
 export interface SortableReorderParams {
 	/** Shared across every `<ul>` in the same drag surface — required for
@@ -16,6 +17,10 @@ export interface SortableReorderParams {
 	 * others sharing their exact group name. */
 	group: string;
 	disabled?: boolean;
+	/** Pins the fallback drag ghost to a single axis ('y' keeps it from
+	 * drifting horizontally while reordering a vertical list). SortableJS
+	 * itself has no such option, so this is applied by the axis-lock plugin. */
+	fallbackAxis?: FallbackAxis;
 	/** Fired once on drop, only if the item actually moved (container or
 	 * position). Everything is read off `data-item-id` / `data-container-id`
 	 * attributes rather than array indices. `beforeItemId`/`afterItemId` are
@@ -35,12 +40,29 @@ function parseContainerId(raw: string | undefined): number | null {
 	return raw === undefined || raw === 'null' ? null : Number(raw);
 }
 
+let axisLockMounted = false;
+
+// SortableJS's `option()` is generic over `keyof Sortable.Options`, which
+// predates the non-upstream `fallbackAxis` option applied by the axis-lock
+// plugin — extend it so that option name is accepted too.
+type AxisLockSortable = Sortable & {
+	option(name: 'fallbackAxis', value: FallbackAxis | null): void;
+};
+
 export function sortableReorder(node: HTMLElement, params: SortableReorderParams) {
 	let current = params;
 
-	const sortable = Sortable.create(node, {
+	// Mount once, on first use — deferred out of module scope so importing
+	// this action stays side-effect free (and SSR-safe).
+	if (!axisLockMounted) {
+		axisLockMounted = true;
+		Sortable.mount(SortableAxisLock);
+	}
+
+	const options: Sortable.Options & { fallbackAxis?: FallbackAxis | null } = {
 		group: current.group,
 		disabled: current.disabled,
+		fallbackAxis: current.fallbackAxis ?? null,
 		animation: 150,
 		// Not delayOnTouchOnly: a reorder is a deliberate press-and-hold on
 		// every pointer, per the plan's long-press convention. Without the
@@ -90,13 +112,15 @@ export function sortableReorder(node: HTMLElement, params: SortableReorderParams
 			if (unchanged) return;
 			current.onDrop({ itemId, toContainerId, beforeItemId, afterItemId });
 		}
-	});
+	};
+	const sortable = Sortable.create(node, options) as AxisLockSortable;
 
 	return {
 		update(next: SortableReorderParams) {
 			current = next;
 			sortable.option('disabled', Boolean(next.disabled));
 			sortable.option('group', next.group);
+			sortable.option('fallbackAxis', next.fallbackAxis ?? null);
 		},
 		destroy() {
 			sortable.destroy();

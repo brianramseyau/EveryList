@@ -52,6 +52,17 @@ function hasFallbackGhost() {
 	return document.querySelector('.sortable-fallback') !== null;
 }
 
+// Reads the fallback ghost's inline transform translation (matrix a,b,c,d,e,f
+// → { x: e, y: f }). Returns null while the ghost is absent or unpositioned.
+function ghostTranslation(): { x: number; y: number } | null {
+	const ghost = document.querySelector('.sortable-fallback') as HTMLElement | null;
+	if (!ghost) return null;
+	const match = /^matrix\(([^)]+)\)$/.exec(ghost.style.transform);
+	if (!match) return null;
+	const values = match[1].split(',').map(Number);
+	return { x: values[4], y: values[5] };
+}
+
 // `toYFraction` positions the drop within the target row (0 = top edge, 1 =
 // bottom edge). SortableJS's fallback swap decision is threshold-based
 // (swapThreshold: 0.65) — landing near the row's exact center is a genuine
@@ -313,5 +324,136 @@ describe('sortableReorder', () => {
 		expect(Sortable.get(ul)).not.toBeNull();
 		action.destroy?.();
 		expect(Sortable.get(ul)).toBeNull();
+	});
+
+	it("locks the fallback ghost to the y-axis when fallbackAxis is 'y'", async () => {
+		const ul = makeList('7');
+		lists.push(ul);
+		const a = makeRow(1);
+		const b = makeRow(2);
+		ul.append(a, b);
+
+		const onDrop = vi.fn();
+		sortableReorder(ul, { group: 'test-lock-y', fallbackAxis: 'y', onDrop });
+
+		const rect = a.getBoundingClientRect();
+		const x = rect.x + rect.width / 2;
+		const y = rect.y + rect.height / 2;
+		const move = (clientX: number, clientY: number) =>
+			document.dispatchEvent(
+				new PointerEvent('pointermove', {
+					bubbles: true,
+					cancelable: true,
+					pointerId: 1,
+					pointerType: 'mouse',
+					button: 0,
+					clientX,
+					clientY
+				})
+			);
+
+		a.dispatchEvent(
+			new PointerEvent('pointerdown', {
+				bubbles: true,
+				cancelable: true,
+				pointerId: 1,
+				pointerType: 'mouse',
+				button: 0,
+				clientX: x,
+				clientY: y
+			})
+		);
+		move(x + 1, y + 1);
+		await waitUntil(() => a.classList.contains('sortable-chosen'));
+
+		// First post-arm move spawns the ghost; the second actually moves it.
+		move(x + 80, y + 10);
+		await waitUntil(hasFallbackGhost);
+		move(x + 80, y + 10);
+		await settle(20);
+
+		const translation = ghostTranslation();
+		expect(translation).not.toBeNull();
+		expect(translation!.x).toBe(0);
+		expect(translation!.y).not.toBe(0);
+
+		document.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				cancelable: true,
+				pointerId: 1,
+				pointerType: 'mouse',
+				button: 0,
+				clientX: x + 80,
+				clientY: y + 10
+			})
+		);
+		await waitUntil(() => !hasFallbackGhost());
+		await settle(250);
+	});
+
+	it("locks the fallback ghost to the x-axis when fallbackAxis is 'x'", async () => {
+		const ul = makeList('7');
+		lists.push(ul);
+		const a = makeRow(1);
+		const b = makeRow(2);
+		ul.append(a, b);
+
+		const onDrop = vi.fn();
+		sortableReorder(ul, { group: 'test-lock-x', fallbackAxis: 'x', onDrop });
+
+		const rect = a.getBoundingClientRect();
+		const x = rect.x + rect.width / 2;
+		const y = rect.y + rect.height / 2;
+		const move = (clientX: number, clientY: number) =>
+			document.dispatchEvent(
+				new PointerEvent('pointermove', {
+					bubbles: true,
+					cancelable: true,
+					pointerId: 1,
+					pointerType: 'mouse',
+					button: 0,
+					clientX,
+					clientY
+				})
+			);
+
+		a.dispatchEvent(
+			new PointerEvent('pointerdown', {
+				bubbles: true,
+				cancelable: true,
+				pointerId: 1,
+				pointerType: 'mouse',
+				button: 0,
+				clientX: x,
+				clientY: y
+			})
+		);
+		move(x + 1, y + 1);
+		await waitUntil(() => a.classList.contains('sortable-chosen'));
+
+		move(x + 80, y + 10);
+		await waitUntil(hasFallbackGhost);
+		move(x + 80, y + 10);
+		await settle(20);
+
+		const translation = ghostTranslation();
+		expect(translation).not.toBeNull();
+		expect(translation!.x).not.toBe(0);
+		expect(translation!.y).toBe(0);
+
+		document.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				cancelable: true,
+				pointerId: 1,
+				pointerType: 'mouse',
+				button: 0,
+				clientX: x + 80,
+				clientY: y + 10
+			})
+		);
+		await waitUntil(() => !hasFallbackGhost());
+		await settle(250);
 	});
 });

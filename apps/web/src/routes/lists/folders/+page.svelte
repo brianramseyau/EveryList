@@ -148,7 +148,12 @@
 
 			<ul
 				class="flex flex-col gap-2"
-				use:sortableReorder={{ group: 'folders', disabled: reordering, onDrop: handleDrop }}
+				use:sortableReorder={{
+					group: 'folders',
+					disabled: reordering,
+					fallbackAxis: 'y',
+					onDrop: handleDrop
+				}}
 			>
 				{#each folders as folder (folder.id)}
 					<li
