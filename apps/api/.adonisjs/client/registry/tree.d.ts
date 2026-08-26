@@ -30,6 +30,9 @@ export interface ApiDefinition {
   metas: {
     show: typeof routes['metas.show']
   }
+  debug: {
+    show: typeof routes['debug.show']
+  }
   folders: {
     folders: {
       index: typeof routes['folders.folders.index']
@@ -52,6 +55,7 @@ export interface ApiDefinition {
       index: typeof routes['lists.categories.index']
       store: typeof routes['lists.categories.store']
       import: typeof routes['lists.categories.import']
+      bulkImport: typeof routes['lists.categories.bulk_import']
       reorder: typeof routes['lists.categories.reorder']
       update: typeof routes['lists.categories.update']
       destroy: typeof routes['lists.categories.destroy']
@@ -65,6 +69,7 @@ export interface ApiDefinition {
       import: typeof routes['lists.items.import']
       update: typeof routes['lists.items.update']
       move: typeof routes['lists.items.move']
+      moveToList: typeof routes['lists.items.move_to_list']
       destroy: typeof routes['lists.items.destroy']
       restore: typeof routes['lists.items.restore']
       purge: typeof routes['lists.items.purge']
@@ -108,6 +113,15 @@ export interface ApiDefinition {
   personalAccessTokens: {
     me: typeof routes['personal_access_tokens.me']
   }
+  alexa: {
+    alexa: typeof routes['alexa.alexa']
+    alexaOauth: {
+      token: typeof routes['alexa.alexa_oauth.token']
+    }
+    alexaIcons: {
+      show: typeof routes['alexa.alexa_icons.show']
+    }
+  }
   inviteAccept: {
     preview: typeof routes['invite_accept.preview']
     accept: typeof routes['invite_accept.accept']
@@ -117,6 +131,7 @@ export interface ApiDefinition {
       update: typeof routes['stores.stores.update']
       categories: typeof routes['stores.stores.categories']
       reorderCategories: typeof routes['stores.stores.reorder_categories']
+      resetCategories: typeof routes['stores.stores.reset_categories']
     }
   }
   backupSettings: {

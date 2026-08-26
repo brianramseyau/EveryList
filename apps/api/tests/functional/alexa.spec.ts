@@ -69,7 +69,7 @@ async function postAlexa(
   envelope: unknown,
   headers: { signature?: string | null; certUrl?: string | null } = {}
 ): Promise<ApiResponse> {
-  let request = client.post('/api/v1/alexa').json(envelope)
+  let request = client.post('/api/v1/alexa').json(envelope as any)
   if (headers.certUrl !== null) {
     request = request.header('signaturecertchainurl', headers.certUrl ?? CERT_URL)
   }

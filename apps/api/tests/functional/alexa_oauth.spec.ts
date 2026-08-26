@@ -18,7 +18,7 @@ async function requestToken(
   body: Record<string, string>,
   auth?: { clientId: string; clientSecret: string }
 ): Promise<ApiResponse> {
-  let request = client.post('/api/v1/alexa/oauth/token').form(body)
+  let request = client.post('/api/v1/alexa/oauth/token').form(body as any)
   if (auth) {
     const basic = Buffer.from(`${auth.clientId}:${auth.clientSecret}`).toString('base64')
     request = request.header('Authorization', `Basic ${basic}`)

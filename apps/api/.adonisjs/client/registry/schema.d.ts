@@ -151,6 +151,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/metas_controller').default['show']>>>
     }
   }
+  'debug.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/debug'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/debug_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/debug_controller').default['show']>>>
+    }
+  }
   'folders.folders.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/folders'
@@ -319,6 +331,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['import']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'lists.categories.bulk_import': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/categories/bulk-import'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/category').bulkImportCategoriesValidator)>>
+      paramsTuple: [ParamValue]
+      params: { listId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/category').bulkImportCategoriesValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['bulkImport']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/categories_controller').default['bulkImport']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'lists.categories.reorder': {
     methods: ["PATCH"]
     pattern: '/api/v1/lists/:listId/categories/reorder'
@@ -449,6 +473,18 @@ export interface Registry {
       query: ExtractQuery<InferInput<(typeof import('#validators/item').moveItemValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['move']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['move']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.items.move_to_list': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/items/:itemId/move-to-list'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/item').moveItemToListValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; itemId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/item').moveItemToListValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/items_controller').default['moveToList']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['moveToList']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
   'lists.items.destroy': {
@@ -751,6 +787,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['me']>>>
     }
   }
+  'alexa.alexa': {
+    methods: ["POST"]
+    pattern: '/api/v1/alexa'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/alexa_controller').default['handle']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/alexa_controller').default['handle']>>>
+    }
+  }
+  'alexa.alexa_oauth.token': {
+    methods: ["POST"]
+    pattern: '/api/v1/alexa/oauth/token'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/alexa_oauth').alexaOAuthTokenValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/alexa_oauth').alexaOAuthTokenValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/alexa_oauth_controller').default['token']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/alexa_oauth_controller').default['token']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'alexa.alexa_icons.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/alexa/icons/:name'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { name: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/alexa_icons_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/alexa_icons_controller').default['show']>>>
+    }
+  }
   'invite_accept.preview': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/invites/:token'
@@ -809,6 +881,18 @@ export interface Registry {
       query: ExtractQuery<InferInput<(typeof import('#validators/store').reorderStoreCategoriesValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['reorderCategories']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['reorderCategories']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'stores.stores.reset_categories': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/stores/:id/categories'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['resetCategories']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/stores_controller').default['resetCategories']>>>
     }
   }
   'backupSettings.backup_settings.show': {
