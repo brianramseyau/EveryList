@@ -63,6 +63,8 @@ function computeMidpointSortOrder(before: number | undefined, after: number | un
  * restore-on-name-match. */
 async function restoreItemRow(list: List, item: Item): Promise<void> {
   item.deletedAt = null
+  item.checked = false
+  item.checkedAt = null
   item.sortOrder = await nextSortOrder(list.id)
   item.version += 1
   await item.save()

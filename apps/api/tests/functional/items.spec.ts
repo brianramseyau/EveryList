@@ -84,6 +84,8 @@ test.group('Items CRUD', (group) => {
 
     const restore = await auth(client.post(`/api/v1/lists/${listId}/items/${item.id}/restore`))
     restore.assertStatus(200)
+    assert.isFalse(restore.body().data.checked, 'restoring a checked item unchecks it')
+    assert.isNull(restore.body().data.checkedAt)
 
     const afterRestore = await auth(client.get(`/api/v1/lists/${listId}/items`))
     assert.lengthOf(afterRestore.body().data, 1)
@@ -1072,6 +1074,35 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
 
     const index = await auth(client.get(`/api/v1/lists/${listId}/items`))
     assert.lengthOf(index.body().data, 1, 'no duplicate row was created')
+  })
+
+  test("re-adding a checked-off deleted item's name restores it unchecked", async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const created = await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk' }))
+    const original = created.body().data
+    await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${original.id}`)
+        .json({ checked: true, expectedVersion: original.version })
+    )
+    await auth(client.delete(`/api/v1/lists/${listId}/items/${original.id}`))
+
+    const readded = await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'milk' }))
+    readded.assertStatus(200)
+    const restored = readded.body().data
+
+    assert.equal(restored.id, original.id, 'same row restored, not a new one')
+    assert.isFalse(
+      restored.checked,
+      'restored item is unchecked even though it was checked when deleted'
+    )
+    assert.isNull(restored.checkedAt)
   })
 
   test('recent-names caps out at 50 distinct names', async ({ client, assert }) => {
