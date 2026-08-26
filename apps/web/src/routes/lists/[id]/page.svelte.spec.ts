@@ -32,6 +32,27 @@ vi.mock('$lib/actions/sortable-reorder', () => ({
 	}
 }));
 
+// The real longPress action's hold-timer behavior is unit-tested in its own
+// spec — this double just surfaces the onLongPress callback on the node so a
+// page test can invoke the quick-select menu directly, the same way the
+// sortable-reorder double exposes onDrop.
+vi.mock('$lib/actions/long-press', () => ({
+	longPress: (
+		node: HTMLElement & { __onLongPress?: () => void },
+		params: { onLongPress: () => void }
+	) => {
+		node.__onLongPress = params.onLongPress;
+		return {
+			update(next: { onLongPress: () => void }) {
+				node.__onLongPress = next.onLongPress;
+			},
+			destroy() {
+				delete node.__onLongPress;
+			}
+		};
+	}
+}));
+
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/lists', () => ({
@@ -50,7 +71,8 @@ vi.mock('$lib/api/items', () => ({
 vi.mock('$lib/api/favorites', () => ({ fetchFavorites: vi.fn() }));
 vi.mock('$lib/api/stores', () => ({ fetchStoreCategoryOrder: vi.fn(), fetchStores: vi.fn() }));
 vi.mock('$lib/api/selected-store', () => ({
-	getSelectedStoreSettings: vi.fn()
+	getSelectedStoreSettings: vi.fn(),
+	setSelectedStoreSettings: vi.fn()
 }));
 vi.mock('$lib/realtime', () => ({ subscribeToList: vi.fn(() => vi.fn()) }));
 vi.mock('$lib/offline/flush', () => ({
@@ -67,7 +89,8 @@ const { fetchItems, createItem, deleteItem, updateItem, fetchRecentItemNames } =
 	await import('$lib/api/items');
 const { fetchFavorites } = await import('$lib/api/favorites');
 const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores');
-const { getSelectedStoreSettings } = await import('$lib/api/selected-store');
+const { getSelectedStoreSettings, setSelectedStoreSettings } =
+	await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
 const { refreshBadgeCount } = await import('$lib/pwa/badge');
 const { openExternalLink } = await import('$lib/open-external-link');
@@ -151,6 +174,7 @@ describe('List detail +page.svelte', () => {
 			storeId: null,
 			filter: 'store'
 		});
+		vi.mocked(setSelectedStoreSettings).mockResolvedValue(undefined);
 		vi.mocked(goto).mockResolvedValue(undefined);
 		vi.mocked(fetchRecentItemNames).mockResolvedValue([]);
 		vi.mocked(fetchFavorites).mockResolvedValue([]);
@@ -816,6 +840,209 @@ describe('List detail +page.svelte', () => {
 		const storesLink = page.getByRole('link', { name: 'Stores' }).element() as HTMLElement;
 		const colorSpan = storesLink.querySelector('span') as HTMLElement;
 		expect(colorSpan.style.color).toBe('rgb(59, 130, 246)');
+	});
+
+	it('long-presses the store icon to quick-select a store, persisting the choice and applying its aisle order', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({ storeId: null, filter: 'store' });
+		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([
+			{ id: 1, storeId: 20, categoryId: 10, sortOrder: 5, deletedAt: null, version: 1 }
+		]);
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		const storesLink = page.getByRole('link', { name: 'Stores' }).element() as HTMLElement & {
+			__onLongPress?: () => void;
+		};
+		storesLink.__onLongPress?.();
+
+		await page.getByRole('button', { name: 'Corner Shop' }).click();
+
+		expect(setSelectedStoreSettings).toHaveBeenCalledWith(1, { storeId: 20, filter: 'store' });
+		expect(fetchStoreCategoryOrder).toHaveBeenCalledWith(20);
+		await expect.element(page.getByRole('button', { name: 'Corner Shop' })).not.toBeInTheDocument();
+	});
+
+	it('clears the selected store from the quick switcher via "No store selected"', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({ storeId: 20, filter: 'store' });
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		const storesLink = page.getByRole('link', { name: 'Stores' }).element() as HTMLElement & {
+			__onLongPress?: () => void;
+		};
+		storesLink.__onLongPress?.();
+
+		await page.getByRole('button', { name: 'No store selected' }).click();
+
+		expect(setSelectedStoreSettings).toHaveBeenCalledWith(1, { storeId: null, filter: 'store' });
+	});
+
+	it('closes the store quick switcher when clicking outside it', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		const storesLink = page.getByRole('link', { name: 'Stores' }).element() as HTMLElement & {
+			__onLongPress?: () => void;
+		};
+		storesLink.__onLongPress?.();
+		await expect.element(page.getByRole('button', { name: 'Corner Shop' })).toBeInTheDocument();
+
+		await page.getByRole('heading', { name: 'Groceries' }).click();
+
+		await expect.element(page.getByRole('button', { name: 'Corner Shop' })).not.toBeInTheDocument();
+	});
+
+	it('closes the store quick switcher on Escape', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		// Escape while the menu is still closed is a no-op.
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+		const storesLink = page.getByRole('link', { name: 'Stores' }).element() as HTMLElement & {
+			__onLongPress?: () => void;
+		};
+		storesLink.__onLongPress?.();
+		await expect.element(page.getByRole('button', { name: 'Corner Shop' })).toBeInTheDocument();
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+		await expect.element(page.getByRole('button', { name: 'Corner Shop' })).not.toBeInTheDocument();
+	});
+
+	it('keeps the quick switcher open when a click lands inside its panel', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		const storesLink = page.getByRole('link', { name: 'Stores' }).element() as HTMLElement & {
+			__onLongPress?: () => void;
+		};
+		storesLink.__onLongPress?.();
+		await expect.element(page.getByRole('button', { name: 'Corner Shop' })).toBeInTheDocument();
+		const menuItem = page.getByRole('button', { name: 'Corner Shop' }).element();
+
+		// Clicking the panel (not a menu item, and not the navigating store
+		// icon) must not be treated as a click-outside.
+		menuItem.parentElement!.dispatchEvent(
+			new MouseEvent('click', { bubbles: true, cancelable: true })
+		);
+
+		await expect.element(page.getByRole('button', { name: 'Corner Shop' })).toBeInTheDocument();
+	});
+
+	it('re-selecting the already-selected store from the quick switcher is a no-op', async () => {
+		const store = {
+			id: 20,
+			name: 'Corner Shop',
+			color: '#3b82f6',
+			createdBy: 1,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		vi.mocked(fetchStores).mockResolvedValue([store]);
+		vi.mocked(getSelectedStoreSettings).mockResolvedValue({ storeId: 20, filter: 'store' });
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+		// The aisle order is fetched once during loadAll for the already-selected store.
+		expect(fetchStoreCategoryOrder).toHaveBeenCalledWith(20);
+
+		const storesLink = page.getByRole('link', { name: 'Stores' }).element() as HTMLElement & {
+			__onLongPress?: () => void;
+		};
+		storesLink.__onLongPress?.();
+		await page.getByRole('button', { name: 'Corner Shop' }).click();
+
+		expect(setSelectedStoreSettings).not.toHaveBeenCalled();
+		expect(fetchStoreCategoryOrder).toHaveBeenCalledTimes(1);
+		await expect.element(page.getByRole('button', { name: 'Corner Shop' })).not.toBeInTheDocument();
+	});
+
+	it('prevents the browser context menu on a long-press of the store icon', async () => {
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		const storesLink = page.getByRole('link', { name: 'Stores' }).element();
+		const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+		storesLink.dispatchEvent(event);
+
+		expect(event.defaultPrevented).toBe(true);
 	});
 
 	it('toggles one item checked without affecting a sibling item', async () => {

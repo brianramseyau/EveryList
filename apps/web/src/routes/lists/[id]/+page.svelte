@@ -12,7 +12,7 @@
 	import { fetchCategoryLearnings } from '$lib/api/category-learnings';
 	import { createItem, deleteItem, fetchItems, updateItem } from '$lib/api/items';
 	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
-	import { getSelectedStoreSettings } from '$lib/api/selected-store';
+	import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
 	import { isRowDirty, type StoreFilter } from '$lib/offline/db';
 	import { isSelfMutation } from '$lib/offline/self-mutations';
 	import { ApiError } from '$lib/api/client';
@@ -21,6 +21,8 @@
 	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
+	import { longPress } from '$lib/actions/long-press';
+	import { anchorPanel } from '$lib/actions/anchor-panel';
 	import { computeMidpointSortOrder } from '$lib/item-sort-order';
 	import { swipeReveal } from '$lib/actions/swipe-reveal';
 	import { splitTextWithLinks } from '$lib/linkify';
@@ -134,6 +136,38 @@
 	let storeCategoryOverrides: Map<number, number> = new SvelteMap();
 
 	const selectedStore = $derived(stores.find((store) => store.id === selectedStoreId) ?? null);
+
+	// Long-press quick-select on the header store icon (a lightweight store
+	// switcher that skips the full stores screen). `storeMenuOpen` is the
+	// panel's open state; `storeMenuAnchor`/`storeMenuContainer` are the refs
+	// the panel is positioned against and the click-outside check keys on.
+	let storeMenuOpen = $state(false);
+	let storeMenuContainer: HTMLDivElement | undefined = $state();
+	let storeMenuAnchor: HTMLAnchorElement | undefined = $state();
+
+	function handleStoreMenuWindowClick(event: MouseEvent) {
+		if (!storeMenuOpen || !storeMenuContainer) return;
+		// Same composedPath() rationale as PopoutMenu: captured at dispatch
+		// time so a menu item swapping its own DOM still reads as "inside".
+		if (!event.composedPath().includes(storeMenuContainer)) storeMenuOpen = false;
+	}
+
+	function handleStoreMenuWindowKeydown(event: KeyboardEvent) {
+		if (storeMenuOpen && event.key === 'Escape') storeMenuOpen = false;
+	}
+
+	async function selectStore(storeId: number | null) {
+		storeMenuOpen = false;
+		if (storeId === selectedStoreId) return;
+		selectedStoreId = storeId;
+		await setSelectedStoreSettings(listId, { storeId, filter: storeFilter });
+		storeCategoryOverrides.clear();
+		if (storeId !== null) {
+			for (const entry of await fetchStoreCategoryOrder(storeId)) {
+				storeCategoryOverrides.set(entry.categoryId, entry.sortOrder);
+			}
+		}
+	}
 
 	// Which items to show, relative to `selectedStore` — decoupled from the store
 	// selection so a store can drive the aisle order without hiding items tagged
@@ -559,6 +593,8 @@
 	}
 </script>
 
+<svelte:window onclick={handleStoreMenuWindowClick} onkeydown={handleStoreMenuWindowKeydown} />
+
 <main class="mx-auto flex max-w-lg flex-col gap-4 px-4 pb-8">
 	<PageHeader
 		title={list?.name}
@@ -569,15 +605,54 @@
 		bind:height={stickyHeaderHeight}
 	>
 		{#snippet actions()}
-			<a
-				href={resolve('/lists/[id]/stores', { id: String(listId) })}
-				aria-label="Stores"
-				class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-			>
-				<span style:color={selectedStore?.color}>
-					<Icon name="store" class="h-5 w-5" />
-				</span>
-			</a>
+			<div class="relative" bind:this={storeMenuContainer}>
+				<a
+					href={resolve('/lists/[id]/stores', { id: String(listId) })}
+					aria-label="Stores"
+					bind:this={storeMenuAnchor}
+					oncontextmenu={(event) => event.preventDefault()}
+					class="store-trigger text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+					use:longPress={{
+						disabled: stores.length === 0,
+						onLongPress: () => (storeMenuOpen = true)
+					}}
+				>
+					<span style:color={selectedStore?.color}>
+						<Icon name="store" class="h-5 w-5" />
+					</span>
+				</a>
+
+				{#if storeMenuOpen && storeMenuAnchor}
+					<div
+						use:anchorPanel={storeMenuAnchor}
+						class="fixed z-30 min-w-48 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+					>
+						<PopoutMenuItem onclick={() => selectStore(null)}>
+							<span class="flex items-center gap-2">
+								<span class="flex-1">No store selected</span>
+								{#if selectedStoreId === null}
+									<Icon name="checkCircle" class="h-5 w-5 shrink-0 text-primary-600" />
+								{/if}
+							</span>
+						</PopoutMenuItem>
+						{#each stores as store (store.id)}
+							<PopoutMenuItem onclick={() => selectStore(store.id)}>
+								<span class="flex items-center gap-2">
+									<span
+										class="h-3.5 w-3.5 shrink-0 rounded-full"
+										style:background-color={store.color}
+										aria-hidden="true"
+									></span>
+									<span class="flex-1">{store.name}</span>
+									{#if selectedStoreId === store.id}
+										<Icon name="checkCircle" class="h-5 w-5 shrink-0 text-primary-600" />
+									{/if}
+								</span>
+							</PopoutMenuItem>
+						{/each}
+					</div>
+				{/if}
+			</div>
 			<PopoutMenu
 				label="List menu"
 				iconName="dotsVertical"
@@ -992,6 +1067,17 @@
 		min-height: 3rem;
 		padding-block: 0.25rem;
 		transition: background-color 600ms ease-out;
+	}
+
+	/* Same push-and-hold suppression as .list-card on the lists page: the
+	   store icon is a link, so a long-press on it would otherwise show iOS's
+	   touch-callout (Open/Copy/Share) or Android Chrome's context menu before
+	   the long-press gesture is detected. -webkit-touch-callout covers iOS;
+	   the oncontextmenu handler on the element covers Android. */
+	.store-trigger {
+		-webkit-touch-callout: none;
+		-webkit-user-select: none;
+		user-select: none;
 	}
 
 	/* A tap on the item name can trigger the browser's native
