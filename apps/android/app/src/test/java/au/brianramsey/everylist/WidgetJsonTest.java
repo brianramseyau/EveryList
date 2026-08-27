@@ -6,7 +6,7 @@ import org.junit.Test;
 
 import java.util.List;
 
-/** Unit tests for the pure JSON + data logic of the widget (PHASE18_PLAN.md) — the pieces that
+/** Unit tests for the pure JSON + data logic of the widget (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md) — the pieces that
  *  don't need the Android framework, run on the JVM via `./gradlew test`. */
 public class WidgetJsonTest {
 

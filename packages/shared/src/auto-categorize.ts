@@ -1,12 +1,12 @@
 /**
  * Auto-categorization in two tiers, shared between the API (server-side
  * suggestion/learning) and the web client (offline fallback) so both sides
- * agree on a guess without a round trip — see PLAN.md §9.
+ * agree on a guess without a round trip — see PLAN_00_FOUNDATIONAL_PLAN.md §9.
  *
  * Tier 1 is the learned model: explicit user category assignments are stored
  * server-side in `category_learnings` (one row per list/token/category) and
  * ranked here via exponential half-life decay with a floor — see
- * PHASE17_PLAN.md and apps/api's category_suggestion_service.ts. Tier 2 is
+ * PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md and apps/api's category_suggestion_service.ts. Tier 2 is
  * the static keyword table below, the fallback when the model has no
  * confident answer.
  *

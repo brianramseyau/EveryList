@@ -126,7 +126,7 @@ export async function deleteFavorite(listId: number, id: number): Promise<void> 
 }
 
 /** Creates a new item from a favorite's defaults. The server computes the resulting item's id,
- * sort order, and dedup-with-an-existing-checked-item behavior — so (per PHASE13_PLAN.md §5) this
+ * sort order, and dedup-with-an-existing-checked-item behavior — so (per PLAN_13_PHASE_NATIVE_APP_SHELL.md §5) this
  * gets the same offline treatment as a create, queued as `'attach'`: a temp-id `Item` placeholder
  * built from the favorite's already-known local fields stands in until the server's authoritative
  * item replaces it on flush. */

@@ -16,7 +16,7 @@ function requiredEnv(
 
 /**
  * Bridges Alexa's account-linking "Access Token URI" call to Authentik, the household's existing
- * IdP (PHASE16_PLAN.md Stage 2 — Authentik is a hard requirement, not one OIDC provider among
+ * IdP (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2 — Authentik is a hard requirement, not one OIDC provider among
  * several). Exported as a plain object, not called directly from the controller, so functional
  * tests can monkey-patch both methods instead of reaching a real Authentik instance over the
  * network — mirroring `signature_verifier.ts`'s seam for `alexa-verifier`.

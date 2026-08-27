@@ -1,7 +1,7 @@
 #!/command/with-contenv sh
 # Runs pending database migrations against /config/everylist.sqlite3 before
 # the app starts, so a fresh (or upgraded) /config volume always has a
-# working schema with zero manual steps — per foundational/PLAN.md §5's
+# working schema with zero manual steps — per foundational/PLAN_00_FOUNDATIONAL_PLAN.md §5's
 # "zero-config startup" rule. Must run after 20-app-key (ace needs APP_KEY
 # in the environment to boot) and before services.d/svc-everylist starts;
 # s6-overlay runs cont-init.d scripts in lexical order and only starts

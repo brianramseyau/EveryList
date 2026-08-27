@@ -45,7 +45,7 @@
 	let categories = $state<CategoryDto[]>([]);
 	let items = $state<ItemDto[]>([]);
 	let stores = $state<StoreDto[]>([]);
-	// The store currently "shopping at" (PHASE10_PLAN.md #0.5) — local/device-only,
+	// The store currently "shopping at" (PLAN_10_PHASE_VALIDATION_USABILITY.md #0.5) — local/device-only,
 	// see $lib/api/selected-store.ts. Drives the category aisle order (via
 	// `storeCategoryOverrides`) and the header store icon's color. Which items are
 	// *shown* is a separate, decoupled setting (`storeFilter`) so you can walk the
@@ -83,7 +83,7 @@
 	let stickyHeaderHeight = $state(144);
 
 	// Briefly highlights a row when adding matched an existing item instead of
-	// creating a new one (PHASE10_PLAN.md #0.2) — both the local pre-check and
+	// creating a new one (PLAN_10_PHASE_VALIDATION_USABILITY.md #0.2) — both the local pre-check and
 	// a server-side match (same id already in `items`) route through this.
 	let highlightedItemId = $state<number | null>(null);
 	let highlightTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -117,7 +117,7 @@
 	}
 
 	// Checked items stay under their category header instead of moving to a
-	// separate section (PHASE9_PLAN.md #3) — this toggle controls whether
+	// separate section (PLAN_09_PHASE_REFINEMENTS.md #3) — this toggle controls whether
 	// they're visible at all, defaulting to shown. Persisted per list/device
 	// via $lib/list-prefs so it survives reload and revisiting the list.
 	let showChecked = $state(true);
@@ -127,7 +127,7 @@
 	let unsubscribeFlushOutcome: (() => void) | null = null;
 
 	// Coarse (touch) pointers get the swipe-to-delete gesture; fine pointers
-	// (mouse/trackpad) get a static "×" fallback instead (PHASE9_PLAN.md #9)
+	// (mouse/trackpad) get a static "×" fallback instead (PLAN_09_PHASE_REFINEMENTS.md #9)
 	// — checked once on mount since input capability doesn't change mid-session.
 	let isCoarsePointer = $state(false);
 
@@ -200,7 +200,7 @@
 			byCategory.get(key)!.push(item);
 		}
 
-		// Lists that opt out of categories (PHASE11_PLAN.md §E) render as a single
+		// Lists that opt out of categories (PLAN_11_PHASE_LIST_FEATURE_REFINEMENTS.md §E) render as a single
 		// flat section — collapse every bucket instead of grouping by categoryId.
 		if (list?.useCategories === false) {
 			const flat = [...byCategory.values()].flat();
@@ -272,7 +272,7 @@
 				fetchStores(listId)
 			]);
 			// Warm the read-only learned-model cache for this list's offline
-			// suggestion fallback (PHASE17_PLAN.md) — non-blocking, so a failure
+			// suggestion fallback (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md) — non-blocking, so a failure
 			// here doesn't fail the page load.
 			void fetchCategoryLearnings(listId);
 
@@ -313,13 +313,13 @@
 		unsubscribeRealtime = subscribeToList(listId, (event) => {
 			// Our own edit's broadcast (sent right after the flush clears `_dirty`)
 			// is suppressed — the optimistic update already reflects it, so
-			// reloading would just churn the DOM mid-gesture (see PHASE14_PLAN.md).
+			// reloading would just churn the DOM mid-gesture (see PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md).
 			if (isSelfMutation(event.entityType, event.entityId)) return;
 			// An unacked local edit on this exact row means the eventual flush response is
-			// authoritative, not this racing broadcast — suppress it (see PHASE5_PLAN.md §4).
+			// authoritative, not this racing broadcast — suppress it (see PLAN_05_PHASE_OFFLINE_PWA.md §4).
 			void isRowDirty(event.entityType, event.entityId).then((dirty) => {
 				// Silent auto-refresh: the removed "This list was updated" toast was the only
-				// previous effect, so re-run the load to keep the list fresh (PHASE14_PLAN.md).
+				// previous effect, so re-run the load to keep the list fresh (PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md).
 				if (!dirty) void loadAll();
 			});
 		});
@@ -354,7 +354,7 @@
 		const name = rawName.trim();
 		if (!name) return;
 
-		// Best-effort local pre-check against what's already loaded (PHASE10_PLAN.md
+		// Best-effort local pre-check against what's already loaded (PLAN_10_PHASE_VALIDATION_USABILITY.md
 		// #0.2) — an unchecked match is left alone, just highlighted, so the input
 		// isn't cleared and no request is made. A checked match still needs the
 		// server round-trip (it flips checked → unchecked), so it falls through.
@@ -470,7 +470,7 @@
 	}
 
 	// Bulk-deletes via the same soft-delete path as a single item, one request
-	// per item rather than a new backend endpoint (PHASE10_PLAN.md #0.11) — each
+	// per item rather than a new backend endpoint (PLAN_10_PHASE_VALIDATION_USABILITY.md #0.11) — each
 	// call targets a different id, so there's no version-conflict risk running
 	// them concurrently, and it inherits the offline-queue behavior for free.
 	async function clearChecked() {

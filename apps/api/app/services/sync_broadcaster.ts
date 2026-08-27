@@ -21,7 +21,7 @@ export interface SyncBroadcaster {
   broadcast(input: SyncBroadcastInput): Promise<void>
 }
 
-/** Persists a `SyncEvent` row and pushes it over the list's Transmit channel — see PLAN.md §8. */
+/** Persists a `SyncEvent` row and pushes it over the list's Transmit channel — see PLAN_00_FOUNDATIONAL_PLAN.md §8. */
 export class TransmitSyncBroadcaster implements SyncBroadcaster {
   async broadcast(input: SyncBroadcastInput): Promise<void> {
     await SyncEvent.create({
@@ -76,7 +76,7 @@ export async function broadcastSync(input: SyncBroadcastInput): Promise<void> {
   await broadcaster.broadcast(input)
 }
 
-/** Fans a Store/StoreCategoryOrder edit out to every list that store is attached to — PLAN.md §7/§8. */
+/** Fans a Store/StoreCategoryOrder edit out to every list that store is attached to — PLAN_00_FOUNDATIONAL_PLAN.md §7/§8. */
 export async function broadcastToStoreLists(
   store: Store,
   input: Omit<SyncBroadcastInput, 'listId'>

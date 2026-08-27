@@ -24,7 +24,7 @@ JSON-only `cacheWillUpdate` guard (`pwa.config.mjs`).
 ## Design decisions (locked)
 
 - **Queued-items area**: dedicated `Settings → Sync status` page (`/settings/sync`), linked from
-  Settings. (Matches PHASE13_PLAN.md §6's persistent-view design.)
+  Settings. (Matches PLAN_13_PHASE_NATIVE_APP_SHELL.md §6's persistent-view design.)
 - **Cloud icon**: global top-right overlay in the root layout, visible on all logged-in pages when
   the server is unreachable.
 - **Unavailable detection**: real reachability — a dedicated `GET /api/v1/ping` probe plus flush

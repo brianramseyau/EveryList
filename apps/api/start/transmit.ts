@@ -5,7 +5,7 @@ import logger from '@adonisjs/core/services/logger'
 
 /**
  * A user may subscribe to a list's channel iff they have an accepted
- * `ListMember` row on it — see PLAN.md §8. Extracted as a plain function so
+ * `ListMember` row on it — see PLAN_00_FOUNDATIONAL_PLAN.md §8. Extracted as a plain function so
  * it's directly unit-testable outside Transmit's own subscribe route, which
  * isn't reachable through Japa's `ApiClient`.
  */

@@ -2,10 +2,10 @@
 
 ## Context
 
-Phases 0–4 of EveryList (see `foundational/PLAN.md`) are complete: auth, list/item/category/store/favorite CRUD, a themed app shell, and membership-based sharing with SSE real-time updates. Phase 5 (§4/§7/§9/§11/§14 of PLAN.md) is the **MVP-complete milestone**: the app currently has zero offline capability — no Dexie, no service worker, no manifest — and every mutation requires a live connection. This phase makes the app local-first: optimistic Dexie-backed writes, a durable sync queue with backoff, server-side `version`-based last-write-wins conflict resolution (PLAN.md §7), client-side auto-categorization so an offline-added item still gets a category guess without a round trip (PLAN.md §9), and full PWA installability with a Workbox service worker.
+Phases 0–4 of EveryList (see `foundational/PLAN_00_FOUNDATIONAL_PLAN.md`) are complete: auth, list/item/category/store/favorite CRUD, a themed app shell, and membership-based sharing with SSE real-time updates. Phase 5 (§4/§7/§9/§11/§14 of PLAN_00_FOUNDATIONAL_PLAN.md) is the **MVP-complete milestone**: the app currently has zero offline capability — no Dexie, no service worker, no manifest — and every mutation requires a live connection. This phase makes the app local-first: optimistic Dexie-backed writes, a durable sync queue with backoff, server-side `version`-based last-write-wins conflict resolution (PLAN_00_FOUNDATIONAL_PLAN.md §7), client-side auto-categorization so an offline-added item still gets a category guess without a round trip (PLAN_00_FOUNDATIONAL_PLAN.md §9), and full PWA installability with a Workbox service worker.
 
 Scope decisions locked in with the user before this plan:
-- **Conflicts resolve as silent merge + toast**, not a dedicated conflict-review screen — the server's copy wins, the client's differing fields are re-applied as a new edit, the user sees a toast. Matches PLAN.md §7's explicit rejection of CRDT-style complexity.
+- **Conflicts resolve as silent merge + toast**, not a dedicated conflict-review screen — the server's copy wins, the client's differing fields are re-applied as a new edit, the user sees a toast. Matches PLAN_00_FOUNDATIONAL_PLAN.md §7's explicit rejection of CRDT-style complexity.
 - **No new "recently deleted" recovery UI** for Category/FavoriteItem/Store/StoreCategoryOrder — the soft-delete columns added below exist purely so an offline delete-then-sync has a well-defined, conflict-safe outcome, not to add new recovery UX. Item/List recovery UI (from Phase 2) is untouched.
 - **Per-resource `expectedVersion`, not a new batch sync endpoint** — every mutation already flows through `ListPolicy` → validate → mutate → `broadcastSync` on its own controller; a batch endpoint would either duplicate that six times or just loop and call the same logic anyway.
 
@@ -34,7 +34,7 @@ Move `apps/api/app/services/auto_categorize_service.ts` (pure function, zero Ado
 
 ## 3. Dexie schema (`apps/web/src/lib/offline/`)
 
-**`db.ts`** — `EveryListDB extends Dexie`, constructed lazily/guarded on `typeof window` the same way `token.ts`/`selected-store.ts`/`realtime.ts` guard SSR (SvelteKit prerenders `/`, `/login`, `/signup`, where `indexedDB` doesn't exist). Tables: `lists` (pk `id`), `categories` (pk `id`, idx `listId`), `items` (pk `id`, idx `[listId+deletedAt]`, `categoryId`), `favoriteItems` (pk `id`, idx `listId`), `stores` (pk `id`), `storeCategoryOrders` (pk `[storeId+categoryId]`, idx `storeId`), `selectedStore` (pk `listId`, migrated local-only "currently shopping at" state — never touches the sync queue, per PLAN.md §7/§9), `syncQueue`. Cached-entity rows mirror their `*Dto` shape plus `_localId?: string` (present on offline-created rows before server ack) and `_dirty?: boolean` (true while a queued mutation on that row is unacked — suppresses stale realtime overwrites, §4).
+**`db.ts`** — `EveryListDB extends Dexie`, constructed lazily/guarded on `typeof window` the same way `token.ts`/`selected-store.ts`/`realtime.ts` guard SSR (SvelteKit prerenders `/`, `/login`, `/signup`, where `indexedDB` doesn't exist). Tables: `lists` (pk `id`), `categories` (pk `id`, idx `listId`), `items` (pk `id`, idx `[listId+deletedAt]`, `categoryId`), `favoriteItems` (pk `id`, idx `listId`), `stores` (pk `id`), `storeCategoryOrders` (pk `[storeId+categoryId]`, idx `storeId`), `selectedStore` (pk `listId`, migrated local-only "currently shopping at" state — never touches the sync queue, per PLAN_00_FOUNDATIONAL_PLAN.md §7/§9), `syncQueue`. Cached-entity rows mirror their `*Dto` shape plus `_localId?: string` (present on offline-created rows before server ack) and `_dirty?: boolean` (true while a queued mutation on that row is unacked — suppresses stale realtime overwrites, §4).
 
 **Local ID strategy** — client-generated **negative integer temp ids** for offline-created rows, swapped for the server's real id on ack. Every DTO's `id` is `number` throughout the codebase; a UUID would widen `id: number → number | string` everywhere, whereas a negative-int convention stays scoped entirely to the offline layer.
 
@@ -72,7 +72,7 @@ interface QueuedMutation {
 
 Manifest icons generated from `branding/icon.svg` into `apps/web/static/icons/` (192/512 + a safe-zone-padded maskable 512 variant) — check whether `branding/icon-{512,192,...}.png` already exist and can be resized/copied rather than regenerated from scratch.
 
-**Install prompt** — new `apps/web/src/lib/pwa/install-prompt.ts` + `InstallPrompt.svelte`, capturing `beforeinstallprompt` (Chromium) into a store, shown as a dismissible row in Settings' "About" section (non-nagging, no unprompted modal, per PLAN.md §9). iOS Safari has no such event — show a static "Add to Home Screen" hint instead when on iOS Safari and not already standalone.
+**Install prompt** — new `apps/web/src/lib/pwa/install-prompt.ts` + `InstallPrompt.svelte`, capturing `beforeinstallprompt` (Chromium) into a store, shown as a dismissible row in Settings' "About" section (non-nagging, no unprompted modal, per PLAN_00_FOUNDATIONAL_PLAN.md §9). iOS Safari has no such event — show a static "Add to Home Screen" hint instead when on iOS Safari and not already standalone.
 
 ## 6. Testing
 
@@ -89,7 +89,7 @@ Manifest icons generated from `branding/icon.svg` into `apps/web/static/icons/` 
 3. Dexie schema + selected-store migration (§3) — independently mergeable; nothing writes through the sync queue yet.
 4. Sync engine write + flush paths (§4) — the four API modules, `flush.ts`, `SyncStatusBanner.svelte`, realtime.ts dirty-row suppression. Largest frontend chunk.
 5. PWA/SW/manifest/install prompt (§5) — deliberately last, independent of sync-engine correctness.
-6. Testing sweep + E2E + status note update (§6) — close coverage gaps, write the offline Playwright scenario, manual end-to-end pass, update `foundational/PLAN.md`.
+6. Testing sweep + E2E + status note update (§6) — close coverage gaps, write the offline Playwright scenario, manual end-to-end pass, update `foundational/PLAN_00_FOUNDATIONAL_PLAN.md`.
 
 ## Verification
 
@@ -98,4 +98,4 @@ Manifest icons generated from `branding/icon.svg` into `apps/web/static/icons/` 
 - `pnpm --filter @everylist/web build` succeeds with the PWA plugin producing a service worker + manifest in the output.
 - Manual pass: build+serve, DevTools → Application → Service Workers to confirm registration/precache, toggle Network → Offline, add/edit/delete items, toggle back online, confirm the sync queue drains and data matches the server.
 - New `offline-sync.e2e.ts` Playwright spec passes locally.
-- Update `foundational/PLAN.md`'s status line and append a Phase 5 completion note per this repo's existing convention (see the Phase 2/3/4 status notes at the bottom of the file).
+- Update `foundational/PLAN_00_FOUNDATIONAL_PLAN.md`'s status line and append a Phase 5 completion note per this repo's existing convention (see the Phase 2/3/4 status notes at the bottom of the file).

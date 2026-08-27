@@ -43,7 +43,7 @@ export function getOrientationPreference(): OrientationPreference {
 /** `lock()` only succeeds while the app is running in a standalone/fullscreen
  * display mode (an installed PWA) — a plain browser tab rejects it. Settings
  * uses this to show an explanatory hint instead of a control that silently
- * does nothing (see PHASE9_PLAN.md #14).
+ * does nothing (see PLAN_09_PHASE_REFINEMENTS.md #14).
  *
  * Native (Capacitor) builds are the exception: they lock via the
  * `@capacitor/screen-orientation` plugin, which doesn't care about display

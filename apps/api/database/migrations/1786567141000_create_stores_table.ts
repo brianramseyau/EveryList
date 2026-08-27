@@ -8,7 +8,7 @@ export default class extends BaseSchema {
       table.increments('id')
       table.string('name').notNullable()
       table.string('color').notNullable().defaultTo('#3b82f6')
-      // Audit only — a Store isn't owned by a single user, see PLAN.md §7.
+      // Audit only — a Store isn't owned by a single user, see PLAN_00_FOUNDATIONAL_PLAN.md §7.
       table
         .integer('created_by')
         .unsigned()

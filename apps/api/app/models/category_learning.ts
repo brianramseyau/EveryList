@@ -5,7 +5,7 @@ import List from '#models/list'
 import Category from '#models/category'
 
 /**
- * One learned name→category association for a list (PHASE17_PLAN.md). Rows
+ * One learned name→category association for a list (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md). Rows
  * are never deleted — `count` only ever increments and `lastSeenAt` only
  * ever bumps — so a long-dormant mapping still categorizes an item whose
  * name has no competing association. Read/written through

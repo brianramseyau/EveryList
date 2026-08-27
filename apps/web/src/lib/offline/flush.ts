@@ -16,8 +16,8 @@ export type ConflictListener = (mutation: QueuedMutation) => void;
 const conflictListeners = new Set<ConflictListener>();
 
 /** The currently-mounted list page (refreshes its stale optimistic view once the server's merged
- * copy lands, see PHASE14_PLAN.md) subscribes here — the silent-merge-and-toast conflict UX of
- * PHASE5_PLAN.md §4 is now surfaced via the Settings sync-status page and server logs rather than a
+ * copy lands, see PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md) subscribes here — the silent-merge-and-toast conflict UX of
+ * PLAN_05_PHASE_OFFLINE_PWA.md §4 is now surfaced via the Settings sync-status page and server logs rather than a
  * banner/toast. Supports more than one listener at a time. Returns an unsubscribe function — call
  * it on teardown instead of passing `null`. Passing `null` clears every subscriber; that's a
  * test-only global reset, not meant for component teardown (it would also drop unrelated listeners
@@ -37,7 +37,7 @@ const flushOutcomeListeners = new Set<FlushOutcomeListener>();
 /** Notifies subscribers whenever a drain either reaches the server (`ok: true`
  * after the queue empties) or is aborted by a network error (`ok: false`) —
  * backs the connectivity monitor's "server unavailable" signal (see
- * PHASE14_PLAN.md). Returns an unsubscribe function; passing `null` clears
+ * PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md). Returns an unsubscribe function; passing `null` clears
  * every subscriber (test-only reset, mirroring `onConflict`). */
 export function onFlushOutcome(listener: FlushOutcomeListener | null): () => void {
 	if (listener === null) {
@@ -55,7 +55,7 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 		// temp row on success; replaying a queued create/attach from here needs the same
 		// cleanup, or the temp row lingers in Dexie forever alongside whatever the server
 		// actually created/matched (full reconciliation with the server's response is a
-		// known gap — see PHASE10_PLAN.md §0.2).
+		// known gap — see PLAN_10_PHASE_VALIDATION_USABILITY.md §0.2).
 		const table = tableForEntity(mutation.entityType as QueueableEntityType);
 		await table.delete(mutation.targetId);
 		return;
@@ -99,7 +99,7 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 	await table.update(mutation.targetId, { _dirty: false });
 }
 
-/** Replays a queued bulk reorder (PHASE13_PLAN.md §5) — `offlineReorder`'s only two callers,
+/** Replays a queued bulk reorder (PLAN_13_PHASE_NATIVE_APP_SHELL.md §5) — `offlineReorder`'s only two callers,
  * category reorder and store-category-order reorder, so a two-way branch on `entityType` rather
  * than the generic `tableForEntity` dispatch (which is keyed to single-numeric-id tables;
  * `storeCategoryOrders` is compound-keyed and has no row of its own to look up by `targetId`).
@@ -130,7 +130,7 @@ async function replayReset(mutation: QueuedMutation): Promise<void> {
 /** Entity types the write paths in `$lib/api/{items,categories,favorites,stores}.ts` actually
  * enqueue through `tableForEntity` — a narrower slice of `SyncEntityType` (which also covers
  * `list`, never queued client-side, and `store_category_order`, queued only via `reorder` and
- * replayed by `replayReorder` above instead of this generic dispatch, see PHASE5_PLAN.md §1). */
+ * replayed by `replayReorder` above instead of this generic dispatch, see PLAN_05_PHASE_OFFLINE_PWA.md §1). */
 type QueueableEntityType = 'category' | 'item' | 'favorite_item' | 'store';
 
 function tableForEntity(entityType: QueueableEntityType) {
@@ -157,10 +157,10 @@ function tableForEntity(entityType: QueueableEntityType) {
  * update, then re-diffs the mutation's own payload against that server copy: any field the
  * offline edit actually changed — and that the winning edit didn't already happen to agree
  * with — is re-applied over the fresh copy and re-enqueued as a new mutation carrying the
- * server's `version` as its `expectedVersion`, per PHASE5_PLAN.md §4's "silent merge + toast"
+ * server's `version` as its `expectedVersion`, per PLAN_05_PHASE_OFFLINE_PWA.md §4's "silent merge + toast"
  * conflict UX (the offline edit is reconciled onto the newer edit, not discarded by it).
  * Silent — the mounted list page refreshes via `onConflict`, and the server logs the exact
- * version delta (see apps/api's `reportVersionConflict`, PHASE14_PLAN.md). */
+ * version delta (see apps/api's `reportVersionConflict`, PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md). */
 async function reconcileConflict(mutation: QueuedMutation, err: ApiError): Promise<void> {
 	const body = err.body as { data?: Record<string, unknown> & { version?: number } } | undefined;
 	if (body?.data) {
@@ -193,7 +193,7 @@ let flushing = false;
 
 /**
  * Drains the `pending` queue oldest-first, sequentially — preserves each row's
- * `expectedVersion` ordering (PHASE5_PLAN.md §4). Stops draining (leaving the rest queued) on
+ * `expectedVersion` ordering (PLAN_05_PHASE_OFFLINE_PWA.md §4). Stops draining (leaving the rest queued) on
  * the first network error, since later rows would fail the same way; a real server rejection or
  * a 409 doesn't block the rest of the queue.
  *

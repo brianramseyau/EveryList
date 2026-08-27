@@ -9,7 +9,7 @@
 	// no-navigation-without-resolve rule can verify that at each call site
 	// instead of only inside this component.
 	//
-	// backLabel is not rendered as visible text (PHASE9_PLAN.md #2 — icon-only
+	// backLabel is not rendered as visible text (PLAN_09_PHASE_REFINEMENTS.md #2 — icon-only
 	// back arrow, for consistent header placement across screens) — it's only
 	// the icon's accessible name.
 	//

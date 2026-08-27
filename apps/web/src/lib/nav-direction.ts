@@ -14,7 +14,7 @@ export function markBackNavigation(): void {
 }
 
 /** BottomNav's section-switch links opt out of the transition entirely
- * (PHASE9_PLAN.md #11 follow-up) — it's reserved for moving between screens
+ * (PLAN_09_PHASE_REFINEMENTS.md #11 follow-up) — it's reserved for moving between screens
  * within a section, not for jumping to a different bottom-nav tab. */
 export function markSkipTransition(): void {
 	pendingSkip = true;

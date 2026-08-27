@@ -1,4 +1,4 @@
-// Performance/accessibility hardening harness (PLAN.md §13, PHASE7_PLAN.md §5):
+// Performance/accessibility hardening harness (PLAN_00_FOUNDATIONAL_PLAN.md §13, PLAN_07_PHASE_POLISH.md §5):
 // audits the authenticated list-detail route with Lighthouse, since that's the
 // route §13 names explicitly, and §13 requires this run "on the built app" —
 // a `vite dev` server is unminified/unbundled/HMR-instrumented and scores a
@@ -29,8 +29,8 @@ const DEBUG_PORT = 9223;
 // service-worker signals moved into other tooling) — audited categories are
 // whatever this Lighthouse version actually reports.
 //
-// Performance is NOT at the PLAN.md §13 target of 90 yet — it's a real,
-// investigated 72 as of the PHASE7_PLAN.md §5 hardening pass, not an
+// Performance is NOT at the PLAN_00_FOUNDATIONAL_PLAN.md §13 target of 90 yet — it's a real,
+// investigated 72 as of the PLAN_07_PHASE_POLISH.md §5 hardening pass, not an
 // arbitrary number. Root-caused to flowbite-svelte: the CSS half was fixed
 // by scoping layout.css's @source to only the 8 components this app
 // actually imports (was scanning the whole library, ~254KB → ~123KB
@@ -54,7 +54,7 @@ const DEBUG_PORT = 9223;
 // below guards against *regression* from today's measured 72, not a claim
 // that §13 is met.
 //
-// Re-measured 2026-08-15 after PHASE9_PLAN.md: the same render-blocking CSS
+// Re-measured 2026-08-15 after PLAN_09_PHASE_REFINEMENTS.md: the same render-blocking CSS
 // (now ~132KB, up from ~123KB — new routes/drag-swipe/view-transition
 // styling) pushed the score down further, landing at a real, reproducible
 // 63 on CI's runner (confirmed via a Lighthouse JSON report: 0ms TBT, so

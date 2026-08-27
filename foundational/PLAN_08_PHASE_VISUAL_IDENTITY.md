@@ -2,7 +2,7 @@
 
 ## Context
 
-Phase 7 (`foundational/PHASE7_PLAN.md`) was the last phase planned in `foundational/PLAN.md` §14, but it left the app's visual design untouched: default Tailwind/Flowbite styling, no custom typography, and a generic cyan "Ocean" accent (`#0ea5e9`) as the only brand color. Functionally complete, visually unstyled scaffolding.
+Phase 7 (`foundational/PLAN_07_PHASE_POLISH.md`) was the last phase planned in `foundational/PLAN_00_FOUNDATIONAL_PLAN.md` §14, but it left the app's visual design untouched: default Tailwind/Flowbite styling, no custom typography, and a generic cyan "Ocean" accent (`#0ea5e9`) as the only brand color. Functionally complete, visually unstyled scaffolding.
 
 The product is a self-hosted, offline-first, general-purpose list app — any kind of list (packing, to-do, wishlist, chores, groceries), not grocery-specific, despite grocery-shaped optional features (per-item price, store/aisle selection) existing in the code. It's explicitly modeled on **AnyList**: solid UX ("I rarely trip over it") but tired visuals and aggressive paywalling. EveryList is free and self-hosted, so the identity leans into that directly — no upsell/premium-badge/urgency UI patterns, anywhere, ever.
 
@@ -17,7 +17,7 @@ The one genuinely distinctive thing already built into the data model is per-lis
 - Ocean (today's default cyan scale) becomes a selectable accent alongside the existing Forest/Berry/Sunset — unchanged values, just no longer default
 - Per-list color swatches (`ColorPicker.svelte`) are untouched — that's the personality layer
 
-**Type** — three self-hosted, subsetted variable woff2 fonts (never Google Fonts network requests — this is an offline-first PWA, and PHASE7_PLAN.md §5 already fought hard for its Lighthouse score):
+**Type** — three self-hosted, subsetted variable woff2 fonts (never Google Fonts network requests — this is an offline-first PWA, and PLAN_07_PHASE_POLISH.md §5 already fought hard for its Lighthouse score):
 - Space Grotesk — display face: wordmark, page titles, list-card names
 - Public Sans — body/UI face, becomes the new `--font-sans` default
 - IBM Plex Mono — utility face for item counts, quantities, prices; must retain the `tnum` (tabular figures) OpenType feature through subsetting
@@ -30,7 +30,7 @@ Add subsetted variable woff2s to `apps/web/static/fonts/` (not `src/lib/assets/`
 
 New `apps/web/src/lib/fonts.css` (or a block at the top of `layout.css`) with `@font-face` declarations, `font-display: swap` on all three. Add `--font-display`, `--font-sans` (override), `--font-mono` (override) to the existing `@theme` block.
 
-Budget each subset under ~30–40KB; re-run `node scripts/lighthouse-check.mjs` against a production build afterward (`THRESHOLDS.performance: 65`, the documented real number — not the aspirational 90 in `PLAN.md`).
+Budget each subset under ~30–40KB; re-run `node scripts/lighthouse-check.mjs` against a production build afterward (`THRESHOLDS.performance: 65`, the documented real number — not the aspirational 90 in `PLAN_00_FOUNDATIONAL_PLAN.md`).
 
 ## 2. Color tokens — `layout.css` / `app.html` / `vite.config.ts`
 

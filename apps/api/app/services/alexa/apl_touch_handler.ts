@@ -13,7 +13,7 @@ const ACTIONS = {
 
 /**
  * Handles an `Alexa.Presentation.APL.UserEvent` fired by tapping an item on-screen
- * (PHASE16_PLAN.md Stage 3) — `apl_document.ts`'s `onPress` command sends
+ * (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3) — `apl_document.ts`'s `onPress` command sends
  * `[action, itemId, listId]`, where `action` is `"complete"` or `"uncheck"` depending on the
  * tapped row's current `checked` state, so tapping the checkbox is a real toggle rather than a
  * one-way "mark done" (which would otherwise silently re-complete an already-checked item on a

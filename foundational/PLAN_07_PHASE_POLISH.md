@@ -2,14 +2,14 @@
 
 ## Context
 
-`foundational/PLAN.md` §14 lists Phase 7 ("Polish") as the last planned phase: passcode lock, extra premium-equivalent themes, personalized autocomplete, and a performance/accessibility hardening pass. Phase 6 (item-store tagging, prices, folders, badge counts, export) shipped in commit `6e3ef8f` but — unlike Phases 3–5 — never got a closing status note appended to `PLAN.md`; that is backfilled first so the doc's trail stays accurate before Phase 7 is added on top.
+`foundational/PLAN_00_FOUNDATIONAL_PLAN.md` §14 lists Phase 7 ("Polish") as the last planned phase: passcode lock, extra premium-equivalent themes, personalized autocomplete, and a performance/accessibility hardening pass. Phase 6 (item-store tagging, prices, folders, badge counts, export) shipped in commit `6e3ef8f` but — unlike Phases 3–5 — never got a closing status note appended to `PLAN_00_FOUNDATIONAL_PLAN.md`; that is backfilled first so the doc's trail stays accurate before Phase 7 is added on top.
 
 Three scope calls were locked in with the user before implementation:
 - **Passcode = simple PIN**, not WebAuthn — matches the app's "boring technology" stack.
 - **Personalization = frequency-based**, not a trained ML model — a real backend service, per §3's requirement, but built from data already in the DB (item→category history), not a new ML pipeline.
 - Both are explicitly consistent with existing codebase idioms — no new infrastructure classes are introduced.
 
-## 1. Backfill the Phase 6 status note (`foundational/PLAN.md`)
+## 1. Backfill the Phase 6 status note (`foundational/PLAN_00_FOUNDATIONAL_PLAN.md`)
 
 Append a closing status note after the existing Phase 5 note, in the same style as the Phase 3/4/5 notes: what shipped (Store item-tagging + filtering, prices/budget total, Folders, badge count + exclusion via Web Badging API, SMTP2GO email export), confirmed present in the current tree (`apps/api/app/models/folder.ts`, `List.badgeExcluded`, `apps/web/src/lib/pwa/badge.ts`, `apps/api/app/mails/list_export_mail.ts`). No code changes, doc only.
 
@@ -37,13 +37,13 @@ Append a closing status note after the existing Phase 5 note, in the same style 
 
 Current state: `packages/shared/src/auto-categorize.ts`'s static `suggestCategoryName` keyword table is called both server-side (`resolveCategoryId` in `apps/api/app/controllers/items_controller.ts`, used at item create) and client-side (`guessCategoryId` in `apps/web/src/lib/api/items.ts`, used only for the offline-optimistic row before the server round-trip). At the time this phase shipped, no new tracking table was needed — personalization was derived from `Item` rows that already exist.
 
-> **Superseded by Phase 17** (see `foundational/PHASE17_PLAN.md`): the item-derived frequency heuristic was replaced with a dedicated `category_learnings` table — a persisted, exponentially-decayed, server-authoritative learned model that only learns from *explicit* category assignments and is synced read-only to the offline client. The "no new tracking table is needed" stance above is no longer accurate.
+> **Superseded by Phase 17** (see `foundational/PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md`): the item-derived frequency heuristic was replaced with a dedicated `category_learnings` table — a persisted, exponentially-decayed, server-authoritative learned model that only learns from *explicit* category assignments and is synced read-only to the offline client. The "no new tracking table is needed" stance above is no longer accurate.
 
 **Backend — new `apps/api/app/services/category_suggestion_service.ts`:** `suggestCategoryId(list, itemName): Promise<number | null>`. Looks up past `Item` rows in **this list** (personalization is list-scoped, matching how `Category` overrides are already list-scoped, not user-scoped — a shared list's convention should apply to everyone on it) with a case-insensitive exact name match and a non-null `categoryId`, grouped by `categoryId`, ordered by count desc. Falls back to today's static-table lookup (`suggestCategoryName` + `getEffectiveCategories`) when there's no personal history. `resolveCategoryId` in `items_controller.ts` calls this new service instead of the static-only logic directly — item creation itself gets smarter, not just the new endpoint.
 
 **New endpoint:** `GET /lists/:listId/items/categorize?name=<itemName>` (viewer role, same pattern as other list-scoped GETs) → `{ categoryId: number | null }`. Route added in `apps/api/start/routes.ts` next to the other `:listId/items/*` routes. New `CategorizeSuggestionDto` in `packages/shared/src/domain.ts`.
 
-**Frontend (`apps/web/src/lib/api/items.ts`):** `guessCategoryId` tries `apiGet('/api/v1/lists/:id/items/categorize?name=...')` first; on success uses its `categoryId`. On failure (offline and this exact `listId`+name was never fetched before, so nothing in the SW's `StaleWhileRevalidate` cache for `/api/v1/*`) it falls back to the existing local static-table lookup, unchanged — this is the "plan for what an offline client does when it can't reach the service" the PLAN.md §3 note calls for, and it reuses the SW caching that already exists rather than adding a new Dexie cache table.
+**Frontend (`apps/web/src/lib/api/items.ts`):** `guessCategoryId` tries `apiGet('/api/v1/lists/:id/items/categorize?name=...')` first; on success uses its `categoryId`. On failure (offline and this exact `listId`+name was never fetched before, so nothing in the SW's `StaleWhileRevalidate` cache for `/api/v1/*`) it falls back to the existing local static-table lookup, unchanged — this is the "plan for what an offline client does when it can't reach the service" the PLAN_00_FOUNDATIONAL_PLAN.md §3 note calls for, and it reuses the SW caching that already exists rather than adding a new Dexie cache table.
 
 ## 4. Extra themes (accent palettes)
 
@@ -62,7 +62,7 @@ Current state: **no Lighthouse or axe-core setup exists anywhere in the repo.** 
 - Add `@axe-core/playwright` to `apps/web`, add a new `apps/web/e2e/accessibility.e2e.ts` that runs `axe-core` against the login page (unauthenticated) and a real list-detail page (reusing the same sign-up-and-seed pattern `e2e/offline-sync.e2e.ts` already establishes), asserting zero violations.
 - Add a Lighthouse harness: a small script (`apps/web/scripts/lighthouse-check.mjs`) using the `lighthouse` npm package driven over Playwright's already-installed Chromium via CDP (reusing the CI-provisioned browser, no extra install step) — signs up/seeds a list the same way, then audits the list-detail route, asserting Performance/Accessibility/Best Practices/PWA scores ≥90 per §13. Wired as a new `apps/web` package script `test:lighthouse`.
 - Wire both into `.github/workflows/ci.yml` as new jobs (`needs: test`, reusing `apps/web/playwright.config.ts`'s existing dev-server webServer setup).
-- **Run the harness and fix whatever it actually finds.** The specific fixes can't be fully enumerated until the tools run — this step is explicitly "run, triage, fix, iterate until green," not a fixed checklist. Likely candidate areas based on a quick skim: color-contrast on muted gray text (`text-gray-500`/`400` on white/dark backgrounds — Flowbite's defaults are borderline AA), missing `aria-label`s on icon-only buttons, and any obvious perf easy-wins the report surfaces (image sizing, unused JS). Document what was actually found/fixed in the closing PLAN.md status note, same as prior phases.
+- **Run the harness and fix whatever it actually finds.** The specific fixes can't be fully enumerated until the tools run — this step is explicitly "run, triage, fix, iterate until green," not a fixed checklist. Likely candidate areas based on a quick skim: color-contrast on muted gray text (`text-gray-500`/`400` on white/dark backgrounds — Flowbite's defaults are borderline AA), missing `aria-label`s on icon-only buttons, and any obvious perf easy-wins the report surfaces (image sizing, unused JS). Document what was actually found/fixed in the closing PLAN_00_FOUNDATIONAL_PLAN.md status note, same as prior phases.
 
 ## 6. Testing
 
@@ -72,13 +72,13 @@ Both workspaces stay at the existing 100%-coverage gate throughout (c8 for `apps
 
 ## 7. Implementation order
 
-1. Backfill Phase 6 status note in `PLAN.md`.
-2. Write `foundational/PHASE7_PLAN.md` (this design doc, committed alongside the code per the Phase 4/5 precedent).
+1. Backfill Phase 6 status note in `PLAN_00_FOUNDATIONAL_PLAN.md`.
+2. Write `foundational/PLAN_07_PHASE_POLISH.md` (this design doc, committed alongside the code per the Phase 4/5 precedent).
 3. Passcode lock: migration → validator/transformer/DTO → `ListMenu` set/change/remove UI → `passcode.ts` → `PasscodeGate.svelte` → list-detail gating → list-index lock badge → tests.
 4. Personalized categorization: `category_suggestion_service.ts` → `resolveCategoryId` refactor → new route/DTO → `items.ts` client call + offline fallback → tests.
 5. Extra themes: `layout.css` palette blocks → accent module → `app.html` bootstrap update → Settings accent picker → tests.
 6. Perf/a11y hardening: axe-core e2e spec, Lighthouse harness script, wire both into `ci.yml`, run, triage, fix, iterate.
-7. Append the closing Phase 7 status note to `PLAN.md` (§16-style — what shipped, what the hardening pass actually found/fixed).
+7. Append the closing Phase 7 status note to `PLAN_00_FOUNDATIONAL_PLAN.md` (§16-style — what shipped, what the hardening pass actually found/fixed).
 8. Full verification pass (below).
 
 ## Verification

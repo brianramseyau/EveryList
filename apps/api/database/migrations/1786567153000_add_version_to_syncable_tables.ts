@@ -7,7 +7,7 @@ export default class extends BaseSchema {
     for (const tableName of TABLES) {
       this.schema.alterTable(tableName, (table) => {
         // Bumped on every mutation; backs the offline sync queue's
-        // expectedVersion/409 conflict check — see PLAN.md §7.
+        // expectedVersion/409 conflict check — see PLAN_00_FOUNDATIONAL_PLAN.md §7.
         table.integer('version').unsigned().notNullable().defaultTo(1)
       })
     }

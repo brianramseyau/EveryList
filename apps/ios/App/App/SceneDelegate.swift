@@ -10,7 +10,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window = UIWindow(windowScene: windowScene)
         // Not the Capacitor-generated default (CAPBridgeViewController()) — MainViewController.swift
         // overrides router() and capacitorDidLoad() for the SPA-fallback fix and pull-to-refresh
-        // (PHASE13_PLAN.md §4). Main.storyboard also references MainViewController, but that
+        // (PLAN_13_PHASE_NATIVE_APP_SHELL.md §4). Main.storyboard also references MainViewController, but that
         // storyboard is never actually loaded at runtime — this line is the one that matters.
         window?.rootViewController = MainViewController()
         window?.makeKeyAndVisible()

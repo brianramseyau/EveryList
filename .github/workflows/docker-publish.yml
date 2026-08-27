@@ -62,7 +62,7 @@ jobs:
 
       - name: Compute build metadata
         # Baked into the image (ARG/ENV, not read at container startup) and served
-        # from GET /api/v1/meta - see foundational/PLAN.md §8/§9 - so the in-app
+        # from GET /api/v1/meta - see foundational/PLAN_00_FOUNDATIONAL_PLAN.md §8/§9 - so the in-app
         # Settings page footer can show exactly what build is running, which matters
         # for anyone tracking a moving tag (nightly or a major-version pin).
         id: buildinfo

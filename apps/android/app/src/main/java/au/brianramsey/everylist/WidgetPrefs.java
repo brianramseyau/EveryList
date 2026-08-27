@@ -8,7 +8,7 @@ import org.json.JSONException;
 import java.util.ArrayList;
 import java.util.List;
 
-/** SharedPreferences access for the widget (PHASE18_PLAN.md). Two layers:
+/** SharedPreferences access for the widget (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). Two layers:
  *  <ul>
  *    <li><b>Global</b> (`everylist_widget`): the provisioned credentials — PAT, server URL, and
  *        the granted list ids — written once from the app's deep-link handoff and shared by every

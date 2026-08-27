@@ -39,7 +39,7 @@ export interface OfflineCreateOptions<T> {
 }
 
 /**
- * Write path for creates (PHASE5_PLAN.md §4): writes an optimistic row to
+ * Write path for creates (PLAN_05_PHASE_OFFLINE_PWA.md §4): writes an optimistic row to
  * Dexie under a temp id and queues the mutation, then — when online —
  * attempts the real request immediately, replacing the temp row with the
  * server's response on success. When Dexie isn't available at all (SSR, or
@@ -173,14 +173,14 @@ export interface OfflineReorderOptions<T> {
 	 * `offline/flush.ts`'s `replayReorder`. */
 	onSuccess: (db: EveryListDB, result: T) => Promise<void>;
 	/** The full desired-order payload to replay from the flush loop if this doesn't resolve
-	 * immediately (PHASE13_PLAN.md §5). */
+	 * immediately (PLAN_13_PHASE_NATIVE_APP_SHELL.md §5). */
 	payload: Record<string, unknown>;
 	url: string;
 	request: () => Promise<T>;
 }
 
 /**
- * Write path for bulk reorders (PHASE13_PLAN.md §5: category reorder, store aisle order).
+ * Write path for bulk reorders (PLAN_13_PHASE_NATIVE_APP_SHELL.md §5: category reorder, store aisle order).
  * Unlike `offlineMutate`, there's no single row's version to guard: the reorder endpoints bump
  * every touched row's version unconditionally, with no `expectedVersion` check (see
  * categories_controller.ts's `reorder` / stores_controller.ts's `reorderCategories`) — so the

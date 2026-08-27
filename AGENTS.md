@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repo. This is the single source of
 
 ## What this app is
 
-EveryList is a self-hosted, mobile-first, offline-first shopping-list PWA — see [`foundational/PLAN.md`](foundational/PLAN.md) for the full product plan and rationale, and [`README.md`](README.md) for a quick overview. Single Docker image, single process, single SQLite file under `/config`, no premium tier.
+EveryList is a self-hosted, mobile-first, offline-first shopping-list PWA — see [`foundational/PLAN_00_FOUNDATIONAL_PLAN.md`](foundational/PLAN_00_FOUNDATIONAL_PLAN.md) for the full product plan and rationale, and [`README.md`](README.md) for a quick overview. Single Docker image, single process, single SQLite file under `/config`, no premium tier.
 
 ## Monorepo layout
 
@@ -13,7 +13,7 @@ apps/api/       AdonisJS 6 backend (Lucid ORM, VineJS validation, Transmit/SSE)
 apps/web/       SvelteKit frontend (Svelte 5, static adapter, Flowbite Svelte, Dexie offline store)
 packages/shared DTOs/contracts shared between API and web
 docker/         Container build; root/etc/cont-init.d/* are s6-overlay boot scripts (migrations, seeding)
-foundational/   PLAN.md and phase plans — the product/architecture spec
+foundational/   PLAN_00_FOUNDATIONAL_PLAN.md and phase plans — the product/architecture spec
 ```
 
 ## Stack essentials
@@ -282,6 +282,6 @@ Settings surfaces feedback.
 ## Working conventions
 
 - Full-stack features go migration → backend (model/validator/controller/policy) → shared DTO → frontend, in that order — see any `Phase 6:` commit for the pattern.
-- **Run `pnpm check` before opening a PR.** It mirrors the GitHub Actions PR gate (`.github/workflows/ci.yml` → `test.yml`, plus the `e2e` job — see `foundational/PLAN.md` §12): builds `@everylist/shared`, lints and typechecks every workspace, installs Playwright Chromium, runs every workspace's coverage-gated test suite, then the web E2E suite. `pnpm check --skip-e2e` drops the E2E suite for fast iteration. This catches issues locally instead of burning (at times multiple) CI round trips. The CI `docker-smoke` job (production Docker image build + smoke test) isn't part of `pnpm check` but **is** reproducible locally now that Docker is available (colima): `docker build -f docker/Dockerfile -t everylist:ci .`, then `docker run -d --name everylist-ci -p 3000:3000 -e APP_KEY=<a 32-char dev key> everylist:ci`, wait for `curl -fsS http://localhost:3000/` to succeed, run the same smoke checks as the job in `.github/workflows/ci.yml`, and clean up with `docker rm -f everylist-ci`. (Lighthouse's CI gate was removed in PR #30 — `scripts/lighthouse-check.mjs` still exists for manual/local runs, but nothing in CI invokes it.)
+- **Run `pnpm check` before opening a PR.** It mirrors the GitHub Actions PR gate (`.github/workflows/ci.yml` → `test.yml`, plus the `e2e` job — see `foundational/PLAN_00_FOUNDATIONAL_PLAN.md` §12): builds `@everylist/shared`, lints and typechecks every workspace, installs Playwright Chromium, runs every workspace's coverage-gated test suite, then the web E2E suite. `pnpm check --skip-e2e` drops the E2E suite for fast iteration. This catches issues locally instead of burning (at times multiple) CI round trips. The CI `docker-smoke` job (production Docker image build + smoke test) isn't part of `pnpm check` but **is** reproducible locally now that Docker is available (colima): `docker build -f docker/Dockerfile -t everylist:ci .`, then `docker run -d --name everylist-ci -p 3000:3000 -e APP_KEY=<a 32-char dev key> everylist:ci`, wait for `curl -fsS http://localhost:3000/` to succeed, run the same smoke checks as the job in `.github/workflows/ci.yml`, and clean up with `docker rm -f everylist-ci`. (Lighthouse's CI gate was removed in PR #30 — `scripts/lighthouse-check.mjs` still exists for manual/local runs, but nothing in CI invokes it.)
 - Don't force-push, don't skip hooks, don't merge/deploy without explicit confirmation — this is a solo-maintained app with no staging environment, so anything that touches `main` effectively touches production on the next deploy.
 - **Stop any dev server process you started (`pnpm dev`, `node ace serve`, `vite`/`vitest` in watch mode, etc.) once you're done with it** — including any child processes it spawned. The one exception: a dev server that was already running before you started (the user's own persistent session) — leave that alone; check process start times if unsure whether something predates your session.

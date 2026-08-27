@@ -2,7 +2,7 @@
 
 ## Context
 
-The auto-categorizer is a two-tier matcher in `apps/api/app/services/category_suggestion_service.ts`: a "personalized" tier that derives a category from past `Item` rows (case-insensitive exact name → most-frequent `categoryId`), and a static keyword table in `packages/shared/src/auto-categorize.ts` as fallback. This was the Phase 7 fallback from an originally-planned ML model ("frequency-based, not a trained ML model", PHASE7_PLAN.md §3).
+The auto-categorizer is a two-tier matcher in `apps/api/app/services/category_suggestion_service.ts`: a "personalized" tier that derives a category from past `Item` rows (case-insensitive exact name → most-frequent `categoryId`), and a static keyword table in `packages/shared/src/auto-categorize.ts` as fallback. This was the Phase 7 fallback from an originally-planned ML model ("frequency-based, not a trained ML model", PLAN_07_PHASE_POLISH.md §3).
 
 Four defects motivate replacing it:
 
@@ -45,8 +45,8 @@ Decisions locked in with the user before implementation:
 ## Docs & references
 
 - Update the stale `auto-categorize.ts` header comment (references nonexistent `default_category_seeder.ts` / `auto_categorize_service.ts`).
-- Correct PHASE7_PLAN.md's "No new tracking table is needed" line.
-- Update `README.md` and `foundational/PLAN.md` to reflect the new standing: auto-categorization is now a persisted, decayed, server-authoritative learned model synced read-only to the offline client, replacing the item-derived frequency heuristic.
+- Correct PLAN_07_PHASE_POLISH.md's "No new tracking table is needed" line.
+- Update `README.md` and `foundational/PLAN_00_FOUNDATIONAL_PLAN.md` to reflect the new standing: auto-categorization is now a persisted, decayed, server-authoritative learned model synced read-only to the offline client, replacing the item-derived frequency heuristic.
 
 ## Testing (100% coverage maintained)
 
@@ -61,7 +61,7 @@ Decisions locked in with the user before implementation:
 3. Service rewrite + delete `personalizedCategoryId`.
 4. Route + `learnCategory` wiring at the four call sites.
 5. Dexie v4 + `fetchCategoryLearnings` + background-sync/`loadAll`/offline fallback.
-6. Docs & references update (README.md, PLAN.md, PHASE7 note, `auto-categorize.ts` header).
+6. Docs & references update (README.md, PLAN_00_FOUNDATIONAL_PLAN.md, PHASE7 note, `auto-categorize.ts` header).
 7. Tests + `pnpm check`.
 
 ## Verification

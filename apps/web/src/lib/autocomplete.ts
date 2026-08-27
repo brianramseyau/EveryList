@@ -4,7 +4,7 @@ export interface AutocompleteSuggestion {
 }
 
 /** Merges favorite names + recent item-name history into one deduped list, favorites first
- * (PHASE10_PLAN.md #0.3) — case-insensitive/trimmed dedup, keeping the favorite's own casing
+ * (PLAN_10_PHASE_VALIDATION_USABILITY.md #0.3) — case-insensitive/trimmed dedup, keeping the favorite's own casing
  * when a name appears in both sources. */
 export function mergeSuggestions(
 	favoriteNames: string[],

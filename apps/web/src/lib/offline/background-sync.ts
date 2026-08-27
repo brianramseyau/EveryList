@@ -19,7 +19,7 @@ let started = false;
 
 /**
  * Refreshes every list's offline cache, not just the one currently open — a follow-up to the
- * per-fetcher cache fallback (PHASE13_PLAN.md §8), which only helps a list that's already been
+ * per-fetcher cache fallback (PLAN_13_PHASE_NATIVE_APP_SHELL.md §8), which only helps a list that's already been
  * visited at least once. Mirrors `routes/lists/[id]/+page.svelte`'s own `loadAll()` per list, plus
  * favorites and recently-deleted items — screens reached from that page's own toolbar links but
  * never warmed by visiting it — so the cache ends up in the same state a real visit to every one

@@ -42,7 +42,7 @@ export async function fetchStores(listId: number): Promise<StoreDto[]> {
 
 /** Attaches an existing store (storeId) or creates + attaches a new one (name). Attaching by id
  * is a join-table op with no versioned row of its own — the server computes the resulting row,
- * so (per PHASE13_PLAN.md §5) it gets the same offline treatment as a create, just queued as
+ * so (per PLAN_13_PHASE_NATIVE_APP_SHELL.md §5) it gets the same offline treatment as a create, just queued as
  * `'attach'`: a best-effort placeholder (a copy of whatever this client already knows about that
  * store, if it's been fetched on another list before, or a generic placeholder otherwise) stands
  * in until the server's authoritative row replaces it on flush. */

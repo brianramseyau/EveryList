@@ -19,7 +19,7 @@ export type ListResolution =
   { kind: 'found'; list: List } | { kind: 'ambiguous'; options: List[] } | { kind: 'not-found' }
 
 /**
- * Resolves which list an Alexa request should act on (PHASE16_PLAN.md Stage 2's "Which list"
+ * Resolves which list an Alexa request should act on (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2's "Which list"
  * section) — this logic is Alexa-specific and exists nowhere else in the app. An explicit
  * `ListName` slot is fuzzy-matched against the token's accessible lists; with no slot, a single
  * accessible list is used implicitly, and more than one asks the user to disambiguate rather

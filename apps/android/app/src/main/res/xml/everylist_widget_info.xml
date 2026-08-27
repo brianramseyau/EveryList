@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- AppWidgetProviderInfo for the EveryList home-screen widget (PHASE18_PLAN.md).
+<!-- AppWidgetProviderInfo for the EveryList home-screen widget (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md).
      `updatePeriodMillis` is floored by Android to ~30 minutes — the widget also has a manual
      refresh button, and `WidgetConfigActivity` re-renders on config changes. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"

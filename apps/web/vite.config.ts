@@ -81,7 +81,7 @@ export default defineConfig({
 			// for *any* unmatched deep route — e.g. reloading on /settings/sync. SvelteKit's
 			// default relative asset paths (`./_app/...`) are only correct when a page is served
 			// from its own exact URL; served from a different path instead, the browser resolves
-			// them against the wrong base and 404s every chunk (PHASE13_PLAN.md §4, found via the
+			// them against the wrong base and 404s every chunk (PLAN_13_PHASE_NATIVE_APP_SHELL.md §4, found via the
 			// "Refresh now" button). Absolute paths (`/_app/...`) — already what adapter-static
 			// forces for the 200.html fallback specifically — resolve correctly regardless of
 			// which URL the file is served from, so apply that globally rather than fixing just

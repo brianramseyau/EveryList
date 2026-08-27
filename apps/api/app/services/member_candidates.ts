@@ -8,7 +8,7 @@ import logger from '@adonisjs/core/services/logger'
  * another list with (both accepted members), minus users already on the
  * target list and the requester themselves. This is the "I already share
  * lists with this person, so adding them to a new list shouldn't need a
- * link" path — see PLAN.md §10.
+ * link" path — see PLAN_00_FOUNDATIONAL_PLAN.md §10.
  */
 export async function findMemberCandidates(userId: number, list: List) {
   // Lists the requester is an accepted member of.

@@ -18,7 +18,7 @@
 
 	// The OS-level app icon badge (Web Badging API) already shows this count where
 	// supported — this pill is the in-app fallback for browsers that don't (iOS Safari,
-	// Firefox), see PLAN.md §16.
+	// Firefox), see PLAN_00_FOUNDATIONAL_PLAN.md §16.
 	let badgeCount = $state(getBadgeCount());
 
 	onMount(() => {

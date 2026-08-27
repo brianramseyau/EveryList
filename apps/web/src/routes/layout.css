@@ -12,7 +12,7 @@
    pulled in every other component's utility classes too (~40 components
    never used here) and bloated the compiled CSS to ~254KB, a real
    contributor to a sub-90 Lighthouse Performance score found during the
-   PHASE7_PLAN.md §5 hardening pass. */
+   PLAN_07_PHASE_POLISH.md §5 hardening pass. */
 @source '../../node_modules/flowbite-svelte/dist/forms';
 @source '../../node_modules/flowbite-svelte/dist/buttons';
 
@@ -20,16 +20,16 @@
    styled entirely with `primary-*` classes and expect the consuming app to
    define that palette — Tailwind v4 ships no color named "primary" out of
    the box. The values declared here (Slate, the app's default brand/chrome
-   color — see PHASE8_PLAN.md "The Index") are both the @theme default *and*
+   color — see PLAN_08_PHASE_VISUAL_IDENTITY.md "The Index") are both the @theme default *and*
    the values Tailwind's generated `bg-primary-*` etc. utilities read at
    runtime through var(--color-primary-*) — so the [data-accent='...']
    blocks below, which plain-CSS-override the same custom properties for a
    non-default accent, re-theme every component with zero component-level
-   changes. See $lib/accent.ts and PHASE7_PLAN.md §4.
+   changes. See $lib/accent.ts and PLAN_07_PHASE_POLISH.md §4.
 
    Slate is deliberately quiet: it's used for UI chrome only (buttons, nav,
    links) so it never competes with a list's own user-chosen `list.color`,
-   which is the app's real source of visual personality (PHASE8_PLAN.md). */
+   which is the app's real source of visual personality (PLAN_08_PHASE_VISUAL_IDENTITY.md). */
 @theme {
 	--color-paper: #f6f5f1;
 	--color-ink: #201f1d;
@@ -114,7 +114,7 @@
 
 /* The single centered app-column width, stepped up from the mobile-first
    max-w-lg so the app stops looking like a phone screen floating in a
-   desktop browser (PHASE8_PLAN.md §7). 512px on phones, 768px from md up
+   desktop browser (PLAN_08_PHASE_VISUAL_IDENTITY.md §7). 512px on phones, 768px from md up
    (fills a 768/820/834px iPad portrait), and 1024px from lg up — Chrome's
    iPad portrait is 1024 wide and landscape 1366, so this fills those nicely
    while capping well short of a desktop monitor: a 1920px screen still shows
@@ -191,7 +191,7 @@ html {
 	list-style: none;
 }
 
-/* Page-transition slide (PHASE9_PLAN.md #11) — direction is set on <html>
+/* Page-transition slide (PLAN_09_PHASE_REFINEMENTS.md #11) — direction is set on <html>
    by +layout.svelte's onNavigate hook just before startViewTransition()
    runs. Kept short ("snappy, not drawn out") and, like the checkmark
    settle animation, off entirely for reduced-motion users. */

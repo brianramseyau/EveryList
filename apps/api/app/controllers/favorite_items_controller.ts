@@ -183,7 +183,7 @@ export default class FavoriteItemsController {
   /**
    * One-tap rebuild: adds this favorite back to its list as a new item,
    * seeded with its default category/quantity — the "master list" loop
-   * from PLAN.md §3, now scoped to a single list.
+   * from PLAN_00_FOUNDATIONAL_PLAN.md §3, now scoped to a single list.
    */
   async addToList({ auth, params, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
@@ -245,7 +245,7 @@ export default class FavoriteItemsController {
     })
 
     // A favorite's default category is an explicit assignment, so re-adding
-    // the favorite to its list teaches the model (PHASE17_PLAN.md).
+    // the favorite to its list teaches the model (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md).
     if (favorite.defaultCategoryId !== null) {
       await learnCategory(list, favorite.name, favorite.defaultCategoryId)
     }

@@ -22,7 +22,7 @@ function toMdiExportName(iconName: string): string {
 
 /**
  * Rasterizes an `@mdi/js` category/list icon to a PNG for the Alexa APL display
- * (PHASE16_PLAN.md Stage 3) — APL's `Image` component can only fetch a real image over HTTPS,
+ * (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3) — APL's `Image` component can only fetch a real image over HTTPS,
  * it can't render arbitrary SVG icon libraries or vector icon fonts directly. Renders in the
  * requested `colorHex` rather than always the same color, since the app tints category headers
  * with each list's own `color`. Cached in-process by `${iconName}:${colorHex}` — the same list's

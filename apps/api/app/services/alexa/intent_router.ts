@@ -14,7 +14,7 @@ type AlexaSlots = Record<string, string | undefined>
 /**
  * Every intent handler's result: the spoken response, plus the list it acted on when one was
  * successfully resolved — `alexa_controller.ts` uses `list` to attach an APL display directive
- * for screen devices (PHASE16_PLAN.md Stage 3). `list` is omitted when there's nothing sensible
+ * for screen devices (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3). `list` is omitted when there's nothing sensible
  * to show: a not-found/ambiguous list, or a request that never got far enough to resolve one
  * (e.g. no `ItemName` slot at all).
  */
@@ -68,7 +68,7 @@ async function resolveListOrRespond(
 
 /**
  * Marks an active item done — the shared mutation behind both the voice `CompleteItemIntent`
- * path below and the touch-driven completion path (`apl_touch_handler.ts`, PHASE16_PLAN.md
+ * path below and the touch-driven completion path (`apl_touch_handler.ts`, PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md
  * Stage 3), so the version bump/`checkedAt`/`broadcastSync` sequence exists in exactly one place.
  */
 export async function completeItemRow(list: List, item: Item): Promise<void> {
@@ -88,7 +88,7 @@ export async function completeItemRow(list: List, item: Item): Promise<void> {
 
 /**
  * Reverses `completeItemRow` — the touch-driven counterpart to tapping an already-checked item
- * on-screen (`apl_touch_handler.ts`, PHASE16_PLAN.md Stage 3). There's no voice equivalent (no
+ * on-screen (`apl_touch_handler.ts`, PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3). There's no voice equivalent (no
  * `UncheckItemIntent` exists; the closest voice path is re-saying an item's name via
  * `handleAddItem`, which restores it as a side effect of its own dedup logic) — this only exists
  * for the tap gesture, so it lives here as its own function rather than folded into that.
@@ -110,7 +110,7 @@ export async function uncheckItemRow(list: List, item: Item): Promise<void> {
 
 /**
  * `AddItemIntent` — fuzzy-matches the spoken name against the list's existing item names first
- * (catching near-miss transcriptions like "miilk" vs "milk", per PHASE16_PLAN.md Stage 2) before
+ * (catching near-miss transcriptions like "miilk" vs "milk", per PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2) before
  * falling back to the API's own exact-match dedup/restore behavior that `items_controller.ts`'s
  * `store()` already implements; re-adding a checked or deleted item's name there restores it
  * rather than creating a metadata-less duplicate, so it's reused wholesale here instead of
@@ -251,9 +251,9 @@ export async function handleRemoveOrComplete(
   return respond(say(`Marked ${match.name} as done on ${list.name}.`), list)
 }
 
-/** `ReadListIntent` — a spoken summary, not a full read of a long list (PHASE16_PLAN.md Stage 2).
+/** `ReadListIntent` — a spoken summary, not a full read of a long list (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2).
  * Unlike the APL display (`apl_view.ts`, Stage 3), this only speaks unchecked items — the two
- * are deliberately allowed to diverge (see PHASE16_PLAN.md Stage 3's design note). */
+ * are deliberately allowed to diverge (see PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3's design note). */
 export async function handleReadList(token: AccessToken, slots: AlexaSlots): Promise<IntentResult> {
   const resolved = await resolveListOrRespond(token, slots.ListName)
   if ('response' in resolved) return respond(resolved.response)
@@ -302,7 +302,7 @@ export async function handleSetDefaultList(
 }
 
 /**
- * Screen-aware `LaunchRequest` (PHASE16_PLAN.md Stage 3): resolves a list exactly the way
+ * Screen-aware `LaunchRequest` (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3): resolves a list exactly the way
  * `ReadListIntent` with no `ListName` slot does (single accessible list used implicitly, several
  * asks to disambiguate), but always with a short greeting rather than the read-back summary —
  * the display itself, attached by `alexa_controller.ts` when the device has a screen, carries

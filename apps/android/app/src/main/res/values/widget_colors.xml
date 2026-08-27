@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Widget surface/text colors (PHASE18_PLAN.md). Kept literal rather than tied to the app
+    <!-- Widget surface/text colors (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). Kept literal rather than tied to the app
          theme because RemoteViews can't read themed color resources; a dark-mode follow-up would
          need an alternative layout/values-night. -->
     <color name="widget_paper">#F6F5F1</color>

@@ -1,5 +1,5 @@
 /**
- * List passcode lock — see PHASE7_PLAN.md §2. This is a local, shared-device
+ * List passcode lock — see PLAN_07_PHASE_POLISH.md §2. This is a local, shared-device
  * deterrent, not a cryptographic secret: any list member already has full
  * API access to the list, and the hash itself is visible to every member in
  * the `ListDto`. The PIN only gates the client-side render of the list body

@@ -2,9 +2,9 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 /**
- * Accessibility smoke pass (PLAN.md §13/§11): axe-core against an
+ * Accessibility smoke pass (PLAN_00_FOUNDATIONAL_PLAN.md §13/§11): axe-core against an
  * unauthenticated page and a real, data-bearing authenticated page — see
- * PHASE7_PLAN.md §5. Runs against the same dev-server webServer setup as
+ * PLAN_07_PHASE_POLISH.md §5. Runs against the same dev-server webServer setup as
  * offline-sync.e2e.ts, which already proxies /api/v1/* to a real API.
  */
 
@@ -12,7 +12,7 @@ import { expect, test } from '@playwright/test';
 // predating this app.html change) for an app-like feel rather than a zoomable web page — a
 // pre-existing, accepted trade-off against WCAG 1.4.4, just never previously visible to axe's
 // static meta-viewport check, since the zoom blocking was JS/touch-action-driven, not declared
-// in the tag itself. `maximum-scale=1` (app.html, PHASE13_PLAN.md §4's WebKit auto-zoom fix)
+// in the tag itself. `maximum-scale=1` (app.html, PLAN_13_PHASE_NATIVE_APP_SHELL.md §4's WebKit auto-zoom fix)
 // makes that same existing behavior visible to axe for the first time; it isn't a new regression.
 const disabledRules = ['meta-viewport'];
 

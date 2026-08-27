@@ -91,7 +91,7 @@ export default class ItemsController {
     return serialize(ItemTransformer.transform(items))
   }
 
-  /** Backs the client's optimistic-row category guess — see PHASE7_PLAN.md §3. */
+  /** Backs the client's optimistic-row category guess — see PLAN_07_PHASE_POLISH.md §3. */
   async categorize({ auth, params, request, response }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'viewer')
@@ -218,7 +218,7 @@ export default class ItemsController {
     })
 
     // Only an *explicit* category choice teaches the model — never the
-    // auto-suggestion itself (PHASE17_PLAN.md's self-reinforcement guard).
+    // auto-suggestion itself (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md's self-reinforcement guard).
     if (typeof payload.categoryId === 'number') {
       await learnCategory(list, payload.name, payload.categoryId)
     }

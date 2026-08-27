@@ -29,7 +29,7 @@ export default class AlexaOAuthController {
   /**
    * Bridges Alexa's account-linking token exchange to Authentik and, on success, mints a
    * Stage-0 Personal Access Token as the OAuth2 "access token" handed back to Alexa
-   * (PHASE16_PLAN.md Stage 2's account-linking design). This is a public endpoint reached
+   * (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2's account-linking design). This is a public endpoint reached
    * directly by Amazon's servers, not a user's browser.
    *
    * Amazon's account-linking config carries exactly one client id/secret pair, used both to

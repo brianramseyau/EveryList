@@ -32,7 +32,7 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // Outbound email (SMTP2GO) — optional: unset in local dev, so the app
   // boots with no config and email export simply reports "not configured"
-  // rather than failing to start (see PLAN.md's zero-config startup rule).
+  // rather than failing to start (see PLAN_00_FOUNDATIONAL_PLAN.md's zero-config startup rule).
   SMTP2GO_HOST: Env.schema.string.optional(),
   SMTP2GO_PORT: Env.schema.number.optional(),
   SMTP2GO_USERNAME: Env.schema.string.optional(),
@@ -41,7 +41,7 @@ export default await Env.create(new URL('../', import.meta.url), {
   SMTP2GO_FROM_NAME: Env.schema.string.optional(),
 
   // Build/image metadata (baked in by docker/Dockerfile at build time — see
-  // GET /api/v1/meta and PLAN.md §8). Absent in local dev, hence optional.
+  // GET /api/v1/meta and PLAN_00_FOUNDATIONAL_PLAN.md §8). Absent in local dev, hence optional.
   APP_VERSION: Env.schema.string.optional(),
   GIT_SHA: Env.schema.string.optional(),
   BUILD_DATE: Env.schema.string.optional(),
@@ -53,10 +53,10 @@ export default await Env.create(new URL('../', import.meta.url), {
   */
   LIMITER_STORE: Env.schema.enum(['database', 'memory'] as const),
 
-  // Alexa custom skill (PHASE16_PLAN.md Stage 2) — all optional: the skill
+  // Alexa custom skill (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2) — all optional: the skill
   // endpoint responds with "link your account" until account linking is
   // configured, and app/ boots with no Alexa config at all otherwise (see
-  // PLAN.md's zero-config startup rule).
+  // PLAN_00_FOUNDATIONAL_PLAN.md's zero-config startup rule).
   //
   // The skill's own Alexa developer-console application id, checked against
   // every request as a defense-in-depth measure alongside signature

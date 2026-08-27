@@ -3,7 +3,7 @@
 	import { anchorPanel } from '$lib/actions/anchor-panel';
 	import Icon from './Icon.svelte';
 
-	// Shared popout-menu primitive (PHASE9_PLAN.md #1/#10): a trigger icon
+	// Shared popout-menu primitive (PLAN_09_PHASE_REFINEMENTS.md #1/#10): a trigger icon
 	// button plus an anchor-panel-positioned list of links or action buttons,
 	// with click-outside and Escape-to-close — the behavior ListMenu.svelte
 	// used to hand-roll for itself with no viewport clamping. `children`

@@ -26,7 +26,7 @@ export default class StoresController {
 
   /**
    * Attaches an existing store (by id) to this list, or creates a new
-   * store and attaches it in one call — see PLAN.md §8.
+   * store and attaches it in one call — see PLAN_00_FOUNDATIONAL_PLAN.md §8.
    */
   async store({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()

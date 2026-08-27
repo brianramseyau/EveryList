@@ -2,10 +2,10 @@ import { getDb, type SelectedStoreSettings } from '$lib/offline/db';
 
 /**
  * "Currently shopping at" is a local, per-device selection — never synced
- * to the server or other members (see PLAN.md §7/§9). Keyed per list so
+ * to the server or other members (see PLAN_00_FOUNDATIONAL_PLAN.md §7/§9). Keyed per list so
  * different lists can remember different stores. Backed by Dexie's
  * `selectedStore` table (moved off localStorage in Phase 5 so it lives
- * alongside the rest of the offline cache — see PHASE5_PLAN.md §3) rather
+ * alongside the rest of the offline cache — see PLAN_05_PHASE_OFFLINE_PWA.md §3) rather
  * than the sync queue, since it's never sent to the server.
  */
 export async function getSelectedStoreSettings(listId: number): Promise<SelectedStoreSettings> {

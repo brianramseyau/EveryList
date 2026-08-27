@@ -265,7 +265,7 @@ describe('List detail +page.svelte', () => {
 			{ id: 2, storeId: 7, categoryId: 11, sortOrder: 0, deletedAt: null, version: 1 }
 		]);
 		// Tagged to the selected store (7) — otherwise the new auto-filter
-		// (PHASE10_PLAN.md #0.5) would hide them, since they'd belong to no
+		// (PLAN_10_PHASE_VALIDATION_USABILITY.md #0.5) would hide them, since they'd belong to no
 		// store while a store is selected.
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, storeId: 7 }),
@@ -2094,7 +2094,7 @@ describe('List detail +page.svelte', () => {
 		expect(subscribeToList).toHaveBeenCalledWith(1, expect.any(Function));
 
 		handler({ entityType: 'item', entityId: 1, op: 'create', payload: null, version: 1 });
-		// The "This list was updated" toast was removed (PHASE14_PLAN.md) — the
+		// The "This list was updated" toast was removed (PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md) — the
 		// event now drives a silent re-load of the list.
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
 	});

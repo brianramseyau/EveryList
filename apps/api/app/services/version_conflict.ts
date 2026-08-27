@@ -7,7 +7,7 @@ export interface VersionedRow {
 /**
  * True when the client sent an `expectedVersion` and it no longer matches
  * the row's current version — the offline sync queue's optimistic-locking
- * check, see PLAN.md §7 and PHASE5_PLAN.md §1.
+ * check, see PLAN_00_FOUNDATIONAL_PLAN.md §7 and PLAN_05_PHASE_OFFLINE_PWA.md §1.
  */
 export function hasVersionConflict(row: VersionedRow, expectedVersion?: number): boolean {
   return expectedVersion !== undefined && row.version !== expectedVersion
@@ -36,7 +36,7 @@ export interface VersionConflictInfo {
 /**
  * Emits a `warn`-level record to the container log whenever a write 409s on a
  * version conflict, so the silent-merge path leaves an auditable trail of the
- * exact expected-vs-actual version delta (see PHASE14_PLAN.md). Call it from a
+ * exact expected-vs-actual version delta (see PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md). Call it from a
  * controller's `hasVersionConflict(...)` branch just before the 409 response.
  */
 export function reportVersionConflict(

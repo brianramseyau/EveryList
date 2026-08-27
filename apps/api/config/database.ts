@@ -20,7 +20,7 @@ const dbConfig = defineConfig({
         // Overridden to /config/everylist.sqlite3 in the production image
         // (see docker/Dockerfile) so the database survives container
         // recreation on the persistent /config volume — see
-        // foundational/PLAN.md §5. Defaults to a tmp file for local dev.
+        // foundational/PLAN_00_FOUNDATIONAL_PLAN.md §5. Defaults to a tmp file for local dev.
         filename: env.get('DATABASE_FILENAME', app.tmpPath('db.sqlite3')),
       },
 

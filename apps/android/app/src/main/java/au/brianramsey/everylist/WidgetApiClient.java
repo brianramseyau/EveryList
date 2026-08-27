@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /** Minimal HTTP client for the widget's API calls, authenticated with the widget's Personal
- *  Access Token (PHASE18_PLAN.md). No external HTTP library — `HttpURLConnection` keeps the
+ *  Access Token (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). No external HTTP library — `HttpURLConnection` keeps the
  *  dependency surface at zero. All methods are blocking; callers must run them off the main
  *  thread. */
 final class WidgetApiClient {
