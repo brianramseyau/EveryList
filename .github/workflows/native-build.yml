@@ -1,11 +1,11 @@
 name: Native App Build
 
-# Builds the Capacitor-wrapped iOS/Android apps (foundational/PHASE13_PLAN.md §7) and attaches
+# Builds the Capacitor-wrapped iOS/Android apps (foundational/PLAN_13_PHASE_NATIVE_APP_SHELL.md §7) and attaches
 # them as downloadable assets on the GitHub Release for every pushed vX.Y.Z tag — same trigger
 # as docker-publish.yml's release path, so a tag produces both the container image and the
 # native builds together.
 #
-# No server URL is baked in (PHASE13_PLAN.md §1 made that runtime-configurable via /server-setup),
+# No server URL is baked in (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1 made that runtime-configurable via /server-setup),
 # so one build here serves every self-hosted instance.
 #
 #   - Android: a debug-signed APK via Gradle. Sideload-ready as-is; there's no release signing

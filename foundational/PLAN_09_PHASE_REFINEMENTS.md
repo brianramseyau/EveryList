@@ -2,7 +2,7 @@
 
 ## Context
 
-Phase 8 (`foundational/PHASE8_PLAN.md`) established "The Index" visual identity — Slate/Paper/Ink tokens, Space Grotesk/Public Sans/IBM Plex Mono, per-list color spine, Signal-green checkmark, `font-mono tabular-nums`. That work touched color/type/the checkmark/the progress strip but left the *interaction* layer of the app largely as originally scaffolded in Phase 2–3: text-link affordances (`← My Lists`, "Remove", "Show recently deleted"), no drag-and-drop, no swipe gestures, no page transitions, and an inline absolutely-positioned popout (`ListMenu.svelte`) that doesn't match the routed-screen pattern used everywhere else (Categories/Members/Favorites/Stores are all their own routes).
+Phase 8 (`foundational/PLAN_08_PHASE_VISUAL_IDENTITY.md`) established "The Index" visual identity — Slate/Paper/Ink tokens, Space Grotesk/Public Sans/IBM Plex Mono, per-list color spine, Signal-green checkmark, `font-mono tabular-nums`. That work touched color/type/the checkmark/the progress strip but left the *interaction* layer of the app largely as originally scaffolded in Phase 2–3: text-link affordances (`← My Lists`, "Remove", "Show recently deleted"), no drag-and-drop, no swipe gestures, no page transitions, and an inline absolutely-positioned popout (`ListMenu.svelte`) that doesn't match the routed-screen pattern used everywhere else (Categories/Members/Favorites/Stores are all their own routes).
 
 This phase converts that inline/text-affordance UI into routed screens, icon affordances, drag-and-drop, and swipe gestures — a mobile-first interaction pass on top of Phase 8's visuals, not a redesign of them.
 

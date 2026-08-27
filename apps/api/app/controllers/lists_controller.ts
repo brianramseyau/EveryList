@@ -15,7 +15,7 @@ import {
 } from '#services/version_conflict'
 
 /** Lists visible to `userId`, ordered by that user's own `list_members.sort_order`
- * (a per-user view preference — see PHASE12_PLAN.md §A) rather than `createdAt`. */
+ * (a per-user view preference — see PLAN_12_PHASE_LISTS_REORDER_ACCOUNT_IDENTITY.md §A) rather than `createdAt`. */
 async function loadListsForUser(userId: number) {
   const lists = await List.query()
     .whereHas('members', (query) => query.where('userId', userId).whereNotNull('acceptedAt'))

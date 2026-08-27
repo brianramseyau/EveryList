@@ -3,7 +3,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { getCategoryLearnings } from '#services/category_suggestion_service'
 
 /**
- * Read-only view of a list's learned categorization model (PHASE17_PLAN.md) —
+ * Read-only view of a list's learned categorization model (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md) —
  * the web client caches this to keep its offline suggestion fallback in step
  * with the server's authoritative model. Viewer-accessible, same as the
  * `categorize` suggestion endpoint it mirrors.

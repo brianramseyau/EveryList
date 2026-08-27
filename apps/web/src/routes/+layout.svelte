@@ -37,7 +37,7 @@
 	}
 
 	onMount(() => {
-		// Native builds have no baked-in server address (PHASE13_PLAN.md §1) — gate here rather
+		// Native builds have no baked-in server address (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1) — gate here rather
 		// than on /login itself, since a fresh native install also has no token, and every other
 		// API call (including login) needs somewhere real to point before it can work at all.
 		const serverSetupPath = resolve('/server-setup');
@@ -50,7 +50,7 @@
 		disablePinchZoom();
 		refreshAuth();
 		syncBadge();
-		// Native deep links (PHASE18_PLAN.md): the Android widget's "open item" tap hands us
+		// Native deep links (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md): the Android widget's "open item" tap hands us
 		// `everylist://lists/<id>/items/<itemId>`, which the native shell funnels back into the
 		// WebView as this event. Route it to the item editor. Gated to the native build — the
 		// PWA/Docker build has no such scheme, and a stale global listener would only matter there.
@@ -90,7 +90,7 @@
 		// update prompts) but Capacitor's WebView already loads the bundle from local files —
 		// there's no real network layer for it to usefully intercept there, and registering one
 		// against a `capacitor://`/local `https://` origin is unsupported/unreliable in practice
-		// (PHASE13_PLAN.md §3). Skip it entirely on native rather than relying on it merely
+		// (PLAN_13_PHASE_NATIVE_APP_SHELL.md §3). Skip it entirely on native rather than relying on it merely
 		// no-oping harmlessly.
 		if (!Capacitor.isNativePlatform()) {
 			// vite-plugin-pwa's virtual module only exists in a built/dev-served app, never under
@@ -130,7 +130,7 @@
 		syncBadge();
 	});
 
-	// Native page-transition slide, gated on browser support (PHASE9_PLAN.md
+	// Native page-transition slide, gated on browser support (PLAN_09_PHASE_REFINEMENTS.md
 	// #11) — a no-op on Safari/iOS, which never defines startViewTransition.
 	// Direction comes from `navigation.delta`, only present on browser
 	// back/forward (popstate) — everything else (link clicks, goto()) reads

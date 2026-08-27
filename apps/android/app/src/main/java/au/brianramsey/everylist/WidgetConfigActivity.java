@@ -21,7 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** The widget's configuration screen (PHASE18_PLAN.md). Three entry paths:
+/** The widget's configuration screen (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). Three entry paths:
  *  <ul>
  *    <li><b>Widget placement</b> — launched by the launcher with {@code EXTRA_APPWIDGET_ID}; picks
  *        which granted list to show and the show/hide-completed default, then saves per-widget.</li>

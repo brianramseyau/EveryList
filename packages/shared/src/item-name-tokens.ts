@@ -1,5 +1,5 @@
 /**
- * Tokenization shared by the learned auto-categorizer (PHASE17_PLAN.md) on
+ * Tokenization shared by the learned auto-categorizer (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md) on
  * both the API (when teaching/querying the model) and the web client (its
  * offline fallback). Splits a free-text item name into a small set of
  * normalized "words" so that spelling variants and plurals collapse onto the

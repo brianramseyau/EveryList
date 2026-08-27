@@ -1,4 +1,4 @@
-/** Mirrors the field picks in apps/api's transformers — see PLAN.md §7-8. */
+/** Mirrors the field picks in apps/api's transformers — see PLAN_00_FOUNDATIONAL_PLAN.md §7-8. */
 
 export interface ListDto {
   id: number
@@ -13,7 +13,7 @@ export interface ListDto {
    *  responses; optional here only so existing test fixtures don't all need updating —
    *  treat a missing value as `true` (the server-side default), same convention as `role` above. */
   useCategories?: boolean
-  /** Client-computed `"<saltHex>:<sha256Hex>"` — the server never sees the raw PIN. See PHASE7_PLAN.md §2. */
+  /** Client-computed `"<saltHex>:<sha256Hex>"` — the server never sees the raw PIN. See PLAN_07_PHASE_POLISH.md §2. */
   passcodeHash: string | null
   itemCount: number
   /** The requesting user's own membership role on this list. Always present on real API
@@ -61,13 +61,13 @@ export interface ItemDto {
   version: number
 }
 
-/** Response for `GET /lists/:listId/items/categorize` — see PHASE7_PLAN.md §3. */
+/** Response for `GET /lists/:listId/items/categorize` — see PLAN_07_PHASE_POLISH.md §3. */
 export interface CategorizeSuggestionDto {
   categoryId: number | null
 }
 
 /** One learned name→category association, synced read-only to the client for its
- * offline suggestion fallback — see PHASE17_PLAN.md. `token` is a normalized
+ * offline suggestion fallback — see PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md. `token` is a normalized
  * name token (packages/shared's `tokenizeItemName`), `count` the number of
  * explicit assignments that produced it, and `lastSeenAt` the most recent. */
 export interface CategoryLearningDto {
@@ -124,7 +124,7 @@ export interface StoreCategoryOrderDto {
   version: number
 }
 
-/** Returned with a 409 when a mutation's `expectedVersion` no longer matches the server's row — PLAN.md §7. */
+/** Returned with a 409 when a mutation's `expectedVersion` no longer matches the server's row — PLAN_00_FOUNDATIONAL_PLAN.md §7. */
 export interface ConflictResponse<T> {
   data: T
   conflict: true
@@ -201,7 +201,7 @@ export interface AccessTokenCreatedDto extends AccessTokenDto {
 }
 
 /** The app→native-widget handoff payload carried over the `everylist://widget-config` deep link
- *  (PHASE18_PLAN.md). The web app mints a list-scoped PAT, then hands the token plus the granted
+ *  (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). The web app mints a list-scoped PAT, then hands the token plus the granted
  *  list ids and the configured server URL to the Android widget so it can call the API directly —
  *  a native widget can't read the WebView's IndexedDB offline cache, so it authenticates over
  *  HTTP with this bearer token instead. */

@@ -4,7 +4,7 @@ import { alexaSignatureVerifier } from '#services/alexa/signature_verifier'
 
 /**
  * Verifies that a request to the Alexa skill endpoint actually came from
- * Amazon (PHASE16_PLAN.md Stage 2) — required because this skill uses a
+ * Amazon (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2) — required because this skill uses a
  * direct HTTPS endpoint instead of Lambda, which would otherwise do this via
  * IAM. Must read the raw body (`request.raw()`, populated by the bodyparser
  * middleware alongside its parsed JSON — see @adonisjs/bodyparser's

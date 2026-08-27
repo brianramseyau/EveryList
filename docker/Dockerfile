@@ -4,7 +4,7 @@
 # assets on one port, packaged behind an s6-overlay init (LSIO-style
 # PUID/PGID remap + APP_KEY persistence) so `docker run` with no flags at
 # all and only a /config mount is a valid, working invocation. See
-# foundational/PLAN.md §5.
+# foundational/PLAN_00_FOUNDATIONAL_PLAN.md §5.
 #
 # Build from the repo root: docker build -f docker/Dockerfile .
 
@@ -135,7 +135,7 @@ COPY --from=prod-deps --chown=appuser:appuser /srv/build /app/build
 COPY docker/root/ /
 
 # Unraid's "nobody"/"users" defaults — see docker/unraid-template.xml and
-# foundational/PLAN.md §5's zero-config startup rule. APP_KEY is
+# foundational/PLAN_00_FOUNDATIONAL_PLAN.md §5's zero-config startup rule. APP_KEY is
 # deliberately absent here: docker/root/etc/cont-init.d/20-app-key
 # generates and persists one to /config/app_key on first boot if it isn't
 # supplied.

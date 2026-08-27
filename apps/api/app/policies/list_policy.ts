@@ -26,7 +26,7 @@ function tokenGrantFor(token: AccessToken, listId: number | string): ListRole | 
 
 /**
  * Membership/role checks backing every list-scoped and store-scoped
- * controller action — see PLAN.md §7/§10. Replaces the owner-only
+ * controller action — see PLAN_00_FOUNDATIONAL_PLAN.md §7/§10. Replaces the owner-only
  * `.where('ownerId', ...)` stand-in used through Phase 2/3.
  */
 export default class ListPolicy {
@@ -87,7 +87,7 @@ export default class ListPolicy {
   /**
    * The user's best (highest-ranked) effective role across every list a
    * store is attached to — a store is visible/editable via membership on
-   * *any* of its lists, per PLAN.md §7. For a PAT, each list's role is
+   * *any* of its lists, per PLAN_00_FOUNDATIONAL_PLAN.md §7. For a PAT, each list's role is
    * first reduced through `effectiveRole` before taking the best one, so a
    * token can't reach a store solely through a list it has no grant on.
    */

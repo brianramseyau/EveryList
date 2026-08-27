@@ -2,7 +2,7 @@
  * `@mdi/js` ships every Material Design Icon (~7,000 glyphs) as one module
  * of `export const mdiFooBar = "<svg path data>"` constants — importing it
  * with a dynamic `import()` puts the whole set in its own chunk instead of
- * the initial app-shell bundle (see PLAN.md §4/§7).
+ * the initial app-shell bundle (see PLAN_00_FOUNDATIONAL_PLAN.md §4/§7).
  *
  * `Category.icon` stores the export name minus its "mdi" prefix, camelCase
  * (e.g. `"fruitCherries"` for the `mdiFruitCherries` export) — see

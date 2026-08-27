@@ -3,7 +3,7 @@
 ## Context
 
 EveryList already ships a native Android app (`apps/android`, a Capacitor wrapper around the
-SvelteKit PWA — see PHASE13_PLAN.md). This phase adds a native home-screen widget whose UI and
+SvelteKit PWA — see PLAN_13_PHASE_NATIVE_APP_SHELL.md). This phase adds a native home-screen widget whose UI and
 interactions mirror Google Tasks, per the user's request:
 
 - **Top-left:** small list selector (the dropdown that switches which list the widget shows).
@@ -27,7 +27,7 @@ Decisions locked in with the user before implementation:
 - **Native widget** (a real `AppWidgetProvider` in `apps/android`), not a PWA/web feature — this is
   the only place a true home-screen widget can live.
 - **Credentials via an in-app auto-minted PAT.** The app's existing Personal Access Token
-  machinery (Settings → Access Tokens, PHASE16_PLAN.md Stage 0) is the perfect primitive: a
+  machinery (Settings → Access Tokens, PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 0) is the perfect primitive: a
   long-lived, per-list-scoped bearer token (`list:<id>:editor`). A new in-app flow mints a PAT
   named "Home-screen widget" and hands it to the widget over an in-app Capacitor plugin method
   (`EveryListWidget.configure`), which writes it to the widget's private SharedPreferences and
@@ -128,7 +128,7 @@ New Java sources under `apps/android/app/src/main/java/au/brianramsey/everylist/
 ## Docs
 
 - This plan.
-- Update `README.md` and `foundational/PLAN.md` to mention the Android home-screen widget.
+- Update `README.md` and `foundational/PLAN_00_FOUNDATIONAL_PLAN.md` to mention the Android home-screen widget.
 - Add an `AGENTS.md` note only if warranted (e.g. the deep-link wiring or a build gotcha).
 
 ## Testing

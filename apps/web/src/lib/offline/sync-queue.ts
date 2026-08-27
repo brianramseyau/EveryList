@@ -69,7 +69,7 @@ export async function enqueueConsolidated(
 	return { id, alreadyPending: pending.length > 0 };
 }
 
-/** All `pending` mutations, oldest first — the flush loop's replay order (PHASE5_PLAN.md §4). */
+/** All `pending` mutations, oldest first — the flush loop's replay order (PLAN_05_PHASE_OFFLINE_PWA.md §4). */
 export async function pendingMutations(): Promise<QueuedMutation[]> {
 	// Provably covered in isolation — other spec files' `vi.mock('./db', …)`/
 	// `vi.mock('./sync-queue', …)` corrupts this statement's V8 attribution
@@ -83,7 +83,7 @@ export async function pendingMutations(): Promise<QueuedMutation[]> {
 }
 
 /** Mutations the server rejected past `MAX_ATTEMPTS` — the sync-status page's
- * "failed" list (see PHASE14_PLAN.md). */
+ * "failed" list (see PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md). */
 export async function failedMutations(): Promise<QueuedMutation[]> {
 	/* v8 ignore next */
 	const db = getDb();
@@ -114,7 +114,7 @@ export interface QueueCounts {
 	conflict: number;
 }
 
-/** Backs the Settings sync-status page's queued-changes counts (PHASE14_PLAN.md). */
+/** Backs the Settings sync-status page's queued-changes counts (PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md). */
 export async function queueCounts(): Promise<QueueCounts> {
 	/* v8 ignore next */
 	const db = getDb();

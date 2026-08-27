@@ -3,7 +3,7 @@ import { apiBaseUrl } from './base-url';
 const PING_TIMEOUT_MS = 5_000;
 
 /**
- * Liveness probe for the connectivity monitor (PHASE14_PLAN.md). Deliberately a
+ * Liveness probe for the connectivity monitor (PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md). Deliberately a
  * raw `fetch` (not the `apiFetch` wrapper) with `cache: 'no-store'`, and treated
  * as reachable only on a 2xx whose `Content-Type` is JSON — a reverse proxy can
  * answer for a downed container with an HTML placeholder/error page, which must
@@ -11,9 +11,9 @@ const PING_TIMEOUT_MS = 5_000;
  * runtime cache (see pwa.config.mjs) so no cached 200 can mask an outage.
  *
  * `baseUrl` defaults to the currently-configured server (`apiBaseUrl()`) but can be overridden to
- * test a candidate URL before it's saved — see `/server-setup` (PHASE13_PLAN.md §1).
+ * test a candidate URL before it's saved — see `/server-setup` (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1).
  *
- * A timed-out abort signal (PHASE13_PLAN.md §8's follow-up) bounds how long a single ping can
+ * A timed-out abort signal (PLAN_13_PHASE_NATIVE_APP_SHELL.md §8's follow-up) bounds how long a single ping can
  * hang: a connection to a port with nothing listening doesn't always fail fast — observed on the
  * Android emulator, where `10.0.2.2` routes through its virtual network layer rather than getting
  * an immediate refusal the way a real loopback connection (e.g. the iOS Simulator, which shares

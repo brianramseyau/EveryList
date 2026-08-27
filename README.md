@@ -16,7 +16,7 @@
 
 ---
 
-AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasing feature parity — it's a **mobile-first, offline-first, one-tier** app that does the everyday list workflow well: create, share in real time, auto-categorize by aisle, check off, and keep working with zero signal. No premium tier, ever. It ships as an installable PWA and as native iOS/Android apps, and can be controlled by voice through Alexa or Home Assistant. See [`foundational/PLAN.md`](foundational/PLAN.md) for the full product plan, architecture, and decision rationale behind everything below.
+AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasing feature parity — it's a **mobile-first, offline-first, one-tier** app that does the everyday list workflow well: create, share in real time, auto-categorize by aisle, check off, and keep working with zero signal. No premium tier, ever. It ships as an installable PWA and as native iOS/Android apps, and can be controlled by voice through Alexa or Home Assistant. See [`foundational/PLAN_00_FOUNDATIONAL_PLAN.md`](foundational/PLAN_00_FOUNDATIONAL_PLAN.md) for the full product plan, architecture, and decision rationale behind everything below.
 
 EveryList is feature-complete and self-hostable today.
 
@@ -50,7 +50,7 @@ EveryList is feature-complete and self-hostable today.
 - **Self-hosted, single container** — one Docker image, one process, one SQLite file under `/config`; trivial to back up.
 - **Automated backups** — configurable daily/weekly/monthly schedule with a chosen time of day and retention window, taken via SQLite's native online backup API so it's safe to run while the app is live; also triggerable on demand from `Settings → Backups`.
 
-Deliberately out of scope: native Watch apps, Siri voice control, and third-party fulfillment integrations (Instacart, etc.) — see the [feature decision matrix](foundational/PLAN.md#3-feature-decision-matrix) in the plan for the full reasoning.
+Deliberately out of scope: native Watch apps, Siri voice control, and third-party fulfillment integrations (Instacart, etc.) — see the [feature decision matrix](foundational/PLAN_00_FOUNDATIONAL_PLAN.md#3-feature-decision-matrix) in the plan for the full reasoning.
 
 ## Tech stack
 
@@ -65,7 +65,7 @@ Deliberately out of scope: native Watch apps, Siri voice control, and third-part
 | Deployment | Single Docker image, LinuxServer.io-style (`s6-overlay`, `PUID`/`PGID`), published to GHCR |
 | Native shell | [Capacitor](https://capacitorjs.com) (iOS + Android) — wraps the same SvelteKit build, no separate native codebase |
 
-Full rationale for each choice is in [§4 of the plan](foundational/PLAN.md#4-technology-stack).
+Full rationale for each choice is in [§4 of the plan](foundational/PLAN_00_FOUNDATIONAL_PLAN.md#4-technology-stack).
 
 ## Monorepo layout
 
@@ -82,7 +82,7 @@ EveryList/
 ├── branding/             # app icon source + generated exports, screenshots
 ├── alexa/                # Alexa custom skill deployment assets (interaction model, account linking)
 └── foundational/
-    └── PLAN.md            # single source of truth for scope & architecture
+    └── PLAN_00_FOUNDATIONAL_PLAN.md     # single source of truth for scope & architecture
 ```
 
 The Home Assistant HACS integration lives in its own repo, [`everylist-hass`](https://github.com/brianramseyau/everylist-hass) — separate from this monorepo because HACS requires `custom_components/<domain>/` at the repo root and versions the integration via that repo's own GitHub releases.
@@ -184,7 +184,7 @@ EveryList lists can be read and edited by voice through two paths, both authenti
 
 CI (GitHub Actions) runs lint → typecheck → tests/coverage → Docker build → E2E smoke on every PR; see [`.github/workflows`](.github/workflows).
 
-Full architecture, scope decisions, and the AnyList feature-by-feature decision matrix live in [`foundational/PLAN.md`](foundational/PLAN.md).
+Full architecture, scope decisions, and the AnyList feature-by-feature decision matrix live in [`foundational/PLAN_00_FOUNDATIONAL_PLAN.md`](foundational/PLAN_00_FOUNDATIONAL_PLAN.md).
 
 ## API docs
 
@@ -196,7 +196,7 @@ Every instance — including your own self-hosted one — serves its full API re
 
 ## Contributing
 
-This is a personal project built against [`foundational/PLAN.md`](foundational/PLAN.md) as the single source of truth — any deviation during implementation should be reflected back into that document first. Issues and PRs are welcome.
+This is a personal project built against [`foundational/PLAN_00_FOUNDATIONAL_PLAN.md`](foundational/PLAN_00_FOUNDATIONAL_PLAN.md) as the single source of truth — any deviation during implementation should be reflected back into that document first. Issues and PRs are welcome.
 
 ## License
 

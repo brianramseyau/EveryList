@@ -4,7 +4,7 @@ import { groupCategoryLearningsFromItems } from '#services/category_learning_bac
 import { DateTime } from 'luxon'
 
 /**
- * The learned auto-categorization model (PHASE17_PLAN.md) — a dedicated
+ * The learned auto-categorization model (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md) — a dedicated
  * table replacing the item-derived frequency heuristic. One row per
  * (list, token, category), where `count` is how many times a user has
  * explicitly assigned that category to an item whose name contains that
@@ -52,7 +52,7 @@ export default class extends BaseSchema {
    * Seeds the model from every historical item (including soft-deleted
    * ones). The seed can't distinguish a category that was explicitly chosen
    * from one that was auto-suggested, and is accepted as such (see
-   * PHASE17_PLAN.md's "backfill all existing history" decision).
+   * PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md's "backfill all existing history" decision).
    */
   private async backfill(db: QueryClientContract) {
     const items = await db.from('items').whereNotNull('category_id')

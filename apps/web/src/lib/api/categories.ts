@@ -61,7 +61,7 @@ export async function createCategory(
 	});
 }
 
-/** Renaming/re-iconing a global default forks it into a list-scoped override — see PLAN.md §7.
+/** Renaming/re-iconing a global default forks it into a list-scoped override — see PLAN_00_FOUNDATIONAL_PLAN.md §7.
  * Note: forking assigns a *new* server-side id, so an edit queued while offline against a
  * still-global-default category cannot be reconciled locally the same way as a plain update —
  * this is a known limitation of the offline path for that one edge case. */
@@ -109,7 +109,7 @@ export async function deleteCategory(listId: number, categoryId: number): Promis
 	});
 }
 
-/** `order` is the full desired list of category ids, in the new order (see PHASE13_PLAN.md §5). */
+/** `order` is the full desired list of category ids, in the new order (see PLAN_13_PHASE_NATIVE_APP_SHELL.md §5). */
 export function reorderCategories(listId: number, order: number[]): Promise<CategoryDto[]> {
 	return offlineReorder<CategoryDto[]>({
 		entityType: 'category',

@@ -1,5 +1,5 @@
 #!/command/with-contenv sh
-# AdonisJS needs APP_KEY to boot. Per foundational/PLAN.md §5's zero-config
+# AdonisJS needs APP_KEY to boot. Per foundational/PLAN_00_FOUNDATIONAL_PLAN.md §5's zero-config
 # startup rule, nothing that can be safely defaulted may block startup, but
 # APP_KEY can't ship with a shared baked-in default without breaking every
 # deployment's security. So: an explicitly-set APP_KEY always wins; otherwise

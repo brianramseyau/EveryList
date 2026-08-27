@@ -38,7 +38,7 @@ function sortBucket(bucket: Item[]): Item[] {
 
 /**
  * Category-grouped, checked-items-included item rows for the APL list view
- * (PHASE16_PLAN.md Stage 3), flattened into one array with a `type` discriminator
+ * (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3), flattened into one array with a `type` discriminator
  * (`header`/`item`) rather than nested per-category lists — see `apl_document.ts` for why.
  * Unlike the spoken summary (`intent_router.ts`'s `handleReadList`, unchecked-only), checked
  * items are included here — struck through, grouped after unchecked ones within each category —

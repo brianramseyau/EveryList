@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import type { ResolvedPathname } from '$app/types';
 
-	// Shared popout-menu item (PHASE9_PLAN.md #1/#10): a single link/button row
+	// Shared popout-menu item (PLAN_09_PHASE_REFINEMENTS.md #1/#10): a single link/button row
 	// inside a PopoutMenu panel. Renders an <a> when `href` is set, a <button>
 	// otherwise — centralising the touch-sized styling that used to be
 	// copy-pasted into every PopoutMenu call site.

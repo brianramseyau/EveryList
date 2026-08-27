@@ -32,7 +32,7 @@
 
 	// Tracks each row's name at the moment it gained focus, so blur can skip
 	// saving when nothing actually changed (user confirmed onBlur over
-	// debounced oninput — PHASE11_PLAN.md §F).
+	// debounced oninput — PLAN_11_PHASE_LIST_FEATURE_REFINEMENTS.md §F).
 	const editStartNames = new SvelteMap<number, string>();
 
 	async function loadAll() {

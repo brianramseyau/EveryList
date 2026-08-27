@@ -7,7 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 
-/** The EveryList home-screen widget (PHASE18_PLAN.md). Rendering, fetching, and toggling all run
+/** The EveryList home-screen widget (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). Rendering, fetching, and toggling all run
  *  in {@link WidgetUpdateService} on background threads; this provider stays thin — it dispatches
  *  the widget's broadcasts (refresh, show/hide-done, item taps) and launches the app for
  *  open-item and quick-add actions. */

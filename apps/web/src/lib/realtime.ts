@@ -47,10 +47,10 @@ function getClient(): Transmit | null {
 
 /**
  * Subscribes to a list's Transmit channel — every member's mutation
- * broadcasts a SyncEvent here (see PLAN.md §8). Returns an unsubscribe
+ * broadcasts a SyncEvent here (see PLAN_00_FOUNDATIONAL_PLAN.md §8). Returns an unsubscribe
  * function; call it on component teardown.
  *
- * On native (PHASE13_PLAN.md §3), iOS/Android suspend background network activity, and the SSE
+ * On native (PLAN_13_PHASE_NATIVE_APP_SHELL.md §3), iOS/Android suspend background network activity, and the SSE
  * connection underneath Transmit doesn't reliably recover on its own once the OS has torn down
  * the socket — unlike a plain browser tab, where the connection is more likely to survive or the
  * EventSource spec's own retry logic to kick back in promptly. `@capacitor/app`'s `appStateChange`

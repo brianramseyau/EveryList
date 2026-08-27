@@ -8,7 +8,7 @@ import UIKit
 /// apps/web/vite.config.ts). Reloading anywhere but the app's root route served that real
 /// prerendered "/" page's content instead of the current route — its own client logic (e.g. an
 /// auth redirect to /lists) then took over, silently bouncing the user back to the root list view
-/// instead of refreshing what they were actually looking at (PHASE13_PLAN.md §4). Overriding
+/// instead of refreshing what they were actually looking at (PLAN_13_PHASE_NATIVE_APP_SHELL.md §4). Overriding
 /// `router()` is Capacitor's own supported hook for this — resolves the fallback to 200.html
 /// instead, the minimal SPA shell adapter-static builds specifically for the client router to
 /// take over from `location.pathname`.
@@ -26,7 +26,7 @@ private struct SpaFallbackRouter: Router {
 /// WKWebView has no pull-to-refresh gesture of its own — wires up a native UIRefreshControl on
 /// its scroll view instead, matching Android's SwipeRefreshLayout counterpart
 /// (MainActivity.java#setUpPullToRefresh) and giving the same manual-resync affordance as the
-/// "Refresh now" button in Settings → Sync Status (PHASE13_PLAN.md §4). Reloading is the same
+/// "Refresh now" button in Settings → Sync Status (PLAN_13_PHASE_NATIVE_APP_SHELL.md §4). Reloading is the same
 /// action either way, and both reach the same fixed SPA-fallback routing above.
 class MainViewController: CAPBridgeViewController {
     private var isLoadingObservation: NSKeyValueObservation?

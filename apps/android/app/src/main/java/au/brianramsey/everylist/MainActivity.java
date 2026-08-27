@@ -17,7 +17,7 @@ public class MainActivity extends BridgeActivity {
         // it) — see setSpaFallbackRoute()'s doc comment for why this is needed at all.
         setSpaFallbackRoute();
         super.onCreate(savedInstanceState);
-        // In-app widget provisioning channel (PHASE18_PLAN.md) — lets the web app hand the
+        // In-app widget provisioning channel (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md) — lets the web app hand the
         // widget's scoped PAT to native storage without putting it in a loggable URL.
         registerPlugin(EveryListWidgetPlugin.class);
         if (BuildConfig.DEBUG) {
@@ -40,7 +40,7 @@ public class MainActivity extends BridgeActivity {
      * comment in apps/web/vite.config.ts). Reloading anywhere but the app's root route served
      * that real prerendered "/" page's content instead of the current route — its own client
      * logic (e.g. an auth redirect to /lists) then took over, silently bouncing the user back to
-     * the root list view instead of refreshing what they were actually looking at (PHASE13_PLAN.md
+     * the root list view instead of refreshing what they were actually looking at (PLAN_13_PHASE_NATIVE_APP_SHELL.md
      * §4). A RouteProcessor is Capacitor's own supported override for this exact hook — it
      * resolves the fallback to 200.html instead, the minimal SPA shell adapter-static builds
      * specifically for the client router to take over from `location.pathname`.
@@ -70,7 +70,7 @@ public class MainActivity extends BridgeActivity {
      * UI feature, not part of the platform WebView API a hybrid app embeds — so it's wired up
      * manually here with a native SwipeRefreshLayout, matching iOS's UIRefreshControl
      * (MainViewController.swift) and giving the same manual-resync affordance as the "Refresh
-     * now" button in Settings → Sync Status (PHASE13_PLAN.md §4). Reloading is the same action
+     * now" button in Settings → Sync Status (PLAN_13_PHASE_NATIVE_APP_SHELL.md §4). Reloading is the same action
      * either way, and both reach the same fixed SPA-fallback routing (see §4's native
      * SPA-fallback bug note).
      */

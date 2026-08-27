@@ -7,7 +7,7 @@ function key(entityType: string, entityId: number): string {
 
 /** Records that this client just mutated an entity, so the realtime broadcast
  * of our own edit — which arrives after the flush clears the row's `_dirty`
- * flag — doesn't trigger a redundant reload of the list (see PHASE14_PLAN.md's
+ * flag — doesn't trigger a redundant reload of the list (see PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md's
  * silent auto-refresh). */
 export function markSelfMutation(entityType: string, entityId: number): void {
 	recent.set(key(entityType, entityId), Date.now());

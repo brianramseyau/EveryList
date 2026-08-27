@@ -79,7 +79,7 @@ export function clearBadge(): void {
 }
 
 /** Refetches every list the user can see and sums uncompleted items across the ones that
- * count toward the badge — excludes archived and badge-excluded lists (see PLAN.md §16).
+ * count toward the badge — excludes archived and badge-excluded lists (see PLAN_00_FOUNDATIONAL_PLAN.md §16).
  * Call after login, on navigation, and after any action that could change an uncompleted
  * count (checking an item, archiving a list, toggling badge exclusion). */
 export async function refreshBadgeCount(): Promise<void> {

@@ -14,7 +14,7 @@ export async function fetchItems(listId: number): Promise<ItemDto[]> {
 			// Cache the server's copies into Dexie so a later offline edit can read the row's
 			// `version` to send as `expectedVersion` — without this the row is never cached and
 			// an offline toggle enqueues `expectedVersion: 0`, guaranteeing a spurious 409 on sync
-			// (see PHASE14_PLAN.md's sync-status page and apps/api's `reportVersionConflict`).
+			// (see PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md's sync-status page and apps/api's `reportVersionConflict`).
 			const db = getDb();
 			if (!db) return items;
 
@@ -129,7 +129,7 @@ export function moveItemToList(
 
 /** Purely local category guess against the static keyword table and whatever
  * categories are already cached in Dexie for this list — the offline fallback
- * for `fetchCategorySuggestion` below (PHASE7_PLAN.md §3), and mirrors the
+ * for `fetchCategorySuggestion` below (PLAN_07_PHASE_POLISH.md §3), and mirrors the
  * server's own static-table fallback in `category_suggestion_service.ts`. */
 async function staticGuessCategoryId(
 	db: EveryListDB,
@@ -151,7 +151,7 @@ async function staticGuessCategoryId(
 }
 
 /** Personalized (frequency-based) suggestion from the real backend service —
- * see PHASE7_PLAN.md §3. Falls back to the local learned-then-static-table
+ * see PLAN_07_PHASE_POLISH.md §3. Falls back to the local learned-then-static-table
  * guess when the request fails (offline and this exact list+name was never
  * cached by the service worker's `StaleWhileRevalidate` rule for
  * `/api/v1/*`). */
@@ -167,7 +167,7 @@ async function guessCategoryId(
 		return suggestion.categoryId;
 	} catch {
 		// Offline: replay the server's two-tier guess from the cached learned
-		// model, then the static keyword table (PHASE17_PLAN.md).
+		// model, then the static keyword table (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md).
 		const tokens = tokenizeItemName(name);
 		if (tokens.length > 0) {
 			const cached = await db.categoryLearnings.get(listId);
@@ -237,7 +237,7 @@ export async function createItem(
 }
 
 /** Distinct, most-recent-first item names for this list, backing the add-item autocomplete
- * (PHASE10_PLAN.md #0.3). Falls back to deriving the same list from Dexie's cached items —
+ * (PLAN_10_PHASE_VALIDATION_USABILITY.md #0.3). Falls back to deriving the same list from Dexie's cached items —
  * offline or a network failure — mirroring `guessCategoryId`'s server-then-local-fallback shape
  * above; the cache only ever holds non-deleted items, so unlike the server's endpoint this
  * fallback can't surface names from checked/deleted history. */
@@ -313,7 +313,7 @@ export async function updateItem(
 
 /** Repositions a single item to just after `previousItemId` (or the front of the list if
  * omitted/null) — the server-side counterpart to `handleItemDrop`'s local reordering, and what
- * the Home Assistant integration's `MOVE_TODO_ITEM` support calls (PHASE16_PLAN.md). */
+ * the Home Assistant integration's `MOVE_TODO_ITEM` support calls (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md). */
 export function moveItem(
 	listId: number,
 	itemId: number,

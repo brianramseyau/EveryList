@@ -6,7 +6,7 @@ function hasStorage(): boolean {
 	return typeof window !== 'undefined';
 }
 
-/** The user-configured server origin for the native build (PHASE13_PLAN.md §1) — e.g.
+/** The user-configured server origin for the native build (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1) — e.g.
  * `https://everylist.example.com`. Empty for the web/PWA build, which is always same-origin and
  * never needs one. Persisted (not baked in at build time) so one native binary works against
  * anyone's self-hosted instance, the same way Nextcloud/Audiobookshelf/Donetick clients do. */

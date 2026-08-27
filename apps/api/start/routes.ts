@@ -63,7 +63,7 @@ router
     // no admin role to gate on instead.
     router.get('debug', [controllers.Debug, 'show']).use(middleware.auth())
 
-    // Liveness probe for the frontend connectivity check (PHASE14_PLAN.md): no
+    // Liveness probe for the frontend connectivity check (PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md): no
     // auth, no cache — the client treats 2xx + application/json as "reachable".
     router.get('ping', ({ response }) => response.ok({ pong: true }))
 
@@ -174,7 +174,7 @@ router
         // verifying the account-linked PAT embedded in the request body
         // (see alexa_controller.ts). Amazon requires signature verification
         // instead of Lambda's free IAM check, since this skill uses a direct
-        // HTTPS endpoint (PHASE16_PLAN.md Stage 2).
+        // HTTPS endpoint (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2).
         router.post('/', [controllers.Alexa, 'handle']).use(middleware.alexaSignature())
         // Amazon's account-linking "Access Token URI" — a plain OAuth2
         // client-credentials-style exchange bridging to Authentik, not

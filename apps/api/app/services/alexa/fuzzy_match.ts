@@ -29,7 +29,7 @@ function levenshtein(a: string, b: string): number {
  * Finds the candidate closest to `query`, tolerating near-miss voice
  * transcriptions ("miilk" vs "milk") — used both to resolve a spoken list
  * name and to match a spoken item name against existing items before
- * mutating anything (PHASE16_PLAN.md Stage 2's "Item matching" section). An
+ * mutating anything (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2's "Item matching" section). An
  * exact (case/whitespace-insensitive) match always wins outright; otherwise
  * the closest candidate is accepted only if its edit distance is small
  * relative to the word's own length, so "eggs" doesn't accidentally match

@@ -8,7 +8,7 @@ import { getServerUrl } from './server-url';
  * sides of the app agree on where "the server" is.
  *
  * Sourced at runtime from `server-url.ts` (a persisted, user-editable setting — see
- * `/server-setup`, PHASE13_PLAN.md §1) rather than baked in at build time: a self-hosted client
+ * `/server-setup`, PLAN_13_PHASE_NATIVE_APP_SHELL.md §1) rather than baked in at build time: a self-hosted client
  * app shouldn't hard-code one server's address into the binary, the same way Nextcloud/
  * Audiobookshelf/Donetick's native apps ask for a server on first launch instead. Kept in its own
  * module (rather than living on `client.ts`) so importing it doesn't pull in `client.ts`'s other

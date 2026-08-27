@@ -15,7 +15,7 @@ type Envelope = {
     'LaunchRequest' | 'IntentRequest' | 'SessionEndedRequest' | 'Alexa.Presentation.APL.UserEvent'
   intentName?: string
   slots?: Record<string, string | undefined>
-  /** Declares `Alexa.Presentation.APL` support on the requesting device (PHASE16_PLAN.md Stage 3). */
+  /** Declares `Alexa.Presentation.APL` support on the requesting device (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3). */
   hasDisplay?: boolean
   /** `request.arguments` for an `Alexa.Presentation.APL.UserEvent` (a tap on-screen). */
   args?: unknown[]

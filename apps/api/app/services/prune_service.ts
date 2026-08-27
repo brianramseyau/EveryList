@@ -15,7 +15,7 @@ export const DELETED_ITEM_RETENTION_DAYS = 180
 
 /**
  * SyncEvents older than this are pruned. The table is an insert-only broadcast
- * log with no functional read path (see PLAN.md §8) — this window keeps a
+ * log with no functional read path (see PLAN_00_FOUNDATIONAL_PLAN.md §8) — this window keeps a
  * bounded audit trail for debugging without letting the table grow forever.
  */
 export const SYNC_EVENT_RETENTION_DAYS = 30

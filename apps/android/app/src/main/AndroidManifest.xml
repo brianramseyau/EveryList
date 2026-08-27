@@ -18,7 +18,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Custom-scheme deep links from the home-screen widget (PHASE18_PLAN.md): the "+"
+            <!-- Custom-scheme deep links from the home-screen widget (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md): the "+"
                  quick-add opens everylist://lists/<id> and an item-row tap opens
                  everylist://lists/<id>/items/<itemId>. Capacitor's @capacitor/app surfaces these
                  to the web app as `appUrlOpen`, which routes them in the SPA. Host is scoped to
@@ -31,7 +31,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Home-screen widget provider + its two services (PHASE18_PLAN.md). -->
+        <!-- Home-screen widget provider + its two services (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). -->
         <receiver
             android:name=".EveryListWidget"
             android:label="@string/app_name"

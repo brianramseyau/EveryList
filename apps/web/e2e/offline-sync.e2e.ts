@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * End-to-end offline sync scenario (PHASE5_PLAN.md §7): a real signup against a real API,
+ * End-to-end offline sync scenario (PLAN_05_PHASE_OFFLINE_PWA.md §7): a real signup against a real API,
  * an item added while the browser is offline (optimistic render + the disconnected-cloud
  * icon), then reconnecting and confirming the flush loop drained the queue and the server
  * actually has the item once the page is reloaded from scratch.
@@ -21,7 +21,7 @@ test('adds an item while offline and syncs it once back online', async ({ page }
 
 	await expect(page).toHaveURL(/\/lists$/);
 
-	// Signup already seeds a starter "Shopping List" list (see PLAN.md's Phase 2
+	// Signup already seeds a starter "Shopping List" list (see PLAN_00_FOUNDATIONAL_PLAN.md's Phase 2
 	// status note) — a distinct name avoids ambiguous locator matches.
 	await page.getByRole('button', { name: 'Create' }).click();
 	await page.getByRole('link', { name: 'Create List' }).click();
@@ -33,7 +33,7 @@ test('adds an item while offline and syncs it once back online', async ({ page }
 	await page.context().setOffline(true);
 
 	// The connectivity monitor marks the server unavailable the moment the browser goes
-	// offline, surfacing the disconnected-cloud icon (PHASE14_PLAN.md).
+	// offline, surfacing the disconnected-cloud icon (PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md).
 	await expect(page.getByRole('link', { name: /Server unavailable/ })).toBeVisible();
 
 	await page.getByPlaceholder('Item name').fill('Milk');
@@ -60,7 +60,7 @@ test('adds an item while offline and syncs it once back online', async ({ page }
 });
 
 /**
- * Reads (PHASE13_PLAN.md §8) are a separate offline path from writes above: on native, there's
+ * Reads (PLAN_13_PHASE_NATIVE_APP_SHELL.md §8) are a separate offline path from writes above: on native, there's
  * no service worker to fall back to a cached HTTP response, so a page's own fetch functions
  * (fetchList/fetchLists/etc.) need to fall back to Dexie themselves. A hard reload — not a
  * client-side nav — is what actually exercises this: it's the only thing that re-runs

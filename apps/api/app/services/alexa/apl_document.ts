@@ -1,6 +1,6 @@
 /**
  * The APL document rendered on screen devices (Echo Show/Hub) for a list view
- * (PHASE16_PLAN.md Stage 3). A plain TS object rather than a standalone `.json` file: the
+ * (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3). A plain TS object rather than a standalone `.json` file: the
  * production Docker image's build stage only copies `apps/api/` (see `docker/Dockerfile`), not
  * the repo-root `alexa/` deployment-assets directory, so anything the running server needs at
  * request time has to live inside `apps/api` — this is sent inline in every

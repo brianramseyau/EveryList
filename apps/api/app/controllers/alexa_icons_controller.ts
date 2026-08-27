@@ -6,7 +6,7 @@ const COLOR_PATTERN = /^[0-9a-fA-F]{6}$/
 const DEFAULT_COLOR = 'edeae3'
 
 /**
- * Serves category/list icons as PNGs for the Alexa APL visual display (PHASE16_PLAN.md
+ * Serves category/list icons as PNGs for the Alexa APL visual display (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md
  * Stage 3) — a plain public URL, deliberately outside the `alexaSignature()`-guarded skill
  * endpoint and any session/PAT auth, since Alexa's cloud renderer fetches `Image` sources
  * directly and unauthenticated, the same way a browser would fetch an `<img src>`.

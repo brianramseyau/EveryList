@@ -1,5 +1,5 @@
 #!/command/with-contenv sh
 # The single Node process: AdonisJS serves /api/v1/* and the prebuilt
-# SvelteKit static assets from the same port. See foundational/PLAN.md §5.
+# SvelteKit static assets from the same port. See foundational/PLAN_00_FOUNDATIONAL_PLAN.md §5.
 cd /app/build
 exec s6-setuidgid appuser node bin/server.js

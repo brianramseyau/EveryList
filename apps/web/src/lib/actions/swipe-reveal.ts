@@ -1,5 +1,5 @@
-// Hand-rolled directional swipe via Pointer Events (PHASE9_PLAN.md #9,
-// PHASE10_PLAN.md #0.9) — no gesture library, driven by a small
+// Hand-rolled directional swipe via Pointer Events (PLAN_09_PHASE_REFINEMENTS.md #9,
+// PLAN_10_PHASE_VALIDATION_USABILITY.md #0.9) — no gesture library, driven by a small
 // synchronously-testable state machine reading synthetic PointerEvents.
 // Swipe right commits onCommitRight (delete); swipe left commits
 // onCommitLeft (edit).

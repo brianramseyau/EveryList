@@ -12,7 +12,7 @@ import type {
 
 /**
  * Entity types the offline sync queue can target — mirrors
- * `SyncEventDto['entityType']` (see PHASE5_PLAN.md §3).
+ * `SyncEventDto['entityType']` (see PLAN_05_PHASE_OFFLINE_PWA.md §3).
  */
 export type SyncEntityType =
 	'list' | 'category' | 'item' | 'favorite_item' | 'store' | 'store_category_order';
@@ -21,7 +21,7 @@ export interface QueuedMutation {
 	id?: number;
 	entityType: SyncEntityType;
 	/** `reorder`: a bulk operation touching every row in the scope (a list's categories, a
-	 * store's category order) — see PHASE13_PLAN.md §5. `attach`: a join/create-by-reference
+	 * store's category order) — see PLAN_13_PHASE_NATIVE_APP_SHELL.md §5. `attach`: a join/create-by-reference
 	 * operation (attaching an existing store, adding a favorite to a list) where the server
 	 * computes the resulting row — same optimistic-temp-id-then-replace shape as `create`,
 	 * kept as a distinct label only so the sync-status page can describe it accurately.
@@ -48,7 +48,7 @@ export interface QueuedMutation {
 	lastError?: string;
 }
 
-/** Which items to show when a store is selected — see PLAN.md §7 (store aisle
+/** Which items to show when a store is selected — see PLAN_00_FOUNDATIONAL_PLAN.md §7 (store aisle
  * order and item filtering are decoupled). */
 export type StoreFilter = 'all' | 'store' | 'storeAndUnassigned';
 
@@ -97,13 +97,13 @@ export type OfflineFavoriteItem = FavoriteItemDto & OfflineBookkeeping;
 export type OfflineStore = StoreDto & OfflineBookkeeping;
 export type OfflineStoreCategoryOrder = StoreCategoryOrderDto & OfflineBookkeeping;
 /** Folders are never written by the offline sync engine — there's no `'folder'` `SyncEntityType`,
- * folder writes stay online-only (see PHASE13_PLAN.md §8's scope note) — so there's no `_dirty`
+ * folder writes stay online-only (see PLAN_13_PHASE_NATIVE_APP_SHELL.md §8's scope note) — so there's no `_dirty`
  * bookkeeping to carry, unlike the other cached entities above. */
 export type OfflineFolder = FolderDto;
 
 /** A list's learned categorization model, cached read-only (no `_dirty`, no sync queue). One
  * row per list holding the whole `CategoryLearningDto[]`, since it's always full-replaced from
- * the server's authoritative copy on fetch rather than edited in place — see PHASE17_PLAN.md. */
+ * the server's authoritative copy on fetch rather than edited in place — see PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md. */
 export interface OfflineCategoryLearnings {
 	listId: number;
 	learnings: CategoryLearningDto[];
@@ -116,7 +116,7 @@ export class EveryListDB extends Dexie {
 	favoriteItems!: Table<OfflineFavoriteItem, number>;
 	stores!: Table<OfflineStore, number>;
 	storeCategoryOrders!: Table<OfflineStoreCategoryOrder, [number, number]>;
-	/** The local-only "currently shopping at" selection — never touches syncQueue, see PLAN.md §7/§9. */
+	/** The local-only "currently shopping at" selection — never touches syncQueue, see PLAN_00_FOUNDATIONAL_PLAN.md §7/§9. */
 	selectedStore!: Table<SelectedStoreRow, number>;
 	syncQueue!: Table<QueuedMutation, number>;
 	folders!: Table<OfflineFolder, number>;

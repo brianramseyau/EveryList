@@ -51,7 +51,7 @@
 		return searchIcons(names, needle);
 	});
 
-	// True windowed grid, not just a result cap (see PLAN.md §4) — only the
+	// True windowed grid, not just a result cap (see PLAN_00_FOUNDATIONAL_PLAN.md §4) — only the
 	// rows scrolled into view (plus a small overscan) ever hit the DOM, so
 	// the rendered node count stays flat whether a search matches 5 icons or
 	// 500.

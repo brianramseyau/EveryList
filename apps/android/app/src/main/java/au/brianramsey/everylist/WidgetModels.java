@@ -1,6 +1,6 @@
 package au.brianramsey.everylist;
 
-/** Plain data holders for the widget's view of the API (PHASE18_PLAN.md). Kept separate from the
+/** Plain data holders for the widget's view of the API (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). Kept separate from the
  *  JSON layer so the parsing/filtering logic is unit-testable on the JVM. */
 final class WidgetModels {
 

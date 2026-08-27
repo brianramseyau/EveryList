@@ -2,7 +2,7 @@
 # Remaps the baked-in "appuser" account to the PUID/PGID supplied at
 # `docker run` time (LSIO-style), defaulting to 99/100 (Unraid's
 # nobody/users) so a bare `docker run` with no -e flags still works.
-# See foundational/PLAN.md §5 "zero-config startup".
+# See foundational/PLAN_00_FOUNDATIONAL_PLAN.md §5 "zero-config startup".
 set -e
 
 PUID="${PUID:-99}"

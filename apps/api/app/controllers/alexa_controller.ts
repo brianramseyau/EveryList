@@ -42,7 +42,7 @@ function slotValues(intent?: { slots?: Record<string, { value?: string } | undef
 /**
  * Merges an APL display directive into an intent's speech response — only when the requesting
  * device declared `Alexa.Presentation.APL` support and the intent resolved a list to show
- * (PHASE16_PLAN.md Stage 3). Non-screen devices, and outcomes with no resolved list
+ * (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3). Non-screen devices, and outcomes with no resolved list
  * (not-found/ambiguous/no-slot-yet), pass through unchanged — `response_builder.ts` itself never
  * knows about displays at all.
  */
@@ -62,7 +62,7 @@ async function withDisplay(result: IntentResult, hasDisplay: boolean): Promise<A
 }
 
 /** Handles the Alexa custom skill's `LaunchRequest`/`IntentRequest`/`SessionEndedRequest`
- * (PHASE16_PLAN.md Stage 2) and, for screen devices, `Alexa.Presentation.APL.UserEvent` touch
+ * (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2) and, for screen devices, `Alexa.Presentation.APL.UserEvent` touch
  * events (Stage 3). Reached only after `AlexaSignatureMiddleware` has confirmed the request
  * actually came from Amazon. */
 export default class AlexaController {

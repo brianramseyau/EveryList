@@ -3,7 +3,7 @@
  * Local equivalent of the GitHub Actions PR gate.
  *
  * CI's gate (`.github/workflows/ci.yml`'s `test` job, defined in the reusable
- * `test.yml`, plus its `e2e` job — see `foundational/PLAN.md` §12) runs, in
+ * `test.yml`, plus its `e2e` job — see `foundational/PLAN_00_FOUNDATIONAL_PLAN.md` §12) runs, in
  * order:
  *   1. build `@everylist/shared`  — `apps/api` and `apps/web` resolve its
  *      types/runtime via the package's `exports` → `dist/`, so a fresh

@@ -47,7 +47,7 @@ to redeem the resulting code. Concretely:
 4. EveryList's server exchanges that same code with Authentik's real token endpoint, then calls
    Authentik's userinfo endpoint to learn your email address.
 5. EveryList looks up the matching EveryList account by that email, and mints a Stage-16
-   [Personal Access Token](../foundational/PHASE16_PLAN.md) scoped to every list you're a member
+   [Personal Access Token](../foundational/PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md) scoped to every list you're a member
    of (capped at the `editor` role — same ceiling the Settings → Access Tokens page enforces).
    That PAT's value is handed back to Alexa as its OAuth2 "access token."
 6. Every subsequent Alexa request for your account carries that PAT, which EveryList verifies the
@@ -169,7 +169,7 @@ URIs any time).
 6. Test in the console's **Test** tab (enable testing for the "Development" stage) before
    touching a real Echo device — the built-in simulator sends real signed requests to your
    endpoint without needing certification, and its **Display** panel renders the APL visual list
-   (PHASE16_PLAN.md Stage 3) so you can check the on-screen layout and tap-to-complete there too.
+   (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3) so you can check the on-screen layout and tap-to-complete there too.
 
 ### Deploying with `ask-cli` instead of the console
 

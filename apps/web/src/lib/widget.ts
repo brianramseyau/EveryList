@@ -8,7 +8,7 @@ import { getServerUrl } from './api/server-url';
 /* v8 ignore stop */
 
 /** The PAT name the widget-minting flow uses, so it's recognizable/revocable in
- *  Settings → Access Tokens (PHASE18_PLAN.md). */
+ *  Settings → Access Tokens (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). */
 export const WIDGET_TOKEN_NAME = 'Home-screen widget';
 
 /** The native handoff channel (the Capacitor `EveryListWidgetPlugin`). Kept token-free of any URL:
@@ -26,7 +26,7 @@ function nativeWidgetClient(): EveryListWidgetNative | null {
 
 /**
  * Mints a list-scoped PAT for the home-screen widget and hands it to the native shell via the
- * in-app Capacitor plugin (PHASE18_PLAN.md), which stores it in private app storage and opens the
+ * in-app Capacitor plugin (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md), which stores it in private app storage and opens the
  * widget's list-picker. A native widget can't read the WebView's IndexedDB offline cache, so it
  * authenticates to the API directly with this token.
  *

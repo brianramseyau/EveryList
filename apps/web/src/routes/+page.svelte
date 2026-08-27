@@ -4,7 +4,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 
 	// Decorative only — echoes the real list-card spine/icon language from
-	// /lists (see PHASE8_PLAN.md "The Index") to show the app's range of use
+	// /lists (see PLAN_08_PHASE_VISUAL_IDENTITY.md "The Index") to show the app's range of use
 	// without a single grocery-specific example dominating the hero.
 	const heroLists: { name: string; icon: string; color: string }[] = [
 		{ name: 'Weekend packing', icon: 'briefcase', color: '#3e4c63' },

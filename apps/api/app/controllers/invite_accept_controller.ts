@@ -30,7 +30,7 @@ export default class InviteAcceptController {
 
     // Every ListMember row in this join-link-only flow is created already
     // accepted (there's no separate email-invite "pending" state — see
-    // PLAN.md §10), so accepting an invite twice is just an idempotent
+    // PLAN_00_FOUNDATIONAL_PLAN.md §10), so accepting an invite twice is just an idempotent
     // role-upgrade: never downgrade an existing member's access.
     const existing = await ListMember.query()
       .where('listId', invite.listId)

@@ -7,7 +7,7 @@ import logger from '@adonisjs/core/services/logger'
 import { DateTime } from 'luxon'
 
 /**
- * Learned auto-categorization (PHASE17_PLAN.md): a persisted, decayed model
+ * Learned auto-categorization (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md): a persisted, decayed model
  * that only learns from *explicit* user category assignments — never from the
  * auto-suggestion itself, avoiding self-reinforcement. The static keyword
  * table in packages/shared stays as the fallback. Server-authoritative: the

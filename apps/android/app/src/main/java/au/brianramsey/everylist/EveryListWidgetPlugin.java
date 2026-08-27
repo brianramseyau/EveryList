@@ -10,7 +10,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import java.util.ArrayList;
 import java.util.List;
 
-/** The app→widget handoff channel (PHASE18_PLAN.md). The web app mints a list-scoped PAT and
+/** The app→widget handoff channel (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). The web app mints a list-scoped PAT and
  *  calls {@code EveryListWidget.configure(...)}; this writes the credentials into the widget's
  *  SharedPreferences and opens the config screen — keeping the token out of any loggable URI (the
  *  earlier design carried it in an {@code everylist://widget-config} deep-link query string, which
