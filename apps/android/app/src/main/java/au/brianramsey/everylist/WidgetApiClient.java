@@ -1,5 +1,7 @@
 package au.brianramsey.everylist;
 
+import org.json.JSONObject;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -39,8 +41,15 @@ final class WidgetApiClient {
 
     /** `PATCH /api/v1/lists/:id/items/:itemId` with `{ checked }` — the checkbox toggle. */
     static void toggleItem(String token, String serverUrl, long listId, long itemId, boolean checked) throws IOException {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("checked", checked);
+        } catch (org.json.JSONException e) {
+            // Unreachable for a boolean value; keep the method's IOException-only surface.
+            throw new IOException("Failed to build toggle payload", e);
+        }
         request("PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token,
-            "{\"checked\":" + checked + "}");
+            body.toString());
     }
 
     private static String request(String method, String url, String token, String jsonBody) throws IOException {

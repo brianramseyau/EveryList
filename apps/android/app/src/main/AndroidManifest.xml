@@ -60,8 +60,8 @@
         </service>
 
         <!-- Widget configuration: launched by the launcher on placement (APPWIDGET_CONFIGURE) and
-             by the app's widget-setup deep link (everylist://widget-config?token=...&listIds=...
-             &serverUrl=...), which carries the freshly-minted PAT. -->
+             by the in-app provisioning plugin (EveryListWidgetPlugin), which writes the minted PAT
+             to private storage first — the token never travels in a loggable URI. -->
         <activity
             android:name=".WidgetConfigActivity"
             android:exported="true"
@@ -69,12 +69,6 @@
             android:theme="@style/AppTheme.NoActionBar">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="everylist" android:host="widget-config" />
             </intent-filter>
         </activity>
 

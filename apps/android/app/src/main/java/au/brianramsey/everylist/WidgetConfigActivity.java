@@ -2,7 +2,6 @@ package au.brianramsey.everylist;
 
 import android.app.Activity;
 import android.appwidget.AppWidgetManager;
-import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -26,9 +25,9 @@ import java.util.Set;
  *  <ul>
  *    <li><b>Widget placement</b> — launched by the launcher with {@code EXTRA_APPWIDGET_ID}; picks
  *        which granted list to show and the show/hide-completed default, then saves per-widget.</li>
- *    <li><b>App handoff</b> — receives the {@code everylist://widget-config} deep link carrying the
- *        freshly-minted PAT; provisions the global credentials, then behaves like placement (or
- *        stores global defaults if the widget hasn't been placed yet).</li>
+ *    <li><b>App handoff</b> — launched by {@link EveryListWidgetPlugin#configure} right after the
+ *        app provisions the shared credentials; the credentials already exist in SharedPreferences
+ *        (never in a URI), so this just shows the picker.</li>
  *    <li><b>List selector tap</b> — opened from the widget with the widget id to change its list.</li>
  *  </ul> */
 public class WidgetConfigActivity extends Activity {
@@ -57,12 +56,7 @@ public class WidgetConfigActivity extends Activity {
         appWidgetId = getIntent().getIntExtra(
             EveryListWidget.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
 
-        WidgetConfigPayload payload = WidgetConfigPayload.parse(dataUri());
-        if (payload != null) {
-            // App handoff: provision the shared credentials first.
-            WidgetPrefs.saveGlobalCredentials(this, payload.token, payload.serverUrl, payload.listIds);
-            grantedListIds.addAll(payload.listIds);
-        } else if (WidgetPrefs.hasGlobalCredentials(this)) {
+        if (WidgetPrefs.hasGlobalCredentials(this)) {
             grantedListIds.addAll(WidgetPrefs.getGlobalListIds(this));
         } else {
             showSetUpPrompt();
@@ -76,11 +70,6 @@ public class WidgetConfigActivity extends Activity {
 
         saveButton.setOnClickListener(v -> save());
         loadListNames();
-    }
-
-    private String dataUri() {
-        Uri data = getIntent().getData();
-        return data == null ? null : data.toString();
     }
 
     private void showSetUpPrompt() {
