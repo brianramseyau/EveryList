@@ -139,7 +139,8 @@
 	class="mx-auto flex app-max-w flex-col gap-4 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
 >
 	<PageHeader
-		title={list ? `${list.name} — Categories` : undefined}
+		title={list ? 'Categories' : undefined}
+		subtitle={list?.name}
 		htmlTitle={list ? `${list.name} categories` : 'Categories'}
 		backHref={resolve('/lists/[id]/settings', { id: String(listId) })}
 		backLabel="Back to settings"

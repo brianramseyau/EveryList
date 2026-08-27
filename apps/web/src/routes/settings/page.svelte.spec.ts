@@ -55,6 +55,10 @@ describe('Settings +page.svelte', () => {
 		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
 		vi.mocked(App.getInfo).mockRejectedValue(new Error('web'));
 		vi.mocked(getServerUrl).mockReturnValue('');
+		// Orientation radio clicks persist the choice to localStorage (see the
+		// auto-rotate/not-supported tests) — clear it so it can't leak into a
+		// later spec file sharing this worker's browser context.
+		window.localStorage.removeItem('everylist:orientation');
 		resetConnectivityForTesting();
 	});
 
@@ -162,7 +166,7 @@ describe('Settings +page.svelte', () => {
 		vi.mocked(fetchProfile).mockResolvedValue({ ...profile, id: 2 });
 
 		render(SettingsPage);
-		await expect.element(page.getByText('Reset app')).toBeInTheDocument();
+		await expect.element(page.getByText('Reset', { exact: true })).toBeInTheDocument();
 
 		await expect.element(page.getByRole('link', { name: 'Debug info' })).not.toBeInTheDocument();
 	});
@@ -330,7 +334,7 @@ describe('Settings +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
-	it('clears cached app data via the Reset app button', async () => {
+	it('clears cached app data via the Reset button after confirmation', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		let resolveReset!: () => void;
 		vi.mocked(resetApp).mockReturnValue(
@@ -341,13 +345,29 @@ describe('Settings +page.svelte', () => {
 
 		render(SettingsPage);
 
-		const resetButton = page.getByRole('button', { name: 'Reset app' });
+		const resetButton = page.getByRole('button', { name: 'Reset' });
 		await resetButton.click();
 
+		// The confirmation step sits between the click and the reset — nothing runs yet.
+		expect(resetApp).not.toHaveBeenCalled();
+		await page.getByRole('button', { name: 'Reset' }).click();
+
 		expect(resetApp).toHaveBeenCalled();
-		await expect.element(page.getByRole('button', { name: 'Resetting…' })).toBeDisabled();
+		await expect.element(page.getByRole('button', { name: 'Reset' })).toBeDisabled();
 
 		resolveReset();
+	});
+
+	it('does not reset when the Reset confirmation is cancelled', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Reset' }).click();
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		expect(resetApp).not.toHaveBeenCalled();
+		await expect.element(page.getByRole('button', { name: 'Reset' })).toBeEnabled();
 	});
 
 	it('shows "up to date" after a check finds no new version', async () => {
@@ -356,7 +376,7 @@ describe('Settings +page.svelte', () => {
 
 		render(SettingsPage);
 
-		const checkButton = page.getByRole('button', { name: 'Check for update' });
+		const checkButton = page.getByRole('button', { name: 'Update' });
 		await checkButton.click();
 
 		expect(checkForUpdate).toHaveBeenCalled();
@@ -369,7 +389,7 @@ describe('Settings +page.svelte', () => {
 
 		render(SettingsPage);
 
-		const checkButton = page.getByRole('button', { name: 'Check for update' });
+		const checkButton = page.getByRole('button', { name: 'Update' });
 		await checkButton.click();
 
 		expect(checkForUpdate).toHaveBeenCalled();
@@ -378,7 +398,7 @@ describe('Settings +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
-	it('leaves the "Checking…" button disabled while an update is found and applied', async () => {
+	it('shows "Updating..." while an update is found and a pending-refresh banner after', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		let resolveCheck!: (result: 'updating') => void;
 		vi.mocked(checkForUpdate).mockReturnValue(
@@ -389,12 +409,17 @@ describe('Settings +page.svelte', () => {
 
 		render(SettingsPage);
 
-		const checkButton = page.getByRole('button', { name: 'Check for update' });
+		const checkButton = page.getByRole('button', { name: 'Update' });
 		await checkButton.click();
 
-		await expect.element(page.getByRole('button', { name: 'Checking…' })).toBeDisabled();
+		await expect.element(page.getByRole('button', { name: 'Updating...' })).toBeDisabled();
 
 		resolveCheck('updating');
+
+		await expect
+			.element(page.getByText('An update is ready — it will apply when the app refreshes.'))
+			.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Update' })).toBeEnabled();
 	});
 
 	it('shows the signed-in account email and current name as text with an edit button', async () => {
@@ -561,7 +586,7 @@ describe('Settings +page.svelte', () => {
 		render(SettingsPage);
 
 		await expect.element(page.getByText('Troubleshooting')).not.toBeInTheDocument();
-		await expect.element(page.getByRole('button', { name: 'Reset app' })).not.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
 	});
 
 	it('shows the configured server URL and changing it clears the token, server URL, and navigates', async () => {

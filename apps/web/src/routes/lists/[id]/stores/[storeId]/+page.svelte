@@ -124,7 +124,8 @@
 	class="mx-auto flex app-max-w flex-col gap-4 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
 >
 	<PageHeader
-		title={list ? `${storeName ?? 'Store'} — Aisle order` : undefined}
+		title={list ? 'Aisle order' : undefined}
+		subtitle={storeName ?? 'Store'}
 		htmlTitle={storeName ? `${storeName} aisle order` : 'Store'}
 		backHref={resolve('/lists/[id]/stores', { id: String(listId) })}
 		backLabel="Stores"

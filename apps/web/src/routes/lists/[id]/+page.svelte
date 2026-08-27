@@ -968,6 +968,13 @@
 																>(<span>{item.quantity}</span>)</span
 															>
 														{/if}
+														{#if item.price !== null}
+															<span
+																class="ml-auto shrink-0 text-xs font-semibold text-primary-600 tabular-nums dark:text-primary-400"
+															>
+																{formatPrice(item.price)}
+															</span>
+														{/if}
 													</div>
 													{#if item.storeId}
 														{@const itemStore = stores.find((store) => store.id === item.storeId)}

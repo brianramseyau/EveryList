@@ -26,6 +26,7 @@
 	let {
 		title,
 		htmlTitle,
+		subtitle,
 		backHref,
 		backLabel = 'Back',
 		actions,
@@ -35,6 +36,7 @@
 	}: {
 		title?: string;
 		htmlTitle?: string;
+		subtitle?: string;
 		backHref?: ResolvedPathname;
 		backLabel?: string;
 		actions?: Snippet;
@@ -48,20 +50,25 @@
 
 {#snippet headerRow()}
 	{#if title}
-		<div class="flex items-center gap-2 border-b border-gray-200 pb-2 dark:border-gray-700">
-			{#if backHref}
-				<a
-					href={backHref}
-					onclick={markBackNavigation}
-					aria-label={backLabel}
-					class="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-800 print:hidden"
-				>
-					<Icon name="arrowLeft" class="h-6 w-6" />
-				</a>
-			{/if}
-			<h1 class="header-title flex-1 font-display text-2xl font-bold">{title}</h1>
-			{#if actions}
-				<div class="flex items-center gap-3 text-sm print:hidden">{@render actions()}</div>
+		<div class="flex flex-col border-b border-gray-200 pb-2 dark:border-gray-700">
+			<div class="flex items-center gap-2">
+				{#if backHref}
+					<a
+						href={backHref}
+						onclick={markBackNavigation}
+						aria-label={backLabel}
+						class="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-800 print:hidden"
+					>
+						<Icon name="arrowLeft" class="h-6 w-6" />
+					</a>
+				{/if}
+				<h1 class="header-title flex-1 font-display text-2xl font-bold">{title}</h1>
+				{#if actions}
+					<div class="flex items-center gap-3 text-sm print:hidden">{@render actions()}</div>
+				{/if}
+			</div>
+			{#if subtitle}
+				<p class="{backHref ? 'pl-11' : ''} text-sm text-gray-600 dark:text-gray-400">{subtitle}</p>
 			{/if}
 		</div>
 	{:else if backHref}

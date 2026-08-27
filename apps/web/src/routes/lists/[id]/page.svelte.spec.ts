@@ -1279,6 +1279,20 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Total: $6.49')).toBeInTheDocument();
 	});
 
+	it('shows a formatted price on each item row that has one set', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, price: 399 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('$3.99', { exact: true })).toBeInTheDocument();
+		// An item without a price renders no price — nothing to show, and no $0.00.
+		await expect.element(page.getByText('$0.00', { exact: true })).not.toBeInTheDocument();
+	});
+
 	it('reloads the list when toggling checked fails without an ApiError', async () => {
 		// toggleChecked's catch sets `error` and immediately triggers a reload via
 		// loadAll(), whose own successful completion clears `error` back to null —
