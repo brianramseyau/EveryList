@@ -4,4 +4,28 @@
     <string name="title_activity_main">EveryList</string>
     <string name="package_name">au.brianramsey.everylist</string>
     <string name="custom_url_scheme">au.brianramsey.everylist</string>
+
+    <!-- Home-screen widget (PHASE18_PLAN.md) -->
+    <string name="widget_description">Shopping lists at a glance — check items off and add new ones.</string>
+    <string name="widget_default_title">EveryList</string>
+    <string name="widget_add">Add item</string>
+    <string name="widget_refresh">Refresh</string>
+    <string name="widget_show_done">Show done</string>
+    <string name="widget_hide_done">Hide done</string>
+    <string name="widget_empty">No items</string>
+    <string name="widget_offline_note">Can’t reach server — showing last saved items</string>
+    <string name="widget_setup_note">Open the EveryList app and go to Settings → Home-screen widget to set this up.</string>
+    <string name="widget_setup_button">Set up in the app</string>
+
+    <!-- Widget config activity -->
+    <string name="config_title">EveryList widget</string>
+    <string name="config_explain">Pick which list the widget shows on your home screen.</string>
+    <string name="config_loading_lists">Loading your lists…</string>
+    <string name="config_show_completed">Show completed items</string>
+    <string name="config_save">Save</string>
+    <string name="config_saved_hint">Widget saved — add it from your home screen’s widget picker.</string>
+    <string name="config_open_app">Open the EveryList app to set up</string>
+    <string name="config_pick_a_list">Pick a list to show.</string>
+    <string name="config_no_lists">This token has no lists — create one in the app first.</string>
+    <string name="config_load_failed">Couldn’t load your lists — is the server reachable?</string>
 </resources>

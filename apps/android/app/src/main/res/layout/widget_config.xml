@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Configuration screen for the EveryList widget. Shown by the launcher on widget placement and
+     by tapping the widget's list selector; also receives the app's `everylist://widget-config`
+     deep link that carries the minted PAT. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/config_title"
+            android:textColor="@color/widget_ink"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/config_explain"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="8dp"
+            android:text="@string/config_explain"
+            android:textColor="@color/widget_muted"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/config_list_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="16dp"
+            android:text="@string/config_loading_lists"
+            android:textColor="@color/widget_muted"
+            android:textSize="14sp" />
+
+        <RadioGroup
+            android:id="@+id/config_list_group"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="4dp" />
+
+        <CheckBox
+            android:id="@+id/config_show_completed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="12dp"
+            android:text="@string/config_show_completed"
+            android:textColor="@color/widget_ink"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/config_error"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="12dp"
+            android:textColor="@color/widget_warn"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/config_save"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/config_save" />
+
+        <Button
+            android:id="@+id/config_open_app"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/config_open_app"
+            android:visibility="gone" />
+    </LinearLayout>
+</ScrollView>
