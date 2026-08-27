@@ -37,19 +37,34 @@
 </div>
 
 <div class="flex flex-col gap-1">
-	<Label for="item-quantity" class="flex items-center gap-1">
-		<Icon name="counter" class="h-4 w-4" />
-		Quantity (optional)
+	<Label for="item-notes" class="flex items-center gap-1">
+		<Icon name="noteTextOutline" class="h-4 w-4" />
+		Notes (optional)
 	</Label>
-	<Input id="item-quantity" placeholder="e.g. 2, 1 lb, a dozen" bind:value={quantity} />
+	<Textarea
+		id="item-notes"
+		rows={3}
+		bind:value={notes}
+		class="w-full border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-700"
+	/>
 </div>
 
-<div class="flex flex-col gap-1">
-	<Label for="item-price" class="flex items-center gap-1">
-		<Icon name="currencyUsd" class="h-4 w-4" />
-		Price (optional)
-	</Label>
-	<Input id="item-price" inputmode="decimal" placeholder="0.00" bind:value={price} />
+<div class="grid grid-cols-2 gap-4">
+	<div class="flex flex-col gap-1">
+		<Label for="item-quantity" class="flex items-center gap-1">
+			<Icon name="counter" class="h-4 w-4" />
+			Quantity (optional)
+		</Label>
+		<Input id="item-quantity" placeholder="e.g. 2, 1 lb, a dozen" bind:value={quantity} />
+	</div>
+
+	<div class="flex flex-col gap-1">
+		<Label for="item-price" class="flex items-center gap-1">
+			<Icon name="currencyUsd" class="h-4 w-4" />
+			Price (optional)
+		</Label>
+		<Input id="item-price" inputmode="decimal" placeholder="0.00" bind:value={price} />
+	</div>
 </div>
 
 {#if showCategory}
@@ -91,16 +106,3 @@
 		/>
 	</div>
 {/if}
-
-<div class="flex flex-col gap-1">
-	<Label for="item-notes" class="flex items-center gap-1">
-		<Icon name="noteTextOutline" class="h-4 w-4" />
-		Notes (optional)
-	</Label>
-	<Textarea
-		id="item-notes"
-		rows={3}
-		bind:value={notes}
-		class="w-full border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-700"
-	/>
-</div>
