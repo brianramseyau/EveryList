@@ -997,12 +997,6 @@
 													{/if}
 												</div>
 												{#if !isCoarsePointer}
-													<span
-														aria-hidden="true"
-														class="ml-auto flex h-11 w-11 shrink-0 items-center justify-center text-gray-300 dark:text-gray-600"
-													>
-														<Icon name="dragVertical" class="h-5 w-5" />
-													</span>
 													<a
 														href={resolve('/lists/[id]/items/[itemId]', {
 															id: String(listId),
