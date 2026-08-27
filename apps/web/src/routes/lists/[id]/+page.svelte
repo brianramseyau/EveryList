@@ -991,11 +991,10 @@
 												>
 													<div class="flex min-w-0 items-center gap-2">
 														<span
-															class="wrap-anywhere {checkAnimatingIds.has(item.id)
-																? 'item-strike-wipe'
-																: item.checked
-																	? 'text-gray-400 line-through'
-																	: ''}"
+															class="wrap-anywhere"
+															class:item-strike-wipe={checkAnimatingIds.has(item.id)}
+															class:text-gray-400={item.checked && !checkAnimatingIds.has(item.id)}
+															class:line-through={item.checked && !checkAnimatingIds.has(item.id)}
 														>
 															{item.name}
 														</span>

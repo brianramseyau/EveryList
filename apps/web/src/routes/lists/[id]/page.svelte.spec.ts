@@ -7,6 +7,7 @@ import { ApiError } from '$lib/api/client';
 import type { SortableReorderParams } from '$lib/actions/sortable-reorder';
 import type { ConflictListener, FlushOutcomeListener } from '$lib/offline/flush';
 import { markSelfMutation, resetSelfMutationsForTesting } from '$lib/offline/self-mutations';
+import { consumeListOrigin } from '$lib/nav-direction';
 
 // SortableJS drives real mouse/touch gestures against real layout, neither of
 // which a component test can reliably reproduce — its own behavior (does it
@@ -1065,6 +1066,46 @@ describe('List detail +page.svelte', () => {
 		expect(refreshBadgeCount).toHaveBeenCalled();
 	});
 
+	it('shows the animated strike wipe right after checking an item, then the steady line-through once it finishes', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('checkbox', { name: 'Bananas' }).click();
+
+		const nameSpan = page.getByText('Bananas').element();
+		expect(nameSpan.className).toContain('item-strike-wipe');
+
+		await expect.poll(() => nameSpan.className, { timeout: 1000 }).toContain('line-through');
+		expect(nameSpan.className).not.toContain('item-strike-wipe');
+	});
+
+	it('skips the check-off animation delay under prefers-reduced-motion, hiding a checked item immediately', async () => {
+		const matchMediaSpy = mockReducedMotion();
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Hide checked items' }).click();
+		await page.getByRole('checkbox', { name: 'Bananas' }).click();
+
+		// No animation delay to wait out — the row (and the now-repositioned
+		// Bread row below it) is gone on the very next render.
+		await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+		matchMediaSpy.mockRestore();
+	});
+
 	it('unchecks a checked item in place', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true })
@@ -1953,6 +1994,22 @@ describe('List detail +page.svelte', () => {
 		} as unknown as MediaQueryList);
 	}
 
+	function mockReducedMotion() {
+		return vi.spyOn(window, 'matchMedia').mockImplementation(
+			(query: string) =>
+				({
+					matches: query.includes('reduced-motion'),
+					media: query,
+					onchange: null,
+					addListener: vi.fn(),
+					removeListener: vi.fn(),
+					addEventListener: vi.fn(),
+					removeEventListener: vi.fn(),
+					dispatchEvent: vi.fn()
+				}) as unknown as MediaQueryList
+		);
+	}
+
 	it('hides the desktop delete/edit icons and swipes right to delete on a coarse-pointer device', async () => {
 		const matchMediaSpy = mockCoarsePointer();
 		vi.mocked(fetchItems).mockResolvedValue([
@@ -2028,6 +2085,28 @@ describe('List detail +page.svelte', () => {
 
 		await expect.element(page.getByRole('button', { name: 'Delete Bananas' })).toBeInTheDocument();
 		await expect.element(page.getByRole('link', { name: 'Edit Bananas' })).toBeInTheDocument();
+	});
+
+	it('marks the list as the navigation origin when the desktop edit link is clicked', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		// Same capture-phase guard as PageHeader.svelte.spec.ts's back-link
+		// test — this is a real same-origin <a href>, and SvelteKit's own
+		// document-level router (live in this test environment) would
+		// otherwise navigate the iframe away, risking flakiness in other
+		// concurrently running test files.
+		const link = page.getByRole('link', { name: 'Edit Bananas' }).element();
+		const preventNav = (event: Event) => event.preventDefault();
+		document.addEventListener('click', preventNav, { capture: true });
+		link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		document.removeEventListener('click', preventNav, { capture: true });
+
+		expect(consumeListOrigin()).toBe(true);
 	});
 
 	it('toggles checked on a short tap anywhere on the row on a coarse-pointer device', async () => {

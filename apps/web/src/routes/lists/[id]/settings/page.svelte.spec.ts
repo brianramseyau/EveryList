@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
+import { markListOrigin } from '$lib/nav-direction';
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -91,6 +92,44 @@ describe('List settings +page.svelte', () => {
 		render(SettingsPage);
 
 		await expect.element(page.getByText('List not found')).toBeInTheDocument();
+	});
+
+	it('goes back in history instead of pushing a new navigation when this page was reached from the list', async () => {
+		const historyBackSpy = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+		markListOrigin();
+
+		render(SettingsPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		// Same capture-phase guard as PageHeader.svelte.spec.ts's back-link
+		// test — this is a real same-origin <a href>, and SvelteKit's own
+		// document-level router (live in this test environment) would
+		// otherwise navigate the iframe away, risking flakiness in other
+		// concurrently running test files.
+		const link = page.getByRole('link', { name: 'Back to list' }).element();
+		const preventNav = (event: Event) => event.preventDefault();
+		document.addEventListener('click', preventNav, { capture: true });
+		link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		document.removeEventListener('click', preventNav, { capture: true });
+
+		expect(historyBackSpy).toHaveBeenCalledOnce();
+		expect(goto).not.toHaveBeenCalled();
+
+		historyBackSpy.mockRestore();
+	});
+
+	it('pushes a normal navigation back to the list when this page was not reached from it', async () => {
+		render(SettingsPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		const link = page.getByRole('link', { name: 'Back to list' }).element();
+		const preventNav = (event: Event) => event.preventDefault();
+		document.addEventListener('click', preventNav, { capture: true });
+		link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		document.removeEventListener('click', preventNav, { capture: true });
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(vi.mocked(goto).mock.calls[0]?.[0]).toBe('/lists/1');
 	});
 
 	it("links to the list's categories and members, scoped to its id", async () => {

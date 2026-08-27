@@ -4,6 +4,7 @@ import { render } from 'vitest-browser-svelte';
 import type { CategoryDto, FavoriteItemDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
+import { markListOrigin } from '$lib/nav-direction';
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1', itemId: '100' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -266,6 +267,24 @@ describe('Item detail +page.svelte', () => {
 		});
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 		expect(vi.mocked(goto).mock.calls[0]?.[0]).toBe('/lists/1');
+	});
+
+	it('goes back in history instead of pushing a new navigation when this page was reached from the list', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+		const historyBackSpy = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+		markListOrigin();
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect.poll(() => historyBackSpy.mock.calls.length).toBe(1);
+		expect(goto).not.toHaveBeenCalled();
+
+		historyBackSpy.mockRestore();
 	});
 
 	it('clears quantity, price, and notes back to null when submitted empty', async () => {

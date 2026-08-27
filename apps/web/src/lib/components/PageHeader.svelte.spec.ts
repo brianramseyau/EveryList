@@ -1,6 +1,6 @@
 import { createRawSnippet } from 'svelte';
 import { page } from 'vitest/browser';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { consumeNavDirection } from '$lib/nav-direction';
 import PageHeader from './PageHeader.svelte';
@@ -46,6 +46,23 @@ describe('PageHeader.svelte', () => {
 		document.removeEventListener('click', preventNav, { capture: true });
 
 		expect(consumeNavDirection(false)).toBe('back');
+	});
+
+	it('prevents the link navigation and calls onBack instead, when onBack is provided', async () => {
+		const onBack = vi.fn();
+		render(PageHeader, { title: 'Categories', backHref: '/lists/1', onBack });
+
+		// Same capture-phase guard as the test above — the real preventDefault
+		// this exercises comes from handleBackClick itself (it fires because
+		// onBack is set), but the guard still keeps SvelteKit's own router from
+		// racing it and navigating this iframe away.
+		const link = page.getByRole('link', { name: 'Back' }).element();
+		const preventNav = (event: Event) => event.preventDefault();
+		document.addEventListener('click', preventNav, { capture: true });
+		link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		document.removeEventListener('click', preventNav, { capture: true });
+
+		expect(onBack).toHaveBeenCalledOnce();
 	});
 
 	it('omits the title row entirely when no title is given, still rendering the back link', async () => {
