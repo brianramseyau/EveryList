@@ -59,11 +59,26 @@
 		let deepLinkHandle: ReturnType<typeof App.addListener> | null = null;
 		if (Capacitor.isNativePlatform()) {
 			deepLinkHandle = App.addListener('appUrlOpen', ({ url }) => {
-				if (loggedIn) {
-					const match = /^everylist:\/\/lists\/(\d+)\/items\/(\d+)$/.exec(url);
-					if (!match) return;
+				if (!loggedIn) return;
+				// `everylist://lists/<id>/items/<itemId>` — the Android widget's "open item" tap.
+				let match = /^everylist:\/\/lists\/(\d+)\/items\/(\d+)$/.exec(url);
+				if (match) {
 					const [, listId, itemId] = match;
 					void goto(resolve('/lists/[id]/items/[itemId]', { id: listId, itemId }));
+					return;
+				}
+				// `everylist://lists/<id>` — the Android widget's quick-add (+) tap, which lands on
+				// the list page and its add field.
+				match = /^everylist:\/\/lists\/(\d+)$/.exec(url);
+				if (match) {
+					const [, listId] = match;
+					void goto(resolve('/lists/[id]', { id: listId }));
+					return;
+				}
+				// `everylist://settings/widget` — the Android widget's "set up" button when no
+				// credentials are provisioned yet.
+				if (url === 'everylist://settings/widget') {
+					void goto(resolve('/settings/widget'));
 				}
 			});
 		}
