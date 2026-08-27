@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Capacitor } from '@capacitor/core';
+	import { App } from '@capacitor/app';
 	import { afterNavigate, goto, onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
@@ -49,6 +50,23 @@
 		disablePinchZoom();
 		refreshAuth();
 		syncBadge();
+		// Native deep links (PHASE18_PLAN.md): the Android widget's "open item" tap hands us
+		// `everylist://lists/<id>/items/<itemId>`, which the native shell funnels back into the
+		// WebView as this event. Route it to the item editor. Gated to the native build — the
+		// PWA/Docker build has no such scheme, and a stale global listener would only matter there.
+		// Skipped while logged out: the item editor (and this whole app) needs a session, and the
+		// login redirect flow is what a normal app launch already handles.
+		let deepLinkHandle: ReturnType<typeof App.addListener> | null = null;
+		if (Capacitor.isNativePlatform()) {
+			deepLinkHandle = App.addListener('appUrlOpen', ({ url }) => {
+				if (loggedIn) {
+					const match = /^everylist:\/\/lists\/(\d+)\/items\/(\d+)$/.exec(url);
+					if (!match) return;
+					const [, listId, itemId] = match;
+					void goto(resolve('/lists/[id]/items/[itemId]', { id: listId, itemId }));
+				}
+			});
+		}
 		startFlushLoop();
 		startConnectivityMonitor();
 		startBackgroundSync();
@@ -85,6 +103,12 @@
 				})
 			);
 		}
+		// Remove the native deep-link listener on unmount — the layout singleton only mounts
+		// once for the app's lifetime, but a clean handle avoids leaks if it ever remounts
+		// (e.g. in tests).
+		return () => {
+			void deepLinkHandle?.then((handle) => handle.remove());
+		};
 	});
 	afterNavigate(() => {
 		refreshAuth();
