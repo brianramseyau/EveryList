@@ -200,6 +200,20 @@ export interface AccessTokenCreatedDto extends AccessTokenDto {
   token: string
 }
 
+/** The app→native-widget handoff payload carried over the `everylist://widget-config` deep link
+ *  (PHASE18_PLAN.md). The web app mints a list-scoped PAT, then hands the token plus the granted
+ *  list ids and the configured server URL to the Android widget so it can call the API directly —
+ *  a native widget can't read the WebView's IndexedDB offline cache, so it authenticates over
+ *  HTTP with this bearer token instead. */
+export interface WidgetConfigDto {
+  /** The `elt_`-prefixed Personal Access Token the widget uses for `Authorization: Bearer`. */
+  token: string
+  /** The list ids the token grants the widget — the user picks which one to display. */
+  listIds: number[]
+  /** The user-configured server origin (see `apps/web/src/lib/api/server-url.ts`). */
+  serverUrl: string
+}
+
 export type BackupFrequency = 'daily' | 'weekly' | 'monthly'
 
 /** `automatic` (taken by the schedule) vs `manual` (an on-demand "back up now") —

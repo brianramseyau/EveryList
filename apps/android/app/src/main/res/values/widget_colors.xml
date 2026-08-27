@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget surface/text colors (PHASE18_PLAN.md). Kept literal rather than tied to the app
+         theme because RemoteViews can't read themed color resources; a dark-mode follow-up would
+         need an alternative layout/values-night. -->
+    <color name="widget_paper">#F6F5F1</color>
+    <color name="widget_ink">#1B1D1F</color>
+    <color name="widget_muted">#6B7280</color>
+    <color name="widget_checked">#9CA3AF</color>
+    <color name="widget_accent">#0EA5E9</color>
+    <color name="widget_warn">#B45309</color>
+    <color name="widget_white">#FFFFFF</color>
+</resources>

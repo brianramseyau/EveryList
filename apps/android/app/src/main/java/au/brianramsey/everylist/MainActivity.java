@@ -17,6 +17,9 @@ public class MainActivity extends BridgeActivity {
         // it) — see setSpaFallbackRoute()'s doc comment for why this is needed at all.
         setSpaFallbackRoute();
         super.onCreate(savedInstanceState);
+        // In-app widget provisioning channel (PHASE18_PLAN.md) — lets the web app hand the
+        // widget's scoped PAT to native storage without putting it in a loggable URL.
+        registerPlugin(EveryListWidgetPlugin.class);
         if (BuildConfig.DEBUG) {
             // Capacitor serves the app itself over https://localhost, and Chromium's Mixed
             // Content policy blocks a plain http:// fetch from an https:// page regardless of
