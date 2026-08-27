@@ -11,7 +11,7 @@ AnyList is broad, cluttered, and monetizes with a hard paywall over basic usabil
 
 Guiding principles:
 - **Mobile-first, offline-first.** The primary use case is standing in a store with flaky signal. Every core interaction (add item, check item, edit quantity) must work with zero network and sync later.
-- **Narrow beats complete.** We deliberately cut features that require native platform hooks (Watch app, Siri/Alexa, home-screen widgets) or third-party commercial integrations (Instacart/Walmart fulfillment) that don't fit a lean, self-hosted PWA.
+- **Narrow beats complete.** We deliberately cut features that require heavy native platform hooks (Watch app, Siri) or third-party commercial integrations (Instacart/Walmart fulfillment) that don't fit a lean, self-hosted PWA — the one exception being the Android home-screen widget, which ships in the Capacitor native shell (Phase 18) because it's pure UI over the existing API.
 - **One tier.** No premium paywall. Features that AnyList locks behind "Complete" are included or excluded based on engineering value, not monetization — see the decision matrix below.
 - **Boring, well-tested technology.** TypeScript everywhere, one frontend framework, one backend framework, no speculative abstraction.
 
@@ -19,11 +19,12 @@ Guiding principles:
 
 ## 2. Scope Strategy: What "Narrowed" Means
 
-Full feature parity with AnyList (including Watch app, Siri, Alexa, Instacart fulfillment, native widgets) is out of reach for a PWA and out of scope for what this app is trying to be. Instead:
+Full feature parity with AnyList (including Watch app, Siri, Instacart fulfillment) is out of reach for a PWA and out of scope for what this app is trying to be. Instead:
 
 - **MVP (Phase 1–5 below):** the core list-management loop — create, share, categorize, check off, favorite, recover, import, use fully offline, and do all of that in a UI that doesn't feel like a developer scaffold (Phase 3, see §16).
 - **Phase 6+ (stretch):** high-value AnyList "Complete" features that are pure software (stores/filtering, prices/budget, folders, extra premium themes, passcode) and don't require a native shell.
-- **Explicitly out of scope:** anything requiring native OS integration a PWA cannot provide (Siri/Alexa voice, Apple Watch, home-screen widgets, geofencing) or third-party commercial fulfillment APIs (Instacart, Walmart, Kroger, etc.). These are flagged below with rationale, not silently dropped, so the decision is visible and revisitable.
+- **Native shell (Phase 13, 18):** once the Capacitor wrapper exists, the one native-OS feature worth adding is a home-screen widget (Phase 18) — it's a thin RemoteViews UI over the existing API, authenticated with the same scoped Personal Access Tokens the voice integrations use.
+- **Explicitly out of scope:** anything requiring native OS integration a PWA cannot provide (Siri voice, Apple Watch, geofencing) or third-party commercial fulfillment APIs (Instacart, Walmart, Kroger, etc.). These are flagged below with rationale, not silently dropped, so the decision is visible and revisitable.
 
 ---
 
@@ -42,7 +43,7 @@ Full feature parity with AnyList (including Watch app, Siri, Alexa, Instacart fu
 | Copy & paste import | Free | **MVP** | Simple parser, high leverage. |
 | Print & email export | Free | **MVP** (print only, email deferred) | Browser print stylesheet is trivial; outbound email (SMTP2GO, see §15) ships in Phase 6. |
 | Uncompleted item badge count | Free | **Phase 6** | Web Badging API, partial browser support; app-shell first. |
-| Home screen install (PWA) | Free (native widget) | **MVP** (install/manifest), widgets **out of scope** | PWA installability ≠ native home-screen widgets; widgets need a native shell (Capacitor), not planned. |
+| Home screen install (PWA) | Free (native widget) | **MVP** (install/manifest); **Phase 18** adds a real native Android widget | PWA installability ≠ native home-screen widgets; once the Capacitor shell landed (Phase 13), a widget became a thin RemoteViews UI over the existing API (see PHASE18_PLAN.md), so it stopped being out of scope. |
 | Voice Assistant (Siri/Alexa) | Free | **Out of scope** | Requires native intents/skills; not achievable from a PWA. Revisit only if a Capacitor wrapper is built later. |
 | Online grocery fulfillment (Instacart, etc.) | Free | **Out of scope** | Requires commercial partner API agreements; not a lean-engineering decision. |
 | Stores & store filtering | Premium | **Phase 6** *(narrowed)* | The `Store` entity itself ships in MVP (see above); Phase 6 adds tagging individual items with a store and filtering the list view to only that store's items. |
@@ -298,6 +299,7 @@ Tag computation uses `docker/metadata-action`, which derives all of this from a 
 | **12 — Lists Page Reorder + Account Identity** | Per-user list reorder, editable account name/identity in Settings — see `foundational/PHASE12_PLAN.md`. |
 | **13 — Native App Shell (Capacitor, iOS + Android)** | Wraps the existing SvelteKit SPA as native iOS/Android apps via Capacitor; configurable API base URL for cross-origin native builds; closes the remaining online-only sync gaps (category/store reorder, favorite/store attach) so the app is fully offline-first on native; a persistent Settings sync-status view alongside the existing banner; signed build artifacts via CI — see `foundational/PHASE13_PLAN.md`. |
 | **17 — Learned auto-categorization** | Replaces the item-derived frequency heuristic with a dedicated `category_learnings` table — a persisted, exponentially-decayed, server-authoritative model that learns only from *explicit* category assignments, backfilled from history, and synced read-only to the offline client so learned categories apply while offline — see `foundational/PHASE17_PLAN.md`. |
+| **18 — Android home-screen widget** | A Google-Tasks-style native widget (list selector, quick-add `+`, tap-to-open, checkbox-complete, show/hide-completed) in the Capacitor Android shell, authenticated by a scoped PAT minted from `Settings → Home-screen widget` and handed over a deep link; network-backed with a last-snapshot offline fallback — see `foundational/PHASE18_PLAN.md`. |
 
 No calendar dates are set here since team size/velocity aren't yet known — phases are ordered by dependency, not duration.
 

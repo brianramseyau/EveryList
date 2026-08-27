@@ -44,12 +44,13 @@ EveryList is feature-complete and self-hostable today.
 - **Light/dark/automatic theme + accent palettes** — four accent themes on top of a real, flash-free light/dark/automatic mode.
 - **Installable PWA** — add to your home screen on any device, no app store required.
 - **Native iOS & Android apps** — the same app wrapped via [Capacitor](https://capacitorjs.com), with a runtime-configurable server URL (point it at your own instance from a `/server-setup` screen, no rebuild needed), pull-to-refresh, and the same offline-first sync as the PWA. Debug-signed/simulator builds are attached to every [GitHub Release](https://github.com/brianramseyau/EveryList/releases) — see [Native apps](#native-apps-iosandroid) below.
+- **Android home-screen widget** — a Google-Tasks-style widget (list selector, quick-add `+`, tap-a-row to open, tap-a-checkbox to complete, show/hide-completed) backed by a scoped PAT minted from `Settings → Home-screen widget`.
 - **Voice control** — a private [Alexa custom skill](alexa/README.md) (add/remove/complete items, read a list back, plus an on-screen [APL](https://developer.amazon.com/en-US/docs/alexa/alexa-presentation-language/apl-overview.html) visual list on an Echo Show/Hub) and a [Home Assistant HACS integration](https://github.com/brianramseyau/everylist-hass) exposing each list as a native `todo.*` entity for Voice Assist — both authenticate via scoped Personal Access Tokens, not your login.
 - **Personal Access Tokens** — scoped, per-list, editor/viewer-capped API tokens (`Settings → Access Tokens`) for third-party integrations like the two above, independent of your login session.
 - **Self-hosted, single container** — one Docker image, one process, one SQLite file under `/config`; trivial to back up.
 - **Automated backups** — configurable daily/weekly/monthly schedule with a chosen time of day and retention window, taken via SQLite's native online backup API so it's safe to run while the app is live; also triggerable on demand from `Settings → Backups`.
 
-Deliberately out of scope: native Watch apps, Siri voice control, home-screen widgets, and third-party fulfillment integrations (Instacart, etc.) — see the [feature decision matrix](foundational/PLAN.md#3-feature-decision-matrix) in the plan for the full reasoning.
+Deliberately out of scope: native Watch apps, Siri voice control, and third-party fulfillment integrations (Instacart, etc.) — see the [feature decision matrix](foundational/PLAN.md#3-feature-decision-matrix) in the plan for the full reasoning.
 
 ## Tech stack
 
@@ -162,6 +163,8 @@ Available image tags:
 ### Native apps (iOS/Android)
 
 Every `vX.Y.Z` tag also builds and attaches native app packages to the corresponding [GitHub Release](https://github.com/brianramseyau/EveryList/releases): a debug-signed Android APK (sideload-ready as-is) and an unsigned iOS Simulator build. Neither is store-signed yet — there's no release keystore or Apple Developer Program enrollment behind this build — so today this is a "build it yourself a real release, or sideload/simulate the CI one" situation, not an App/Play Store listing. The app itself doesn't care: on first launch it sends you to a `/server-setup` screen to enter your own instance's URL, so one build works against anyone's self-hosted server with no rebuild.
+
+The Android build also ships a **home-screen widget** (see [Features](#features)): set it up once from `Settings → Home-screen widget` (which mints a scoped token just for the widget), then place it from your launcher's widget picker. It's network-backed against your instance (a native widget can't reach the WebView's offline cache), showing the last fetched snapshot with a "can't reach server" note when offline.
 
 ## Voice control & integrations
 
