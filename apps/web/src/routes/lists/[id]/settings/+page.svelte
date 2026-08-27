@@ -11,6 +11,7 @@
 	import { ApiError } from '$lib/api/client';
 	import { buildPasscodeHash } from '$lib/passcode';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
+	import { consumeListOrigin } from '$lib/nav-direction';
 	import IconPicker from '$lib/components/IconPicker.svelte';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -32,6 +33,9 @@
 	let settingPasscode = $state(false);
 	let draftPin = $state('');
 	let savingPasscode = $state(false);
+	// See items/[itemId]/+page.svelte's `cameFromList` — same rationale, used
+	// by the header back arrow below to prefer a real `history.back()`.
+	let cameFromList = false;
 
 	async function loadAll() {
 		loading = true;
@@ -54,8 +58,17 @@
 			void goto(resolve('/login'));
 			return;
 		}
+		cameFromList = consumeListOrigin();
 		void loadAll();
 	});
+
+	async function returnToList() {
+		if (cameFromList) {
+			window.history.back();
+			return;
+		}
+		await goto(resolve('/lists/[id]', { id: String(listId) }));
+	}
 
 	async function onupdate(
 		input: Partial<{
@@ -169,6 +182,7 @@
 		htmlTitle={list ? `${list.name} — Settings` : 'List settings'}
 		backHref={resolve('/lists/[id]', { id: String(listId) })}
 		backLabel="Back to list"
+		onBack={returnToList}
 	/>
 
 	{#if loading}

@@ -31,3 +31,28 @@ export function consumeSkipTransition(): boolean {
 	pendingSkip = false;
 	return skip;
 }
+
+// A screen reached by clicking into it from the list-detail page (item edit,
+// list settings) can return to that exact list with a real `history.back()`
+// instead of pushing a fresh navigation to it — SvelteKit only restores a
+// page's prior scroll position for a genuine back/forward (popstate)
+// traversal, and a real back also collapses the stale intermediate entry
+// instead of leaving it for the *next* back press to land on. Call
+// `markListOrigin()` in the entry link's `onclick` (same timing as
+// `markBackNavigation`, above) and `consumeListOrigin()` once when the
+// destination screen mounts. Left unset — so `consumeListOrigin()` reports
+// false — for any other way of reaching that screen, e.g. the native app's
+// `everylist://lists/<id>/items/<itemId>` widget deep link
+// (+layout.svelte's `appUrlOpen` handler), which has no list entry in this
+// tab's history to go back to.
+let pendingListOrigin = false;
+
+export function markListOrigin(): void {
+	pendingListOrigin = true;
+}
+
+export function consumeListOrigin(): boolean {
+	const origin = pendingListOrigin;
+	pendingListOrigin = false;
+	return origin;
+}

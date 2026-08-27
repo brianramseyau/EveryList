@@ -37,7 +37,7 @@
 </script>
 
 {#if href}
-	<a {href} class={linkClass}>{@render children()}</a>
+	<a {href} {onclick} class={linkClass}>{@render children()}</a>
 {:else}
 	<button type="button" {onclick} {disabled} class={buttonClass}>{@render children()}</button>
 {/if}

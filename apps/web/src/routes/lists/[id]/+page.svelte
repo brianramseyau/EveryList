@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { SvelteMap } from 'svelte/reactivity';
+	import { flip } from 'svelte/animate';
+	import { slide } from 'svelte/transition';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
@@ -19,6 +21,7 @@
 	import { subscribeToList } from '$lib/realtime';
 	import { onConflict, onFlushOutcome } from '$lib/offline/flush';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
+	import { markListOrigin } from '$lib/nav-direction';
 	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { longPress } from '$lib/actions/long-press';
@@ -131,6 +134,20 @@
 	// — checked once on mount since input capability doesn't change mid-session.
 	let isCoarsePointer = $state(false);
 
+	// Checked once on mount, same as isCoarsePointer — gates the check-off
+	// wipe animation and the flip/slide used to close the gap when a checked
+	// item leaves the list (see `toggleChecked` and the item `<li>` below).
+	let prefersReducedMotion = $state(false);
+
+	// Item ids mid check-off animation: `item.checked` has already flipped to
+	// true (so the checkbox and DB update happen immediately), but the row is
+	// kept out of `groups`' hide-checked filter and rendered with the
+	// animated wipe instead of the steady line-through classes, so checking
+	// an item off reads as "cross it off, then it slides away" instead of an
+	// instant disappearance when showChecked is off.
+	const CHECK_ANIMATION_MS = 320;
+	let checkAnimatingIds = new SvelteSet<number>();
+
 	// Store-specific aisle order, if the shopper has picked a store for this
 	// list on this device — purely local, see $lib/api/selected-store.ts.
 	let storeCategoryOverrides: Map<number, number> = new SvelteMap();
@@ -194,7 +211,7 @@
 	const groups = $derived.by(() => {
 		const byCategory = new SvelteMap<number | null, ItemDto[]>();
 		for (const item of visibleItems) {
-			if (item.checked && !showChecked) continue;
+			if (item.checked && !showChecked && !checkAnimatingIds.has(item.id)) continue;
 			const key = item.categoryId;
 			if (!byCategory.has(key)) byCategory.set(key, []);
 			byCategory.get(key)!.push(item);
@@ -307,6 +324,7 @@
 			return;
 		}
 		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+		prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		showChecked = getShowChecked(listId);
 		document.addEventListener('visibilitychange', lockOnHide);
 		void loadAll();
@@ -397,6 +415,12 @@
 		items = items.map((current) =>
 			current.id === item.id ? { ...current, checked: nextChecked } : current
 		);
+		if (nextChecked && !prefersReducedMotion) {
+			checkAnimatingIds.add(item.id);
+			setTimeout(() => checkAnimatingIds.delete(item.id), CHECK_ANIMATION_MS);
+		} else {
+			checkAnimatingIds.delete(item.id);
+		}
 		try {
 			await updateItem(listId, item.id, { checked: nextChecked });
 			void refreshBadgeCount();
@@ -736,7 +760,10 @@
 							Clear ALL List Items
 						</PopoutMenuItem>
 						<PopoutMenuItem divider onclick={() => (shareView = true)}>Share</PopoutMenuItem>
-						<PopoutMenuItem href={resolve('/lists/[id]/settings', { id: String(listId) })}>
+						<PopoutMenuItem
+							href={resolve('/lists/[id]/settings', { id: String(listId) })}
+							onclick={markListOrigin}
+						>
 							List Settings
 						</PopoutMenuItem>
 					{/if}
@@ -893,7 +920,12 @@
 									}}
 								>
 									{#each group.items as item (item.id)}
-										<li class="relative overflow-hidden rounded-lg" data-item-id={item.id}>
+										<li
+											class="relative overflow-hidden rounded-lg"
+											data-item-id={item.id}
+											animate:flip={{ duration: prefersReducedMotion ? 0 : 250 }}
+											out:slide={{ duration: prefersReducedMotion ? 0 : 200 }}
+										>
 											<div
 												class="absolute top-px bottom-px left-px flex w-20 items-center justify-center rounded-l-lg bg-red-600 text-white print:hidden"
 												aria-hidden="true"
@@ -915,13 +947,15 @@
 												use:swipeReveal={{
 													disabled: !isCoarsePointer,
 													onCommitRight: () => removeItem(item),
-													onCommitLeft: () =>
-														goto(
+													onCommitLeft: () => {
+														markListOrigin();
+														void goto(
 															resolve('/lists/[id]/items/[itemId]', {
 																id: String(listId),
 																itemId: String(item.id)
 															})
-														),
+														);
+													},
 													onTap: () => void toggleChecked(item)
 												}}
 											>
@@ -957,9 +991,10 @@
 												>
 													<div class="flex min-w-0 items-center gap-2">
 														<span
-															class="wrap-anywhere {item.checked
-																? 'text-gray-400 line-through'
-																: ''}"
+															class="wrap-anywhere"
+															class:item-strike-wipe={checkAnimatingIds.has(item.id)}
+															class:text-gray-400={item.checked && !checkAnimatingIds.has(item.id)}
+															class:line-through={item.checked && !checkAnimatingIds.has(item.id)}
 														>
 															{item.name}
 														</span>
@@ -1002,6 +1037,7 @@
 															id: String(listId),
 															itemId: String(item.id)
 														})}
+														onclick={markListOrigin}
 														aria-label={`Edit ${item.name}`}
 														data-reorder-ignore
 														class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 print:hidden"
@@ -1101,6 +1137,32 @@
 	@media (prefers-reduced-motion: no-preference) {
 		.check-glyph[aria-checked='true'] svg {
 			animation: check-settle 180ms ease-out;
+		}
+	}
+
+	/* Crosses the item name off left-to-right when it's checked, instead of
+	   the line-through classes applying instantly — a plain background
+	   (not a ::after overlay) so it paints correctly across wrapped lines
+	   too, the same way a background-color highlight would. Swapped back to
+	   the static text-gray-400/line-through classes once CHECK_ANIMATION_MS
+	   elapses (see `toggleChecked`), which is what actually keeps the strike
+	   once the list re-groups/hides the item. */
+	.item-strike-wipe {
+		background-image: linear-gradient(currentColor, currentColor);
+		background-repeat: no-repeat;
+		background-position: left center;
+		background-size: 0% 2px;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.item-strike-wipe {
+			animation: strike-wipe 320ms ease-out forwards;
+		}
+	}
+
+	@keyframes strike-wipe {
+		to {
+			background-size: 100% 2px;
 		}
 	}
 
