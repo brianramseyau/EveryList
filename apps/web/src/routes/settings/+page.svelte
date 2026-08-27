@@ -129,23 +129,23 @@
 	}
 
 	let resetting = $state(false);
+	let confirmingReset = $state(false);
 
 	async function handleResetApp() {
 		resetting = true;
 		await resetApp();
 	}
 
-	let checkingUpdate = $state(false);
-	let updateStatus = $state<'idle' | 'up-to-date' | 'unavailable'>('idle');
+	let updateStatus = $state<'idle' | 'checking' | 'updating' | 'up-to-date' | 'unavailable'>(
+		'idle'
+	);
 
 	async function handleCheckForUpdate() {
-		checkingUpdate = true;
-		updateStatus = 'idle';
+		updateStatus = 'checking';
 		const result = await checkForUpdate();
 		// 'updating' means a new service worker was found — it activates and reloads the page on
-		// its own (see +layout.svelte's onNeedReload), so there's nothing further to show here.
-		if (result === 'updating') return;
-		checkingUpdate = false;
+		// its own (see +layout.svelte's onNeedReload); the banner reports that a refresh is
+		// imminent instead of leaving the click with nothing to show.
 		updateStatus = result;
 	}
 
@@ -459,6 +459,12 @@
 					>
 						Update check unavailable right now — try again in a moment.
 					</p>
+				{:else if updateStatus === 'updating'}
+					<p
+						class="mb-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-700 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
+					>
+						An update is ready — it will apply when the app refreshes.
+					</p>
 				{/if}
 				<div class="flex items-center justify-between gap-4">
 					<span class="text-sm text-gray-600 dark:text-gray-300">
@@ -468,27 +474,54 @@
 					<button
 						type="button"
 						onclick={handleCheckForUpdate}
-						disabled={checkingUpdate}
-						class="shrink-0 text-sm text-gray-600 hover:underline disabled:opacity-50 dark:text-gray-400"
+						disabled={updateStatus === 'checking'}
+						class="w-28 shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-white hover:bg-primary-700 disabled:opacity-50"
 					>
-						{checkingUpdate ? 'Checking…' : 'Check for update'}
+						{updateStatus === 'checking' ? 'Updating...' : 'Update'}
 					</button>
 				</div>
 			</div>
-			<div class="flex items-center justify-between gap-4 px-4 py-3">
-				<span class="text-sm text-gray-600 dark:text-gray-300">
-					If the app looks broken or stuck after an update, this clears cached app data and reloads
-					— the on-device fix for a home-screen install with no devtools access.
-				</span>
-				<button
-					type="button"
-					onclick={handleResetApp}
-					disabled={resetting}
-					class="shrink-0 text-sm text-gray-600 hover:underline disabled:opacity-50 dark:text-gray-400"
+			{#if confirmingReset}
+				<div
+					class="flex items-center justify-between gap-2 rounded-lg border border-red-200 px-4 py-3 text-sm dark:border-red-900"
 				>
-					{resetting ? 'Resetting…' : 'Reset app'}
-				</button>
-			</div>
+					<p class="text-red-600 dark:text-red-400">
+						This clears cached app data and reloads the app. Continue?
+					</p>
+					<div class="flex shrink-0 gap-2">
+						<button
+							type="button"
+							onclick={handleResetApp}
+							disabled={resetting}
+							class="w-28 rounded-lg border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+						>
+							Reset
+						</button>
+						<button
+							type="button"
+							onclick={() => (confirmingReset = false)}
+							disabled={resetting}
+							class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			{:else}
+				<div class="flex items-center justify-between gap-4 px-4 py-3">
+					<span class="text-sm text-gray-600 dark:text-gray-300">
+						If the app looks broken or stuck after an update, this clears cached app data and
+						reloads — the on-device fix for a home-screen install with no devtools access.
+					</span>
+					<button
+						type="button"
+						onclick={() => (confirmingReset = true)}
+						class="w-28 shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+					>
+						Reset
+					</button>
+				</div>
+			{/if}
 			{#if profile?.id === 1}
 				<a
 					href={resolve('/debug')}
