@@ -29,6 +29,7 @@
 		subtitle,
 		backHref,
 		backLabel = 'Back',
+		onBack,
 		actions,
 		fixed = false,
 		extra,
@@ -39,11 +40,25 @@
 		subtitle?: string;
 		backHref?: ResolvedPathname;
 		backLabel?: string;
+		// Overrides a plain navigation to `backHref` with caller-supplied logic
+		// (e.g. a real `history.back()` when it's known to land on the right
+		// screen — see $lib/nav-direction's `consumeListOrigin`) — `backHref`
+		// is still required alongside it as the link's href (so the row stays
+		// a real, right-clickable/middle-clickable link) and as the fallback
+		// target for that logic to fall back on.
+		onBack?: () => void;
 		actions?: Snippet;
 		fixed?: boolean;
 		extra?: Snippet;
 		height?: number;
 	} = $props();
+
+	function handleBackClick(event: MouseEvent) {
+		markBackNavigation();
+		if (!onBack) return;
+		event.preventDefault();
+		onBack();
+	}
 
 	const documentTitle = $derived(htmlTitle ?? title);
 </script>
@@ -55,7 +70,7 @@
 				{#if backHref}
 					<a
 						href={backHref}
-						onclick={markBackNavigation}
+						onclick={handleBackClick}
 						aria-label={backLabel}
 						class="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-800 print:hidden"
 					>
@@ -74,6 +89,7 @@
 	{:else if backHref}
 		<a
 			href={backHref}
+			onclick={handleBackClick}
 			aria-label={backLabel}
 			class="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-primary-700 hover:bg-gray-100 dark:text-primary-400 dark:hover:bg-gray-800 print:hidden"
 		>

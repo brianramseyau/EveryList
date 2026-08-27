@@ -14,6 +14,7 @@
 	import { getDb } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
+	import { consumeListOrigin } from '$lib/nav-direction';
 	import Icon from '$lib/components/Icon.svelte';
 	import ItemFields from '$lib/components/ItemFields.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -33,6 +34,10 @@
 	let allLists = $state<ListDto[]>([]);
 	let draftMoveTargetId = $state<number | null>(null);
 	let moving = $state(false);
+	// Set once on mount from $lib/nav-direction's marker — true only when this
+	// page was reached by clicking into it from the list (not a cold/deep-link
+	// visit, e.g. the native widget's "open item" tap) — see `returnToList`.
+	let cameFromList = false;
 
 	// Only lists the user can actually write to — matches the "owner or editor" bar the server
 	// enforces on the destination in ItemsController#moveToList.
@@ -109,8 +114,24 @@
 			void goto(resolve('/login'));
 			return;
 		}
+		cameFromList = consumeListOrigin();
 		void loadAll();
 	});
+
+	// Prefers a real `history.back()` over pushing a fresh navigation back to
+	// the list — SvelteKit only restores the list's prior scroll position for
+	// an actual back/forward traversal (see nav-direction.ts), so this is what
+	// makes Save return you to where you were instead of the top of the list.
+	// Falls back to the plain push when this page wasn't reached from the
+	// list in the first place (`cameFromList` false), since there's then no
+	// list entry in history to go back to.
+	async function returnToList() {
+		if (cameFromList) {
+			window.history.back();
+			return;
+		}
+		await goto(resolve('/lists/[id]', { id: String(listId) }));
+	}
 
 	async function save() {
 		if (!draftName.trim() || saving) return;
@@ -128,7 +149,7 @@
 				categoryId: draftCategoryId,
 				storeId: draftStoreId
 			});
-			await goto(resolve('/lists/[id]', { id: String(listId) }));
+			await returnToList();
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to save item.';
 			saving = false;
@@ -186,6 +207,7 @@
 		htmlTitle={item ? item.name : 'Item'}
 		backHref={resolve('/lists/[id]', { id: String(listId) })}
 		backLabel="Back to list"
+		onBack={returnToList}
 	>
 		{#snippet actions()}
 			{#if item}

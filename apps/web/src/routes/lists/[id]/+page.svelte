@@ -21,6 +21,7 @@
 	import { subscribeToList } from '$lib/realtime';
 	import { onConflict, onFlushOutcome } from '$lib/offline/flush';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
+	import { markListOrigin } from '$lib/nav-direction';
 	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { longPress } from '$lib/actions/long-press';
@@ -759,7 +760,10 @@
 							Clear ALL List Items
 						</PopoutMenuItem>
 						<PopoutMenuItem divider onclick={() => (shareView = true)}>Share</PopoutMenuItem>
-						<PopoutMenuItem href={resolve('/lists/[id]/settings', { id: String(listId) })}>
+						<PopoutMenuItem
+							href={resolve('/lists/[id]/settings', { id: String(listId) })}
+							onclick={markListOrigin}
+						>
 							List Settings
 						</PopoutMenuItem>
 					{/if}
@@ -943,13 +947,15 @@
 												use:swipeReveal={{
 													disabled: !isCoarsePointer,
 													onCommitRight: () => removeItem(item),
-													onCommitLeft: () =>
-														goto(
+													onCommitLeft: () => {
+														markListOrigin();
+														void goto(
 															resolve('/lists/[id]/items/[itemId]', {
 																id: String(listId),
 																itemId: String(item.id)
 															})
-														),
+														);
+													},
 													onTap: () => void toggleChecked(item)
 												}}
 											>
@@ -1032,6 +1038,7 @@
 															id: String(listId),
 															itemId: String(item.id)
 														})}
+														onclick={markListOrigin}
 														aria-label={`Edit ${item.name}`}
 														data-reorder-ignore
 														class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 print:hidden"
