@@ -62,6 +62,22 @@ describe('PageHeader.svelte', () => {
 		expect(document.title).toBe('My Lists — EveryList');
 	});
 
+	it('renders a subtitle under the title, indented to align with the title when a back link is present', async () => {
+		render(PageHeader, { title: 'Stores', subtitle: 'Groceries', backHref: '/lists/1' });
+
+		const subtitle = page.getByText('Groceries');
+		await expect.element(subtitle).toBeInTheDocument();
+		expect(subtitle.element().className).toContain('pl-11');
+	});
+
+	it('renders a subtitle flush left when there is no back link', async () => {
+		render(PageHeader, { title: 'Stores', subtitle: 'Groceries' });
+
+		const subtitle = page.getByText('Groceries');
+		await expect.element(subtitle).toBeInTheDocument();
+		expect(subtitle.element().className).not.toContain('pl-11');
+	});
+
 	it('uses `htmlTitle` verbatim for the document title when given, ignoring `title`', async () => {
 		render(PageHeader, { title: 'Edit Favorite', htmlTitle: 'Milk' });
 

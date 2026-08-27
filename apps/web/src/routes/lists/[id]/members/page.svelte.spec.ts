@@ -162,7 +162,7 @@ describe('Members +page.svelte', () => {
 	it('links back to List Settings, not the list view', async () => {
 		render(MembersPage);
 
-		await expect.element(page.getByText('Groceries — Members')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 		const backLink = page.getByRole('link', { name: 'Back to settings' });
 		await expect.element(backLink).toBeInTheDocument();
 		expect(backLink.element().getAttribute('href')).toBe('/lists/5/settings');

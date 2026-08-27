@@ -75,7 +75,8 @@
 	class="mx-auto flex app-max-w flex-col gap-4 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"
 >
 	<PageHeader
-		title={list ? `${list.name} — Recently Deleted` : undefined}
+		title={list ? 'Recently Deleted' : undefined}
+		subtitle={list?.name}
 		htmlTitle={list ? `${list.name} recently deleted` : 'Recently Deleted'}
 		backHref={resolve('/lists/[id]', { id: String(listId) })}
 		backLabel="Back to list"

@@ -157,7 +157,7 @@ describe('Store aisle order +page.svelte', () => {
 	it('renders categories in default order under the store name', async () => {
 		render(StoreOrderPage);
 
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 		await expect.element(page.getByText('Produce')).toBeInTheDocument();
 		await expect.element(page.getByText('Dairy')).toBeInTheDocument();
 		await expect
@@ -170,7 +170,7 @@ describe('Store aisle order +page.svelte', () => {
 
 		render(StoreOrderPage);
 
-		await expect.element(page.getByText('Store — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 		await expect
 			.element(page.getByText('Everyone who shops at "" sees this order.'))
 			.toBeInTheDocument();
@@ -183,7 +183,7 @@ describe('Store aisle order +page.svelte', () => {
 		]);
 
 		render(StoreOrderPage);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 
 		const names = document.querySelectorAll('li > span:last-child');
 		expect([...names].map((el) => el.textContent)).toEqual(['Dairy', 'Produce']);
@@ -209,7 +209,7 @@ describe('Store aisle order +page.svelte', () => {
 		]);
 
 		render(StoreOrderPage);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 
 		// Starting order is [Produce(10), Dairy(11)]; drag Produce below Dairy,
 		// landing at the end.
@@ -228,7 +228,7 @@ describe('Store aisle order +page.svelte', () => {
 		]);
 
 		render(StoreOrderPage);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 
 		// Drag Dairy above Produce, landing at the start.
 		triggerDrop({ itemId: 11, beforeItemId: null, afterItemId: 10 });
@@ -246,7 +246,7 @@ describe('Store aisle order +page.svelte', () => {
 		]);
 
 		render(StoreOrderPage);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 
 		// No before/after neighbor — insertAt falls back to the end.
 		triggerDrop({ itemId: 10, beforeItemId: null, afterItemId: null });
@@ -269,14 +269,14 @@ describe('Store aisle order +page.svelte', () => {
 			.mockRejectedValueOnce(new TypeError('reload failed'));
 
 		render(StoreOrderPage);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 
 		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
 		await expect
 			.element(page.getByText('Failed to load store category order.'))
 			.toBeInTheDocument();
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 	});
 
 	it('reloads the list when reordering fails without an ApiError', async () => {
@@ -287,29 +287,29 @@ describe('Store aisle order +page.svelte', () => {
 		vi.mocked(reorderStoreCategories).mockRejectedValue(new TypeError('network down'));
 
 		render(StoreOrderPage);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 
 		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 	});
 
 	it('reloads the list when reordering fails with an ApiError', async () => {
 		vi.mocked(reorderStoreCategories).mockRejectedValue(new ApiError(500, 'Could not save'));
 
 		render(StoreOrderPage);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 
 		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
 		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(2);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 	});
 
 	it('disables the reset button when the store has no custom order', async () => {
 		render(StoreOrderPage);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 
 		await expect
 			.element(page.getByRole('button', { name: 'Reset to default order' }))
@@ -323,7 +323,7 @@ describe('Store aisle order +page.svelte', () => {
 		]);
 
 		render(StoreOrderPage);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 
 		const resetButton = page.getByRole('button', { name: 'Reset to default order' });
 		await expect.element(resetButton).not.toBeDisabled();
@@ -348,12 +348,12 @@ describe('Store aisle order +page.svelte', () => {
 		vi.mocked(resetStoreCategoryOrder).mockRejectedValue(new TypeError('network down'));
 
 		render(StoreOrderPage);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Reset to default order' }).click();
 
 		await expect.poll(() => vi.mocked(fetchStoreCategoryOrder).mock.calls.length).toBe(2);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 	});
 
 	it('reloads the list when resetting fails, surfacing the reload error if that also fails', async () => {
@@ -366,13 +366,13 @@ describe('Store aisle order +page.svelte', () => {
 			.mockRejectedValueOnce(new TypeError('reload failed'));
 
 		render(StoreOrderPage);
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Reset to default order' }).click();
 
 		await expect
 			.element(page.getByText('Failed to load store category order.'))
 			.toBeInTheDocument();
-		await expect.element(page.getByText('Walmart — Aisle order')).toBeInTheDocument();
+		await expect.element(page.getByText('Aisle order')).toBeInTheDocument();
 	});
 });

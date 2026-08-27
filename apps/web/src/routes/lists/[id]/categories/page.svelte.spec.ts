@@ -140,7 +140,7 @@ describe('Categories +page.svelte', () => {
 	it('links back to List Settings, not the list view', async () => {
 		render(CategoriesPage);
 
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 		const backLink = page.getByRole('link', { name: 'Back to settings' });
 		await expect.element(backLink).toBeInTheDocument();
 		expect(backLink.element().getAttribute('href')).toBe('/lists/1/settings');
@@ -167,7 +167,7 @@ describe('Categories +page.svelte', () => {
 	it('only shows Delete for list-scoped categories, not global defaults', async () => {
 		render(CategoriesPage);
 
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 		const deleteButtons = page.getByRole('button', { name: 'Delete' });
 		await expect.element(deleteButtons).toBeInTheDocument();
 		await expect.poll(async () => (await deleteButtons.all()).length).toBe(1);
@@ -177,7 +177,7 @@ describe('Categories +page.svelte', () => {
 		vi.mocked(updateCategory).mockResolvedValue({ ...produce, name: 'Fruits & Veg' });
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		// Textbox order: one per category row — Produce is the first row.
 		const nameInput = page.getByRole('textbox').nth(0);
@@ -190,7 +190,7 @@ describe('Categories +page.svelte', () => {
 
 	it('does not save on blur when the name was not changed', async () => {
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		const nameInput = page.getByRole('textbox').nth(0);
 		nameInput.element().focus();
@@ -203,7 +203,7 @@ describe('Categories +page.svelte', () => {
 		vi.mocked(updateCategory).mockResolvedValue(undefined);
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		const nameInput = page.getByRole('textbox').nth(0);
 		await nameInput.fill('Fruits & Veg');
@@ -218,7 +218,7 @@ describe('Categories +page.svelte', () => {
 		vi.mocked(updateCategory).mockResolvedValue({ ...produce, icon: 'carrot' });
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Apple' }).click();
 		await page.getByPlaceholder('Search icons…').fill('carrot');
@@ -236,35 +236,35 @@ describe('Categories +page.svelte', () => {
 		vi.mocked(updateCategory).mockRejectedValue(new TypeError('network down'));
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Apple' }).click();
 		await page.getByPlaceholder('Search icons…').fill('carrot');
 		await page.getByRole('button', { name: 'Carrot', exact: true }).click();
 
 		await expect.poll(() => vi.mocked(fetchCategories).mock.calls.length).toBe(2);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 	});
 
 	it('reloads the list when saving a category fails with an ApiError', async () => {
 		vi.mocked(updateCategory).mockRejectedValue(new ApiError(500, 'Could not save'));
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Apple' }).click();
 		await page.getByPlaceholder('Search icons…').fill('carrot');
 		await page.getByRole('button', { name: 'Carrot', exact: true }).click();
 
 		await expect.poll(() => vi.mocked(fetchCategories).mock.calls.length).toBe(2);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 	});
 
 	it('deletes a list-scoped category', async () => {
 		vi.mocked(deleteCategory).mockResolvedValue(undefined);
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Delete' }).click();
 
@@ -275,24 +275,24 @@ describe('Categories +page.svelte', () => {
 		vi.mocked(deleteCategory).mockRejectedValue(new TypeError('network down'));
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Delete' }).click();
 
 		await expect.poll(() => vi.mocked(fetchCategories).mock.calls.length).toBe(2);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 	});
 
 	it('reloads the list when deleting a category fails with an ApiError', async () => {
 		vi.mocked(deleteCategory).mockRejectedValue(new ApiError(500, 'Could not delete'));
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Delete' }).click();
 
 		await expect.poll(() => vi.mocked(fetchCategories).mock.calls.length).toBe(2);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 	});
 
 	// Invokes the onDrop handler SortableJS would have called on a real drop
@@ -312,7 +312,7 @@ describe('Categories +page.svelte', () => {
 		vi.mocked(reorderCategories).mockResolvedValue([custom, produce]);
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		// Starting order is [Produce(10), Pet Supplies(11)]; drag Produce below
 		// Pet Supplies, landing at the end.
@@ -326,7 +326,7 @@ describe('Categories +page.svelte', () => {
 		vi.mocked(reorderCategories).mockResolvedValue([custom, produce]);
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		// Drag Pet Supplies above Produce, landing at the start.
 		triggerDrop({ itemId: 11, beforeItemId: null, afterItemId: 10 });
@@ -339,7 +339,7 @@ describe('Categories +page.svelte', () => {
 		vi.mocked(reorderCategories).mockResolvedValue([produce, custom]);
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		// No before/after neighbor — insertAt falls back to the end.
 		triggerDrop({ itemId: 10, beforeItemId: null, afterItemId: null });
@@ -352,7 +352,7 @@ describe('Categories +page.svelte', () => {
 		vi.mocked(reorderCategories).mockRejectedValue(new TypeError('network down'));
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
@@ -363,7 +363,7 @@ describe('Categories +page.svelte', () => {
 		vi.mocked(reorderCategories).mockRejectedValue(new ApiError(500, 'Could not reorder'));
 
 		render(CategoriesPage);
-		await expect.element(page.getByText('Groceries — Categories')).toBeInTheDocument();
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
 
 		triggerDrop({ itemId: 10, beforeItemId: 11, afterItemId: null });
 
