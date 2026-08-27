@@ -62,40 +62,66 @@ describe('orientation (browser)', () => {
 		matchMediaSpy.mockRestore();
 	});
 
-	it('applyOrientation calls lock() with the requested orientation', async () => {
+	it('applyOrientation calls lock() with the requested orientation when standalone', async () => {
 		const lockSpy = vi.spyOn(screen.orientation, 'lock').mockResolvedValue(undefined);
+		vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: true } as MediaQueryList);
 
-		await applyOrientation('portrait');
+		const result = await applyOrientation('portrait');
 
 		expect(lockSpy).toHaveBeenCalledWith('portrait');
+		expect(result).toEqual({ status: 'locked', orientation: 'portrait' });
 	});
 
 	it('applyOrientation calls unlock() for "automatic"', async () => {
 		const unlockSpy = vi.spyOn(screen.orientation, 'unlock').mockImplementation(() => {});
 
-		await applyOrientation('automatic');
+		const result = await applyOrientation('automatic');
 
 		expect(unlockSpy).toHaveBeenCalled();
+		expect(result).toEqual({ status: 'unlocked' });
 	});
 
-	it('applyOrientation swallows a lock() rejection (e.g. not running standalone)', async () => {
+	it('applyOrientation reports a lock() rejection (e.g. system Auto-rotate off on Android)', async () => {
+		vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: true } as MediaQueryList);
 		vi.spyOn(screen.orientation, 'lock').mockRejectedValue(new Error('NotSupportedError'));
 
-		await expect(applyOrientation('landscape')).resolves.toBeUndefined();
+		const result = await applyOrientation('landscape');
+
+		expect(result).toEqual({ status: 'failed', reason: 'rejected' });
+	});
+
+	it('applyOrientation reports not-standalone in a plain browser tab without calling lock()', async () => {
+		const lockSpy = vi.spyOn(screen.orientation, 'lock').mockResolvedValue(undefined);
+
+		const result = await applyOrientation('portrait');
+
+		expect(result).toEqual({ status: 'failed', reason: 'not-standalone' });
+		expect(lockSpy).not.toHaveBeenCalled();
+	});
+
+	it('applyOrientation reports no-api when the lock method is absent (e.g. Safari)', async () => {
+		vi.stubGlobal('screen', { orientation: { type: 'portrait-primary', angle: 0 } });
+
+		const result = await applyOrientation('portrait');
+
+		expect(result).toEqual({ status: 'failed', reason: 'no-api' });
 	});
 
 	it('setOrientationPreference persists the choice and applies it', async () => {
 		const lockSpy = vi.spyOn(screen.orientation, 'lock').mockResolvedValue(undefined);
+		vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: true } as MediaQueryList);
 
-		await setOrientationPreference('portrait');
+		const result = await setOrientationPreference('portrait');
 
 		expect(window.localStorage.getItem('everylist:orientation')).toBe('portrait');
 		expect(getOrientationPreference()).toBe('portrait');
 		expect(lockSpy).toHaveBeenCalledWith('portrait');
+		expect(result).toEqual({ status: 'locked', orientation: 'portrait' });
 	});
 
 	it('initOrientation applies whatever preference is already stored', async () => {
 		const lockSpy = vi.spyOn(screen.orientation, 'lock').mockResolvedValue(undefined);
+		vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: true } as MediaQueryList);
 		window.localStorage.setItem('everylist:orientation', 'landscape');
 
 		await initOrientation();
@@ -122,35 +148,40 @@ describe('orientation (native)', () => {
 		vi.mocked(isNativePlatform).mockReturnValue(true);
 		vi.mocked(ScreenOrientation.lock).mockResolvedValue(undefined);
 
-		await applyOrientation('portrait');
+		const result = await applyOrientation('portrait');
 
 		expect(ScreenOrientation.lock).toHaveBeenCalledWith({ orientation: 'portrait' });
+		expect(result).toEqual({ status: 'locked', orientation: 'portrait' });
 	});
 
 	it('applyOrientation unlocks via the native plugin for "automatic"', async () => {
 		vi.mocked(isNativePlatform).mockReturnValue(true);
 		vi.mocked(ScreenOrientation.unlock).mockResolvedValue(undefined);
 
-		await applyOrientation('automatic');
+		const result = await applyOrientation('automatic');
 
 		expect(ScreenOrientation.unlock).toHaveBeenCalled();
+		expect(result).toEqual({ status: 'unlocked' });
 	});
 
-	it('applyOrientation swallows a native lock() rejection', async () => {
+	it('applyOrientation reports a native lock() rejection', async () => {
 		vi.mocked(isNativePlatform).mockReturnValue(true);
 		vi.mocked(ScreenOrientation.lock).mockRejectedValue(new Error('not available'));
 
-		await expect(applyOrientation('landscape')).resolves.toBeUndefined();
+		const result = await applyOrientation('landscape');
+
+		expect(result).toEqual({ status: 'failed', reason: 'rejected' });
 	});
 
 	it('setOrientationPreference persists and locks via the native plugin', async () => {
 		vi.mocked(isNativePlatform).mockReturnValue(true);
 		vi.mocked(ScreenOrientation.lock).mockResolvedValue(undefined);
 
-		await setOrientationPreference('landscape');
+		const result = await setOrientationPreference('landscape');
 
 		expect(window.localStorage.getItem('everylist:orientation')).toBe('landscape');
 		expect(ScreenOrientation.lock).toHaveBeenCalledWith({ orientation: 'landscape' });
+		expect(result).toEqual({ status: 'locked', orientation: 'landscape' });
 	});
 
 	it('initOrientation applies the stored preference via the native plugin', async () => {

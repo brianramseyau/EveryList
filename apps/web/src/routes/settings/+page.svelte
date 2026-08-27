@@ -42,6 +42,7 @@
 	let canLockOrientationNow = $state(false);
 	let supportsOrientationLock = $state(false);
 	let isNative = $state(false);
+	let orientationFeedback = $state<string | null>(null);
 	let serverUrl = $state('');
 	let nativeInfo = $state<{ version: string; build: string } | null>(null);
 
@@ -75,9 +76,29 @@
 		setAccentPreference(preference);
 	}
 
-	function chooseOrientation(preference: OrientationPreference) {
+	async function chooseOrientation(preference: OrientationPreference) {
 		orientationPreference = preference;
-		void setOrientationPreference(preference);
+		orientationFeedback = null;
+		// Not standalone, not native → the static install/unsupported hint below
+		// already explains why the lock can't take. Don't double up.
+		if (!canLockOrientationNow && !isNative) return;
+		const result = await setOrientationPreference(preference);
+		if (result.status !== 'failed') return;
+		// lock() is a silently-rejecting API on several platforms (Chrome
+		// Android rejects when the device's Auto-rotate is off, and on many
+		// builds even in an installed PWA). Say what actually happened instead
+		// of letting the control look broken — see the AGENTS.md postmortem.
+		if (result.reason === 'no-api') {
+			orientationFeedback =
+				"Screen orientation lock isn't supported in this browser — it only works in the native app.";
+		} else {
+			// 'rejected' — the only other failure reachable past the standalone
+			// gate above (a not-standalone result would have been returned
+			// before this, when canLockOrientationNow was false).
+			orientationFeedback = isNative
+				? "This device didn't allow locking the screen orientation."
+				: "Your device's screen rotation (Auto-rotate) may be off — turn it on in your system settings, then rotate your phone once. For a guaranteed lock, use the native app.";
+		}
 	}
 
 	async function handleLogout() {
@@ -314,6 +335,9 @@
 					Screen orientation lock isn't supported in this browser — it only works in the native app.
 				{/if}
 			</p>
+		{/if}
+		{#if orientationFeedback}
+			<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">{orientationFeedback}</p>
 		{/if}
 	</section>
 

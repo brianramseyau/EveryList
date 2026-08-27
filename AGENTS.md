@@ -238,6 +238,47 @@ added `alexa.*` (and #122/#130 added `debug`, `categories.bulkImport`, `items.mo
   change — diff `git log -1` on `apps/api/.adonisjs/server/routes.d.ts` against `start/routes.ts`
   before relying on generated types for a new route.
 
+### Android PWA orientation lock silently no-ops — `screen.orientation.lock()` rejects in cases the app can't control
+
+**Status (2026-08-27): platform limitation, mitigated in code (not fixed at the root — there's no web-side fix).**
+
+A user reporting "orientation lock still not working on the Android PWA" after #132 (which fixed the
+*native* app via `@capacitor/screen-orientation`) was hitting the Web Screen Orientation API's Android
+behavior, not a code bug. On Chrome/Android the PWA path calls `screen.orientation.lock('portrait'|'landscape')`,
+which:
+
+- **Rejects when the device's system Auto-rotate is OFF** — the most common real-world cause, and
+  exactly what the user had. Nothing on the page can override the OS setting.
+- **Rejects in a plain browser tab** (`NotSupportedError: lock() is not available on this device`) —
+  the app already detected this and showed the "install to your home screen" hint.
+- **Rejects even in an installed standalone PWA on many Chrome builds** — the W3C pre-lock conditions
+  allow user agents to require element-level fullscreen; Chrome frequently does.
+- The one thing Android *reliably* honors for an installed PWA is the web-manifest `orientation`
+  member, but it's baked into the WebAPK at **install** time — it can't express a per-user runtime
+  Auto/Portrait/Landscape choice without a reinstall. (Don't "fix" this by adding `"orientation"` to
+  `pwa.config.mjs`: it would break Landscape/Auto on Android and the installed copy still wouldn't
+  change until reinstall.)
+
+**Fix (mitigation):** `applyOrientation`/`setOrientationPreference` no longer swallow the outcome —
+they return an `OrientationLockResult` (`{ status: 'locked' }` | `{ status: 'unlocked' }` |
+`{ status: 'failed', reason: 'no-api' | 'not-standalone' | 'rejected' }`). Settings uses it to show an
+honest, actionable note when the lock didn't take: for a rejected standalone-PWA lock it says
+"Auto-rotate may be off — turn it on, then rotate your phone once; use the native app for a guaranteed
+lock", and for an absent API (iOS PWA) it says orientation lock only works in the native app. Boot-time
+reapplication (`initOrientation` in `+layout.svelte`) stays silent — only the explicit user action in
+Settings surfaces feedback.
+
+**What this means for future work:**
+
+- `applyOrientation` never throws; the return type is the contract. Don't reintroduce the
+  swallow-everything `void` shape, or the Android PWA control goes back to silently doing nothing.
+- Don't "fix" the PWA lock with `requestFullscreen()` (the classic game-dev workaround): the lock is
+  released when fullscreen exits, and a shopping-list app shouldn't run element-fullscreen.
+- If a regression report says the Android PWA "still rotates after picking Portrait": first check
+  whether Settings now shows the amber Auto-rotate note — if it doesn't, check that `applyOrientation`
+  still returns the result and that `chooseOrientation` in `routes/settings/+page.svelte` still gates
+  on `canLockOrientationNow` (a regression there would reproduce the exact original symptom).
+
 ## Working conventions
 
 - Full-stack features go migration → backend (model/validator/controller/policy) → shared DTO → frontend, in that order — see any `Phase 6:` commit for the pattern.

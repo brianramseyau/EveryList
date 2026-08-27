@@ -9,6 +9,17 @@ import { ScreenOrientation } from '@capacitor/screen-orientation';
 
 export type OrientationPreference = 'automatic' | 'portrait' | 'landscape';
 
+/** What actually happened when `applyOrientation`/`setOrientationPreference` ran.
+ * Settings uses this to say something honest when a lock didn't take — the Web
+ * Screen Orientation API can reject in cases the old all-swallowing version
+ * left invisible (notably Chrome Android: `lock()` rejects when the device's
+ * system Auto-rotate is off, and rejects even in an installed PWA on many
+ * builds — see the PWA orientation postmortem in AGENTS.md). */
+export type OrientationLockResult =
+	| { status: 'locked'; orientation: 'portrait' | 'landscape' }
+	| { status: 'unlocked' }
+	| { status: 'failed'; reason: 'no-api' | 'not-standalone' | 'rejected' };
+
 const STORAGE_KEY = 'everylist:orientation';
 const VALID_PREFERENCES: readonly OrientationPreference[] = ['automatic', 'portrait', 'landscape'];
 
@@ -58,14 +69,17 @@ export function supportsScreenOrientationLock(): boolean {
  * Capacitor screen-orientation plugin (the Web `screen.orientation.lock()` API
  * is unimplemented in iOS WKWebView and unreliable in Android's WebView); the
  * browser/PWA path uses the Screen Orientation API. Never throws: unsupported
- * browsers and the in-browser-tab rejection are both expected, no-op outcomes,
- * not errors — mirrors $lib/theme.ts's and $lib/accent.ts's `hasWindow()` no-op
- * convention. */
-export async function applyOrientation(preference: OrientationPreference): Promise<void> {
-	if (!hasWindow()) return;
+ * browsers, the in-browser-tab rejection, and the auto-rotate-off rejection
+ * are all expected, non-actionable outcomes, not errors — but they're reported
+ * back via the result so callers can say so honestly instead of the lock
+ * silently no-oping (mirrors $lib/theme.ts's and $lib/accent.ts's `hasWindow()`
+ * no-op convention). */
+export async function applyOrientation(
+	preference: OrientationPreference
+): Promise<OrientationLockResult> {
+	if (!hasWindow()) return { status: 'unlocked' };
 	if (Capacitor.isNativePlatform()) {
-		await applyNativeOrientation(preference);
-		return;
+		return applyNativeOrientation(preference);
 	}
 	const orientation = screen.orientation as
 		| (ScreenOrientation & {
@@ -73,21 +87,29 @@ export async function applyOrientation(preference: OrientationPreference): Promi
 				unlock?: () => void;
 		  })
 		| undefined;
-	// Only reachable on a browser with no Screen Orientation API at all —
-	// every real test browser (and every browser this PWA targets) has one,
-	// so this can't be exercised without literally deleting the global.
-	/* v8 ignore next */
-	if (!orientation) return;
+	if (!orientation?.lock) return { status: 'failed', reason: 'no-api' };
 
 	try {
 		if (preference === 'automatic') {
 			orientation.unlock?.();
-		} else {
-			await orientation.lock?.(preference);
+			return { status: 'unlocked' };
 		}
+		// `lock()` only succeeds while the app is running in a standalone/
+		// fullscreen display mode (an installed PWA) — a plain browser tab
+		// rejects it. Checked up front (and mirrored by canLockOrientation) so
+		// the failure is reported as "not installed" rather than a generic
+		// rejection, which has a different remedy.
+		if (!window.matchMedia('(display-mode: standalone)').matches) {
+			return { status: 'failed', reason: 'not-standalone' };
+		}
+		await orientation.lock(preference);
+		return { status: 'locked', orientation: preference };
 	} catch {
-		// Unsupported browser, or locked outside standalone/fullscreen mode —
-		// both expected, non-actionable outcomes; see canLockOrientation().
+		// Chrome Android rejects when the device's system Auto-rotate is off;
+		// some builds reject even in an installed PWA. Expected, non-actionable
+		// from inside the page — reported so Settings can point the user at the
+		// real fix (turn on Auto-rotate) or the native app.
+		return { status: 'failed', reason: 'rejected' };
 	}
 }
 
@@ -96,23 +118,28 @@ export async function applyOrientation(preference: OrientationPreference): Promi
  * Android and the equivalent UIKit rotation on iOS. `lock()` can still fail
  * (e.g. an orientation not declared in the iOS project's
  * `UISupportedInterfaceOrientations`, or Android 16's large-screen restriction),
- * so it's wrapped in the same swallow-on-failure convention as the web branch. */
-async function applyNativeOrientation(preference: OrientationPreference): Promise<void> {
+ * so it's wrapped in the same report-don't-throw convention as the web branch. */
+async function applyNativeOrientation(
+	preference: OrientationPreference
+): Promise<OrientationLockResult> {
 	try {
 		if (preference === 'automatic') {
 			await ScreenOrientation.unlock();
-		} else {
-			await ScreenOrientation.lock({ orientation: preference });
+			return { status: 'unlocked' };
 		}
+		await ScreenOrientation.lock({ orientation: preference });
+		return { status: 'locked', orientation: preference };
 	} catch {
-		// Orientation unavailable/undeclared — expected, non-actionable outcome.
+		return { status: 'failed', reason: 'rejected' };
 	}
 }
 
-export async function setOrientationPreference(preference: OrientationPreference): Promise<void> {
-	if (!hasWindow()) return;
+export async function setOrientationPreference(
+	preference: OrientationPreference
+): Promise<OrientationLockResult> {
+	if (!hasWindow()) return { status: 'unlocked' };
 	window.localStorage.setItem(STORAGE_KEY, preference);
-	await applyOrientation(preference);
+	return applyOrientation(preference);
 }
 
 /** Re-applies whatever preference is already stored — called on app boot

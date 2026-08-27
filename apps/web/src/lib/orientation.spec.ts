@@ -25,8 +25,8 @@ describe('orientation (no window)', () => {
 	});
 
 	it('applyOrientation, setOrientationPreference, and initOrientation are no-ops without throwing', async () => {
-		await expect(applyOrientation('portrait')).resolves.toBeUndefined();
-		await expect(setOrientationPreference('landscape')).resolves.toBeUndefined();
+		await expect(applyOrientation('portrait')).resolves.toEqual({ status: 'unlocked' });
+		await expect(setOrientationPreference('landscape')).resolves.toEqual({ status: 'unlocked' });
 		await expect(initOrientation()).resolves.toBeUndefined();
 	});
 });

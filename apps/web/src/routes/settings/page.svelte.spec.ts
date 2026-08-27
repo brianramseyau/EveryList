@@ -204,6 +204,9 @@ describe('Settings +page.svelte', () => {
 
 	it('switches the screen orientation preference and reflects the choice in the radio group', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		const matchMediaSpy = vi
+			.spyOn(window, 'matchMedia')
+			.mockReturnValue({ matches: true } as MediaQueryList);
 		const lockSpy = vi.spyOn(screen.orientation, 'lock').mockResolvedValue(undefined);
 
 		render(SettingsPage);
@@ -220,6 +223,7 @@ describe('Settings +page.svelte', () => {
 
 		window.localStorage.removeItem('everylist:orientation');
 		lockSpy.mockRestore();
+		matchMediaSpy.mockRestore();
 	});
 
 	it('shows an install hint when orientation locking is unavailable in a plain browser tab', async () => {
@@ -234,6 +238,60 @@ describe('Settings +page.svelte', () => {
 				})
 			)
 			.toBeInTheDocument();
+
+		// Picking an orientation in a plain tab stays silent — the install hint
+		// above already explains the remedy; don't double up with the guidance note.
+		await page.getByRole('radio', { name: 'Portrait' }).click();
+		await expect.element(page.getByText(/Auto-rotate/)).not.toBeInTheDocument();
+	});
+
+	it('shows an auto-rotate guidance note when a standalone PWA lock is rejected', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		const matchMediaSpy = vi
+			.spyOn(window, 'matchMedia')
+			.mockReturnValue({ matches: true } as MediaQueryList);
+		vi.spyOn(screen.orientation, 'lock').mockRejectedValue(new Error('NotSupportedError'));
+
+		render(SettingsPage);
+
+		await page.getByRole('radio', { name: 'Portrait' }).click();
+
+		await expect.element(page.getByText(/Auto-rotate/)).toBeInTheDocument();
+		matchMediaSpy.mockRestore();
+	});
+
+	it('shows a not-supported note when the lock API is absent even standalone (e.g. iOS PWA)', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		const matchMediaSpy = vi
+			.spyOn(window, 'matchMedia')
+			.mockReturnValue({ matches: true } as MediaQueryList);
+		vi.stubGlobal('screen', { orientation: { type: 'landscape-primary', angle: 0 } });
+
+		render(SettingsPage);
+
+		await page.getByRole('radio', { name: 'Landscape' }).click();
+
+		await expect
+			.element(
+				page.getByText("Screen orientation lock isn't supported in this browser", {
+					exact: false
+				})
+			)
+			.toBeInTheDocument();
+		matchMediaSpy.mockRestore();
+	});
+
+	it('shows a note when the native orientation lock fails', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+		const { ScreenOrientation } = await import('@capacitor/screen-orientation');
+		vi.mocked(ScreenOrientation.lock).mockRejectedValue(new Error('not available'));
+
+		render(SettingsPage);
+
+		await page.getByRole('radio', { name: 'Portrait' }).click();
+
+		await expect.element(page.getByText(/This device didn't allow locking/)).toBeInTheDocument();
 	});
 
 	it('hides the install hint once running standalone (orientation locking is available)', async () => {
