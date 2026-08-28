@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import { slide } from 'svelte/transition';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
@@ -21,7 +21,7 @@
 	import { subscribeToList } from '$lib/realtime';
 	import { onConflict, onFlushOutcome } from '$lib/offline/flush';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
-	import { markListOrigin } from '$lib/nav-direction';
+	import { markListOrigin, rememberListScroll, consumeListScroll } from '$lib/nav-direction';
 	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { longPress } from '$lib/actions/long-press';
@@ -318,6 +318,15 @@
 		if (document.hidden) unlocked = false;
 	}
 
+	// Called from every click that navigates into item edit or list settings
+	// — see nav-direction.ts's `markListOrigin`/`rememberListScroll` for why
+	// saving/backing out of those screens needs both to get you back to
+	// exactly where you were.
+	function markListOriginAndScroll() {
+		markListOrigin();
+		rememberListScroll(listId, window.scrollY);
+	}
+
 	onMount(() => {
 		if (!getToken()) {
 			void goto(resolve('/login'));
@@ -327,7 +336,20 @@
 		prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		showChecked = getShowChecked(listId);
 		document.addEventListener('visibilitychange', lockOnHide);
-		void loadAll();
+		// A back-navigation into this page (see nav-direction.ts's
+		// `rememberListScroll`) has SvelteKit apply its own restored scroll
+		// position before this component's own data even starts loading — the
+		// page is still just the "Loading…" placeholder at that instant, too
+		// short to hold it, so the browser clamps to the top and nothing
+		// redoes it once the real content is back. Reapplying it ourselves
+		// once `loadAll` resolves (and Svelte has actually painted the
+		// result) is what makes that restore stick.
+		const rememberedScroll = consumeListScroll(listId);
+		void loadAll().then(async () => {
+			if (rememberedScroll === null) return;
+			await tick();
+			window.scrollTo(0, rememberedScroll);
+		});
 		unsubscribeRealtime = subscribeToList(listId, (event) => {
 			// Our own edit's broadcast (sent right after the flush clears `_dirty`)
 			// is suppressed — the optimistic update already reflects it, so
@@ -762,7 +784,7 @@
 						<PopoutMenuItem divider onclick={() => (shareView = true)}>Share</PopoutMenuItem>
 						<PopoutMenuItem
 							href={resolve('/lists/[id]/settings', { id: String(listId) })}
-							onclick={markListOrigin}
+							onclick={markListOriginAndScroll}
 						>
 							List Settings
 						</PopoutMenuItem>
@@ -948,7 +970,7 @@
 													disabled: !isCoarsePointer,
 													onCommitRight: () => removeItem(item),
 													onCommitLeft: () => {
-														markListOrigin();
+														markListOriginAndScroll();
 														void goto(
 															resolve('/lists/[id]/items/[itemId]', {
 																id: String(listId),
@@ -1037,7 +1059,7 @@
 															id: String(listId),
 															itemId: String(item.id)
 														})}
-														onclick={markListOrigin}
+														onclick={markListOriginAndScroll}
 														aria-label={`Edit ${item.name}`}
 														data-reorder-ignore
 														class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 print:hidden"

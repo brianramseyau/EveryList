@@ -7,7 +7,7 @@ import { ApiError } from '$lib/api/client';
 import type { SortableReorderParams } from '$lib/actions/sortable-reorder';
 import type { ConflictListener, FlushOutcomeListener } from '$lib/offline/flush';
 import { markSelfMutation, resetSelfMutationsForTesting } from '$lib/offline/self-mutations';
-import { consumeListOrigin } from '$lib/nav-direction';
+import { consumeListOrigin, rememberListScroll } from '$lib/nav-direction';
 
 // SortableJS drives real mouse/touch gestures against real layout, neither of
 // which a component test can reliably reproduce — its own behavior (does it
@@ -2107,6 +2107,36 @@ describe('List detail +page.svelte', () => {
 		document.removeEventListener('click', preventNav, { capture: true });
 
 		expect(consumeListOrigin()).toBe(true);
+	});
+
+	it('restores a remembered scroll position once the list has reloaded', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+		rememberListScroll(1, 400);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await expect.poll(() => scrollToSpy.mock.calls.length).toBeGreaterThan(0);
+		expect(scrollToSpy).toHaveBeenCalledWith(0, 400);
+
+		scrollToSpy.mockRestore();
+	});
+
+	it('leaves scroll alone when nothing was remembered for this list', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		expect(scrollToSpy).not.toHaveBeenCalled();
+
+		scrollToSpy.mockRestore();
 	});
 
 	it('toggles checked on a short tap anywhere on the row on a coarse-pointer device', async () => {
