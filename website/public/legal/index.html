@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — EveryList</title>
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://everylist.dev/legal">
+<meta property="og:title" content="Privacy Policy — EveryList">
+<meta property="og:description" content="EveryList doesn't run a backend or collect any data itself — your data lives only on the self-hosted server you connect the app to.">
+<meta property="og:image" content="https://everylist.dev/assets/og-image.png">
+<meta property="og:image:width" content="1024">
+<meta property="og:image:height" content="500">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Privacy Policy — EveryList">
+<meta name="twitter:image" content="https://everylist.dev/assets/og-image.png">
+<style>
+  :root {
+    --paper: #f6f5f1;
+    --ink: #201f1d;
+    --muted: #5b5954;
+    --accent: #0284C7;
+    --line: #e2e0da;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  header {
+    background: linear-gradient(135deg, #22D3EE 0%, #0284C7 100%);
+    padding: 48px 24px 40px;
+    color: #fff;
+  }
+  .brand {
+    max-width: 720px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .brand img { width: 40px; height: 40px; flex-shrink: 0; border-radius: 9px; }
+  .brand h1 { font-size: 22px; margin: 0; font-weight: 700; }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  h2 {
+    font-size: 20px;
+    margin: 40px 0 12px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+  }
+  h2:first-of-type { margin-top: 0; }
+  p, li { color: var(--ink); }
+  .muted { color: var(--muted); font-size: 15px; }
+  ul { padding-left: 22px; }
+  a { color: var(--accent); }
+  footer {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="../assets/icon.svg" alt="" aria-hidden="true">
+      <h1>EveryList</h1>
+    </div>
+  </header>
+
+  <main>
+    <p class="muted">Last updated: 2026-08-28</p>
+
+    <h2>Overview</h2>
+    <p>
+      EveryList is a self-hosted list app. The EveryList mobile and web app ("the App") is
+      published by Brian Ramsey ("we", "us"), but the App does not talk to any server we operate.
+      Instead, on first launch the App asks you for the address of a EveryList server — either one
+      you run yourself, or one operated by someone you trust — and everything the App does after
+      that happens directly between your device and that server.
+    </p>
+    <p>
+      Because of that design, this policy is split into what we (the App's developer) do, and what
+      happens on the server you choose to connect to, which is outside of our control.
+    </p>
+
+    <h2>What we collect</h2>
+    <p>
+      Nothing. We do not operate a backend for the App, do not run analytics or crash-reporting
+      services, do not show ads, and do not use third-party trackers of any kind. We have no
+      visibility into what you do in the App, what server you connect to, or what data that server
+      holds.
+    </p>
+
+    <h2>Data handled by your self-hosted server</h2>
+    <p>
+      When you set up the App with a server address, that server (not us) stores the data you give
+      it, which typically includes:
+    </p>
+    <ul>
+      <li>Your account email address, display name, and a salted hash of your password</li>
+      <li>The lists, categories, items, and stores you create, and any changes you make to them</li>
+      <li>Membership and invite information for lists you share with others</li>
+    </ul>
+    <p>
+      That data is controlled entirely by whoever operates the server you connected to — which may
+      be you. Review that operator's own policies (or your own setup) if you have questions about
+      how it's stored, backed up, or secured.
+    </p>
+
+    <h2>Data stored on your device</h2>
+    <p>
+      The App keeps a few things locally on your device so it can work offline and remember your
+      settings:
+    </p>
+    <ul>
+      <li>The server address you configured and your login session token</li>
+      <li>A local cache of your lists, items, and categories, so they're available offline and sync
+        back to your server once you're reconnected</li>
+    </ul>
+    <p>This data stays on your device and is never sent anywhere except the server you configured.</p>
+
+    <h2>Optional third-party integrations</h2>
+    <p>
+      If you choose to connect EveryList to Amazon Alexa or Home Assistant, your server issues a
+      personal access token for that integration. Any data exchanged then flows directly between
+      your server and that third-party service, governed by your own configuration and that
+      service's own privacy policy — not by us.
+    </p>
+
+    <h2>Children's privacy</h2>
+    <p>
+      The App is not directed at children under 13, and we do not knowingly collect information
+      from them — see "What we collect" above.
+    </p>
+
+    <h2>Changes to this policy</h2>
+    <p>
+      If this policy changes, we'll update the date at the top of this page. Continued use of the
+      App after a change means you accept the update.
+    </p>
+
+    <h2>Contact</h2>
+    <p>Questions about this policy: <a href="mailto:privacy@everylist.dev">privacy@everylist.dev</a></p>
+  </main>
+
+  <footer>
+    EveryList — <a href="https://everylist.dev">everylist.dev</a>
+  </footer>
+</body>
+</html>

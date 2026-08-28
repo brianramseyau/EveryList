@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EveryList — every list, always in sync</title>
+<meta name="description" content="EveryList is a free, self-hosted list app. Real-time shared lists, offline-first, learns your store's aisles, and installs on iOS, Android, and the web. No premium tier, ever.">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://everylist.dev">
+<meta property="og:title" content="EveryList — every list, always in sync">
+<meta property="og:description" content="A free, self-hosted list app. Real-time shared lists, offline-first, learns your store's aisles. No premium tier, ever.">
+<meta property="og:image" content="https://everylist.dev/assets/og-image.png">
+<meta property="og:image:width" content="1024">
+<meta property="og:image:height" content="500">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="EveryList — every list, always in sync">
+<meta name="twitter:description" content="A free, self-hosted list app. Real-time shared lists, offline-first, learns your store's aisles. No premium tier, ever.">
+<meta name="twitter:image" content="https://everylist.dev/assets/og-image.png">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f6f5f1;
+    --paper-raised: #ffffff;
+    --ink: #201f1d;
+    --ink-soft: #5b5954;
+    --line: #e2e0da;
+    --cyan: #22d3ee;
+    --blue: #0284c7;
+    --amber: #f59e0b;
+    --green: #10b981;
+    --purple: #7c6ef2;
+    --orange: #f97316;
+    --red: #ef4444;
+    --shadow: 0 20px 45px -25px rgba(32, 31, 29, 0.35);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #1b1d1f;
+      --paper-raised: #26282b;
+      --ink: #edeae3;
+      --ink-soft: #a8a49b;
+      --line: #37393c;
+      --shadow: 0 20px 45px -25px rgba(0, 0, 0, 0.6);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Manrope', -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, .wordmark {
+    font-family: 'Baloo 2', -apple-system, sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  .mono {
+    font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+  }
+
+  a { color: inherit; }
+
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ---------- Nav ---------- */
+
+  nav.topbar {
+    padding: 22px 0;
+  }
+  .topbar .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+  .brand img { width: 34px; height: 34px; border-radius: 8px; }
+  .brand span {
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .navlinks {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .navlinks a {
+    text-decoration: none;
+    color: var(--ink-soft);
+  }
+  .navlinks a:hover { color: var(--ink); }
+  .navlinks .cta {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 9px 18px;
+    border-radius: 999px;
+  }
+  .navlinks .cta:hover { color: var(--paper); }
+
+  /* ---------- Hero ---------- */
+
+  .hero { position: relative; overflow: hidden; padding: 40px 0 0; }
+  .hero-glow {
+    position: absolute;
+    top: -280px;
+    right: -220px;
+    width: 720px;
+    height: 720px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, var(--cyan), var(--blue) 65%, transparent 72%);
+    opacity: 0.28;
+    filter: blur(10px);
+    pointer-events: none;
+  }
+  .hero .wrap {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 56px;
+    align-items: center;
+    padding-top: 28px;
+    padding-bottom: 24px;
+  }
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--blue);
+    background: color-mix(in srgb, var(--blue) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--blue) 28%, transparent);
+    padding: 6px 14px;
+    border-radius: 999px;
+    margin-bottom: 22px;
+  }
+  @media (prefers-color-scheme: dark) {
+    .eyebrow { color: var(--cyan); }
+  }
+  .eyebrow .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+  }
+  h1.headline {
+    font-size: clamp(40px, 5.4vw, 62px);
+    font-weight: 800;
+    line-height: 1.03;
+    margin: 0 0 22px;
+  }
+  h1.headline .accent {
+    background: linear-gradient(100deg, var(--blue), var(--cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .sub {
+    font-size: 19px;
+    color: var(--ink-soft);
+    max-width: 46ch;
+    margin: 0 0 32px;
+  }
+  .cta-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 26px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 16px;
+    text-decoration: none;
+    border: 1px solid transparent;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-ghost {
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  .btn-ghost:hover { border-color: var(--ink-soft); }
+  .cta-note {
+    margin: 16px 0 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  /* ---------- Demo card (signature element) ---------- */
+
+  .demo-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    box-shadow: var(--shadow);
+    padding: 22px 22px 18px;
+    max-width: 380px;
+    margin: 0 auto;
+    transform: rotate(1.4deg);
+  }
+  .demo-topline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .demo-dot { width: 12px; height: 12px; border-radius: 4px; background: var(--green); flex-shrink: 0; }
+  .demo-title { font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 17px; flex: 1; }
+  .demo-count { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); }
+  .demo-cat {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--green);
+    border-bottom: 2px solid color-mix(in srgb, var(--green) 35%, transparent);
+    padding-bottom: 6px;
+    margin: 14px 0 10px;
+  }
+  .demo-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 0;
+  }
+  .demo-row .box {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    border: 2px solid var(--line);
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    animation: boxfill 6s infinite;
+  }
+  .demo-row .box svg {
+    width: 14px;
+    height: 14px;
+    stroke: #fff;
+    stroke-width: 3;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 20;
+    stroke-dashoffset: 20;
+    animation: drawcheck 6s infinite;
+  }
+  .demo-row .label {
+    font-size: 15.5px;
+    font-weight: 600;
+    animation: labelfade 6s infinite;
+  }
+  .demo-row.r2 .box, .demo-row.r2 .box svg, .demo-row.r2 .label { animation-delay: 0.9s; }
+  .demo-row.r3 .box, .demo-row.r3 .box svg, .demo-row.r3 .label { animation-delay: 1.8s; }
+
+  @keyframes boxfill {
+    0%, 6% { background: transparent; border-color: var(--line); }
+    12%, 88% { background: var(--green); border-color: var(--green); }
+    94%, 100% { background: transparent; border-color: var(--line); }
+  }
+  @keyframes drawcheck {
+    0%, 8% { stroke-dashoffset: 20; }
+    16%, 84% { stroke-dashoffset: 0; }
+    92%, 100% { stroke-dashoffset: 20; }
+  }
+  @keyframes labelfade {
+    0%, 6% { color: var(--ink); text-decoration: none; opacity: 1; }
+    12%, 88% { color: var(--ink-soft); text-decoration: line-through; opacity: 0.6; }
+    94%, 100% { color: var(--ink); text-decoration: none; opacity: 1; }
+  }
+  .demo-sync {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--line);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+  .demo-sync .pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 60%, transparent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 55%, transparent); }
+    70% { box-shadow: 0 0 0 8px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .demo-row .box, .demo-row .box svg, .demo-row .label, .demo-sync .pulse {
+      animation: none !important;
+    }
+    .demo-row.r1 .box { background: var(--green); border-color: var(--green); }
+    .demo-row.r1 .box svg { stroke-dashoffset: 0; }
+    .demo-row.r1 .label { color: var(--ink-soft); text-decoration: line-through; opacity: 0.6; }
+  }
+
+  /* ---------- Section shell ---------- */
+
+  section { padding: 88px 0; }
+  #features { padding-top: 40px; }
+  .section-head { max-width: 620px; margin: 0 0 48px; }
+  .kicker {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 10px;
+  }
+  h2.section-title {
+    font-size: clamp(28px, 3.4vw, 38px);
+    font-weight: 800;
+    margin: 0 0 14px;
+    line-height: 1.1;
+  }
+  .section-lede { font-size: 17px; color: var(--ink-soft); margin: 0; }
+
+  /* ---------- Features ---------- */
+
+  .features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .feature {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 26px 24px;
+  }
+  .feature .icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 16px;
+    color: #fff;
+  }
+  .feature .icon svg { width: 22px; height: 22px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .feature h3 { font-size: 18px; font-weight: 700; margin: 0 0 8px; }
+  .feature p { font-size: 15px; color: var(--ink-soft); margin: 0; }
+
+  /* ---------- Showcase ---------- */
+
+  .showcase-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 22px;
+  }
+  .phone {
+    background: var(--ink);
+    border-radius: 30px;
+    padding: 10px;
+    box-shadow: var(--shadow);
+  }
+  .phone img {
+    width: 100%;
+    display: block;
+    border-radius: 20px;
+  }
+  .phone-caption {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-top: 12px;
+  }
+
+  /* ---------- Self-hosted band ---------- */
+
+  .band {
+    background: linear-gradient(120deg, var(--blue), var(--cyan));
+    border-radius: 28px;
+    padding: 56px;
+    color: #fff;
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 40px;
+    align-items: center;
+  }
+  .band h2 { font-size: clamp(26px, 3vw, 34px); margin: 0 0 14px; font-weight: 800; }
+  .band p { font-size: 16.5px; opacity: 0.94; margin: 0; max-width: 52ch; }
+  .band-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .band-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    background: rgba(255,255,255,0.14);
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+
+  /* ---------- Footer ---------- */
+
+  footer { padding: 48px 0 60px; border-top: 1px solid var(--line); }
+  footer .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .foot-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+  .foot-brand img { width: 26px; height: 26px; border-radius: 6px; }
+  .footlinks { display: flex; gap: 22px; font-size: 14.5px; color: var(--ink-soft); }
+  .footlinks a { text-decoration: none; }
+  .footlinks a:hover { color: var(--ink); }
+
+  /* ---------- Responsive ---------- */
+
+  @media (max-width: 900px) {
+    .hero .wrap { grid-template-columns: 1fr; padding-top: 12px; }
+    .demo-card { margin-top: 8px; transform: none; }
+    .features { grid-template-columns: repeat(2, 1fr); }
+    .showcase-strip { grid-template-columns: repeat(2, 1fr); }
+    .band { grid-template-columns: 1fr; padding: 36px 26px; }
+  }
+  @media (max-width: 560px) {
+    .features { grid-template-columns: 1fr; }
+    .showcase-strip { grid-template-columns: 1fr; max-width: 320px; margin: 0 auto; }
+    section { padding: 64px 0; }
+    .navlinks .hide-mobile { display: none; }
+    .navlinks { gap: 14px; }
+    .navlinks .cta { padding: 9px 14px; font-size: 14px; white-space: nowrap; }
+  }
+</style>
+</head>
+<body>
+
+  <nav class="topbar">
+    <div class="wrap">
+      <a class="brand" href="/">
+        <img src="assets/icon.svg" alt="">
+        <span>EveryList</span>
+      </a>
+      <div class="navlinks">
+        <a href="#features" class="hide-mobile">Features</a>
+        <a href="#screens" class="hide-mobile">Screens</a>
+        <a href="https://github.com/brianramseyau/EveryList" class="cta"><span class="hide-mobile">View on </span>GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-glow" aria-hidden="true"></div>
+    <div class="wrap">
+      <div>
+        <span class="eyebrow"><span class="dot"></span>Self-hosted · One tier · Free forever</span>
+        <h1 class="headline">Every list,<br><span class="accent">always in sync.</span></h1>
+        <p class="sub">
+          Share lists in real time, keep checking things off with zero signal, and let it
+          learn your store's aisles — all running on a server you control, with nothing held
+          back behind a paywall.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/brianramseyau/EveryList">Self-host it</a>
+          <a class="btn btn-ghost" href="#features">See what it does</a>
+        </div>
+        <p class="cta-note">Installable on iOS, Android, and the web · Native apps coming to Google Play</p>
+      </div>
+
+      <div class="demo-card" role="img" aria-label="A demo list called Produce showing Bananas, Oat milk, and Sourdough being checked off one after another">
+        <div class="demo-topline">
+          <span class="demo-dot"></span>
+          <span class="demo-title">Groceries</span>
+          <span class="demo-count">3 items</span>
+        </div>
+        <p class="demo-cat">Produce</p>
+        <div class="demo-row r1">
+          <span class="box"><svg viewBox="0 0 20 20"><path d="M3 10l4.5 4.5L17 5"/></svg></span>
+          <span class="label">Bananas</span>
+        </div>
+        <div class="demo-row r2">
+          <span class="box"><svg viewBox="0 0 20 20"><path d="M3 10l4.5 4.5L17 5"/></svg></span>
+          <span class="label">Oat milk</span>
+        </div>
+        <div class="demo-row r3">
+          <span class="box"><svg viewBox="0 0 20 20"><path d="M3 10l4.5 4.5L17 5"/></svg></span>
+          <span class="label">Sourdough</span>
+        </div>
+        <div class="demo-sync"><span class="pulse"></span>Synced to everyone on this list — just now</div>
+      </div>
+    </div>
+  </header>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker">What it does</p>
+        <h2 class="section-title">Built for the list you actually share</h2>
+        <p class="section-lede">Six things EveryList does well, instead of a hundred things behind a subscription.</p>
+      </div>
+
+      <div class="features">
+        <div class="feature">
+          <div class="icon" style="background:var(--blue)"><svg viewBox="0 0 24 24"><path d="M7 12h10M7 7h10M7 17h6"/><circle cx="4" cy="12" r="1.2" fill="#fff" stroke="none"/><circle cx="4" cy="7" r="1.2" fill="#fff" stroke="none"/><circle cx="4" cy="17" r="1.2" fill="#fff" stroke="none"/></svg></div>
+          <h3>Real-time, for real</h3>
+          <p>Add milk on your phone, watch it land on theirs before you've put yours down — every list is shared live.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" style="background:var(--green)"><svg viewBox="0 0 24 24"><path d="M2 12a10 10 0 1 1 3 7"/><path d="M2 20v-5h5"/></svg></div>
+          <h3>Keeps working offline</h3>
+          <p>Check things off in a dead zone at the store. Everything queues up and syncs the moment you're back.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" style="background:var(--amber)"><svg viewBox="0 0 24 24"><path d="M4 4h16v6H4zM4 14h10v6H4zM17 14h3v6h-3z"/></svg></div>
+          <h3>Learns your aisles</h3>
+          <p>Pick your store and the list sorts itself to match its layout — it gets smarter about your items over time.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" style="background:var(--purple)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h3>A color for every list</h3>
+          <p>Groceries, the hardware store, Saturday's BBQ — each list gets its own color and icon so you spot it instantly.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" style="background:var(--red)"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg></div>
+          <h3>Yours to run</h3>
+          <p>Self-hosted, single tier, nothing locked behind an upsell. Your data lives on your server, full stop.</p>
+        </div>
+        <div class="feature">
+          <div class="icon" style="background:var(--orange)"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M10 18h4"/></svg></div>
+          <h3>Everywhere you are</h3>
+          <p>A real app on iOS, Android, and the web, plus voice control through Alexa or Home Assistant.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker">Take a look</p>
+        <h2 class="section-title">The app, not a mockup</h2>
+        <p class="section-lede">Every screen below is a real screenshot of EveryList running.</p>
+      </div>
+      <div class="showcase-strip">
+        <figure class="phone">
+          <img src="assets/lists.png" alt="My Lists screen showing Groceries, Hardware Store, and Weekend BBQ lists, each with its own color and icon">
+        </figure>
+        <figure class="phone">
+          <img src="assets/list-detail.png" alt="A Groceries list with items grouped under Produce, Dairy, and Pantry category headers, some checked off">
+        </figure>
+        <figure class="phone">
+          <img src="assets/sharing.png" alt="The sharing screen for inviting other people to a list">
+        </figure>
+        <figure class="phone">
+          <img src="assets/settings.png" alt="The settings screen">
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="band">
+        <div>
+          <h2>Run it yourself. Keep it yours.</h2>
+          <p>
+            EveryList ships as a single self-hosted container. Stand it up on your own hardware
+            or a small VPS, point the app at it, and every list, item, and photo stays on
+            infrastructure you own — never on ours, because we don't run one.
+          </p>
+        </div>
+        <ul class="band-list">
+          <li>$ docker compose up</li>
+          <li>→ one container, your data</li>
+          <li>→ no account with us, ever</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <a class="foot-brand" href="/">
+        <img src="assets/icon.svg" alt="">
+        EveryList
+      </a>
+      <div class="footlinks">
+        <a href="https://github.com/brianramseyau/EveryList">GitHub</a>
+        <a href="/legal">Privacy Policy</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
