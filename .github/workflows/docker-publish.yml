@@ -20,6 +20,16 @@ name: Docker Publish
 # for a commit that's already been verified. Tag releases should be cut from a commit that's
 # already on main for the same reason - tagging an arbitrary unverified commit bypasses that
 # guarantee.
+#
+# Multi-arch (amd64 + arm64): each platform builds on its own *native* runner
+# (ubuntu-latest / ubuntu-24.04-arm) rather than cross-compiling one arch under QEMU
+# emulation on a single amd64 runner - better-sqlite3's native addon (node-gyp) is exactly
+# the kind of build that's slow and occasionally flaky under emulation, so this was
+# deliberately deferred single-arch until there was a real arm64 target. There is now:
+# Oracle Cloud's Ampere A1 (Always Free tier) is arm64-only. Each platform job pushes its
+# image by digest only (no tag yet); the merge job then assembles one multi-arch manifest
+# list from both digests and applies the real tags to that - the standard
+# docker/build-push-action recipe for native-runner multi-platform builds.
 
 on:
   push:
@@ -35,13 +45,82 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-push:
-    name: Build & push image
-    runs-on: ubuntu-latest
+  build:
+    name: Build & push by digest (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute build metadata
+        # Baked into the image (ARG/ENV, not read at container startup) and served
+        # from GET /api/v1/meta - see foundational/PLAN_00_FOUNDATIONAL_PLAN.md §8/§9 - so the in-app
+        # Settings page footer can show exactly what build is running, which matters
+        # for anyone tracking a moving tag (nightly or a major-version pin).
+        id: buildinfo
+        run: |
+          echo "version=${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'nightly' }}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Turn "linux/arm64" into "linux-arm64" for use in a filename/artifact name
+        run: echo "PLATFORM_PAIR=${PLATFORM//\//-}" >> "$GITHUB_ENV"
+        env:
+          PLATFORM: ${{ matrix.platform }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            APP_VERSION=${{ steps.buildinfo.outputs.version }}
+            GIT_SHA=${{ steps.buildinfo.outputs.sha }}
+            BUILD_DATE=${{ steps.buildinfo.outputs.date }}
+          # No tags here on purpose - a bare digest push, merged into the real tags by the
+          # merge job below. Annotations/labels similarly move to the merge step, since a
+          # manifest list (not either per-platform image) is what `docker pull
+          # ghcr.io/.../everylist:vX.Y.Z` actually resolves to.
+          outputs: type=image,name=ghcr.io/brianramseyau/everylist,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Merge into multi-arch manifest
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
 
       - uses: docker/login-action@v3
         with:
@@ -60,31 +139,16 @@ jobs:
             type=semver,pattern=v{{major}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-') }}
 
-      - name: Compute build metadata
-        # Baked into the image (ARG/ENV, not read at container startup) and served
-        # from GET /api/v1/meta - see foundational/PLAN_00_FOUNDATIONAL_PLAN.md §8/§9 - so the in-app
-        # Settings page footer can show exactly what build is running, which matters
-        # for anyone tracking a moving tag (nightly or a major-version pin).
-        id: buildinfo
-        run: |
-          echo "version=${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'nightly' }}" >> "$GITHUB_OUTPUT"
-          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
 
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            APP_VERSION=${{ steps.buildinfo.outputs.version }}
-            GIT_SHA=${{ steps.buildinfo.outputs.sha }}
-            BUILD_DATE=${{ steps.buildinfo.outputs.date }}
-          # Unraid is x86_64-only, so single-arch keeps this fast and avoids flaky
-          # QEMU-emulated cross-builds of better-sqlite3's native addon. Revisit if
-          # there's ever a real arm64 target (e.g. Raspberry Pi self-hosting).
-          platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/brianramseyau/everylist@sha256:%s ' *)
+        env:
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
+
+      - name: Inspect merged image
+        run: docker buildx imagetools inspect ghcr.io/brianramseyau/everylist:${{ steps.meta.outputs.version }}
