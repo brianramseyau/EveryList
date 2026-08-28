@@ -516,6 +516,66 @@ Verified: `pnpm --filter web run check`, `pnpm --filter web run lint`, `pnpm --f
 test` (100% statements/branches/functions/lines) all pass. Visual re-check on-device is the
 maintainer's to do (Simulator/emulator can't be driven from here).
 
+### 11. Play Store publishing: release signing + CI publish — **done, pending the maintainer's Play Console setup**
+
+§7 shipped debug-signed Android APKs on every tag as a sideload-only stopgap, explicitly deferring
+release signing and a Play Store submission. Implemented the deferred half, plus a request from
+the maintainer to keep the debug build around for pre-release smoke-testing rather than dropping
+it once release signing existed:
+
+- **Tag shape now selects the build path**, via a new `meta` job in
+  `.github/workflows/native-build.yml` that parses `GITHUB_REF_NAME` once and fans its outputs
+  (`version_code`, `version_name`, `is_rc`) out to the jobs below:
+  - `vX.Y.Z-rc.N` (pre-release testing tags) → `build-android-debug` only (§7's original debug
+    APK, renamed from `build-android`) — sideload-only, never published to Play.
+  - `vX.Y.Z` (real releases) → `build-android-release` (a release-signed AAB) +
+    `publish-play` (uploads it to the Play Console's **internal testing** track — the
+    maintainer's choice of starting track, promotable to closed/production later from the Console
+    without rebuilding).
+  - `build-ios` is unchanged and still runs on every tag of either shape (Simulator-only, not a
+    Play concern).
+  - `release` (the GitHub Release asset-attach job) now needs all three Android/iOS build jobs and
+    runs with `if: always() && !cancelled() && !failure()`, since exactly one of
+    `build-android-debug`/`build-android-release` is always skipped (not failed) depending on
+    `is_rc` — `softprops/action-gh-release`'s glob-based `files:` silently skips whichever
+    artifact directory didn't get produced. Marks the Release `prerelease: true` for rc tags.
+  - `versionCode` derivation was extended (previously `MAJOR * 10000 + MINOR * 100 + PATCH`,
+    which breaks on a `-rc.N` suffix since bash's `IFS='.' read` can't parse `"3-rc"` as an
+    integer): `MAJOR * 1000000 + MINOR * 10000 + PATCH * 100 + RC`, where `RC` is the tag's rc
+    number (capped at 98 pre-release iterations per patch) or `99` for the real release — keeps
+    `rc.1 < rc.2 < ... < the final vX.Y.Z build` of the same patch strictly increasing, per
+    Android's update-vs-downgrade requirement.
+- **`apps/android/app/build.gradle`** gained a `release` `signingConfig`, populated only when
+  Gradle project properties `RELEASE_STORE_FILE`/`RELEASE_STORE_PASSWORD`/`RELEASE_KEY_ALIAS`/
+  `RELEASE_KEY_PASSWORD` are present (CI supplies them via `ORG_GRADLE_PROJECT_*` env vars, per
+  Gradle's own env-to-property mapping — avoids the secret values ever appearing in a command-line
+  arg). Absent locally, `./gradlew assembleRelease`/`bundleRelease` still produce an unsigned build
+  rather than failing, so nothing about local dev changed.
+- **New secrets** (named as anticipated back in §7): `ANDROID_KEYSTORE_BASE64`,
+  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` — an upload keystore
+  generated with `keytool` (PKCS12, the current default keystore type, which requires the store
+  and key passwords to be identical — a real first-attempt failure during setup,
+  `signReleaseBundle`'s "Given final block not properly padded" turned out to mean exactly that,
+  not a corrupt file). Play App Signing re-signs the uploaded AAB with Google's own held key, so
+  this upload key only needs to prove continuity between releases, not be the "real" signing key.
+  Plus `PLAY_SERVICE_ACCOUNT_JSON`, a Google Cloud service account key (Release Manager access on
+  the Play Console app) consumed by `r0adkll/upload-google-play@v1` in `publish-play`.
+- **Play Console's own constraint, not something CI can route around**: a brand-new app's very
+  first release must be uploaded manually through the Console UI — the Publishing API refuses to
+  publish anything until at least one release exists. Worked around by building a real signed AAB
+  locally (`./gradlew bundleRelease` with the same env-var-driven signing config CI uses) for the
+  maintainer to upload by hand once; every tagged release after that flows through
+  `publish-play` normally.
+
+**Left for the maintainer** (none of this is drivable from here — needs their Play Console
+account and browser): create the app listing in Play Console (package `au.brianramsey.everylist`,
+matching `capacitor.config.ts`/`build.gradle`'s existing `appId`/`namespace`); complete the
+store listing, content rating, target audience, data safety, and privacy policy sections Play
+requires before any release (even internal testing) can roll out; the one manual first-release
+upload described above; create a Google Cloud service account and grant it Release Manager access
+under Play Console → Users and permissions → API access, download its JSON key; and add all five
+secrets above to the repo's GitHub Actions secrets.
+
 ## Execution order
 
 The sections above are scoped, not sequenced — here's the actual build order and why, reviewed 2026-08-21:

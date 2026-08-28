@@ -1,19 +1,26 @@
 name: Native App Build
 
-# Builds the Capacitor-wrapped iOS/Android apps (foundational/PLAN_13_PHASE_NATIVE_APP_SHELL.md §7) and attaches
-# them as downloadable assets on the GitHub Release for every pushed vX.Y.Z tag — same trigger
-# as docker-publish.yml's release path, so a tag produces both the container image and the
-# native builds together.
+# Builds the Capacitor-wrapped iOS/Android apps (foundational/PLAN_13_PHASE_NATIVE_APP_SHELL.md §7)
+# on every pushed tag, split by tag shape:
 #
-# No server URL is baked in (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1 made that runtime-configurable via /server-setup),
-# so one build here serves every self-hosted instance.
+#   - `vX.Y.Z-rc.N` (pre-release testing tags): builds a debug-signed Android APK only, attached
+#     as a GitHub Release asset (marked prerelease). Sideload-only — never published to Play.
+#   - `vX.Y.Z` (real releases): builds a release-signed Android App Bundle and publishes it to the
+#     Play Console's internal testing track, plus attaches the AAB to the GitHub Release too.
 #
-#   - Android: a debug-signed APK via Gradle. Sideload-ready as-is; there's no release signing
-#     keystore yet, so this isn't Play-Store-submission-ready — swap `assembleDebug` for
-#     `assembleRelease` plus a keystore-backed signing config once one exists.
-#   - iOS: an unsigned Simulator build only (no Apple Developer Program enrollment yet, which a
-#     real device/TestFlight-capable build requires) — installable in the iOS Simulator via
-#     `xcrun simctl install`, not on a physical device.
+# iOS builds an unsigned Simulator-only app on every tag of either shape (no Apple Developer
+# Program enrollment yet, which a real device/TestFlight build requires) — installable via
+# `xcrun simctl install`, not on a physical device, and not a Play Store concern.
+#
+# No server URL is baked in (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1 made that runtime-configurable
+# via /server-setup), so one build here serves every self-hosted instance.
+#
+# Required secrets for the release-signed Android path:
+#   - ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+#     — the upload keystore used to sign the AAB (Play re-signs with its own app signing key
+#     under Play App Signing; this is only the upload key).
+#   - PLAY_SERVICE_ACCOUNT_JSON — a Google Cloud service account key JSON (plain text) with
+#     Release Manager access on the Play Console app, used by the Play publish step.
 
 on:
   push:
@@ -27,9 +34,37 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
 
-  build-android:
-    name: Build Android APK
-    needs: test
+  meta:
+    name: Parse release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version_code: ${{ steps.parse.outputs.version_code }}
+      version_name: ${{ steps.parse.outputs.version_name }}
+      is_rc: ${{ steps.parse.outputs.is_rc }}
+    steps:
+      - id: parse
+        # versionCode must strictly increase release over release, or Android refuses to treat a
+        # new APK/AAB as an update. The RC slot keeps every vX.Y.Z-rc.N build's code below the
+        # eventual vX.Y.Z release of the same patch (RC=99), and rc.1 < rc.2 < ... within that,
+        # capped at 98 pre-release iterations per patch.
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          BASE="${TAG%%-*}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
+          if [[ "$TAG" == *-rc.* ]]; then
+            RC="${TAG##*-rc.}"
+            echo "is_rc=true" >> "$GITHUB_OUTPUT"
+          else
+            RC=99
+            echo "is_rc=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version_code=$((MAJOR * 1000000 + MINOR * 10000 + PATCH * 100 + RC))" >> "$GITHUB_OUTPUT"
+          echo "version_name=$TAG" >> "$GITHUB_OUTPUT"
+
+  build-android-debug:
+    name: Build Android debug APK (pre-release)
+    needs: [test, meta]
+    if: needs.meta.outputs.is_rc == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,34 +91,98 @@ jobs:
           java-version: '21'
 
       - name: Accept SDK licenses
-        # AGP auto-downloads any additional SDK platform/build-tools packages it needs
-        # (compileSdk 36, per apps/android/variables.gradle) on first use, but only once the
-        # licenses for those packages have been accepted.
         run: yes | sdkmanager --licenses >/dev/null || true
-
-      - name: Compute Android version code/name from the tag
-        # versionCode must strictly increase release over release or Android refuses to
-        # treat a new APK as an update. This job only runs on vX.Y.Z tag pushes (see the
-        # `on:` trigger above), so github.ref_name is always a tag here.
-        id: androidver
-        run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$TAG"
-          echo "code=$((MAJOR * 10000 + MINOR * 100 + PATCH))" >> "$GITHUB_OUTPUT"
-          echo "name=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Assemble debug APK
         working-directory: apps/android
         run: |
           ./gradlew assembleDebug --no-daemon \
-            -PappVersionCode=${{ steps.androidver.outputs.code }} \
-            -PappVersionName=${{ steps.androidver.outputs.name }}
+            -PappVersionCode=${{ needs.meta.outputs.version_code }} \
+            -PappVersionName=${{ needs.meta.outputs.version_name }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: android-apk
+          name: android-apk-debug
           path: apps/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  build-android-release:
+    name: Build Android release AAB
+    needs: [test, meta]
+    if: needs.meta.outputs.is_rc == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @everylist/shared build
+
+      - name: Build web bundle and sync into the native Android project
+        run: pnpm --filter @everylist/web run cap:sync
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Accept SDK licenses
+        run: yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Decode signing keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > apps/android/app/release.keystore
+
+      - name: Assemble release AAB
+        working-directory: apps/android
+        env:
+          # ORG_GRADLE_PROJECT_* env vars map straight to Gradle project properties without the
+          # values ever appearing on the command line (unlike passing them as -P args).
+          ORG_GRADLE_PROJECT_RELEASE_STORE_FILE: release.keystore
+          ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew bundleRelease --no-daemon \
+            -PappVersionCode=${{ needs.meta.outputs.version_code }} \
+            -PappVersionName=${{ needs.meta.outputs.version_name }}
+
+      - name: Remove decoded keystore
+        if: always()
+        run: rm -f apps/android/app/release.keystore
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-aab-release
+          path: apps/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+  publish-play:
+    name: Publish to Play Console (internal testing)
+    needs: [meta, build-android-release]
+    if: needs.meta.outputs.is_rc == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-aab-release
+          path: dist
+
+      - uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: au.brianramsey.everylist
+          releaseFiles: dist/app-release.aab
+          track: internal
+          status: completed
 
   build-ios:
     name: Build iOS Simulator app
@@ -133,7 +232,8 @@ jobs:
 
   release:
     name: Attach builds to the GitHub Release
-    needs: [build-android, build-ios]
+    needs: [meta, build-android-debug, build-android-release, build-ios]
+    if: ${{ always() && !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -144,6 +244,8 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          prerelease: ${{ needs.meta.outputs.is_rc == 'true' }}
           files: |
-            dist/android-apk/app-debug.apk
-            dist/ios-simulator-build/EveryList-ios-simulator.zip
+            dist/android-apk-debug/*.apk
+            dist/android-aab-release/*.aab
+            dist/ios-simulator-build/*.zip
