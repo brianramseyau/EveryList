@@ -2,6 +2,7 @@ package au.brianramsey.everylist;
 
 import android.app.Activity;
 import android.appwidget.AppWidgetManager;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -148,11 +149,11 @@ public class WidgetConfigActivity extends Activity {
             prefs.setListId(chosenListId);
             prefs.setShowCompleted(showCompletedChecked);
             prefs.setLastError(null);
-            // Render immediately.
-            Intent service = new Intent(this, WidgetUpdateService.class)
-                .setAction(EveryListWidget.ACTION_REFRESH);
-            service.putExtra(EveryListWidget.EXTRA_APPWIDGET_ID, appWidgetId);
-            startService(service);
+            // Render immediately, off the main thread (the refresh hits the network).
+            final Context appContext = getApplicationContext();
+            final int widgetId = appWidgetId;
+            new Thread(() -> WidgetUpdater.handle(
+                appContext, EveryListWidget.ACTION_REFRESH, widgetId, -1L, -1L)).start();
             setResult(RESULT_OK, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId));
         } else {
             // Provisioned before any widget is placed — remember the defaults for the next one.

@@ -1,14 +1,16 @@
 package au.brianramsey.everylist;
 
-import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 /** The EveryList home-screen widget (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). Rendering, fetching, and toggling all run
- *  in {@link WidgetUpdateService} on background threads; this provider stays thin — it dispatches
+ *  in {@link WidgetUpdater} off the main thread; this provider stays thin — it dispatches
  *  the widget's broadcasts (refresh, show/hide-done, item taps) and launches the app for
  *  open-item and quick-add actions. */
 public class EveryListWidget extends AppWidgetProvider {
@@ -31,11 +33,18 @@ public class EveryListWidget extends AppWidgetProvider {
     static final String DEEP_LINK_SCHEME = "everylist";
     static final String DEEP_LINK_HOST_LISTS = "lists";
 
+    /** Shared across broadcasts so overlapping updates queue up rather than each spawning a thread. */
+    private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
+
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
-        for (int appWidgetId : appWidgetIds) {
-            startUpdateService(context, ACTION_REFRESH, appWidgetId, -1L, -1L);
-        }
+        // Called from within onReceive's dispatch, so goAsync() below is still valid here.
+        final int[] ids = appWidgetIds.clone();
+        runAsync(context, (ctx) -> {
+            for (int appWidgetId : ids) {
+                WidgetUpdater.handle(ctx, ACTION_REFRESH, appWidgetId, -1L, -1L);
+            }
+        });
     }
 
     @Override
@@ -43,7 +52,7 @@ public class EveryListWidget extends AppWidgetProvider {
         String action = intent.getAction();
         int appWidgetId = intent.getIntExtra(EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
         if (ACTION_REFRESH.equals(action) || ACTION_TOGGLE_COMPLETED.equals(action)) {
-            startUpdateService(context, action, appWidgetId, -1L, -1L);
+            runAsync(context, (ctx) -> WidgetUpdater.handle(ctx, action, appWidgetId, -1L, -1L));
             return;
         }
         if (ACTION_ITEM.equals(action)) {
@@ -59,19 +68,30 @@ public class EveryListWidget extends AppWidgetProvider {
             } else if (ACTION_TOGGLE_ITEM.equals(itemAction)
                     && appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
                     && listId > 0 && itemId > 0) {
-                startUpdateService(context, ACTION_ITEM, appWidgetId, listId, itemId);
+                runAsync(context, (ctx) -> WidgetUpdater.handle(ctx, ACTION_ITEM, appWidgetId, listId, itemId));
             }
             return;
         }
         super.onReceive(context, intent);
     }
 
-    private static void startUpdateService(Context context, String action, int appWidgetId, long listId, long itemId) {
-        Intent service = new Intent(context, WidgetUpdateService.class);
-        service.setAction(action);
-        service.putExtra(EXTRA_APPWIDGET_ID, appWidgetId);
-        if (listId > 0) service.putExtra(EXTRA_LIST_ID, listId);
-        if (itemId > 0) service.putExtra(EXTRA_ITEM_ID, itemId);
-        context.startService(service);
+    /** Keeps this broadcast alive while {@code work} runs off the main thread. See
+     *  {@link WidgetUpdater}'s doc comment for why the work runs here rather than in a started
+     *  Service or a WorkManager job — both had side effects that broke the widget outright. */
+    private void runAsync(Context context, WidgetWork work) {
+        // The receiver's own Context is restricted and shouldn't outlive onReceive.
+        final Context appContext = context.getApplicationContext();
+        final PendingResult pending = goAsync();
+        EXECUTOR.execute(() -> {
+            try {
+                work.run(appContext);
+            } finally {
+                pending.finish();
+            }
+        });
+    }
+
+    private interface WidgetWork {
+        void run(Context context);
     }
 }
