@@ -100,10 +100,15 @@ jobs:
             -PappVersionCode=${{ needs.meta.outputs.version_code }} \
             -PappVersionName=${{ needs.meta.outputs.version_name }}
 
+      - name: Rename APK with the release tag, so repeat downloads don't collide
+        run: |
+          mv apps/android/app/build/outputs/apk/debug/app-debug.apk \
+            "apps/android/app/build/outputs/apk/debug/app-debug-${{ needs.meta.outputs.version_name }}.apk"
+
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk-debug
-          path: apps/android/app/build/outputs/apk/debug/app-debug.apk
+          path: apps/android/app/build/outputs/apk/debug/app-debug-*.apk
           if-no-files-found: error
 
   build-android-release:

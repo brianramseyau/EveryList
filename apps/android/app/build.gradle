@@ -48,6 +48,9 @@ android {
     }
     buildTypes {
         debug {
+            // Distinct applicationId so a sideloaded debug build installs alongside the Play
+            // Store release instead of replacing it — lets a device carry both for testing.
+            applicationIdSuffix ".debug"
             signingConfig signingConfigs.debug
         }
         release {

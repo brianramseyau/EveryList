@@ -114,8 +114,21 @@ describe('Home-screen widget +page.svelte', () => {
 		await expect.element(page.getByText(/Widget set up/)).not.toBeInTheDocument();
 	});
 
-	it('shows a generic message when the handoff fails without an ApiError', async () => {
+	it('includes the underlying error message when the handoff fails without an ApiError', async () => {
 		vi.mocked(configureWidget).mockRejectedValue(new TypeError('no launcher'));
+
+		render(WidgetPage);
+
+		await page.getByRole('checkbox', { name: 'Groceries' }).click();
+		await page.getByRole('button', { name: 'Create widget' }).click();
+
+		await expect
+			.element(page.getByText('Failed to set up the widget: no launcher'))
+			.toBeInTheDocument();
+	});
+
+	it('shows the generic message when the handoff fails with a non-Error value', async () => {
+		vi.mocked(configureWidget).mockRejectedValue('boom');
 
 		render(WidgetPage);
 

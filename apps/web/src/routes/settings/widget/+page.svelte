@@ -50,7 +50,16 @@
 		try {
 			handedOff = await configureWidget(selectedListIds);
 		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to set up the widget.';
+			// A non-ApiError here (a fetch failure reaching the server, a rejection from the
+			// native EveryListWidget plugin, etc.) used to collapse to a bare "Failed to set up
+			// the widget." with no way to tell what actually went wrong on-device — surface the
+			// underlying message instead so a failed handoff is diagnosable.
+			error =
+				err instanceof ApiError
+					? err.message
+					: err instanceof Error
+						? `Failed to set up the widget: ${err.message}`
+						: 'Failed to set up the widget.';
 		} finally {
 			creating = false;
 		}
