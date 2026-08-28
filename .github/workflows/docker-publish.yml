@@ -151,4 +151,10 @@ jobs:
           DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
 
       - name: Inspect merged image
-        run: docker buildx imagetools inspect ghcr.io/brianramseyau/everylist:${{ steps.meta.outputs.version }}
+        # Uses the first line of `tags` rather than `steps.meta.outputs.version` - flagged by
+        # review as possibly empty on a plain `main` push, where only the raw `nightly` rule
+        # (not a semver rule) matches. `tags` is guaranteed non-empty any time this job runs at
+        # all, regardless of which rule produced it, so this sidesteps the question entirely.
+        run: |
+          tag="$(head -n1 <<< "${{ steps.meta.outputs.tags }}")"
+          docker buildx imagetools inspect "$tag"
