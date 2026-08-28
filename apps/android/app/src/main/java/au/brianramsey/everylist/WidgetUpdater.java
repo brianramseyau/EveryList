@@ -131,7 +131,12 @@ public class WidgetUpdater {
 
         Intent template = new Intent(context, EveryListWidget.class).setAction(EveryListWidget.ACTION_ITEM);
         template.putExtra(EveryListWidget.EXTRA_APPWIDGET_ID, appWidgetId);
-        rv.setPendingIntentTemplate(R.id.widget_list, pendingBroadcast(context, appWidgetId, template));
+        // Must be mutable: the system fills in each row's setOnClickFillInIntent extras (item id,
+        // open vs toggle) into this PendingIntent's Intent at click time, which an immutable
+        // PendingIntent can't be modified to do — rows would render but every tap would silently
+        // no-op with no crash and no log line, exactly as observed on-device.
+        rv.setPendingIntentTemplate(R.id.widget_list, PendingIntent.getBroadcast(context, appWidgetId, template,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE));
 
         manager.updateAppWidget(appWidgetId, rv);
         manager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widget_list);

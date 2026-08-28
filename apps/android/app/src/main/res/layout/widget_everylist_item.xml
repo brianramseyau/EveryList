@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One item row inside the widget's ListView. The row itself opens the item in the app; the
-     checkbox toggles completion. Both get fill-in intents from WidgetListViewsFactory, merged
-     into the list's shared PendingIntent template (see EveryListWidget.ACTION_ITEM).
+<!-- One item row inside the widget's ListView. Tapping item_body (checkbox + text) opens the
+     item in the app; tapping just the checkbox toggles completion. Both get fill-in intents
+     from WidgetListViewsFactory, merged into the list's shared PendingIntent template (see
+     EveryListWidget.ACTION_ITEM). They're siblings, not parent/child — a RemoteViews collection
+     row only delivers clicks registered on the outer/root view when nothing nested underneath it
+     is also separately registered; with both row_root (the whole row) and item_check (nested
+     inside it) both calling setOnClickFillInIntent, taps anywhere outside item_check's bounds
+     went nowhere; only item_check's own toggle ever fired. Splitting them into siblings under a
+     plain, unregistered root fixes that.
 
      The "checkbox" is a plain ImageView (checked/unchecked drawable swapped by
      WidgetListViewsFactory), not a real CheckBox — RemoteViews couldn't inflate CheckBox/
@@ -9,30 +15,33 @@
      widget host's inflate of this row threw silently and every row was stuck showing the
      generic system loading placeholder forever, with no error surfaced anywhere. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/row_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:clickable="true"
-    android:focusable="true"
     android:paddingTop="6dp"
-    android:paddingBottom="6dp"
-    android:background="?android:attr/selectableItemBackground">
+    android:paddingBottom="6dp">
 
     <ImageView
         android:id="@+id/item_check"
-        android:layout_width="22dp"
-        android:layout_height="22dp"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:padding="9dp"
         android:clickable="true"
-        android:focusable="false"
+        android:focusable="true"
+        android:background="?android:attr/selectableItemBackground"
         android:src="@drawable/ic_widget_checkbox_unchecked" />
 
     <LinearLayout
+        android:id="@+id/item_body"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:layout_weight="1"
         android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="?android:attr/selectableItemBackground"
         android:paddingLeft="6dp">
 
         <TextView
