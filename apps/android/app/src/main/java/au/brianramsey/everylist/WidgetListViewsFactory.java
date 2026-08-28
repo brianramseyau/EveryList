@@ -51,7 +51,10 @@ public class WidgetListViewsFactory implements RemoteViewsService.RemoteViewsFac
         RemoteViews row = new RemoteViews(context.getPackageName(), R.layout.widget_everylist_item);
 
         row.setTextViewText(R.id.item_name, item.name);
-        row.setBoolean(R.id.item_check, "setChecked", item.checked);
+        row.setImageViewResource(R.id.item_check,
+            item.checked ? R.drawable.ic_widget_checkbox_checked : R.drawable.ic_widget_checkbox_unchecked);
+        row.setContentDescription(R.id.item_check,
+            context.getString(item.checked ? R.string.widget_item_checked : R.string.widget_item_unchecked));
 
         if (item.quantity != null && !item.quantity.isEmpty()) {
             row.setViewVisibility(R.id.item_sub, View.VISIBLE);

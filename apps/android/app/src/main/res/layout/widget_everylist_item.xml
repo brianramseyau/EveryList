@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- One item row inside the widget's ListView. The row itself opens the item in the app; the
      checkbox toggles completion. Both get fill-in intents from WidgetListViewsFactory, merged
-     into the list's shared PendingIntent template (see EveryListWidget.ACTION_ITEM). -->
+     into the list's shared PendingIntent template (see EveryListWidget.ACTION_ITEM).
+
+     The "checkbox" is a plain ImageView (checked/unchecked drawable swapped by
+     WidgetListViewsFactory), not a real CheckBox — RemoteViews couldn't inflate CheckBox/
+     Switch/RadioButton in an App Widget until Android 12 (API 31); on every older device the
+     widget host's inflate of this row threw silently and every row was stuck showing the
+     generic system loading placeholder forever, with no error surfaced anywhere. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/row_root"
     android:layout_width="match_parent"
@@ -14,13 +20,13 @@
     android:paddingBottom="6dp"
     android:background="?android:attr/selectableItemBackground">
 
-    <CheckBox
+    <ImageView
         android:id="@+id/item_check"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
         android:clickable="true"
         android:focusable="false"
-        android:buttonTint="@color/widget_accent" />
+        android:src="@drawable/ic_widget_checkbox_unchecked" />
 
     <LinearLayout
         android:layout_width="0dp"
