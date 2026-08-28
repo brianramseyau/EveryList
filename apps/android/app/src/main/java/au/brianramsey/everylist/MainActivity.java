@@ -1,6 +1,8 @@
 package au.brianramsey.everylist;
 
+import android.content.Context;
 import android.os.Bundle;
+import android.view.MotionEvent;
 import android.view.ViewGroup;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -82,7 +84,7 @@ public class MainActivity extends BridgeActivity {
 
         parent.removeView(webView);
 
-        SwipeRefreshLayout swipeRefreshLayout = new SwipeRefreshLayout(this);
+        SwipeRefreshLayout swipeRefreshLayout = new RefreshGestureAwareLayout(this);
         swipeRefreshLayout.setLayoutParams(webViewParams);
         swipeRefreshLayout.addView(
             webView,
@@ -114,5 +116,67 @@ public class MainActivity extends BridgeActivity {
                     }
                 }
             );
+    }
+
+    /**
+     * A plain SwipeRefreshLayout can't tell a pull-to-refresh apart from the web app's own
+     * long-press-then-drag list reordering (sortable-reorder.ts's `delay: 400`) — both look
+     * identical at the point that matters: a downward drag starting on content that's already
+     * scrolled to the top, which is exactly the condition SwipeRefreshLayout watches for. By the
+     * time the reorder drag's own JS actually starts (after its own 400ms hold) and tries to keep
+     * the gesture for itself via preventDefault, this layout has *already* claimed the touch
+     * stream natively (WebView only defers to a JS preventDefault on the very first touchmove of a
+     * sequence) — the drag never gets a further chance and the swipe is read as a refresh instead.
+     *
+     * <p>Matching that same 400ms threshold here — before SwipeRefreshLayout's own gesture
+     * detection ever sees a move — disambiguates the two up front: a real pull starts moving
+     * (almost) right away, while a reorder drag sits still past the threshold first. Once a touch
+     * has been held that long with no real movement yet, this stops treating the gesture as a
+     * refresh candidate for the rest of that touch sequence; a genuine pull that's already in
+     * motion by then is left alone.
+     */
+    private static final class RefreshGestureAwareLayout extends SwipeRefreshLayout {
+        private static final long HOLD_THRESHOLD_MS = 400;
+        private static final int MOVE_SLOP_PX = 20;
+
+        private float downX;
+        private float downY;
+        private long downTimeMs;
+        private boolean moved;
+
+        RefreshGestureAwareLayout(Context context) {
+            super(context);
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent event) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    downX = event.getRawX();
+                    downY = event.getRawY();
+                    downTimeMs = System.currentTimeMillis();
+                    moved = false;
+                    setEnabled(true);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (!moved) {
+                        float dx = event.getRawX() - downX;
+                        float dy = event.getRawY() - downY;
+                        if (Math.hypot(dx, dy) > MOVE_SLOP_PX) {
+                            moved = true;
+                        } else if (System.currentTimeMillis() - downTimeMs > HOLD_THRESHOLD_MS) {
+                            setEnabled(false);
+                        }
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    setEnabled(true);
+                    break;
+                default:
+                    break;
+            }
+            return super.dispatchTouchEvent(event);
+        }
     }
 }
