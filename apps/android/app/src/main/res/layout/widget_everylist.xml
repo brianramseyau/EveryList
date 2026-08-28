@@ -7,7 +7,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="10dp"
+    android:padding="12dp"
     android:background="@drawable/widget_background">
 
     <LinearLayout
@@ -15,7 +15,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:paddingBottom="8dp">
 
         <TextView
             android:id="@+id/widget_list_button"
@@ -27,20 +28,25 @@
             android:ellipsize="end"
             android:text="@string/widget_default_title"
             android:textColor="@color/widget_ink"
-            android:textSize="15sp"
+            android:textSize="16sp"
             android:textStyle="bold"
             android:drawablePadding="4dp"
             android:background="?android:attr/selectableItemBackground" />
 
+        <!-- A rounded pill rather than a bare hyperlink-style text, so it reads as a control
+             next to the icon buttons rather than a stray link floating in the header. -->
         <TextView
             android:id="@+id/widget_toggle_completed"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:padding="6dp"
+            android:layout_marginEnd="4dp"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="5dp"
             android:text="@string/widget_show_done"
             android:textColor="@color/widget_accent"
             android:textSize="12sp"
-            android:background="?android:attr/selectableItemBackground" />
+            android:textStyle="bold"
+            android:background="@drawable/widget_pill_background" />
 
         <ImageButton
             android:id="@+id/widget_refresh"
@@ -58,6 +64,14 @@
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/widget_add" />
     </LinearLayout>
+
+    <!-- A plain View isn't in RemoteViews' allowed class list for app widgets (only certain
+         concrete view types are, and android.view.View itself isn't one) — FrameLayout is. -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginBottom="4dp"
+        android:background="@color/widget_border" />
 
     <TextView
         android:id="@+id/widget_error"

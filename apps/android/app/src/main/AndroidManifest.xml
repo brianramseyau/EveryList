@@ -57,14 +57,19 @@
             </intent-filter>
         </service>
 
-        <!-- Widget configuration: launched by the launcher on placement (APPWIDGET_CONFIGURE) and
-             by the in-app provisioning plugin (EveryListWidgetPlugin), which writes the minted PAT
-             to private storage first — the token never travels in a loggable URI. -->
+        <!-- Widget configuration: launched by the launcher on placement (APPWIDGET_CONFIGURE), by the
+             in-app provisioning plugin (EveryListWidgetPlugin, which writes the minted PAT to private
+             storage first — the token never travels in a loggable URI), and by the widget's own list
+             selector (WidgetUpdater's widget_list_button PendingIntent) to quick-switch an existing
+             widget's list. AppTheme.WidgetDialog makes all three feel like a popup anchored to the
+             widget rather than a full page — see WidgetConfigActivity's own doc comment for how it
+             tells the placement flow (which still needs an explicit Save, per the AppWidgetManager
+             contract) apart from a quick switch (which applies on tap and closes immediately). -->
         <activity
             android:name=".WidgetConfigActivity"
             android:exported="true"
             android:excludeFromRecents="true"
-            android:theme="@style/AppTheme.NoActionBar">
+            android:theme="@style/AppTheme.WidgetDialog">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>

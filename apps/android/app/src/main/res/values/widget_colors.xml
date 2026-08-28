@@ -1,13 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Widget surface/text colors (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). Kept literal rather than tied to the app
-         theme because RemoteViews can't read themed color resources; a dark-mode follow-up would
-         need an alternative layout/values-night. -->
+    <!-- Widget surface/text colors (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md), matching the web app's light
+         tokens (apps/web/src/routes/layout.css's @theme block: color-paper, color-ink, primary-*, color-signal).
+         The dark variant lives in values-night/widget_colors.xml. Every reference to these must go through
+         @color/... (never a literal hex) so RemoteViews and code that calls context.getColor(...) both pick up
+         the values-night override automatically under the host process's night-mode configuration. -->
     <color name="widget_paper">#F6F5F1</color>
     <color name="widget_ink">#1B1D1F</color>
     <color name="widget_muted">#6B7280</color>
+    <!-- Completed-item strikethrough text — deliberately a step lighter than widget_muted so a
+         finished row visibly recedes further than an ordinary subtitle. -->
     <color name="widget_checked">#9CA3AF</color>
-    <color name="widget_accent">#0EA5E9</color>
+    <color name="widget_border">#E5E7EB</color>
+    <!-- The app's current default accent (Slate primary-600) — was previously a leftover #0EA5E9
+         sky-blue from before the app's default palette was renamed to Slate; ocean is now just one
+         of four selectable accents, not the default, so the widget's hardcoded color had drifted out
+         of sync with the rest of the app. -->
+    <color name="widget_accent">#32496A</color>
+    <!-- widget_accent at ~10% opacity, for the "Show done" pill fill. -->
+    <color name="widget_pill_fill">#1A32496A</color>
+    <!-- A completed item's own color — the app's "signal" token — kept distinct from widget_accent so
+         "this is done" (signal green) never looks like "this is a tappable control" (accent slate). -->
+    <color name="widget_signal">#2E8B57</color>
     <color name="widget_warn">#B45309</color>
     <color name="widget_white">#FFFFFF</color>
 </resources>

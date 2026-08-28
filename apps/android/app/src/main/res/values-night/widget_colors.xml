@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark-mode override of values/widget_colors.xml, matching the web app's dark tokens
+         (apps/web/src/routes/layout.css's :root.dark block: color-paper #1b1d1f, color-ink #edeae3).
+         The widget host (launcher) re-resolves these against its own night-mode configuration when
+         it inflates widget_everylist.xml/widget_everylist_item.xml, and our own process's
+         context.getColor(...) calls (WidgetUpdater, WidgetListViewsFactory) follow system night mode
+         the same way — no code branching needed on either side. -->
+    <color name="widget_paper">#1B1D1F</color>
+    <color name="widget_ink">#EDEAE3</color>
+    <color name="widget_muted">#9CA3AF</color>
+    <color name="widget_checked">#6B7280</color>
+    <color name="widget_border">#374151</color>
+    <!-- Lightened a step from the light-mode Slate accent (#32496A) for contrast on a dark surface —
+         primary-400 in the web app's palette. -->
+    <color name="widget_accent">#5F7BA0</color>
+    <color name="widget_pill_fill">#265F7BA0</color>
+    <!-- Lightened a step from the light-mode signal green for the same reason. -->
+    <color name="widget_signal">#3FAF74</color>
+    <color name="widget_warn">#D97706</color>
+    <color name="widget_white">#FFFFFF</color>
+</resources>

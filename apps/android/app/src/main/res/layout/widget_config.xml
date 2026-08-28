@@ -1,16 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Configuration screen for the EveryList widget. Shown by the launcher on widget placement and
-     by tapping the widget's list selector; also receives the app's `everylist://widget-config`
-     deep link that carries the minted PAT. -->
+<!-- Configuration screen for the EveryList widget. Shown by the launcher on widget placement, by
+     the widget's own list selector (quick-switch — see WidgetConfigActivity), and by the app's
+     `everylist://widget-config` deep link that carries the minted PAT. Styled as a floating card
+     (AppTheme.WidgetDialog) rather than a full page — see that theme's doc comment. -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_height="wrap_content"
+    android:maxHeight="480dp"
     android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
+        android:background="@drawable/widget_config_card_background"
         android:padding="20dp">
 
         <TextView
@@ -18,14 +21,14 @@
             android:layout_height="wrap_content"
             android:text="@string/config_title"
             android:textColor="@color/widget_ink"
-            android:textSize="20sp"
+            android:textSize="19sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/config_explain"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingTop="8dp"
+            android:paddingTop="6dp"
             android:text="@string/config_explain"
             android:textColor="@color/widget_muted"
             android:textSize="14sp" />
@@ -39,17 +42,28 @@
             android:textColor="@color/widget_muted"
             android:textSize="14sp" />
 
-        <RadioGroup
-            android:id="@+id/config_list_group"
+        <!-- config_list_group's own rows (RadioButtons) are built and styled in
+             WidgetConfigActivity#showLists, since they're inflated per-list at runtime. -->
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingTop="4dp" />
+            android:layout_marginTop="12dp"
+            android:background="@drawable/widget_config_section_background">
+
+            <RadioGroup
+                android:id="@+id/config_list_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="4dp" />
+        </FrameLayout>
 
         <CheckBox
             android:id="@+id/config_show_completed"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingTop="12dp"
+            android:layout_marginTop="16dp"
+            android:buttonTint="@color/widget_accent"
             android:text="@string/config_show_completed"
             android:textColor="@color/widget_ink"
             android:textSize="14sp" />
@@ -65,17 +79,29 @@
 
         <Button
             android:id="@+id/config_save"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
             android:layout_marginTop="20dp"
-            android:text="@string/config_save" />
+            android:background="@drawable/widget_config_button_primary"
+            android:text="@string/config_save"
+            android:textAllCaps="false"
+            android:textColor="@color/widget_paper"
+            android:textStyle="bold"
+            android:elevation="0dp"
+            android:stateListAnimator="@null" />
 
         <Button
             android:id="@+id/config_open_app"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/widget_config_button_primary"
             android:text="@string/config_open_app"
+            android:textAllCaps="false"
+            android:textColor="@color/widget_paper"
+            android:textStyle="bold"
+            android:elevation="0dp"
+            android:stateListAnimator="@null"
             android:visibility="gone" />
     </LinearLayout>
 </ScrollView>

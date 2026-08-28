@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.appwidget.AppWidgetManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -24,16 +25,24 @@ import java.util.Set;
 
 /** The widget's configuration screen (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). Three entry paths:
  *  <ul>
- *    <li><b>Widget placement</b> — launched by the launcher with {@code EXTRA_APPWIDGET_ID}; picks
- *        which granted list to show and the show/hide-completed default, then saves per-widget.</li>
+ *    <li><b>Widget placement</b> — launched by the launcher with {@code EXTRA_APPWIDGET_ID} and
+ *        {@code ACTION_APPWIDGET_CONFIGURE}; picks which granted list to show and the
+ *        show/hide-completed default, then requires an explicit Save (AppWidgetManager's contract:
+ *        finishing without {@code RESULT_OK} removes the just-placed widget).</li>
  *    <li><b>App handoff</b> — launched by {@link EveryListWidgetPlugin#configure} right after the
- *        app provisions the shared credentials; the credentials already exist in SharedPreferences
- *        (never in a URI), so this just shows the picker.</li>
- *    <li><b>List selector tap</b> — opened from the widget with the widget id to change its list.</li>
+ *        app provisions the shared credentials; same as placement (no widget id yet), but the
+ *        credentials already exist in SharedPreferences (never in a URI).</li>
+ *    <li><b>Quick switch</b> — opened from the widget's own list-selector tap ({@link
+ *        WidgetUpdater}'s {@code widget_list_button} PendingIntent), with a real appWidgetId but
+ *        <i>not</i> the CONFIGURE action. No Save button here — an existing widget doesn't need one,
+ *        so tapping a list applies it and closes immediately, which is what makes this read as an
+ *        in-widget popup rather than a trip into the app.</li>
  *  </ul> */
 public class WidgetConfigActivity extends Activity {
 
     private int appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID;
+    /** True only for the quick-switch entry path — see the class doc. */
+    private boolean quickSwitch;
     private final List<Long> grantedListIds = new ArrayList<>();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -56,6 +65,8 @@ public class WidgetConfigActivity extends Activity {
 
         appWidgetId = getIntent().getIntExtra(
             EveryListWidget.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+        quickSwitch = appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
+            && !AppWidgetManager.ACTION_APPWIDGET_CONFIGURE.equals(getIntent().getAction());
 
         if (WidgetPrefs.hasGlobalCredentials(this)) {
             grantedListIds.addAll(WidgetPrefs.getGlobalListIds(this));
@@ -64,12 +75,16 @@ public class WidgetConfigActivity extends Activity {
             return;
         }
 
-        showCompleted.setChecked(
-            appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
-                ? new WidgetPrefs(this, appWidgetId).getShowCompleted()
-                : WidgetPrefs.getGlobalDefaultShowCompleted(this));
-
-        saveButton.setOnClickListener(v -> save());
+        if (quickSwitch) {
+            showCompleted.setVisibility(View.GONE);
+            saveButton.setVisibility(View.GONE);
+        } else {
+            showCompleted.setChecked(
+                appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
+                    ? new WidgetPrefs(this, appWidgetId).getShowCompleted()
+                    : WidgetPrefs.getGlobalDefaultShowCompleted(this));
+            saveButton.setOnClickListener(v -> save());
+        }
         loadListNames();
     }
 
@@ -108,13 +123,34 @@ public class WidgetConfigActivity extends Activity {
     private void showLists(List<WidgetModels.WidgetList> lists, Set<Long> granted) {
         listGroup.removeAllViews();
         long current = new WidgetPrefs(this, appWidgetId).getListId();
+        int accent = getColor(R.color.widget_accent);
+        int ink = getColor(R.color.widget_ink);
+        int border = getColor(R.color.widget_border);
         boolean any = false;
         for (WidgetModels.WidgetList list : lists) {
             if (!granted.contains(list.id)) continue;
+            if (any) {
+                // A hairline divider between rows — matches the app's own settings-row sections.
+                View divider = new View(this);
+                divider.setLayoutParams(new RadioGroup.LayoutParams(RadioGroup.LayoutParams.MATCH_PARENT, dp(1)));
+                divider.setBackgroundColor(border);
+                listGroup.addView(divider);
+            }
             RadioButton button = new RadioButton(this);
             button.setText(list.name);
             button.setTag(list.id);
             button.setId(View.generateViewId());
+            button.setTextColor(ink);
+            button.setTextSize(15);
+            button.setButtonTintList(ColorStateList.valueOf(accent));
+            button.setPadding(dp(12), dp(12), dp(12), dp(12));
+            button.setMinHeight(dp(44));
+            long listId = list.id;
+            // A real click only — setChecked(true) below (pre-selecting the current list) doesn't
+            // fire this, so populating the list can't itself trigger an unwanted quick-switch close.
+            button.setOnClickListener(v -> {
+                if (quickSwitch) applyQuickSwitch(listId);
+            });
             listGroup.addView(button);
             if (list.id == current) button.setChecked(true);
             any = true;
@@ -127,6 +163,25 @@ public class WidgetConfigActivity extends Activity {
         if (listGroup.getCheckedRadioButtonId() == View.NO_ID && listGroup.getChildCount() > 0) {
             ((RadioButton) listGroup.getChildAt(0)).setChecked(true);
         }
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    /** The quick-switch entry path's whole flow: apply and close, no Save tap needed — see the
+     *  class doc for why an existing widget doesn't need the placement flow's explicit-Save
+     *  contract. */
+    private void applyQuickSwitch(long listId) {
+        WidgetPrefs prefs = new WidgetPrefs(this, appWidgetId);
+        prefs.setListId(listId);
+        prefs.setLastError(null);
+        final Context appContext = getApplicationContext();
+        final int widgetId = appWidgetId;
+        new Thread(() -> WidgetUpdater.handle(
+            appContext, EveryListWidget.ACTION_REFRESH, widgetId, -1L, -1L)).start();
+        setResult(RESULT_OK, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId));
+        finish();
     }
 
     private void showError(int resId) {
