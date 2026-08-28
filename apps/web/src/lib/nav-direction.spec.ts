@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+	consumeListScroll,
 	consumeNavDirection,
 	consumeSkipTransition,
 	markBackNavigation,
-	markSkipTransition
+	markSkipTransition,
+	rememberListScroll
 } from './nav-direction';
 
 describe('nav-direction', () => {
@@ -27,5 +29,23 @@ describe('nav-direction', () => {
 
 		expect(consumeSkipTransition()).toBe(true);
 		expect(consumeSkipTransition()).toBe(false);
+	});
+
+	it('returns the remembered scroll position for a matching listId, then resets', () => {
+		rememberListScroll(1, 400);
+
+		expect(consumeListScroll(1)).toBe(400);
+		expect(consumeListScroll(1)).toBeNull();
+	});
+
+	it('returns null, and still resets, for a mismatched listId', () => {
+		rememberListScroll(1, 400);
+
+		expect(consumeListScroll(2)).toBeNull();
+		expect(consumeListScroll(1)).toBeNull();
+	});
+
+	it('returns null when nothing was remembered', () => {
+		expect(consumeListScroll(1)).toBeNull();
 	});
 });

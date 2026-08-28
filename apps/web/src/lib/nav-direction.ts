@@ -56,3 +56,29 @@ export function consumeListOrigin(): boolean {
 	pendingListOrigin = false;
 	return origin;
 }
+
+// A real `history.back()` (see above) only gets `markListOrigin`'s screen
+// back to the *URL* it left from — SvelteKit's own scroll restoration still
+// loses the race against this app's client-only data load: the list page
+// starts every fresh mount (a back navigation included — the component was
+// fully torn down when it navigated away, same as a forward one) with
+// `loading` true and `items` empty, so the "Loading…" placeholder is all
+// there is to scroll when the browser applies the remembered scrollY —
+// clamped near the top of that near-empty page, with nothing to redo it
+// once the real content streams back in a moment later. Remembering the
+// scroll position ourselves and reapplying it once the list has actually
+// reloaded (list-detail's own onMount, after `loadAll()` resolves) works
+// around that gap. Keyed by listId so a move-to-a-different-list (or any
+// other stale, never-consumed entry) can't get replayed onto the wrong
+// list — `consumeListScroll` returns null for a mismatched id instead.
+let pendingListScroll: { listId: number; scrollY: number } | null = null;
+
+export function rememberListScroll(listId: number, scrollY: number): void {
+	pendingListScroll = { listId, scrollY };
+}
+
+export function consumeListScroll(listId: number): number | null {
+	const remembered = pendingListScroll;
+	pendingListScroll = null;
+	return remembered && remembered.listId === listId ? remembered.scrollY : null;
+}
