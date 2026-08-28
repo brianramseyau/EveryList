@@ -47,6 +47,10 @@ public class WidgetUpdater {
             return;
         }
 
+        if (EveryListWidget.ACTION_TOGGLE_COMPLETED.equals(action)) {
+            prefs.setShowCompleted(!prefs.getShowCompleted());
+        }
+
         String token = prefs.getToken();
         String serverUrl = prefs.getServerUrl();
         prefs.seedFromDefaults(context);
