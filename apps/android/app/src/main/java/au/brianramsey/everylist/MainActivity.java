@@ -18,10 +18,13 @@ public class MainActivity extends BridgeActivity {
         // Must be set before super.onCreate() builds the Bridge (which is what actually reads
         // it) — see setSpaFallbackRoute()'s doc comment for why this is needed at all.
         setSpaFallbackRoute();
-        super.onCreate(savedInstanceState);
         // In-app widget provisioning channel (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md) — lets the web app hand the
-        // widget's scoped PAT to native storage without putting it in a loggable URL.
+        // widget's scoped PAT to native storage without putting it in a loggable URL. Must also
+        // be registered before super.onCreate(), which is what actually builds the Bridge and
+        // freezes its plugin list — registering after it runs used to silently no-op every call,
+        // surfacing on the JS side as `"EveryListWidget" plugin is not implemented on android`.
         registerPlugin(EveryListWidgetPlugin.class);
+        super.onCreate(savedInstanceState);
         if (BuildConfig.DEBUG) {
             // Capacitor serves the app itself over https://localhost, and Chromium's Mixed
             // Content policy blocks a plain http:// fetch from an https:// page regardless of
