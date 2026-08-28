@@ -1,0 +1,13 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "everylist-website",
+	"compatibility_date": "2026-08-28",
+	"assets": {
+		"directory": "public",
+		"not_found_handling": "404-page"
+	},
+	"routes": [
+		{ "pattern": "everylist.dev", "custom_domain": true },
+		{ "pattern": "www.everylist.dev", "custom_domain": true }
+	]
+}
