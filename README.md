@@ -16,6 +16,14 @@
 
 ---
 
+<h3 align="center">📱 The Android app is in closed beta</h3>
+
+<p align="center">
+  Want an invite to test it out? <a href="https://github.com/brianramseyau/EveryList/issues/new">Open an issue</a> and let us know.
+</p>
+
+---
+
 AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasing feature parity — it's a **mobile-first, offline-first, one-tier** app that does the everyday list workflow well: create, share in real time, auto-categorize by aisle, check off, and keep working with zero signal. No premium tier, ever. It ships as an installable PWA and as native iOS/Android apps, and can be controlled by voice through Alexa or Home Assistant. See [`foundational/PLAN_00_FOUNDATIONAL_PLAN.md`](foundational/PLAN_00_FOUNDATIONAL_PLAN.md) for the full product plan, architecture, and decision rationale behind everything below.
 
 EveryList is feature-complete and self-hostable today.
