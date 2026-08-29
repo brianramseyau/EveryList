@@ -28,6 +28,8 @@
 	let editRole = $state<Exclude<ListRole, 'owner'>>('editor');
 	let saving = $state(false);
 
+	let confirmingRevokeId = $state<number | null>(null);
+
 	// Minting a token requires being an owner of every list it's scoped to
 	// (apps/api's PersonalAccessTokensController gates on it), so only owned
 	// lists are offered to pick from — an editor/viewer-only list would just
@@ -117,6 +119,7 @@
 	}
 
 	async function handleRevoke(token: AccessTokenDto) {
+		confirmingRevokeId = null;
 		tokens = tokens.filter((current) => current.id !== token.id);
 		try {
 			await revokeToken(token.id);
@@ -231,23 +234,41 @@
 											.join(', ')}
 									</span>
 								</div>
-								<div class="ml-auto flex gap-2">
-									{#if editingTokenId !== token.id}
+								<div class="ml-auto flex items-center gap-2">
+									{#if confirmingRevokeId === token.id}
+										<span class="text-xs text-gray-600 dark:text-gray-400">Revoke this token?</span>
+										<button
+											type="button"
+											class="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+											onclick={() => handleRevoke(token)}
+										>
+											Revoke
+										</button>
 										<button
 											type="button"
 											class="text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-											onclick={() => startEdit(token)}
+											onclick={() => (confirmingRevokeId = null)}
 										>
-											Edit
+											Cancel
+										</button>
+									{:else}
+										{#if editingTokenId !== token.id}
+											<button
+												type="button"
+												class="text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+												onclick={() => startEdit(token)}
+											>
+												Edit
+											</button>
+										{/if}
+										<button
+											type="button"
+											class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+											onclick={() => (confirmingRevokeId = token.id)}
+										>
+											Revoke
 										</button>
 									{/if}
-									<button
-										type="button"
-										class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-										onclick={() => handleRevoke(token)}
-									>
-										Revoke
-									</button>
 								</div>
 							</div>
 

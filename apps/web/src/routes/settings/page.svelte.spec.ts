@@ -15,7 +15,10 @@ vi.mock('$lib/api/auth', () => ({
 vi.mock('$lib/pwa/reset', () => ({ resetApp: vi.fn() }));
 vi.mock('$lib/pwa/update', () => ({ checkForUpdate: vi.fn() }));
 vi.mock('@capacitor/core', () => ({
-	Capacitor: { isNativePlatform: vi.fn().mockReturnValue(false) }
+	Capacitor: {
+		isNativePlatform: vi.fn().mockReturnValue(false),
+		getPlatform: vi.fn().mockReturnValue('web')
+	}
 }));
 vi.mock('@capacitor/app', () => ({
 	App: { getInfo: vi.fn().mockRejectedValue(new Error('web')) }
@@ -53,6 +56,7 @@ describe('Settings +page.svelte', () => {
 		vi.unstubAllGlobals();
 		vi.clearAllMocks();
 		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+		vi.mocked(Capacitor.getPlatform).mockReturnValue('web');
 		vi.mocked(App.getInfo).mockRejectedValue(new Error('web'));
 		vi.mocked(getServerUrl).mockReturnValue('');
 		// Orientation radio clicks persist the choice to localStorage (see the
@@ -605,5 +609,33 @@ describe('Settings +page.svelte', () => {
 		expect(getToken()).toBeNull();
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 		expect(goto).toHaveBeenCalledWith('/server-setup');
+	});
+
+	it('hides the Home-screen widget link on the web/PWA build', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Home-screen widget')).not.toBeInTheDocument();
+	});
+
+	it('hides the Home-screen widget link on non-Android native builds', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+		vi.mocked(Capacitor.getPlatform).mockReturnValue('ios');
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Home-screen widget')).not.toBeInTheDocument();
+	});
+
+	it('shows the Home-screen widget link on Android native builds', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+		vi.mocked(Capacitor.getPlatform).mockReturnValue('android');
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Home-screen widget')).toBeInTheDocument();
 	});
 });

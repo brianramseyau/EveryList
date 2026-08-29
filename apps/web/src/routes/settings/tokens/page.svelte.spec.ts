@@ -286,12 +286,34 @@ describe('Access Tokens +page.svelte', () => {
 		await expect.element(page.getByText('Failed to create token.')).toBeInTheDocument();
 	});
 
-	it('revokes a token', async () => {
+	it('asks for confirmation before revoking a token', async () => {
+		vi.mocked(fetchTokens).mockResolvedValue([token({ id: 5, name: 'Home Assistant' })]);
+
+		render(TokensPage);
+		await page.getByRole('button', { name: 'Revoke' }).click();
+
+		await expect.element(page.getByText('Revoke this token?')).toBeInTheDocument();
+		expect(revokeToken).not.toHaveBeenCalled();
+	});
+
+	it('cancels revoking without calling the API', async () => {
+		vi.mocked(fetchTokens).mockResolvedValue([token({ id: 5, name: 'Home Assistant' })]);
+
+		render(TokensPage);
+		await page.getByRole('button', { name: 'Revoke' }).click();
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		await expect.element(page.getByText('Revoke this token?')).not.toBeInTheDocument();
+		expect(revokeToken).not.toHaveBeenCalled();
+	});
+
+	it('revokes a token after confirming', async () => {
 		vi.mocked(fetchTokens).mockResolvedValue([token({ id: 5, name: 'Home Assistant' })]);
 
 		render(TokensPage);
 		await expect.element(page.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
 
+		await page.getByRole('button', { name: 'Revoke' }).click();
 		await page.getByRole('button', { name: 'Revoke' }).click();
 
 		expect(revokeToken).toHaveBeenCalledWith(5);
@@ -305,6 +327,7 @@ describe('Access Tokens +page.svelte', () => {
 		render(TokensPage);
 		await expect.element(page.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
 
+		await page.getByRole('button', { name: 'Revoke' }).click();
 		await page.getByRole('button', { name: 'Revoke' }).click();
 
 		await expect.poll(() => vi.mocked(fetchTokens).mock.calls.length).toBe(2);
@@ -321,6 +344,7 @@ describe('Access Tokens +page.svelte', () => {
 		render(TokensPage);
 		await expect.element(page.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
 
+		await page.getByRole('button', { name: 'Revoke' }).click();
 		await page.getByRole('button', { name: 'Revoke' }).click();
 
 		await expect.element(page.getByText('Could not revoke token')).toBeInTheDocument();
