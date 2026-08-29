@@ -3,10 +3,14 @@
      the widget's own list selector (quick-switch — see WidgetConfigActivity), and by the app's
      `everylist://widget-config` deep link that carries the minted PAT. Styled as a floating card
      (AppTheme.WidgetDialog) rather than a full page — see that theme's doc comment. -->
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Plain ScrollView has no android:maxHeight styleable (that attribute only exists on a few
+     other views, e.g. ImageView) — it's silently ignored rather than erroring, so this needs
+     MaxHeightScrollView, which actually clamps its own measured height in code. -->
+<au.brianramsey.everylist.MaxHeightScrollView
+    android:id="@+id/config_scroll"
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:maxHeight="480dp"
     android:fillViewport="true">
 
     <LinearLayout
@@ -104,4 +108,4 @@
             android:stateListAnimator="@null"
             android:visibility="gone" />
     </LinearLayout>
-</ScrollView>
+</au.brianramsey.everylist.MaxHeightScrollView>

@@ -57,6 +57,9 @@ public class WidgetConfigActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.widget_config);
 
+        MaxHeightScrollView scroll = findViewById(R.id.config_scroll);
+        scroll.setMaxHeightPx(Math.round(480 * getResources().getDisplayMetrics().density));
+
         listGroup = findViewById(R.id.config_list_group);
         showCompleted = findViewById(R.id.config_show_completed);
         errorView = findViewById(R.id.config_error);
