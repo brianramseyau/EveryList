@@ -5,7 +5,7 @@
 <h1 align="center">EveryList</h1>
 
 <p align="center">
-  A narrower, sharper shopping-list app — the 20% of AnyList's feature set that covers 90% of real usage, done well, free, and self-hosted.
+  A narrower, sharper list app — the 20% of AnyList's feature set that covers 90% of real usage, done well, free, and self-hosted.
 </p>
 
 <p align="center">

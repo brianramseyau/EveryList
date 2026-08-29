@@ -11,7 +11,7 @@
             "Alexa, set my default list to Shopping List",
             "Alexa, ask every list to add eggs"
           ],
-          "keywords": ["shopping list", "todo", "groceries", "self-hosted"]
+          "keywords": ["lists", "shopping list", "todo", "tasks", "groceries", "self-hosted"]
         }
       },
       "isAvailableWorldwide": false,

@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repo. This is the single source of
 
 ## What this app is
 
-EveryList is a self-hosted, mobile-first, offline-first shopping-list PWA — see [`foundational/PLAN_00_FOUNDATIONAL_PLAN.md`](foundational/PLAN_00_FOUNDATIONAL_PLAN.md) for the full product plan and rationale, and [`README.md`](README.md) for a quick overview. Single Docker image, single process, single SQLite file under `/config`, no premium tier.
+EveryList is a self-hosted, mobile-first, offline-first list-taking PWA — see [`foundational/PLAN_00_FOUNDATIONAL_PLAN.md`](foundational/PLAN_00_FOUNDATIONAL_PLAN.md) for the full product plan and rationale, and [`README.md`](README.md) for a quick overview. Single Docker image, single process, single SQLite file under `/config`, no premium tier.
 
 ## Monorepo layout
 
@@ -273,7 +273,7 @@ Settings surfaces feedback.
 - `applyOrientation` never throws; the return type is the contract. Don't reintroduce the
   swallow-everything `void` shape, or the Android PWA control goes back to silently doing nothing.
 - Don't "fix" the PWA lock with `requestFullscreen()` (the classic game-dev workaround): the lock is
-  released when fullscreen exits, and a shopping-list app shouldn't run element-fullscreen.
+  released when fullscreen exits, and a list app shouldn't run element-fullscreen.
 - If a regression report says the Android PWA "still rotates after picking Portrait": first check
   whether Settings now shows the amber Auto-rotate note — if it doesn't, check that `applyOrientation`
   still returns the result and that `chooseOrientation` in `routes/settings/+page.svelte` still gates

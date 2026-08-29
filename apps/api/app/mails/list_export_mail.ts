@@ -19,7 +19,7 @@ export default class ListExportMail extends BaseMail {
     private recipientEmail: string
   ) {
     super()
-    this.subject = `Shopping list: ${list.name}`
+    this.subject = `List: ${list.name}`
   }
 
   prepare() {

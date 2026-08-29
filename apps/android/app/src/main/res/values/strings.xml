@@ -6,7 +6,7 @@
     <string name="custom_url_scheme">au.brianramsey.everylist</string>
 
     <!-- Home-screen widget (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md) -->
-    <string name="widget_description">Shopping lists at a glance — check items off and add new ones.</string>
+    <string name="widget_description">Your lists at a glance — check items off and add new ones.</string>
     <string name="widget_default_title">EveryList</string>
     <string name="widget_add">Add item</string>
     <string name="widget_refresh">Refresh</string>
