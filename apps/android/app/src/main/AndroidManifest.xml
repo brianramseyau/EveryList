@@ -64,11 +64,18 @@
              widget's list. AppTheme.WidgetDialog makes all three feel like a popup anchored to the
              widget rather than a full page — see WidgetConfigActivity's own doc comment for how it
              tells the placement flow (which still needs an explicit Save, per the AppWidgetManager
-             contract) apart from a quick switch (which applies on tap and closes immediately). -->
+             contract) apart from a quick switch (which applies on tap and closes immediately).
+             taskAffinity="" keeps it out of the app's own task: without that, launching it while
+             the app already has a backgrounded task running would attach it to that task instead
+             of starting fresh, bringing the whole app forward underneath the popup rather than
+             just showing the popup over whatever was already in front. excludeFromRecents keeps
+             that isolated task out of Overview too — it's a momentary popup, never a real
+             destination to switch back to. -->
         <activity
             android:name=".WidgetConfigActivity"
             android:exported="true"
             android:excludeFromRecents="true"
+            android:taskAffinity=""
             android:theme="@style/AppTheme.WidgetDialog">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
