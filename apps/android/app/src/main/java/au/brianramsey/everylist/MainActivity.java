@@ -137,6 +137,18 @@ public class MainActivity extends BridgeActivity {
      * has been held that long with no real movement yet, this stops treating the gesture as a
      * refresh candidate for the rest of that touch sequence; a genuine pull that's already in
      * motion by then is left alone.
+     *
+     * <p>The hold-time check runs before the move-slop check (not after) so that ordinary finger
+     * jitter during the hold-still window can't lock in "moved" — and therefore skip the
+     * disable — before the 400ms mark is reached; a reorder drag that starts before the threshold
+     * fires is rare enough that favoring the hold check first doesn't hurt real pulls, which
+     * clear the slop almost immediately anyway.
+     *
+     * <p>A second disambiguator handles the web app's own list-item swipe-to-reveal actions
+     * (swipe-reveal.ts), which — being a quick horizontal gesture — never reaches the hold
+     * threshold: once a move clears the slop within that window, its direction is checked, and a
+     * horizontally-dominant move disables the refresh layout immediately rather than leaving it
+     * enabled to contest the touch with the row's own JS gesture handling.
      */
     private static final class RefreshGestureAwareLayout extends SwipeRefreshLayout {
         private static final long HOLD_THRESHOLD_MS = 400;
@@ -163,12 +175,18 @@ public class MainActivity extends BridgeActivity {
                     break;
                 case MotionEvent.ACTION_MOVE:
                     if (!moved) {
-                        float dx = event.getRawX() - downX;
-                        float dy = event.getRawY() - downY;
-                        if (Math.hypot(dx, dy) > MOVE_SLOP_PX) {
+                        if (System.currentTimeMillis() - downTimeMs > HOLD_THRESHOLD_MS) {
                             moved = true;
-                        } else if (System.currentTimeMillis() - downTimeMs > HOLD_THRESHOLD_MS) {
                             setEnabled(false);
+                        } else {
+                            float dx = event.getRawX() - downX;
+                            float dy = event.getRawY() - downY;
+                            if (Math.hypot(dx, dy) > MOVE_SLOP_PX) {
+                                moved = true;
+                                if (Math.abs(dx) > Math.abs(dy)) {
+                                    setEnabled(false);
+                                }
+                            }
                         }
                     }
                     break;
