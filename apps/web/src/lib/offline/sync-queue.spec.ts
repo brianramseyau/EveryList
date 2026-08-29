@@ -6,6 +6,7 @@ import {
 	enqueueConsolidated,
 	enqueueMutation,
 	failedMutations,
+	findPendingMutation,
 	pendingMutations,
 	queueCounts,
 	updateMutation
@@ -152,6 +153,62 @@ describe('enqueueConsolidated', () => {
 		const pending = await pendingMutations();
 		expect(pending).toHaveLength(2);
 		expect(pending[1]).toMatchObject({ op: 'delete', expectedVersion: null });
+	});
+});
+
+describe('findPendingMutation', () => {
+	it('finds the pending mutation matching entityType, targetId, and op', async () => {
+		const id = await enqueueMutation({
+			entityType: 'item',
+			op: 'delete',
+			targetId: 5,
+			expectedVersion: 3,
+			payload: {},
+			url: '/api/v1/x/5'
+		});
+
+		const found = await findPendingMutation('item', 5, 'delete');
+		expect(found).toMatchObject({ id, entityType: 'item', targetId: 5, op: 'delete' });
+	});
+
+	it('returns undefined when no mutation matches the row', async () => {
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'delete',
+			targetId: 5,
+			expectedVersion: 3,
+			payload: {},
+			url: '/api/v1/x/5'
+		});
+
+		expect(await findPendingMutation('item', 6, 'delete')).toBeUndefined();
+	});
+
+	it('returns undefined when the row has queued work of a different op', async () => {
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 3,
+			payload: { checked: true },
+			url: '/api/v1/x/5'
+		});
+
+		expect(await findPendingMutation('item', 5, 'delete')).toBeUndefined();
+	});
+
+	it('ignores a mutation that is no longer pending', async () => {
+		const id = await enqueueMutation({
+			entityType: 'item',
+			op: 'delete',
+			targetId: 5,
+			expectedVersion: 3,
+			payload: {},
+			url: '/api/v1/x/5'
+		});
+		await updateMutation(id!, { status: 'failed' });
+
+		expect(await findPendingMutation('item', 5, 'delete')).toBeUndefined();
 	});
 });
 

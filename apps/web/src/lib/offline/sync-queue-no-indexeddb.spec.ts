@@ -4,6 +4,7 @@ import {
 	enqueueConsolidated,
 	enqueueMutation,
 	failedMutations,
+	findPendingMutation,
 	pendingMutations,
 	queueCounts,
 	updateMutation
@@ -37,6 +38,10 @@ describe('without an IndexedDB implementation', () => {
 				url: '/api/v1/x'
 			})
 		).resolves.toBeUndefined();
+	});
+
+	it('findPendingMutation returns undefined', async () => {
+		await expect(findPendingMutation('item', 5, 'delete')).resolves.toBeUndefined();
 	});
 
 	it('pendingMutations returns an empty array', async () => {

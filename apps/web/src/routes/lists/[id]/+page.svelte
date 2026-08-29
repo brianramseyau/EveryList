@@ -12,7 +12,7 @@
 	import { emailExportList, fetchList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
 	import { fetchCategoryLearnings } from '$lib/api/category-learnings';
-	import { createItem, deleteItem, fetchItems, updateItem } from '$lib/api/items';
+	import { createItem, deleteItem, fetchItems, undoDeleteItem, updateItem } from '$lib/api/items';
 	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
 	import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
 	import { isRowDirty, type StoreFilter } from '$lib/offline/db';
@@ -36,6 +36,7 @@
 	import PasscodeGate from '$lib/components/PasscodeGate.svelte';
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
 	import PopoutMenuItem from '$lib/components/PopoutMenuItem.svelte';
+	import UndoToast from '$lib/components/UndoToast.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -522,6 +523,36 @@
 			await deleteItem(listId, item.id);
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to delete item.';
+			void loadAll();
+		}
+	}
+
+	// Undo-delete toast (PLAN_20_PHASE_UNDO_DELETE_TOAST.md) — wraps only the two direct
+	// single-item delete gestures (swipe and the X button), not `clearChecked`'s bulk path, which
+	// keeps calling `removeItem` directly. One slot: a second delete while a toast is showing
+	// replaces it outright, same as Gmail/Todoist's "latest wins" — the superseded delete is
+	// simply no longer undoable.
+	let pendingUndo = $state<ItemDto | null>(null);
+
+	function removeItemWithUndo(item: ItemDto) {
+		pendingUndo = item;
+		void removeItem(item);
+	}
+
+	function expireUndo() {
+		pendingUndo = null;
+	}
+
+	// Only reachable via the toast's own onAction, which only renders while `pendingUndo` is set.
+	async function undoRemove() {
+		const item = pendingUndo!;
+		pendingUndo = null;
+
+		items = [...items, item].sort((a, b) => a.sortOrder - b.sortOrder);
+		try {
+			await undoDeleteItem(listId, item.id);
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to undo delete.';
 			void loadAll();
 		}
 	}
@@ -1034,7 +1065,7 @@
 												style="touch-action: pan-y;"
 												use:swipeReveal={{
 													disabled: !isCoarsePointer,
-													onCommitRight: () => removeItem(item),
+													onCommitRight: () => removeItemWithUndo(item),
 													onCommitLeft: () => {
 														markListOriginAndScroll();
 														void goto(
@@ -1137,7 +1168,7 @@
 														aria-label={`Delete ${item.name}`}
 														data-reorder-ignore
 														class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-red-600 dark:hover:text-red-400 print:hidden"
-														onclick={() => removeItem(item)}
+														onclick={() => removeItemWithUndo(item)}
 													>
 														<Icon name="close" class="h-5 w-5" />
 													</button>
@@ -1169,6 +1200,12 @@
 			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 		{/if}
 	</div>
+
+	{#if pendingUndo}
+		{#key pendingUndo.id}
+			<UndoToast message="Item deleted" onAction={undoRemove} onDismiss={expireUndo} />
+		{/key}
+	{/if}
 </main>
 
 <style>

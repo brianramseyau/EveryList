@@ -66,6 +66,7 @@ vi.mock('$lib/api/items', () => ({
 	fetchItems: vi.fn(),
 	createItem: vi.fn(),
 	deleteItem: vi.fn(),
+	undoDeleteItem: vi.fn(),
 	updateItem: vi.fn(),
 	fetchRecentItemNames: vi.fn()
 }));
@@ -86,7 +87,7 @@ vi.mock('$lib/open-external-link', () => ({ openExternalLink: vi.fn() }));
 const { fetchList, emailExportList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
 const { fetchCategoryLearnings } = await import('$lib/api/category-learnings');
-const { fetchItems, createItem, deleteItem, updateItem, fetchRecentItemNames } =
+const { fetchItems, createItem, deleteItem, undoDeleteItem, updateItem, fetchRecentItemNames } =
 	await import('$lib/api/items');
 const { fetchFavorites } = await import('$lib/api/favorites');
 const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores');
@@ -184,6 +185,7 @@ describe('List detail +page.svelte', () => {
 	afterEach(async () => {
 		vi.clearAllMocks();
 		vi.unstubAllGlobals();
+		vi.useRealTimers();
 		clearToken();
 		window.sessionStorage.clear();
 		window.localStorage.clear();
@@ -1435,6 +1437,107 @@ describe('List detail +page.svelte', () => {
 		await expect
 			.element(page.getByText('Nothing here yet. Add your first item above.'))
 			.toBeInTheDocument();
+	});
+
+	describe('undo-delete toast', () => {
+		it('shows an undo toast after deleting an item, and Undo restores it at its original position', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 }),
+				makeItem({ id: 101, name: 'Milk', categoryId: 10, sortOrder: 1 })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+
+			expect(deleteItem).toHaveBeenCalledWith(1, 100);
+			await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+			await expect.element(page.getByText('Item deleted')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			expect(undoDeleteItem).toHaveBeenCalledWith(1, 100);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+			await expect.element(page.getByText('Item deleted')).not.toBeInTheDocument();
+
+			const produceHeader = page.getByText('Produce').element().closest('h2');
+			const names = [...produceHeader!.parentElement!.querySelectorAll('li span')]
+				.map((el) => el.textContent?.trim())
+				.filter((t) => t === 'Bananas' || t === 'Milk');
+			expect(names).toEqual(['Bananas', 'Milk']);
+		});
+
+		it('lets the deletion stand once the toast times out without Undo', async () => {
+			vi.useFakeTimers();
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+			await expect.element(page.getByText('Item deleted')).toBeInTheDocument();
+
+			await vi.advanceTimersByTimeAsync(5000);
+
+			await expect.element(page.getByText('Item deleted')).not.toBeInTheDocument();
+			await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+			expect(undoDeleteItem).not.toHaveBeenCalled();
+		});
+
+		it('replaces an active toast when a second item is deleted before Undo', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 }),
+				makeItem({ id: 101, name: 'Milk', categoryId: 10, sortOrder: 1 })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+			await expect.element(page.getByText('Item deleted')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Milk' }).click();
+			await expect.element(page.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			expect(undoDeleteItem).toHaveBeenCalledExactlyOnceWith(1, 101);
+			await expect.element(page.getByText('Milk')).toBeInTheDocument();
+			await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+		});
+
+		it('reloads the list when undoing a delete fails without an ApiError', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 })
+			]);
+			vi.mocked(undoDeleteItem).mockRejectedValue(new TypeError('network down'));
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+		});
+
+		it('reloads the list when undoing a delete fails with an ApiError', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 })
+			]);
+			vi.mocked(undoDeleteItem).mockRejectedValue(new ApiError(500, 'Could not undo delete'));
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+		});
 	});
 
 	it('disables "Clear Checked Off Items" in the menu until at least one item is checked', async () => {
