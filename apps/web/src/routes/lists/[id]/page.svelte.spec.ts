@@ -1571,6 +1571,55 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 	});
 
+	it('dismisses the confirmation when clicking outside the dialog, but not on a click inside it', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List menu' }).click();
+		await page.getByRole('button', { name: 'Clear all list items' }).click();
+		await expect.element(page.getByText('Clear all 1 item?')).toBeInTheDocument();
+
+		// The outside-click listener attaches a tick after the dialog opens (see
+		// +page.svelte) so the same click that opened it can't also close it.
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const dialogMessage = page.getByText('Clear all 1 item?').element();
+		dialogMessage.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		await expect.element(page.getByText('Clear all 1 item?')).toBeInTheDocument();
+
+		const overlay = dialogMessage.closest('[role="alertdialog"]')!.parentElement!;
+		overlay.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+		await expect.element(page.getByText('Clear all 1 item?')).not.toBeInTheDocument();
+		expect(deleteItem).not.toHaveBeenCalled();
+	});
+
+	it('dismisses the confirmation on Escape, ignoring other keys', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'List menu' }).click();
+		await page.getByRole('button', { name: 'Clear all list items' }).click();
+		await expect.element(page.getByText('Clear all 1 item?')).toBeInTheDocument();
+
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await expect.element(page.getByText('Clear all 1 item?')).toBeInTheDocument();
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		await expect.element(page.getByText('Clear all 1 item?')).not.toBeInTheDocument();
+		expect(deleteItem).not.toHaveBeenCalled();
+	});
+
 	describe('Share submenu', () => {
 		it('prints the list from the Share submenu, without navigating away', async () => {
 			vi.mocked(fetchItems).mockResolvedValue([

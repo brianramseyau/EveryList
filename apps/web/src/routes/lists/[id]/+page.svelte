@@ -553,6 +553,36 @@
 		if (confirmAction === 'clearAll') void clearAllItems();
 	}
 
+	// The confirm dialog's own box — clicking anywhere outside it (i.e. on the
+	// darkened overlay) dismisses the dialog, same as Cancel. The listeners are
+	// only attached a tick after the dialog opens — the click that opens it
+	// (e.g. a menu item) originates outside `confirmDialogEl` too, since the
+	// dialog doesn't exist yet at dispatch time, so attaching synchronously
+	// would have that same click immediately close what it just opened.
+	let confirmDialogEl: HTMLDivElement | undefined = $state();
+
+	$effect(() => {
+		if (!confirmMessage) return;
+
+		function handleClick(event: MouseEvent) {
+			if (confirmDialogEl && !event.composedPath().includes(confirmDialogEl)) confirmAction = null;
+		}
+		function handleKeydown(event: KeyboardEvent) {
+			if (event.key === 'Escape') confirmAction = null;
+		}
+
+		const timer = setTimeout(() => {
+			window.addEventListener('click', handleClick);
+			window.addEventListener('keydown', handleKeydown);
+		}, 0);
+
+		return () => {
+			clearTimeout(timer);
+			window.removeEventListener('click', handleClick);
+			window.removeEventListener('keydown', handleKeydown);
+		};
+	});
+
 	function resetShareState() {
 		shareView = false;
 		exportingEmail = false;
@@ -865,25 +895,38 @@
 				<PasscodeGate {list} onunlock={() => (unlocked = true)} />
 			{:else}
 				{#if confirmMessage}
+					<!-- Centered over a darkened overlay rather than inline in the list flow —
+					     an inline banner at the top was invisible when scrolled to the bottom.
+					     Dismissing on outside click/Escape is handled by the dedicated $effect
+					     above (deferred one tick past the dialog opening so that same click
+					     can't also close it). -->
 					<div
-						class="flex items-center justify-between gap-2 rounded-lg border border-red-200 p-3 text-sm dark:border-red-900 print:hidden"
+						class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 print:hidden"
 					>
-						<p class="text-red-600 dark:text-red-400">{confirmMessage}</p>
-						<div class="flex shrink-0 gap-2">
-							<button
-								type="button"
-								class="rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700"
-								onclick={handleConfirm}
-							>
-								Confirm
-							</button>
-							<button
-								type="button"
-								class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-								onclick={() => (confirmAction = null)}
-							>
-								Cancel
-							</button>
+						<div
+							bind:this={confirmDialogEl}
+							class="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800"
+							role="alertdialog"
+							aria-modal="true"
+							aria-label={confirmMessage}
+						>
+							<p class="text-red-600 dark:text-red-400">{confirmMessage}</p>
+							<div class="flex justify-end gap-2">
+								<button
+									type="button"
+									class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+									onclick={() => (confirmAction = null)}
+								>
+									Cancel
+								</button>
+								<button
+									type="button"
+									class="rounded-lg bg-red-600 px-3 py-1.5 text-white hover:bg-red-700"
+									onclick={handleConfirm}
+								>
+									Confirm
+								</button>
+							</div>
 						</div>
 					</div>
 				{/if}
