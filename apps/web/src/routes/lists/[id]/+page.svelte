@@ -897,8 +897,9 @@
 				{#if confirmMessage}
 					<!-- Centered over a darkened overlay rather than inline in the list flow —
 					     an inline banner at the top was invisible when scrolled to the bottom.
-					     Dismissing on outside click/Escape is handled by the svelte:window
-					     listeners below (shared with the store quick-select menu). -->
+					     Dismissing on outside click/Escape is handled by the dedicated $effect
+					     above (deferred one tick past the dialog opening so that same click
+					     can't also close it). -->
 					<div
 						class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 print:hidden"
 					>
