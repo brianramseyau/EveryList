@@ -163,15 +163,14 @@
 	let storeMenuAnchor: HTMLAnchorElement | undefined = $state();
 
 	function handleStoreMenuWindowClick(event: MouseEvent) {
-		if (storeMenuOpen && storeMenuContainer && !event.composedPath().includes(storeMenuContainer)) {
-			storeMenuOpen = false;
-		}
-		handleConfirmOverlayClick(event);
+		if (!storeMenuOpen || !storeMenuContainer) return;
+		// Same composedPath() rationale as PopoutMenu: captured at dispatch
+		// time so a menu item swapping its own DOM still reads as "inside".
+		if (!event.composedPath().includes(storeMenuContainer)) storeMenuOpen = false;
 	}
 
 	function handleStoreMenuWindowKeydown(event: KeyboardEvent) {
 		if (storeMenuOpen && event.key === 'Escape') storeMenuOpen = false;
-		handleConfirmOverlayKeydown(event);
 	}
 
 	async function selectStore(storeId: number | null) {
@@ -555,16 +554,34 @@
 	}
 
 	// The confirm dialog's own box — clicking anywhere outside it (i.e. on the
-	// darkened overlay) dismisses the dialog, same as Cancel.
+	// darkened overlay) dismisses the dialog, same as Cancel. The listeners are
+	// only attached a tick after the dialog opens — the click that opens it
+	// (e.g. a menu item) originates outside `confirmDialogEl` too, since the
+	// dialog doesn't exist yet at dispatch time, so attaching synchronously
+	// would have that same click immediately close what it just opened.
 	let confirmDialogEl: HTMLDivElement | undefined = $state();
 
-	function handleConfirmOverlayClick(event: MouseEvent) {
-		if (confirmDialogEl && !event.composedPath().includes(confirmDialogEl)) confirmAction = null;
-	}
+	$effect(() => {
+		if (!confirmMessage) return;
 
-	function handleConfirmOverlayKeydown(event: KeyboardEvent) {
-		if (confirmMessage && event.key === 'Escape') confirmAction = null;
-	}
+		function handleClick(event: MouseEvent) {
+			if (confirmDialogEl && !event.composedPath().includes(confirmDialogEl)) confirmAction = null;
+		}
+		function handleKeydown(event: KeyboardEvent) {
+			if (event.key === 'Escape') confirmAction = null;
+		}
+
+		const timer = setTimeout(() => {
+			window.addEventListener('click', handleClick);
+			window.addEventListener('keydown', handleKeydown);
+		}, 0);
+
+		return () => {
+			clearTimeout(timer);
+			window.removeEventListener('click', handleClick);
+			window.removeEventListener('keydown', handleKeydown);
+		};
+	});
 
 	function resetShareState() {
 		shareView = false;
