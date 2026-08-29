@@ -119,10 +119,8 @@ public class WidgetUpdater {
         long listId = prefs.getListId();
         if (listId > 0) {
             rv.setOnClickPendingIntent(R.id.widget_add, pendingActivity(context, appWidgetId,
-                new Intent(Intent.ACTION_VIEW,
-                    Uri.parse(EveryListWidget.DEEP_LINK_SCHEME + "://"
-                        + EveryListWidget.DEEP_LINK_HOST_LISTS + "/" + listId))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
+                new Intent(context, QuickAddActivity.class)
+                    .putExtra(EveryListWidget.EXTRA_APPWIDGET_ID, appWidgetId)));
             rv.setViewVisibility(R.id.widget_add, View.VISIBLE);
         } else {
             rv.setViewVisibility(R.id.widget_add, View.GONE);

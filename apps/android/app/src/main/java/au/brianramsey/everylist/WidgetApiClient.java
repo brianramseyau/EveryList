@@ -39,6 +39,18 @@ final class WidgetApiClient {
         }
     }
 
+    /** `POST /api/v1/lists/:id/items` with `{ name }` — the quick-add popup's only field. */
+    static void createItem(String token, String serverUrl, long listId, String name) throws IOException {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("name", name);
+        } catch (org.json.JSONException e) {
+            // Unreachable for a string value; keep the method's IOException-only surface.
+            throw new IOException("Failed to build create-item payload", e);
+        }
+        request("POST", serverUrl + "/api/v1/lists/" + listId + "/items", token, body.toString());
+    }
+
     /** `PATCH /api/v1/lists/:id/items/:itemId` with `{ checked }` — the checkbox toggle. */
     static void toggleItem(String token, String serverUrl, long listId, long itemId, boolean checked) throws IOException {
         JSONObject body = new JSONObject();
