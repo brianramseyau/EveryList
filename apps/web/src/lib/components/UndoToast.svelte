@@ -42,13 +42,13 @@
 
 <div
 	role="status"
-	class="fixed inset-x-4 z-20 mx-auto flex app-max-w items-center justify-between gap-3 rounded-t-xl border border-b-0 border-gray-200 bg-paper px-4 py-2 text-sm shadow-sm dark:border-gray-700 print:hidden"
+	class="fixed inset-x-4 z-20 mx-auto flex app-max-w items-center justify-between gap-3 rounded-t-xl border border-b-0 border-amber-300 bg-amber-50 px-4 py-2 text-sm shadow-sm dark:border-amber-700 dark:bg-amber-900/30 print:hidden"
 	style="bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));"
 >
-	<span class="text-gray-700 dark:text-gray-200">{message}</span>
+	<span class="text-amber-900 dark:text-amber-200">{message}</span>
 	<button
 		type="button"
-		class="shrink-0 font-semibold text-primary-700 hover:underline dark:text-primary-400"
+		class="shrink-0 font-semibold text-amber-900 underline hover:no-underline dark:text-amber-200"
 		onclick={handleAction}
 	>
 		{actionLabel}
