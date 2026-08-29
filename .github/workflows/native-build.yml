@@ -6,7 +6,9 @@ name: Native App Build
 #   - `vX.Y.Z-rc.N` (pre-release testing tags): builds a debug-signed Android APK only, attached
 #     as a GitHub Release asset (marked prerelease). Sideload-only — never published to Play.
 #   - `vX.Y.Z` (real releases): builds a release-signed Android App Bundle and publishes it to the
-#     Play Console's internal testing track, plus attaches the AAB to the GitHub Release too.
+#     Play Console's internal testing track, plus attaches the AAB to the GitHub Release too. Once
+#     that's all green, its `-rc.N` GitHub Releases for the same version are pruned — they're
+#     sideload-only test builds superseded the moment the real release ships.
 #
 # iOS builds an unsigned Simulator-only app on every tag of either shape (no Apple Developer
 # Program enrollment yet, which a real device/TestFlight build requires) — installable via
@@ -254,3 +256,23 @@ jobs:
             dist/android-apk-debug/*.apk
             dist/android-aab-release/*.aab
             dist/ios-simulator-build/*.zip
+
+  prune-prereleases:
+    name: Prune superseded pre-release tags
+    # Only after a real (non-rc) tag's build is fully green, including the Play publish — a
+    # failed publish-play run leaves this job skipped rather than pruning test builds a real
+    # release didn't actually finish replacing.
+    needs: [meta, release, publish-play]
+    if: needs.meta.outputs.is_rc == 'false' && success()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # mlapaglia/delete-prereleases matches by substring on the `version` input, e.g. "v1.0.1"
+      # matches "v1.0.1-rc.1", "v1.0.1-rc.2", etc. It deletes the GitHub Releases (and their
+      # attached assets) only — it does not delete the underlying git tags, so `git tag -l` will
+      # still list the pruned rc tags after this runs.
+      - uses: mlapaglia/delete-prereleases@v1
+        with:
+          version: ${{ needs.meta.outputs.version_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
