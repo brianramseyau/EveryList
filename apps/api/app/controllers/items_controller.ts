@@ -1,4 +1,4 @@
-import List from '#models/list'
+import type List from '#models/list'
 import Item from '#models/item'
 import Category from '#models/category'
 import ListPolicy from '#policies/list_policy'
@@ -37,26 +37,25 @@ async function resolveCategoryId(
  * By default appends to the end of the list. Pass `respectInsertPosition` only
  * for user-initiated new-item creation (not restores/imports/moves) — when the
  * owning list's `insertPosition` is `'top'`, it instead returns a value below
- * the current minimum so the new item lands first.
+ * the current minimum so the new item lands first. Takes the full `list` (every
+ * call site already has one in hand via `ListPolicy.requireList` or similar) so
+ * `insertPosition` is read off it directly rather than re-querying the row.
  */
 async function nextSortOrder(
-  listId: number,
+  list: List,
   options?: { respectInsertPosition?: boolean }
 ): Promise<number> {
-  if (options?.respectInsertPosition) {
-    const list = await List.query().where('id', listId).select('insertPosition').firstOrFail()
-    if (list.insertPosition === 'top') {
-      const result = await Item.query()
-        .where('listId', listId)
-        .whereNull('deletedAt')
-        .min('sort_order as minSortOrder')
-        .first()
-      return Number(result?.$extras.minSortOrder ?? 1) - 1
-    }
+  if (options?.respectInsertPosition && list.insertPosition === 'top') {
+    const result = await Item.query()
+      .where('listId', list.id)
+      .whereNull('deletedAt')
+      .min('sort_order as minSortOrder')
+      .first()
+    return Number(result?.$extras.minSortOrder ?? 1) - 1
   }
 
   const result = await Item.query()
-    .where('listId', listId)
+    .where('listId', list.id)
     .whereNull('deletedAt')
     .max('sort_order as maxSortOrder')
     .first()
@@ -86,7 +85,7 @@ async function restoreItemRow(list: List, item: Item): Promise<void> {
   item.deletedAt = null
   item.checked = false
   item.checkedAt = null
-  item.sortOrder = await nextSortOrder(list.id)
+  item.sortOrder = await nextSortOrder(list)
   item.version += 1
   await item.save()
 
@@ -233,7 +232,7 @@ export default class ItemsController {
       storeId: payload.storeId ?? null,
       price: payload.price ?? null,
       checked: false,
-      sortOrder: await nextSortOrder(list.id, { respectInsertPosition: true }),
+      sortOrder: await nextSortOrder(list, { respectInsertPosition: true }),
       createdBy: user.id,
       version: 1,
     })
@@ -316,7 +315,7 @@ export default class ItemsController {
       return category.id
     }
 
-    let sortOrder = await nextSortOrder(list.id)
+    let sortOrder = await nextSortOrder(list)
     const items: Item[] = []
     for (const section of parsed.sections) {
       const sectionCategoryId = await resolveSectionCategory(section.header)
@@ -533,7 +532,7 @@ export default class ItemsController {
     item.listId = destination.id
     item.categoryId = categoryId
     item.storeId = storeId
-    item.sortOrder = await nextSortOrder(destination.id)
+    item.sortOrder = await nextSortOrder(destination)
     item.version += 1
     await item.save()
 

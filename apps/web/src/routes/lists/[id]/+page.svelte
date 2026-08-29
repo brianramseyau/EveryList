@@ -548,7 +548,12 @@
 		const item = pendingUndo!;
 		pendingUndo = null;
 
-		items = [...items, item].sort((a, b) => a.sortOrder - b.sortOrder);
+		// `removeItem`'s own delete request can fail independently (e.g. the server rejected it) and
+		// self-heal via `loadAll()`, which may already have put the item back into `items` before
+		// Undo is clicked — concatenating unconditionally would then duplicate it.
+		if (!items.some((current) => current.id === item.id)) {
+			items = [...items, item].sort((a, b) => a.sortOrder - b.sortOrder);
+		}
 		try {
 			await undoDeleteItem(listId, item.id);
 		} catch (err) {

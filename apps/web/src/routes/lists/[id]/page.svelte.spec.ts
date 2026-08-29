@@ -1538,6 +1538,30 @@ describe('List detail +page.svelte', () => {
 
 			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
 		});
+
+		it("doesn't duplicate the item if the original delete already self-healed via a reload before Undo is clicked", async () => {
+			// `deleteItem` fails independently of the toast, so `removeItem`'s own
+			// catch reloads the list — since `fetchItems` keeps resolving with
+			// Bananas still present, that reload alone already puts it back into
+			// `items` before Undo is ever clicked.
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 })
+			]);
+			vi.mocked(deleteItem).mockRejectedValueOnce(new ApiError(500, 'Could not delete'));
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			expect(undoDeleteItem).toHaveBeenCalledWith(1, 100);
+			await expect.element(page.getByText('Item deleted')).not.toBeInTheDocument();
+			expect(page.getByText('Bananas').elements()).toHaveLength(1);
+		});
 	});
 
 	it('disables "Clear Checked Off Items" in the menu until at least one item is checked', async () => {
