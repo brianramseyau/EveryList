@@ -74,7 +74,7 @@ test.group('List export', (group) => {
       const message = sentMail.message
       return (
         message.hasTo('friend@example.com') &&
-        message.hasSubject('Shopping list: Test List') &&
+        message.hasSubject('List: Test List') &&
         typeof message.nodeMailerMessage.text === 'string' &&
         message.nodeMailerMessage.text.includes('Bananas (2)') &&
         message.nodeMailerMessage.text.includes('Bread') &&
