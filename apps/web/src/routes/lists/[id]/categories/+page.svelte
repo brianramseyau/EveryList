@@ -11,6 +11,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
 	import PopoutMenuItem from '$lib/components/PopoutMenuItem.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { getToken } from '$lib/api/token';
 	import { fetchList } from '$lib/api/lists';
@@ -161,7 +162,7 @@
 	</PageHeader>
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else if list}
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			Rename, reorder, or add categories. Renaming a default category creates a copy that's

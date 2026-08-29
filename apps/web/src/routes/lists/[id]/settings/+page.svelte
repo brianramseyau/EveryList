@@ -15,6 +15,7 @@
 	import IconPicker from '$lib/components/IconPicker.svelte';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -208,7 +209,7 @@
 	/>
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else if list}
 		<nav class="flex flex-col gap-1">
 			{#if list.useCategories !== false}

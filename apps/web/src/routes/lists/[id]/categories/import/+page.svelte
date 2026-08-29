@@ -7,6 +7,7 @@
 	import type { CategoryDto, ListDto } from '@everylist/shared';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 	import { getToken } from '$lib/api/token';
 	import { fetchLists } from '$lib/api/lists';
 	import { fetchCategories, importCategories } from '$lib/api/categories';
@@ -104,7 +105,7 @@
 	{/if}
 
 	{#if loadingLists}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else if lists.length === 0}
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			You don't have any other lists to copy categories from yet.
@@ -121,7 +122,7 @@
 		</div>
 
 		{#if loadingCategories}
-			<p class="text-gray-600 dark:text-gray-400">Loading categories…</p>
+			<Loader label="Loading categories…" />
 		{:else if sourceCategories.length === 0}
 			<p class="text-sm text-gray-600 dark:text-gray-300">This list has no categories to import.</p>
 		{:else}

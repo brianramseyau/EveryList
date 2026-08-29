@@ -9,6 +9,7 @@
 	import { configureWidget } from '$lib/widget';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	let lists = $state<ListDto[]>([]);
 	let loading = $state(true);
@@ -92,7 +93,7 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else if ownedLists.length === 0}
 		<p class="text-sm text-gray-600 dark:text-gray-400">
 			You need to own a list before you can set up the widget for it.

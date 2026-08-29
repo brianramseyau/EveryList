@@ -8,6 +8,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { getToken } from '$lib/api/token';
 	import { deleteFolder, fetchFolders, reorderFolders, updateFolder } from '$lib/api/folders';
@@ -131,7 +132,7 @@
 	</PageHeader>
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else}
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			Rename, recolor, reorder, or delete folders.
