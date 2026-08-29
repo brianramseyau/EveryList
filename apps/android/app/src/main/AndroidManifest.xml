@@ -31,7 +31,9 @@
             </intent-filter>
         </activity>
 
-        <!-- Home-screen widget provider + its two services (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). -->
+        <!-- Home-screen widget provider + its data-provider service (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md) — the
+             actual refresh/toggle work runs on a background thread held open by the receiver's
+             goAsync() (WidgetUpdater), not a started Service. -->
         <receiver
             android:name=".EveryListWidget"
             android:label="@string/app_name"
@@ -44,10 +46,6 @@
                 android:resource="@xml/everylist_widget_info" />
         </receiver>
 
-        <service
-            android:name=".WidgetUpdateService"
-            android:exported="false" />
-
         <!-- The ListView's data provider. Must be bindable by the launcher (the widget host), hence
              exported, but only through the BIND_REMOTEVIEWS permission. -->
         <service
@@ -59,14 +57,19 @@
             </intent-filter>
         </service>
 
-        <!-- Widget configuration: launched by the launcher on placement (APPWIDGET_CONFIGURE) and
-             by the in-app provisioning plugin (EveryListWidgetPlugin), which writes the minted PAT
-             to private storage first — the token never travels in a loggable URI. -->
+        <!-- Widget configuration: launched by the launcher on placement (APPWIDGET_CONFIGURE), by the
+             in-app provisioning plugin (EveryListWidgetPlugin, which writes the minted PAT to private
+             storage first — the token never travels in a loggable URI), and by the widget's own list
+             selector (WidgetUpdater's widget_list_button PendingIntent) to quick-switch an existing
+             widget's list. AppTheme.WidgetDialog makes all three feel like a popup anchored to the
+             widget rather than a full page — see WidgetConfigActivity's own doc comment for how it
+             tells the placement flow (which still needs an explicit Save, per the AppWidgetManager
+             contract) apart from a quick switch (which applies on tap and closes immediately). -->
         <activity
             android:name=".WidgetConfigActivity"
             android:exported="true"
             android:excludeFromRecents="true"
-            android:theme="@style/AppTheme.NoActionBar">
+            android:theme="@style/AppTheme.WidgetDialog">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>

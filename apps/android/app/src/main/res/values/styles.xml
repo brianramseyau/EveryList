@@ -19,4 +19,18 @@
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
     </style>
+
+    <!-- WidgetConfigActivity's theme: a floating card over a dimmed scrim rather than a full-screen
+         page, so switching a widget's list (its most common use) reads as a quick popup anchored to
+         the widget, not a trip into the app. windowBackground is transparent — widget_config.xml
+         supplies its own rounded card background — and the content's own width/padding size the
+         window, since a Dialog-style activity's window otherwise wraps to its content. -->
+    <style name="AppTheme.WidgetDialog" parent="Theme.AppCompat.DayNight.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimAmount">0.4</item>
+        <item name="android:windowMinWidthMajor">90%</item>
+        <item name="android:windowMinWidthMinor">90%</item>
+    </style>
 </resources>

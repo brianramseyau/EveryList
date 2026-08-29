@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Save button's fill, with a ripple so it still gives touch feedback despite the flat color. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/widget_paper">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/widget_accent" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+</ripple>

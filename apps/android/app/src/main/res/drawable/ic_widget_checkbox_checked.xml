@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Filled circle + check (Material "check_circle"), tinted with widget_signal (the app's
+     "done"/success green) rather than widget_accent — a completed item shouldn't read as just
+     another tappable control. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24"
-    android:tint="@color/widget_accent">
+    android:tint="@color/widget_signal">
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M19,3H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2V5c0,-1.1 -0.9,-2 -2,-2zM10,17l-5,-5l1.41,-1.41L10,14.17l7.59,-7.59L19,8l-9,9z" />
+        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM10,17l-5,-5l1.41,-1.41L10,14.17l7.59,-7.59L19,8l-9,9z" />
 </vector>

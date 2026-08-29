@@ -75,7 +75,7 @@ public class WidgetListViewsFactory implements RemoteViewsService.RemoteViewsFac
         openFill.putExtra(EveryListWidget.EXTRA_ACTION, EveryListWidget.ACTION_OPEN_ITEM);
         openFill.putExtra(EveryListWidget.EXTRA_ITEM_ID, item.id);
         openFill.putExtra(EveryListWidget.EXTRA_LIST_ID, item.listId);
-        row.setOnClickFillInIntent(R.id.row_root, openFill);
+        row.setOnClickFillInIntent(R.id.item_body, openFill);
 
         Intent toggleFill = new Intent();
         toggleFill.putExtra(EveryListWidget.EXTRA_ACTION, EveryListWidget.ACTION_TOGGLE_ITEM);
