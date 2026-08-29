@@ -6,7 +6,7 @@
 export const pwaManifest = {
 	name: 'EveryList',
 	short_name: 'EveryList',
-	description: 'Shared, offline-first shopping lists.',
+	description: 'Shared, offline-first lists for everything.',
 	start_url: '/lists',
 	scope: '/',
 	display: 'standalone',

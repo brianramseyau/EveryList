@@ -23,7 +23,7 @@ const openapiConfig: OpenApiConfig = {
     title: 'EveryList API',
     version,
     description:
-      'Self-hosted shopping list API. Endpoints are bearer-token protected except where noted.',
+      'Self-hosted list API. Endpoints are bearer-token protected except where noted.',
   },
   servers: [{ url: '/' }],
   securitySchemes: {

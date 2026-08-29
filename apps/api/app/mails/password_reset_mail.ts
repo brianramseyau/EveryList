@@ -108,7 +108,7 @@ export default class PasswordResetMail extends BaseMail {
         `</tr>` +
         `<tr>` +
         `<td class="el-muted" align="center" style="padding:20px 16px 0;font-size:12px;line-height:1.5;color:${MUTED};">` +
-        `EveryList — your self-hosted shopping list` +
+        `EveryList — your self-hosted list app` +
         `</td>` +
         `</tr>` +
         `</table>` +
