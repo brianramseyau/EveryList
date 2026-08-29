@@ -367,6 +367,25 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText(/^Total:/)).not.toBeInTheDocument();
 	});
 
+	it("sorts items alphabetically within a category when itemSortOrder is 'alphabetical'", async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, itemSortOrder: 'alphabetical' });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 }),
+			makeItem({ id: 101, name: 'Apples', categoryId: 10, sortOrder: 1 })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+		const produceHeader = page.getByText('Produce').element().closest('h2');
+		expect(produceHeader).not.toBeNull();
+
+		const names = [...produceHeader!.parentElement!.querySelectorAll('li span')]
+			.map((el) => el.textContent?.trim())
+			.filter((t) => t === 'Bananas' || t === 'Apples');
+		expect(names).toEqual(['Apples', 'Bananas']);
+	});
+
 	it('hides checked items when the eye toggle is switched off, and shows them again on toggle', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
@@ -436,6 +455,24 @@ describe('List detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'List menu' }).click();
 		const settingsLink = page.getByRole('link', { name: 'List settings' });
 		expect(settingsLink.element().getAttribute('href')).toBe('/lists/1/settings');
+	});
+
+	it('hides the Stores, Favorites, and Recently deleted links when their list settings are off', async () => {
+		vi.mocked(fetchList).mockResolvedValue({
+			...list,
+			useShops: false,
+			useFavorites: false,
+			useRecent: false
+		});
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await expect.element(page.getByRole('link', { name: 'Stores' })).not.toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'Favorites' })).not.toBeInTheDocument();
+		await expect
+			.element(page.getByRole('link', { name: 'Recently deleted' }))
+			.not.toBeInTheDocument();
 	});
 
 	it('collapses the Favorites and Recently Deleted links while the item input is focused', async () => {
@@ -1691,6 +1728,50 @@ describe('List detail +page.svelte', () => {
 
 			await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
 			expect(writeText).toHaveBeenCalledWith('Groceries\n\n• Bananas');
+		});
+
+		it('copies an alphabetical-sort list to the clipboard sorted by name within each category', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, itemSortOrder: 'alphabetical' });
+			vi.mocked(fetchCategories).mockResolvedValue([produce, dairy]);
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false }),
+				makeItem({ id: 104, name: 'Apples', categoryId: 10, checked: false }),
+				makeItem({ id: 101, name: 'Milk', categoryId: 11, checked: false })
+			]);
+			const writeText = vi.fn().mockResolvedValue(undefined);
+			vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Copy to Clipboard' }).click();
+
+			await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
+			expect(writeText).toHaveBeenCalledWith(
+				'Groceries\n\nPRODUCE\n• Apples\n• Bananas\n\nDAIRY\n• Milk'
+			);
+		});
+
+		it('omits quantity from the copied text when the list opts out of quantity', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, useQuantity: false });
+			vi.mocked(fetchCategories).mockResolvedValue([produce]);
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false, quantity: '2' })
+			]);
+			const writeText = vi.fn().mockResolvedValue(undefined);
+			vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Copy to Clipboard' }).click();
+
+			await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
+			expect(writeText).toHaveBeenCalledWith('Groceries\n\nPRODUCE\n• Bananas');
 		});
 
 		it('sends an email export from the Share submenu', async () => {

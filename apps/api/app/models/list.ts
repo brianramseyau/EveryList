@@ -21,6 +21,27 @@ export default class List extends ListSchema {
   @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
   declare useCategories: boolean
 
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare useShops: boolean
+
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare useFavorites: boolean
+
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare useRecent: boolean
+
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare useQuantity: boolean
+
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare usePrice: boolean
+
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare showStoreInList: boolean
+
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare showPriceInList: boolean
+
   @belongsTo(() => User, { foreignKey: 'ownerId' })
   declare owner: BelongsTo<typeof User>
 

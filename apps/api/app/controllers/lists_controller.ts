@@ -99,6 +99,15 @@ export default class ListsController {
       color: payload.color ?? '#3b82f6',
       icon: payload.icon ?? null,
       useCategories: payload.useCategories,
+      useShops: payload.useShops,
+      useFavorites: payload.useFavorites,
+      useRecent: payload.useRecent,
+      useQuantity: payload.useQuantity,
+      usePrice: payload.usePrice,
+      showStoreInList: payload.showStoreInList,
+      showPriceInList: payload.showPriceInList,
+      itemSortOrder: payload.itemSortOrder,
+      insertPosition: payload.insertPosition,
     })
 
     logger.debug({ userId: user.id, listId: list.id }, 'list created')

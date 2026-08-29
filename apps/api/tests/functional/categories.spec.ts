@@ -57,8 +57,10 @@ test.group('Categories', (group) => {
     const lists = await client.get('/api/v1/lists').header('Authorization', `Bearer ${token}`)
     lists.assertStatus(200)
     const listIndex = bodyData<ListDto[]>(lists)
-    assert.lengthOf(listIndex, 1)
-    const listId = listIndex[0]!.id
+    // Signup also seeds a "Todos" starter list (useCategories: false) ahead of
+    // "Shopping List" — find the one that actually has categories.
+    assert.lengthOf(listIndex, 2)
+    const listId = listIndex.find((list) => list.name === 'Shopping List')!.id
 
     const index = await client
       .get(`/api/v1/lists/${listId}/categories`)

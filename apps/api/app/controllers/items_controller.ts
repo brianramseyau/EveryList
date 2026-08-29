@@ -1,4 +1,4 @@
-import type List from '#models/list'
+import List from '#models/list'
 import Item from '#models/item'
 import Category from '#models/category'
 import ListPolicy from '#policies/list_policy'
@@ -33,7 +33,28 @@ async function resolveCategoryId(
   return suggestCategoryId(list, itemName)
 }
 
-async function nextSortOrder(listId: number): Promise<number> {
+/**
+ * By default appends to the end of the list. Pass `respectInsertPosition` only
+ * for user-initiated new-item creation (not restores/imports/moves) — when the
+ * owning list's `insertPosition` is `'top'`, it instead returns a value below
+ * the current minimum so the new item lands first.
+ */
+async function nextSortOrder(
+  listId: number,
+  options?: { respectInsertPosition?: boolean }
+): Promise<number> {
+  if (options?.respectInsertPosition) {
+    const list = await List.query().where('id', listId).select('insertPosition').firstOrFail()
+    if (list.insertPosition === 'top') {
+      const result = await Item.query()
+        .where('listId', listId)
+        .whereNull('deletedAt')
+        .min('sort_order as minSortOrder')
+        .first()
+      return Number(result?.$extras.minSortOrder ?? 1) - 1
+    }
+  }
+
   const result = await Item.query()
     .where('listId', listId)
     .whereNull('deletedAt')
@@ -212,7 +233,7 @@ export default class ItemsController {
       storeId: payload.storeId ?? null,
       price: payload.price ?? null,
       checked: false,
-      sortOrder: await nextSortOrder(list.id),
+      sortOrder: await nextSortOrder(list.id, { respectInsertPosition: true }),
       createdBy: user.id,
       version: 1,
     })

@@ -11,17 +11,40 @@ test.group('Lists CRUD', (group) => {
     response.assertStatus(401)
   })
 
-  test('signup seeds a starter Shopping List owned by the new user', async ({ client, assert }) => {
+  test('signup seeds a starter Todos list and a starter Shopping List owned by the new user', async ({
+    client,
+    assert,
+  }) => {
     const token = await signupAndGetToken(client)
 
     const index = await client.get('/api/v1/lists').header('Authorization', `Bearer ${token}`)
     index.assertStatus(200)
     const indexed = bodyData<ListDto[]>(index)
-    assert.lengthOf(indexed, 1)
-    assert.equal(indexed[0]?.name, 'Shopping List')
-    assert.equal(indexed[0]?.icon, 'basket')
-    assert.equal(indexed[0]?.color, '#c2410c')
-    assert.equal(indexed[0]?.itemCount, 0)
+    assert.lengthOf(indexed, 2)
+
+    // Todos is created first so it sorts above Shopping List for a brand-new user.
+    const [todos, shopping] = indexed
+    assert.equal(todos?.name, 'Todos')
+    assert.equal(todos?.icon, 'formatListChecks')
+    assert.equal(todos?.color, '#1d4ed8')
+    assert.isFalse(todos?.useCategories)
+    assert.isFalse(todos?.useShops)
+    assert.isFalse(todos?.useFavorites)
+    assert.isFalse(todos?.useRecent)
+    assert.isFalse(todos?.useQuantity)
+    assert.isFalse(todos?.usePrice)
+    assert.equal(todos?.itemCount, 5)
+
+    assert.equal(shopping?.name, 'Shopping List')
+    assert.equal(shopping?.icon, 'basket')
+    assert.equal(shopping?.color, '#c2410c')
+    assert.equal(shopping?.itemCount, 0)
+    assert.isTrue(shopping?.useCategories)
+    assert.isTrue(shopping?.useShops)
+    assert.isTrue(shopping?.useFavorites)
+    assert.isTrue(shopping?.useRecent)
+    assert.isTrue(shopping?.useQuantity)
+    assert.isTrue(shopping?.usePrice)
   })
 
   test('creates, lists, updates, and soft-deletes a list', async ({ client, assert }) => {
@@ -43,9 +66,9 @@ test.group('Lists CRUD', (group) => {
     const index = await authed()
     index.assertStatus(200)
     const indexed = bodyData<ListDto[]>(index)
-    // Signup seeds a starter "Shopping List" list, so the index has that plus
-    // the one created above.
-    assert.lengthOf(indexed, 2)
+    // Signup seeds a starter "Todos" list and a starter "Shopping List" list,
+    // so the index has those two plus the one created above.
+    assert.lengthOf(indexed, 3)
     const indexedCreated = indexed.find((list) => list.id === listId)
     assert.equal(indexedCreated?.itemCount, 0)
 

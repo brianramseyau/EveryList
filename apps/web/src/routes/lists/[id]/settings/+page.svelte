@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Input, Select } from 'flowbite-svelte';
+	import { Button, Input, Select, Toggle } from 'flowbite-svelte';
 	import type { FolderDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { deleteList, fetchList, updateList } from '$lib/api/lists';
@@ -78,6 +78,15 @@
 			archived: boolean;
 			badgeExcluded: boolean;
 			useCategories: boolean;
+			useShops: boolean;
+			useFavorites: boolean;
+			useRecent: boolean;
+			useQuantity: boolean;
+			usePrice: boolean;
+			showStoreInList: boolean;
+			showPriceInList: boolean;
+			itemSortOrder: 'ranked' | 'alphabetical';
+			insertPosition: 'top' | 'bottom';
 			passcodeHash: string | null;
 			folderId: number | null;
 		}>
@@ -131,8 +140,21 @@
 		await onupdate({ badgeExcluded: !current.badgeExcluded });
 	}
 
-	async function toggleUseCategories(current: ListDto) {
-		await onupdate({ useCategories: current.useCategories === false });
+	type BooleanFeatureField =
+		| 'useCategories'
+		| 'useShops'
+		| 'useFavorites'
+		| 'useRecent'
+		| 'useQuantity'
+		| 'usePrice'
+		| 'showStoreInList'
+		| 'showPriceInList';
+
+	// Every feature toggle defaults to `true` server-side — `!== false` is the
+	// standard "missing/undefined means on" read used across this page (see
+	// ListDto's field comments).
+	async function toggleFeature(field: BooleanFeatureField, current: ListDto) {
+		await onupdate({ [field]: current[field] === false });
 	}
 
 	async function savePasscode(event: SubmitEvent) {
@@ -232,6 +254,7 @@
 				<div class="flex flex-col gap-1">
 					<span class="text-xs text-gray-500 dark:text-gray-400">Folder</span>
 					<Select
+						aria-label="Folder"
 						size="sm"
 						items={folders.map((folder) => ({ value: folder.id, name: folder.name }))}
 						placeholder="No folder"
@@ -262,13 +285,113 @@
 			{list.badgeExcluded ? 'Include in badge count' : 'Exclude from badge count'}
 		</button>
 
-		<button
-			type="button"
-			class="rounded-lg border border-gray-200 px-3 py-3 text-left text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-			onclick={() => toggleUseCategories(list!)}
-		>
-			{list.useCategories === false ? 'Enable categories' : 'Disable categories'}
-		</button>
+		<div class="flex flex-col gap-2">
+			<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">Features</span>
+
+			<Toggle
+				checked={list.useCategories !== false}
+				onchange={() => toggleFeature('useCategories', list!)}
+				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
+			>
+				Categories
+			</Toggle>
+
+			<Toggle
+				checked={list.useShops !== false}
+				onchange={() => toggleFeature('useShops', list!)}
+				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
+			>
+				Shops
+			</Toggle>
+
+			{#if list.useShops !== false}
+				<Toggle
+					checked={list.showStoreInList !== false}
+					onchange={() => toggleFeature('showStoreInList', list!)}
+					class="ml-4 w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
+				>
+					Show store name in list
+				</Toggle>
+			{/if}
+
+			<Toggle
+				checked={list.useFavorites !== false}
+				onchange={() => toggleFeature('useFavorites', list!)}
+				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
+			>
+				Favorites
+			</Toggle>
+
+			<Toggle
+				checked={list.useRecent !== false}
+				onchange={() => toggleFeature('useRecent', list!)}
+				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
+			>
+				Recently deleted
+			</Toggle>
+
+			<Toggle
+				checked={list.useQuantity !== false}
+				onchange={() => toggleFeature('useQuantity', list!)}
+				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
+			>
+				Quantity
+			</Toggle>
+
+			<Toggle
+				checked={list.usePrice !== false}
+				onchange={() => toggleFeature('usePrice', list!)}
+				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
+			>
+				Price
+			</Toggle>
+
+			{#if list.usePrice !== false}
+				<Toggle
+					checked={list.showPriceInList !== false}
+					onchange={() => toggleFeature('showPriceInList', list!)}
+					class="ml-4 w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
+				>
+					Show price in list
+				</Toggle>
+			{/if}
+		</div>
+
+		<div class="flex flex-col gap-1">
+			<span class="text-xs text-gray-500 dark:text-gray-400">Item Sort Order</span>
+			<Select
+				aria-label="Item Sort Order"
+				size="sm"
+				items={[
+					{ value: 'ranked', name: 'Ranked' },
+					{ value: 'alphabetical', name: 'Alphabetical' }
+				]}
+				value={list.itemSortOrder ?? 'ranked'}
+				onchange={(event) => {
+					const value = (event.target as HTMLSelectElement).value as 'ranked' | 'alphabetical';
+					void onupdate({ itemSortOrder: value });
+				}}
+			/>
+		</div>
+
+		{#if (list.itemSortOrder ?? 'ranked') !== 'alphabetical'}
+			<div class="flex flex-col gap-1">
+				<span class="text-xs text-gray-500 dark:text-gray-400">Insert new items</span>
+				<Select
+					aria-label="Insert new items"
+					size="sm"
+					items={[
+						{ value: 'bottom', name: 'At bottom' },
+						{ value: 'top', name: 'At top' }
+					]}
+					value={list.insertPosition ?? 'bottom'}
+					onchange={(event) => {
+						const value = (event.target as HTMLSelectElement).value as 'top' | 'bottom';
+						void onupdate({ insertPosition: value });
+					}}
+				/>
+			</div>
+		{/if}
 
 		{#if settingPasscode}
 			<form class="flex flex-col gap-2" onsubmit={savePasscode}>

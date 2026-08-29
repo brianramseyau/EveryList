@@ -218,7 +218,7 @@ describe('List settings +page.svelte', () => {
 		render(SettingsPage);
 		await expect.element(page.getByRole('button', { name: 'Archive list' })).toBeInTheDocument();
 
-		await expect.element(page.getByRole('combobox')).not.toBeInTheDocument();
+		await expect.element(page.getByRole('combobox', { name: 'Folder' })).not.toBeInTheDocument();
 	});
 
 	it('stages a folder change locally until Save is clicked', async () => {
@@ -236,9 +236,9 @@ describe('List settings +page.svelte', () => {
 		vi.mocked(updateList).mockResolvedValue({ ...list, folderId: 5 });
 
 		render(SettingsPage);
-		await expect.element(page.getByRole('combobox')).toBeInTheDocument();
+		await expect.element(page.getByRole('combobox', { name: 'Folder' })).toBeInTheDocument();
 
-		await page.getByRole('combobox').selectOptions('5');
+		await page.getByRole('combobox', { name: 'Folder' }).selectOptions('5');
 		expect(updateList).not.toHaveBeenCalled();
 
 		await page.getByRole('button', { name: 'Save changes' }).click();
@@ -266,7 +266,7 @@ describe('List settings +page.svelte', () => {
 		vi.mocked(updateList).mockResolvedValue({ ...list, folderId: null });
 
 		render(SettingsPage);
-		await expect.element(page.getByRole('combobox')).toBeInTheDocument();
+		await expect.element(page.getByRole('combobox', { name: 'Folder' })).toBeInTheDocument();
 
 		await page.getByRole('button', { name: 'Close' }).click();
 		expect(updateList).not.toHaveBeenCalled();
@@ -310,20 +310,16 @@ describe('List settings +page.svelte', () => {
 		expect(refreshBadgeCount).toHaveBeenCalled();
 	});
 
-	it('disables categories, flipping the button label and hiding the Categories link', async () => {
+	it('disables categories, flipping the toggle and hiding the Categories link', async () => {
 		vi.mocked(updateList).mockResolvedValue({ ...list, useCategories: false });
 
 		render(SettingsPage);
-		await expect
-			.element(page.getByRole('button', { name: 'Disable categories' }))
-			.toBeInTheDocument();
+		await expect.element(page.getByRole('checkbox', { name: 'Categories' })).toBeInTheDocument();
 
-		await page.getByRole('button', { name: 'Disable categories' }).click();
+		await page.getByRole('checkbox', { name: 'Categories' }).click();
 
 		expect(updateList).toHaveBeenCalledWith(1, { useCategories: false });
-		await expect
-			.element(page.getByRole('button', { name: 'Enable categories' }))
-			.toBeInTheDocument();
+		await expect.element(page.getByRole('checkbox', { name: 'Categories' })).not.toBeChecked();
 		await expect.element(page.getByRole('link', { name: 'Categories' })).not.toBeInTheDocument();
 	});
 
@@ -332,16 +328,82 @@ describe('List settings +page.svelte', () => {
 		vi.mocked(updateList).mockResolvedValue({ ...list, useCategories: true });
 
 		render(SettingsPage);
-		await expect
-			.element(page.getByRole('button', { name: 'Enable categories' }))
-			.toBeInTheDocument();
+		await expect.element(page.getByRole('checkbox', { name: 'Categories' })).not.toBeChecked();
 
-		await page.getByRole('button', { name: 'Enable categories' }).click();
+		await page.getByRole('checkbox', { name: 'Categories' }).click();
 
 		expect(updateList).toHaveBeenCalledWith(1, { useCategories: true });
+		await expect.element(page.getByRole('checkbox', { name: 'Categories' })).toBeChecked();
+	});
+
+	it('toggles Shops, Favorites, Recently deleted, Quantity, and Price, revealing their sub-toggles', async () => {
+		vi.mocked(updateList).mockImplementation(async (_id, patch) => ({ ...list, ...patch }));
+
+		render(SettingsPage);
+		await expect.element(page.getByRole('checkbox', { name: 'Shops' })).toBeChecked();
 		await expect
-			.element(page.getByRole('button', { name: 'Disable categories' }))
+			.element(page.getByRole('checkbox', { name: 'Show store name in list' }))
 			.toBeInTheDocument();
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Show price in list' }))
+			.toBeInTheDocument();
+
+		await page.getByRole('checkbox', { name: 'Shops' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, { useShops: false });
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Show store name in list' }))
+			.not.toBeInTheDocument();
+
+		await page.getByRole('checkbox', { name: 'Favorites' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, { useFavorites: false });
+
+		await page.getByRole('checkbox', { name: 'Recently deleted' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, { useRecent: false });
+
+		await page.getByRole('checkbox', { name: 'Quantity' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, { useQuantity: false });
+
+		await page.getByRole('checkbox', { name: 'Price', exact: true }).click();
+		expect(updateList).toHaveBeenCalledWith(1, { usePrice: false });
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Show price in list' }))
+			.not.toBeInTheDocument();
+	});
+
+	it('toggles the display-only Show store name / Show price sub-settings independently of the parent feature', async () => {
+		vi.mocked(updateList).mockResolvedValue({ ...list, showStoreInList: false });
+
+		render(SettingsPage);
+		await page.getByRole('checkbox', { name: 'Show store name in list' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, { showStoreInList: false });
+
+		await page.getByRole('checkbox', { name: 'Show price in list' }).click();
+		expect(updateList).toHaveBeenCalledWith(1, { showPriceInList: false });
+	});
+
+	it('changes the Item Sort Order and hides "Insert new items" once alphabetical is chosen', async () => {
+		vi.mocked(updateList).mockResolvedValue({ ...list, itemSortOrder: 'alphabetical' });
+
+		render(SettingsPage);
+		await expect
+			.element(page.getByRole('combobox', { name: 'Insert new items' }))
+			.toBeInTheDocument();
+
+		await page.getByRole('combobox', { name: 'Item Sort Order' }).selectOptions('alphabetical');
+
+		expect(updateList).toHaveBeenCalledWith(1, { itemSortOrder: 'alphabetical' });
+		await expect
+			.element(page.getByRole('combobox', { name: 'Insert new items' }))
+			.not.toBeInTheDocument();
+	});
+
+	it('changes Insert new items to "At top"', async () => {
+		vi.mocked(updateList).mockResolvedValue({ ...list, insertPosition: 'top' });
+
+		render(SettingsPage);
+		await page.getByRole('combobox', { name: 'Insert new items' }).selectOptions('top');
+
+		expect(updateList).toHaveBeenCalledWith(1, { insertPosition: 'top' });
 	});
 
 	it('shows an error when updating the list fails', async () => {

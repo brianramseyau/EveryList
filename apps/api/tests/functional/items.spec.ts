@@ -1134,4 +1134,34 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
       .header('Authorization', `Bearer ${stranger.token}`)
     strangerResponse.assertStatus(404)
   })
+
+  test("a list with insertPosition 'top' places newly created items above existing ones", async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listResponse = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Top-insert list', insertPosition: 'top' })
+    const listId = bodyData<ListDto>(listResponse).id
+
+    const first = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'First' })
+    const firstItem = bodyData<ItemDto>(first)
+
+    const second = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Second' })
+    const secondItem = bodyData<ItemDto>(second)
+
+    assert.isBelow(
+      secondItem.sortOrder,
+      firstItem.sortOrder,
+      'a later item on a top-insert list sorts above an earlier one'
+    )
+  })
 })
