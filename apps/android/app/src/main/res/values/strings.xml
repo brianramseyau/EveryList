@@ -30,4 +30,10 @@
     <string name="config_pick_a_list">Pick a list to show.</string>
     <string name="config_no_lists">This token has no lists — create one in the app first.</string>
     <string name="config_load_failed">Couldn’t load your lists — is the server reachable?</string>
+
+    <!-- Quick-add popup -->
+    <string name="quick_add_title">Add to %1$s</string>
+    <string name="quick_add_hint">Add an item…</string>
+    <string name="quick_add_save">Add</string>
+    <string name="quick_add_failed">Couldn’t add that — is the server reachable?</string>
 </resources>

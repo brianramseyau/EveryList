@@ -82,6 +82,18 @@
             </intent-filter>
         </activity>
 
+        <!-- The widget's "+" quick-add popup (WidgetUpdater's widget_add PendingIntent). Not
+             exported: it's only ever launched via an explicit PendingIntent created by this app
+             itself, never resolved by an external intent-filter match, so exported=false is both
+             sufficient and tighter. Same taskAffinity/excludeFromRecents/dialog-theme rationale as
+             WidgetConfigActivity above — a momentary popup, not a real destination. -->
+        <activity
+            android:name=".QuickAddActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/AppTheme.WidgetDialog" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
