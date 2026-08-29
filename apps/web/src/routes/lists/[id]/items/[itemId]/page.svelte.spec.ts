@@ -399,6 +399,54 @@ describe('Item detail +page.svelte', () => {
 		await expect.element(page.getByLabelText('Category')).not.toBeInTheDocument();
 	});
 
+	it('hides the Quantity field when the list opts out of quantity', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useQuantity: false });
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await expect.element(page.getByLabelText('Quantity (optional)')).not.toBeInTheDocument();
+		await expect.element(page.getByLabelText('Price (optional)')).toBeInTheDocument();
+	});
+
+	it('hides the Price field when the list opts out of price', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, usePrice: false });
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await expect.element(page.getByLabelText('Price (optional)')).not.toBeInTheDocument();
+		await expect.element(page.getByLabelText('Quantity (optional)')).toBeInTheDocument();
+	});
+
+	it('hides both Quantity and Price fields when the list opts out of both', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useQuantity: false, usePrice: false });
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await expect.element(page.getByLabelText('Quantity (optional)')).not.toBeInTheDocument();
+		await expect.element(page.getByLabelText('Price (optional)')).not.toBeInTheDocument();
+	});
+
+	it('hides the Store field when the list opts out of shops, even with stores available', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useShops: false });
+		vi.mocked(fetchStores).mockResolvedValue([corner]);
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await expect.element(page.getByLabelText('Store')).not.toBeInTheDocument();
+	});
+
 	it('picks a store via the select', async () => {
 		const db = getDb()!;
 		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));

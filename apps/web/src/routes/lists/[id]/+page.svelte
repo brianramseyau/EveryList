@@ -12,7 +12,7 @@
 	import { emailExportList, fetchList } from '$lib/api/lists';
 	import { fetchCategories } from '$lib/api/categories';
 	import { fetchCategoryLearnings } from '$lib/api/category-learnings';
-	import { createItem, deleteItem, fetchItems, updateItem } from '$lib/api/items';
+	import { createItem, deleteItem, fetchItems, undoDeleteItem, updateItem } from '$lib/api/items';
 	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
 	import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
 	import { isRowDirty, type StoreFilter } from '$lib/offline/db';
@@ -36,6 +36,7 @@
 	import PasscodeGate from '$lib/components/PasscodeGate.svelte';
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
 	import PopoutMenuItem from '$lib/components/PopoutMenuItem.svelte';
+	import UndoToast from '$lib/components/UndoToast.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -217,6 +218,14 @@
 			byCategory.get(key)!.push(item);
 		}
 
+		// itemSortOrder: 'alphabetical' (PLAN_19_PHASE_LIST_FEATURE_TOGGLES.md) only changes the
+		// ordering *within* each bucket — category grouping (or lack of it) is unaffected.
+		if (list?.itemSortOrder === 'alphabetical') {
+			for (const bucket of byCategory.values()) {
+				bucket.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+			}
+		}
+
 		// Lists that opt out of categories (PLAN_11_PHASE_LIST_FEATURE_REFINEMENTS.md §E) render as a single
 		// flat section — collapse every bucket instead of grouping by categoryId.
 		if (list?.useCategories === false) {
@@ -260,6 +269,9 @@
 				return '';
 		}
 	});
+
+	const showPriceInList = $derived(list?.usePrice !== false && list?.showPriceInList !== false);
+	const showStoreInList = $derived(list?.useShops !== false && list?.showStoreInList !== false);
 
 	const totalCents = $derived(visibleItems.reduce((sum, item) => sum + (item.price ?? 0), 0));
 
@@ -515,6 +527,41 @@
 		}
 	}
 
+	// Undo-delete toast (PLAN_20_PHASE_UNDO_DELETE_TOAST.md) — wraps only the two direct
+	// single-item delete gestures (swipe and the X button), not `clearChecked`'s bulk path, which
+	// keeps calling `removeItem` directly. One slot: a second delete while a toast is showing
+	// replaces it outright, same as Gmail/Todoist's "latest wins" — the superseded delete is
+	// simply no longer undoable.
+	let pendingUndo = $state<ItemDto | null>(null);
+
+	function removeItemWithUndo(item: ItemDto) {
+		pendingUndo = item;
+		void removeItem(item);
+	}
+
+	function expireUndo() {
+		pendingUndo = null;
+	}
+
+	// Only reachable via the toast's own onAction, which only renders while `pendingUndo` is set.
+	async function undoRemove() {
+		const item = pendingUndo!;
+		pendingUndo = null;
+
+		// `removeItem`'s own delete request can fail independently (e.g. the server rejected it) and
+		// self-heal via `loadAll()`, which may already have put the item back into `items` before
+		// Undo is clicked — concatenating unconditionally would then duplicate it.
+		if (!items.some((current) => current.id === item.id)) {
+			items = [...items, item].sort((a, b) => a.sortOrder - b.sortOrder);
+		}
+		try {
+			await undoDeleteItem(listId, item.id);
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to undo delete.';
+			void loadAll();
+		}
+	}
+
 	// Bulk-deletes via the same soft-delete path as a single item, one request
 	// per item rather than a new backend endpoint (PLAN_10_PHASE_VALIDATION_USABILITY.md #0.11) — each
 	// call targets a different id, so there's no version-conflict risk running
@@ -605,13 +652,18 @@
 			if (!byCategory.has(key)) byCategory.set(key, []);
 			byCategory.get(key)!.push(item);
 		}
+		if (list!.itemSortOrder === 'alphabetical') {
+			for (const bucket of byCategory.values()) {
+				bucket.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+			}
+		}
 
 		const lines: string[] = [list!.name, ''];
 		const appendSection = (header: string | null, sectionItems: ItemDto[]) => {
 			if (sectionItems.length === 0) return;
 			if (header) lines.push(header.toUpperCase());
 			for (const item of sectionItems) {
-				const quantity = item.quantity ? ` (${item.quantity})` : '';
+				const quantity = item.quantity && list!.useQuantity !== false ? ` (${item.quantity})` : '';
 				lines.push(`• ${item.name}${quantity}`);
 			}
 			lines.push('');
@@ -681,54 +733,56 @@
 		bind:height={stickyHeaderHeight}
 	>
 		{#snippet actions()}
-			<div class="relative" bind:this={storeMenuContainer}>
-				<a
-					href={resolve('/lists/[id]/stores', { id: String(listId) })}
-					aria-label="Stores"
-					bind:this={storeMenuAnchor}
-					oncontextmenu={(event) => event.preventDefault()}
-					class="store-trigger text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-					use:longPress={{
-						disabled: stores.length === 0,
-						onLongPress: () => (storeMenuOpen = true)
-					}}
-				>
-					<span style:color={selectedStore?.color}>
-						<Icon name="store" class="h-5 w-5" />
-					</span>
-				</a>
-
-				{#if storeMenuOpen && storeMenuAnchor}
-					<div
-						use:anchorPanel={storeMenuAnchor}
-						class="fixed z-30 min-w-48 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+			{#if list?.useShops !== false}
+				<div class="relative" bind:this={storeMenuContainer}>
+					<a
+						href={resolve('/lists/[id]/stores', { id: String(listId) })}
+						aria-label="Stores"
+						bind:this={storeMenuAnchor}
+						oncontextmenu={(event) => event.preventDefault()}
+						class="store-trigger text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+						use:longPress={{
+							disabled: stores.length === 0,
+							onLongPress: () => (storeMenuOpen = true)
+						}}
 					>
-						<PopoutMenuItem onclick={() => selectStore(null)}>
-							<span class="flex items-center gap-2">
-								<span class="flex-1">No store selected</span>
-								{#if selectedStoreId === null}
-									<Icon name="checkCircle" class="h-5 w-5 shrink-0 text-primary-600" />
-								{/if}
-							</span>
-						</PopoutMenuItem>
-						{#each stores as store (store.id)}
-							<PopoutMenuItem onclick={() => selectStore(store.id)}>
+						<span style:color={selectedStore?.color}>
+							<Icon name="store" class="h-5 w-5" />
+						</span>
+					</a>
+
+					{#if storeMenuOpen && storeMenuAnchor}
+						<div
+							use:anchorPanel={storeMenuAnchor}
+							class="fixed z-30 min-w-48 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+						>
+							<PopoutMenuItem onclick={() => selectStore(null)}>
 								<span class="flex items-center gap-2">
-									<span
-										class="h-3.5 w-3.5 shrink-0 rounded-full"
-										style:background-color={store.color}
-										aria-hidden="true"
-									></span>
-									<span class="flex-1">{store.name}</span>
-									{#if selectedStoreId === store.id}
+									<span class="flex-1">No store selected</span>
+									{#if selectedStoreId === null}
 										<Icon name="checkCircle" class="h-5 w-5 shrink-0 text-primary-600" />
 									{/if}
 								</span>
 							</PopoutMenuItem>
-						{/each}
-					</div>
-				{/if}
-			</div>
+							{#each stores as store (store.id)}
+								<PopoutMenuItem onclick={() => selectStore(store.id)}>
+									<span class="flex items-center gap-2">
+										<span
+											class="h-3.5 w-3.5 shrink-0 rounded-full"
+											style:background-color={store.color}
+											aria-hidden="true"
+										></span>
+										<span class="flex-1">{store.name}</span>
+										{#if selectedStoreId === store.id}
+											<Icon name="checkCircle" class="h-5 w-5 shrink-0 text-primary-600" />
+										{/if}
+									</span>
+								</PopoutMenuItem>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
 			<PopoutMenu
 				label="List menu"
 				iconName="dotsVertical"
@@ -842,20 +896,24 @@
 							? 'pointer-events-none max-w-0 opacity-0'
 							: 'max-w-28 opacity-100'}"
 					>
-						<a
-							href={resolve('/lists/[id]/favorites', { id: String(listId) })}
-							aria-label="Favorites"
-							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
-						>
-							<Icon name="heart" class="h-5 w-5" />
-						</a>
-						<a
-							href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
-							aria-label="Recently deleted"
-							class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
-						>
-							<Icon name="history" class="h-5 w-5" />
-						</a>
+						{#if list?.useFavorites !== false}
+							<a
+								href={resolve('/lists/[id]/favorites', { id: String(listId) })}
+								aria-label="Favorites"
+								class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+							>
+								<Icon name="heart" class="h-5 w-5" />
+							</a>
+						{/if}
+						{#if list?.useRecent !== false}
+							<a
+								href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
+								aria-label="Recently deleted"
+								class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
+							>
+								<Icon name="history" class="h-5 w-5" />
+							</a>
+						{/if}
 					</div>
 					<ItemAutocomplete
 						{listId}
@@ -981,7 +1039,8 @@
 									use:sortableReorder={{
 										group: 'list-items',
 										fallbackAxis: 'y',
-										onDrop: handleItemDrop
+										onDrop: handleItemDrop,
+										disabled: list?.itemSortOrder === 'alphabetical'
 									}}
 								>
 									{#each group.items as item (item.id)}
@@ -1011,7 +1070,7 @@
 												style="touch-action: pan-y;"
 												use:swipeReveal={{
 													disabled: !isCoarsePointer,
-													onCommitRight: () => removeItem(item),
+													onCommitRight: () => removeItemWithUndo(item),
 													onCommitLeft: () => {
 														markListOriginAndScroll();
 														void goto(
@@ -1063,12 +1122,12 @@
 														>
 															{item.name}
 														</span>
-														{#if item.quantity}
+														{#if item.quantity && list?.useQuantity !== false}
 															<span class="text-gray-600 dark:text-gray-400"
 																>(<span>{item.quantity}</span>)</span
 															>
 														{/if}
-														{#if item.price !== null}
+														{#if item.price !== null && showPriceInList}
 															<span
 																class="ml-auto shrink-0 text-xs font-semibold text-primary-600 tabular-nums dark:text-primary-400"
 															>
@@ -1076,7 +1135,7 @@
 															</span>
 														{/if}
 													</div>
-													{#if item.storeId}
+													{#if item.storeId && showStoreInList}
 														{@const itemStore = stores.find((store) => store.id === item.storeId)}
 														{#if itemStore}
 															<span class="text-xs" style:color={itemStore.color}>
@@ -1114,7 +1173,7 @@
 														aria-label={`Delete ${item.name}`}
 														data-reorder-ignore
 														class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-400 hover:text-red-600 dark:hover:text-red-400 print:hidden"
-														onclick={() => removeItem(item)}
+														onclick={() => removeItemWithUndo(item)}
 													>
 														<Icon name="close" class="h-5 w-5" />
 													</button>
@@ -1134,7 +1193,7 @@
 						<span class="text-gray-600 dark:text-gray-400">
 							{progressText}
 						</span>
-						{#if totalCents > 0}
+						{#if totalCents > 0 && showPriceInList}
 							<span class="font-mono font-semibold tabular-nums">{totalText}</span>
 						{/if}
 					</div>
@@ -1146,6 +1205,12 @@
 			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 		{/if}
 	</div>
+
+	{#if pendingUndo}
+		{#key pendingUndo.id}
+			<UndoToast message="Item deleted" onAction={undoRemove} onDismiss={expireUndo} />
+		{/key}
+	{/if}
 </main>
 
 <style>

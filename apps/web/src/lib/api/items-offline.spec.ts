@@ -22,6 +22,7 @@ const {
 	createItem,
 	updateItem,
 	deleteItem,
+	undoDeleteItem,
 	fetchItems,
 	fetchRecentItemNames,
 	fetchRecentItems,
@@ -388,6 +389,61 @@ describe('deleteItem (Dexie available)', () => {
 	it('is a no-op against Dexie when the row was never cached', async () => {
 		vi.mocked(apiDelete).mockResolvedValue(undefined);
 		await expect(deleteItem(1, 999)).resolves.toBeUndefined();
+	});
+});
+
+describe('undoDeleteItem (Dexie available)', () => {
+	const baseItem = {
+		id: 5,
+		listId: 1,
+		name: 'Milk',
+		quantity: null,
+		notes: null,
+		categoryId: null,
+		storeId: null,
+		price: null,
+		checked: false,
+		checkedAt: null,
+		sortOrder: 0,
+		createdBy: 1,
+		createdAt: '2026-08-01T00:00:00.000Z',
+		updatedAt: null,
+		deletedAt: null,
+		version: 3
+	};
+
+	it('cancels a still-queued (offline) delete: dequeues it and reverts the row locally, never calling restore', async () => {
+		const db = getDb()!;
+		await db.items.put(baseItem);
+		vi.stubGlobal('navigator', { onLine: false });
+
+		await deleteItem(1, 5);
+		expect(await pendingMutations()).toHaveLength(1);
+
+		await undoDeleteItem(1, 5);
+
+		expect(await pendingMutations()).toHaveLength(0);
+		expect(apiPost).not.toHaveBeenCalled();
+		const cached = await db.items.get(5);
+		expect(cached?.deletedAt).toBeNull();
+		expect(cached?._dirty).toBe(false);
+		expect(cached?.version).toBe(3);
+	});
+
+	it('falls back to restoreItem once the delete has already reached the server', async () => {
+		const db = getDb()!;
+		await db.items.put(baseItem);
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+		await deleteItem(1, 5);
+		expect(await pendingMutations()).toHaveLength(0);
+
+		vi.mocked(apiPost).mockResolvedValue({ id: 5, deletedAt: null, version: 4 });
+		await undoDeleteItem(1, 5);
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items/5/restore');
+		const cached = await db.items.get(5);
+		expect(cached?.deletedAt).toBeNull();
+		expect(cached?.version).toBe(4);
 	});
 });
 

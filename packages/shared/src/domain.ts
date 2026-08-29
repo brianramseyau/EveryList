@@ -13,6 +13,19 @@ export interface ListDto {
    *  responses; optional here only so existing test fixtures don't all need updating —
    *  treat a missing value as `true` (the server-side default), same convention as `role` above. */
   useCategories?: boolean
+  /** Same "missing = server default (true)" convention as useCategories above. */
+  useShops?: boolean
+  useFavorites?: boolean
+  useRecent?: boolean
+  useQuantity?: boolean
+  usePrice?: boolean
+  /** Display-only, independent of useShops/usePrice — same "missing = true" convention. */
+  showStoreInList?: boolean
+  showPriceInList?: boolean
+  /** Missing = server default `'ranked'`. */
+  itemSortOrder?: 'ranked' | 'alphabetical'
+  /** Only meaningful when itemSortOrder is 'ranked'. Missing = server default `'bottom'`. */
+  insertPosition?: 'top' | 'bottom'
   /** Client-computed `"<saltHex>:<sha256Hex>"` — the server never sees the raw PIN. See PLAN_07_PHASE_POLISH.md §2. */
   passcodeHash: string | null
   itemCount: number

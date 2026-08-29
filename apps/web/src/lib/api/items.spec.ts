@@ -26,6 +26,7 @@ const {
 	moveItemToList,
 	purgeItem,
 	restoreItem,
+	undoDeleteItem,
 	updateItem
 } = await import('./items');
 
@@ -43,6 +44,11 @@ describe('items api', () => {
 
 	it('restoreItem POSTs to the restore endpoint', () => {
 		restoreItem(1, 100);
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items/100/restore');
+	});
+
+	it('undoDeleteItem falls back to restoreItem when Dexie is unavailable', async () => {
+		await undoDeleteItem(1, 100);
 		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items/100/restore');
 	});
 

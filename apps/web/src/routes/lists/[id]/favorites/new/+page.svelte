@@ -116,6 +116,9 @@
 				{categories}
 				{stores}
 				showCategory={list?.useCategories !== false}
+				showQuantity={list?.useQuantity !== false}
+				showPrice={list?.usePrice !== false}
+				showStore={list?.useShops !== false}
 			/>
 		</form>
 	{/if}

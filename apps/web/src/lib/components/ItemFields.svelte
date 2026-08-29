@@ -13,6 +13,9 @@
 		categories,
 		stores,
 		showCategory = true,
+		showQuantity = true,
+		showPrice = true,
+		showStore = true,
 		autofocusName = true
 	}: {
 		name?: string;
@@ -24,6 +27,9 @@
 		categories: CategoryDto[];
 		stores: StoreDto[];
 		showCategory?: boolean;
+		showQuantity?: boolean;
+		showPrice?: boolean;
+		showStore?: boolean;
 		autofocusName?: boolean;
 	} = $props();
 </script>
@@ -49,23 +55,29 @@
 	/>
 </div>
 
-<div class="grid grid-cols-2 gap-4">
-	<div class="flex flex-col gap-1">
-		<Label for="item-quantity" class="flex items-center gap-1">
-			<Icon name="counter" class="h-4 w-4" />
-			Quantity (optional)
-		</Label>
-		<Input id="item-quantity" placeholder="e.g. 2, 1 lb, a dozen" bind:value={quantity} />
-	</div>
+{#if showQuantity || showPrice}
+	<div class="grid grid-cols-2 gap-4">
+		{#if showQuantity}
+			<div class="flex flex-col gap-1" class:col-span-2={!showPrice}>
+				<Label for="item-quantity" class="flex items-center gap-1">
+					<Icon name="counter" class="h-4 w-4" />
+					Quantity (optional)
+				</Label>
+				<Input id="item-quantity" placeholder="e.g. 2, 1 lb, a dozen" bind:value={quantity} />
+			</div>
+		{/if}
 
-	<div class="flex flex-col gap-1">
-		<Label for="item-price" class="flex items-center gap-1">
-			<Icon name="currencyUsd" class="h-4 w-4" />
-			Price (optional)
-		</Label>
-		<Input id="item-price" inputmode="decimal" placeholder="0.00" bind:value={price} />
+		{#if showPrice}
+			<div class="flex flex-col gap-1" class:col-span-2={!showQuantity}>
+				<Label for="item-price" class="flex items-center gap-1">
+					<Icon name="currencyUsd" class="h-4 w-4" />
+					Price (optional)
+				</Label>
+				<Input id="item-price" inputmode="decimal" placeholder="0.00" bind:value={price} />
+			</div>
+		{/if}
 	</div>
-</div>
+{/if}
 
 {#if showCategory}
 	<div class="flex flex-col gap-1">
@@ -87,7 +99,7 @@
 	</div>
 {/if}
 
-{#if stores.length > 0}
+{#if showStore && stores.length > 0}
 	<div class="flex flex-col gap-1">
 		<Label for="item-store" class="flex items-center gap-1">
 			<Icon name="store" class="h-4 w-4" />

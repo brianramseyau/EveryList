@@ -25,6 +25,35 @@ export interface ConsolidatedEnqueueResult {
 	alreadyPending: boolean;
 }
 
+/** All `pending` mutations for a given row, oldest first. */
+async function pendingMutationsFor(
+	entityType: SyncEntityType,
+	targetId: number
+): Promise<QueuedMutation[]> {
+	const db = getDb();
+	if (!db) return [];
+
+	return db.syncQueue
+		.where('status')
+		.equals('pending')
+		.filter((row) => row.entityType === entityType && row.targetId === targetId)
+		.sortBy('createdAt');
+}
+
+/** The still-`pending` mutation for a given row and operation, if any — used to tell whether a
+ * mutation has actually left the device yet. A `pending` row can mean either "never sent" (the
+ * offline case, or the brief window before an online request fires) or "sent, awaiting response"
+ * (the request is in flight but hasn't resolved to a dequeue yet) — callers that need to
+ * distinguish those two must do so themselves; this only reports queue membership. */
+export async function findPendingMutation(
+	entityType: SyncEntityType,
+	targetId: number,
+	op: QueuedMutation['op']
+): Promise<QueuedMutation | undefined> {
+	const pending = await pendingMutationsFor(entityType, targetId);
+	return pending.find((row) => row.op === op);
+}
+
 /** Enqueues a user-initiated mutation, coalescing it with any already-pending
  * mutation for the same row so the queue holds the latest *state* rather than a
  * history of actions. Multiple updates to one row fold into a single mutation
@@ -41,11 +70,7 @@ export async function enqueueConsolidated(
 	const db = getDb();
 	if (!db) return undefined;
 
-	const pending = await db.syncQueue
-		.where('status')
-		.equals('pending')
-		.filter((row) => row.entityType === mutation.entityType && row.targetId === mutation.targetId)
-		.sortBy('createdAt');
+	const pending = await pendingMutationsFor(mutation.entityType, mutation.targetId);
 
 	const pendingUpdate = pending.find((row) => row.op === 'update');
 	if (mutation.op === 'update' && pendingUpdate) {

@@ -4,6 +4,7 @@ import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@e
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 import { getDb, type EveryListDB } from '$lib/offline/db';
 import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';
+import { dequeueMutation, findPendingMutation } from '$lib/offline/sync-queue';
 import { withCacheFallback } from './cache-fallback';
 /* v8 ignore stop */
 
@@ -106,6 +107,28 @@ export async function restoreItem(listId: number, itemId: number): Promise<ItemD
 		},
 		request: () => apiPost<ItemDto>(`/api/v1/lists/${listId}/items/${itemId}/restore`)
 	});
+}
+
+/** The undo-delete toast's action (PLAN_20_PHASE_UNDO_DELETE_TOAST.md). If the delete mutation
+ * hasn't actually left the device yet — offline, or the brief window before an online request
+ * fires — cancels it outright: dequeues the mutation and reverts the row with a plain (non-dirty)
+ * write, so nothing is ever sent to the server. Otherwise the delete has already reached the
+ * server (or is in flight), so this falls back to the normal `restoreItem` path. */
+export async function undoDeleteItem(listId: number, itemId: number): Promise<void> {
+	const db = getDb();
+	if (!db) {
+		await restoreItem(listId, itemId);
+		return;
+	}
+
+	const pending = await findPendingMutation('item', itemId, 'delete');
+	if (pending?.id !== undefined) {
+		await dequeueMutation(pending.id);
+		await db.items.update(itemId, { deletedAt: null, _dirty: false });
+		return;
+	}
+
+	await restoreItem(listId, itemId);
 }
 
 /** Hard-deletes an already soft-deleted row — the "Recently Deleted" page's permanent-delete

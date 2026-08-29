@@ -66,6 +66,7 @@ vi.mock('$lib/api/items', () => ({
 	fetchItems: vi.fn(),
 	createItem: vi.fn(),
 	deleteItem: vi.fn(),
+	undoDeleteItem: vi.fn(),
 	updateItem: vi.fn(),
 	fetchRecentItemNames: vi.fn()
 }));
@@ -86,7 +87,7 @@ vi.mock('$lib/open-external-link', () => ({ openExternalLink: vi.fn() }));
 const { fetchList, emailExportList } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
 const { fetchCategoryLearnings } = await import('$lib/api/category-learnings');
-const { fetchItems, createItem, deleteItem, updateItem, fetchRecentItemNames } =
+const { fetchItems, createItem, deleteItem, undoDeleteItem, updateItem, fetchRecentItemNames } =
 	await import('$lib/api/items');
 const { fetchFavorites } = await import('$lib/api/favorites');
 const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores');
@@ -184,6 +185,7 @@ describe('List detail +page.svelte', () => {
 	afterEach(async () => {
 		vi.clearAllMocks();
 		vi.unstubAllGlobals();
+		vi.useRealTimers();
 		clearToken();
 		window.sessionStorage.clear();
 		window.localStorage.clear();
@@ -367,6 +369,25 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText(/^Total:/)).not.toBeInTheDocument();
 	});
 
+	it("sorts items alphabetically within a category when itemSortOrder is 'alphabetical'", async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, itemSortOrder: 'alphabetical' });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 }),
+			makeItem({ id: 101, name: 'Apples', categoryId: 10, sortOrder: 1 })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+		const produceHeader = page.getByText('Produce').element().closest('h2');
+		expect(produceHeader).not.toBeNull();
+
+		const names = [...produceHeader!.parentElement!.querySelectorAll('li span')]
+			.map((el) => el.textContent?.trim())
+			.filter((t) => t === 'Bananas' || t === 'Apples');
+		expect(names).toEqual(['Apples', 'Bananas']);
+	});
+
 	it('hides checked items when the eye toggle is switched off, and shows them again on toggle', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
@@ -436,6 +457,24 @@ describe('List detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'List menu' }).click();
 		const settingsLink = page.getByRole('link', { name: 'List settings' });
 		expect(settingsLink.element().getAttribute('href')).toBe('/lists/1/settings');
+	});
+
+	it('hides the Stores, Favorites, and Recently deleted links when their list settings are off', async () => {
+		vi.mocked(fetchList).mockResolvedValue({
+			...list,
+			useShops: false,
+			useFavorites: false,
+			useRecent: false
+		});
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		await expect.element(page.getByRole('link', { name: 'Stores' })).not.toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'Favorites' })).not.toBeInTheDocument();
+		await expect
+			.element(page.getByRole('link', { name: 'Recently deleted' }))
+			.not.toBeInTheDocument();
 	});
 
 	it('collapses the Favorites and Recently Deleted links while the item input is focused', async () => {
@@ -1400,6 +1439,131 @@ describe('List detail +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
+	describe('undo-delete toast', () => {
+		it('shows an undo toast after deleting an item, and Undo restores it at its original position', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 }),
+				makeItem({ id: 101, name: 'Milk', categoryId: 10, sortOrder: 1 })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+
+			expect(deleteItem).toHaveBeenCalledWith(1, 100);
+			await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+			await expect.element(page.getByText('Item deleted')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			expect(undoDeleteItem).toHaveBeenCalledWith(1, 100);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+			await expect.element(page.getByText('Item deleted')).not.toBeInTheDocument();
+
+			const produceHeader = page.getByText('Produce').element().closest('h2');
+			const names = [...produceHeader!.parentElement!.querySelectorAll('li span')]
+				.map((el) => el.textContent?.trim())
+				.filter((t) => t === 'Bananas' || t === 'Milk');
+			expect(names).toEqual(['Bananas', 'Milk']);
+		});
+
+		it('lets the deletion stand once the toast times out without Undo', async () => {
+			vi.useFakeTimers();
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+			await expect.element(page.getByText('Item deleted')).toBeInTheDocument();
+
+			await vi.advanceTimersByTimeAsync(5000);
+
+			await expect.element(page.getByText('Item deleted')).not.toBeInTheDocument();
+			await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+			expect(undoDeleteItem).not.toHaveBeenCalled();
+		});
+
+		it('replaces an active toast when a second item is deleted before Undo', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 }),
+				makeItem({ id: 101, name: 'Milk', categoryId: 10, sortOrder: 1 })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+			await expect.element(page.getByText('Item deleted')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Milk' }).click();
+			await expect.element(page.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			expect(undoDeleteItem).toHaveBeenCalledExactlyOnceWith(1, 101);
+			await expect.element(page.getByText('Milk')).toBeInTheDocument();
+			await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+		});
+
+		it('reloads the list when undoing a delete fails without an ApiError', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 })
+			]);
+			vi.mocked(undoDeleteItem).mockRejectedValue(new TypeError('network down'));
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+		});
+
+		it('reloads the list when undoing a delete fails with an ApiError', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 })
+			]);
+			vi.mocked(undoDeleteItem).mockRejectedValue(new ApiError(500, 'Could not undo delete'));
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+		});
+
+		it("doesn't duplicate the item if the original delete already self-healed via a reload before Undo is clicked", async () => {
+			// `deleteItem` fails independently of the toast, so `removeItem`'s own
+			// catch reloads the list — since `fetchItems` keeps resolving with
+			// Bananas still present, that reload alone already puts it back into
+			// `items` before Undo is ever clicked.
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 })
+			]);
+			vi.mocked(deleteItem).mockRejectedValueOnce(new ApiError(500, 'Could not delete'));
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Delete Bananas' }).click();
+			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			expect(undoDeleteItem).toHaveBeenCalledWith(1, 100);
+			await expect.element(page.getByText('Item deleted')).not.toBeInTheDocument();
+			expect(page.getByText('Bananas').elements()).toHaveLength(1);
+		});
+	});
+
 	it('disables "Clear Checked Off Items" in the menu until at least one item is checked', async () => {
 		vi.mocked(updateItem).mockResolvedValue(undefined);
 		vi.mocked(fetchItems).mockResolvedValue([
@@ -1691,6 +1855,50 @@ describe('List detail +page.svelte', () => {
 
 			await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
 			expect(writeText).toHaveBeenCalledWith('Groceries\n\n• Bananas');
+		});
+
+		it('copies an alphabetical-sort list to the clipboard sorted by name within each category', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, itemSortOrder: 'alphabetical' });
+			vi.mocked(fetchCategories).mockResolvedValue([produce, dairy]);
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false }),
+				makeItem({ id: 104, name: 'Apples', categoryId: 10, checked: false }),
+				makeItem({ id: 101, name: 'Milk', categoryId: 11, checked: false })
+			]);
+			const writeText = vi.fn().mockResolvedValue(undefined);
+			vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Copy to Clipboard' }).click();
+
+			await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
+			expect(writeText).toHaveBeenCalledWith(
+				'Groceries\n\nPRODUCE\n• Apples\n• Bananas\n\nDAIRY\n• Milk'
+			);
+		});
+
+		it('omits quantity from the copied text when the list opts out of quantity', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, useQuantity: false });
+			vi.mocked(fetchCategories).mockResolvedValue([produce]);
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false, quantity: '2' })
+			]);
+			const writeText = vi.fn().mockResolvedValue(undefined);
+			vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await page.getByRole('button', { name: 'Share' }).click();
+			await page.getByRole('button', { name: 'Copy to Clipboard' }).click();
+
+			await expect.element(page.getByRole('button', { name: 'Copied!' })).toBeInTheDocument();
+			expect(writeText).toHaveBeenCalledWith('Groceries\n\nPRODUCE\n• Bananas');
 		});
 
 		it('sends an email export from the Share submenu', async () => {

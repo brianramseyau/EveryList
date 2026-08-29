@@ -263,7 +263,7 @@ export class ListStoreSchema extends BaseModel {
 }
 
 export class ListSchema extends BaseModel {
-  static $columns = ['archived', 'badgeExcluded', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'name', 'ownerId', 'passcodeHash', 'updatedAt', 'useCategories', 'version'] as const
+  static $columns = ['archived', 'badgeExcluded', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'insertPosition', 'itemSortOrder', 'name', 'ownerId', 'passcodeHash', 'showPriceInList', 'showStoreInList', 'updatedAt', 'useCategories', 'useFavorites', 'usePrice', 'useQuantity', 'useRecent', 'useShops', 'version'] as const
   $columns = ListSchema.$columns
   @column()
   declare archived: boolean
@@ -282,15 +282,33 @@ export class ListSchema extends BaseModel {
   @column({ isPrimary: true })
   declare id: number
   @column()
+  declare insertPosition: string
+  @column()
+  declare itemSortOrder: string
+  @column()
   declare name: string
   @column()
   declare ownerId: number
   @column()
   declare passcodeHash: string | null
+  @column()
+  declare showPriceInList: boolean
+  @column()
+  declare showStoreInList: boolean
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()
   declare useCategories: boolean
+  @column()
+  declare useFavorites: boolean
+  @column()
+  declare usePrice: boolean
+  @column()
+  declare useQuantity: boolean
+  @column()
+  declare useRecent: boolean
+  @column()
+  declare useShops: boolean
   @column()
   declare version: number
 }
