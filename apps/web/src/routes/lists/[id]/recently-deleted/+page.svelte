@@ -10,6 +10,7 @@
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -87,7 +88,7 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else if recentItems.length === 0}
 		<p class="text-gray-600 dark:text-gray-400">Nothing recently deleted.</p>
 	{:else}

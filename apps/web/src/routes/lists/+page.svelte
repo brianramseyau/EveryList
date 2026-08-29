@@ -12,6 +12,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
 	import PopoutMenuItem from '$lib/components/PopoutMenuItem.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 
 	let lists = $state<ListDto[]>([]);
@@ -193,7 +194,7 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else if lists.length === 0 && folders.length === 0}
 		<p class="text-gray-600 dark:text-gray-400">No lists yet — tap + to create one.</p>
 	{:else}

@@ -9,6 +9,7 @@
 	import { formatFileSize } from '$lib/api/format-file-size';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -108,7 +109,7 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else}
 		<form class="flex flex-col gap-3" onsubmit={handleSave}>
 			<label class="flex flex-col gap-1 text-sm">

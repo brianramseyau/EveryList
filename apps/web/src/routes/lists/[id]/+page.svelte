@@ -37,6 +37,7 @@
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
 	import PopoutMenuItem from '$lib/components/PopoutMenuItem.svelte';
 	import UndoToast from '$lib/components/UndoToast.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -947,7 +948,7 @@
 
 	<div style:padding-top={`${stickyHeaderHeight}px`}>
 		{#if loading}
-			<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+			<Loader />
 		{:else if list}
 			{#if list.passcodeHash && !unlocked}
 				<PasscodeGate {list} onunlock={() => (unlocked = true)} />

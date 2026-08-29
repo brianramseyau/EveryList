@@ -17,6 +17,7 @@
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	const listId = $derived(Number(page.params.id));
 	const storeId = $derived(Number(page.params.storeId));
@@ -144,7 +145,7 @@
 	</PageHeader>
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else if list}
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			Reorder categories to match this store's real aisle layout. Everyone who shops at "{storeName}"

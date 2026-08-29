@@ -9,6 +9,7 @@
 	import { createToken, fetchTokens, revokeToken, updateToken } from '$lib/api/tokens';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	let lists = $state<ListDto[]>([]);
 	let tokens = $state<AccessTokenDto[]>([]);
@@ -146,7 +147,7 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else}
 		{#if ownedLists.length === 0}
 			<p class="text-sm text-gray-600 dark:text-gray-400">

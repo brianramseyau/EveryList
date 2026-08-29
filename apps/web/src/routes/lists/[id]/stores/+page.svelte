@@ -14,6 +14,7 @@
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	const DEFAULT_COLOR = '#3b82f6';
 
@@ -132,7 +133,7 @@
 	</PageHeader>
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else if list}
 		<p class="text-sm text-gray-600 dark:text-gray-300">
 			Pick the store you're shopping at so categories match its aisle layout, then choose which

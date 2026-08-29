@@ -24,6 +24,7 @@
 	import { createInvite, fetchInvites, revokeInvite } from '$lib/api/invites';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -167,7 +168,7 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else if list}
 		<section class="flex flex-col gap-2">
 			<h2 class="text-sm font-semibold">Members</h2>

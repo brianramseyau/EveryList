@@ -12,6 +12,7 @@
 	import { ApiError } from '$lib/api/client';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -131,7 +132,7 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else if favorites.length === 0}
 		<p class="text-gray-600 dark:text-gray-400">No favorites yet — tap + to add one.</p>
 	{:else}

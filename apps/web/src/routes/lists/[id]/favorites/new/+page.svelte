@@ -13,6 +13,7 @@
 	import { ApiError } from '$lib/api/client';
 	import ItemFields from '$lib/components/ItemFields.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -99,7 +100,7 @@
 	</PageHeader>
 
 	{#if loading}
-		<p class="text-gray-600 dark:text-gray-400">Loading…</p>
+		<Loader />
 	{:else if error}
 		<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 	{/if}

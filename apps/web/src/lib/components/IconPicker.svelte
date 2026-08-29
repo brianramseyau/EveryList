@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import { Button, Input } from 'flowbite-svelte';
 	import Icon from './Icon.svelte';
+	import Loader from './Loader.svelte';
 	import { loadMdiIcons, fromMdiExportName, toDisplayLabel } from '$lib/icons/mdi';
 	import { searchIcons } from '$lib/icons/search';
 	import { suggestedIcons } from '$lib/icons/suggested';
@@ -135,7 +136,7 @@
 			/>
 
 			{#if loading}
-				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading icons…</p>
+				<Loader label="Loading icons…" compact />
 			{:else if matches.length === 0}
 				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
 					No icons match "<span>{search}</span>".
