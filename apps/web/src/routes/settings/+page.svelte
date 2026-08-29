@@ -42,6 +42,7 @@
 	let canLockOrientationNow = $state(false);
 	let supportsOrientationLock = $state(false);
 	let isNative = $state(false);
+	let isAndroid = $state(false);
 	let orientationFeedback = $state<string | null>(null);
 	let serverUrl = $state('');
 	let nativeInfo = $state<{ version: string; build: string } | null>(null);
@@ -165,6 +166,7 @@
 		canLockOrientationNow = canLockOrientation();
 		supportsOrientationLock = supportsScreenOrientationLock();
 		isNative = Capacitor.isNativePlatform();
+		isAndroid = isNative && Capacitor.getPlatform() === 'android';
 		serverUrl = getServerUrl();
 		if (isNative) {
 			try {
@@ -437,13 +439,15 @@
 			<span>Access Tokens</span>
 			<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
 		</a>
-		<a
-			href={resolve('/settings/widget')}
-			class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
-		>
-			<span>Home-screen widget</span>
-			<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
-		</a>
+		{#if isAndroid}
+			<a
+				href={resolve('/settings/widget')}
+				class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+			>
+				<span>Home-screen widget</span>
+				<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
+			</a>
+		{/if}
 	</section>
 
 	{#if !isNative}
