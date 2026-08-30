@@ -8,6 +8,7 @@ import {
   handleRemoveOrComplete,
   handleReadList,
   handleSetDefaultList,
+  handleSetShowChecked,
   handleLaunchWithDisplay,
   type IntentResult,
 } from '#services/alexa/intent_router'
@@ -46,10 +47,14 @@ function slotValues(intent?: { slots?: Record<string, { value?: string } | undef
  * (not-found/ambiguous/no-slot-yet), pass through unchanged — `response_builder.ts` itself never
  * knows about displays at all.
  */
-async function withDisplay(result: IntentResult, hasDisplay: boolean): Promise<AlexaResponse> {
+async function withDisplay(
+  result: IntentResult,
+  hasDisplay: boolean,
+  token: AccessToken
+): Promise<AlexaResponse> {
   if (!hasDisplay || !result.list) return result.response
 
-  const directive = await buildListDisplay(result.list)
+  const directive = await buildListDisplay(result.list, Number(token.tokenableId))
   return {
     ...result.response,
     // `shouldEndSession: false` on a screen response with APL content keeps the extended
@@ -118,7 +123,9 @@ export default class AlexaController {
             )
           )
         }
-        return response.ok(await withDisplay(await handleLaunchWithDisplay(token), hasDisplay))
+        return response.ok(
+          await withDisplay(await handleLaunchWithDisplay(token), hasDisplay, token)
+        )
       }
 
       case 'SessionEndedRequest':
@@ -126,12 +133,16 @@ export default class AlexaController {
 
       case 'IntentRequest':
         return response.ok(
-          await withDisplay(await this.#routeIntent(token, body.request, logger), hasDisplay)
+          await withDisplay(await this.#routeIntent(token, body.request, logger), hasDisplay, token)
         )
 
       case 'Alexa.Presentation.APL.UserEvent':
         return response.ok(
-          await withDisplay(await handleTouchEvent(token, body.request.arguments ?? []), hasDisplay)
+          await withDisplay(
+            await handleTouchEvent(token, body.request.arguments ?? []),
+            hasDisplay,
+            token
+          )
         )
 
       /* c8 ignore next 2 -- Alexa's request.type is a closed enum; no other value is ever sent. */
@@ -159,10 +170,14 @@ export default class AlexaController {
         return handleReadList(token, slots)
       case 'SetDefaultListIntent':
         return handleSetDefaultList(token, slots)
+      case 'ShowCheckedItemsIntent':
+        return handleSetShowChecked(token, true)
+      case 'HideCheckedItemsIntent':
+        return handleSetShowChecked(token, false)
       case 'AMAZON.HelpIntent':
         return {
           response: say(
-            "You can say 'add milk to my list', 'what's on my list', or 'set groceries as my default list'.",
+            "You can say 'add milk to my list', 'what's on my list', 'set groceries as my default list', or 'hide checked items'.",
             { reprompt: 'What would you like to do?' }
           ),
         }

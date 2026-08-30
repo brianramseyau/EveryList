@@ -213,6 +213,17 @@ export interface AccessTokenCreatedDto extends AccessTokenDto {
   token: string
 }
 
+/** The signed-in user's Alexa skill preferences — one row per user, readable/writable from
+ *  Settings → Alexa in the web app as well as from `services/alexa/*` (voice/on-screen tap). */
+export interface AlexaPreferenceDto {
+  /** The list `SetDefaultListIntent`/this settings page's picker chose. `null` if never set —
+   *  a request naming no list then asks which one, unless only one is accessible. */
+  defaultListId: number | null
+  /** Whether the Alexa display (and voice "show/hide checked items") includes checked items.
+   *  Missing = server default `true`. */
+  showChecked?: boolean
+}
+
 /** The app→native-widget handoff payload carried over the `everylist://widget-config` deep link
  *  (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). The web app mints a list-scoped PAT, then hands the token plus the granted
  *  list ids and the configured server URL to the Android widget so it can call the API directly —

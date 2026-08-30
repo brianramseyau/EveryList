@@ -19,6 +19,7 @@ public class WidgetListViewsFactory implements RemoteViewsService.RemoteViewsFac
     private final Context context;
     private final int appWidgetId;
     private List<WidgetModels.WidgetItem> items = new ArrayList<>();
+    private long listId = -1L;
 
     WidgetListViewsFactory(Context context, int appWidgetId) {
         this.context = context;
@@ -32,7 +33,8 @@ public class WidgetListViewsFactory implements RemoteViewsService.RemoteViewsFac
     @Override
     public void onDataSetChanged() {
         WidgetPrefs prefs = new WidgetPrefs(context, appWidgetId);
-        items = WidgetData.filter(prefs.loadSnapshot(), prefs.getShowCompleted());
+        items = prefs.loadSnapshot();
+        listId = prefs.getListId();
     }
 
     @Override
@@ -74,13 +76,13 @@ public class WidgetListViewsFactory implements RemoteViewsService.RemoteViewsFac
         Intent openFill = new Intent();
         openFill.putExtra(EveryListWidget.EXTRA_ACTION, EveryListWidget.ACTION_OPEN_ITEM);
         openFill.putExtra(EveryListWidget.EXTRA_ITEM_ID, item.id);
-        openFill.putExtra(EveryListWidget.EXTRA_LIST_ID, item.listId);
+        openFill.putExtra(EveryListWidget.EXTRA_LIST_ID, listId);
         row.setOnClickFillInIntent(R.id.item_body, openFill);
 
         Intent toggleFill = new Intent();
         toggleFill.putExtra(EveryListWidget.EXTRA_ACTION, EveryListWidget.ACTION_TOGGLE_ITEM);
         toggleFill.putExtra(EveryListWidget.EXTRA_ITEM_ID, item.id);
-        toggleFill.putExtra(EveryListWidget.EXTRA_LIST_ID, item.listId);
+        toggleFill.putExtra(EveryListWidget.EXTRA_LIST_ID, listId);
         row.setOnClickFillInIntent(R.id.item_check, toggleFill);
 
         return row;

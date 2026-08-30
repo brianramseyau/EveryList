@@ -1,10 +1,12 @@
 import Item from '#models/item'
 import type Category from '#models/category'
 import type List from '#models/list'
+import AlexaPreference from '#models/alexa_preference'
 import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import { appUrl } from '#config/app'
 import { getEffectiveCategories } from '#services/category_service'
+import { buildFlatDisplayOrder } from '#services/list_display_order'
 import { LIST_VIEW_DOCUMENT } from '#services/alexa/apl_document'
 
 type ListRow =
@@ -28,61 +30,51 @@ export function buildIconUrl(iconName: string, colorHex: string): string {
 // `color: undefined` here even though a real row always has one.
 const DEFAULT_LIST_COLOR = '#3b82f6'
 
-/** Unchecked items before checked ones, each group in `sortOrder`. */
-function sortBucket(bucket: Item[]): Item[] {
-  return [...bucket].sort((a, b) => {
-    if (a.checked !== b.checked) return a.checked ? 1 : -1
-    return a.sortOrder - b.sortOrder
-  })
-}
-
 /**
- * Category-grouped, checked-items-included item rows for the APL list view
- * (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3), flattened into one array with a `type` discriminator
- * (`header`/`item`) rather than nested per-category lists — see `apl_document.ts` for why.
- * Unlike the spoken summary (`intent_router.ts`'s `handleReadList`, unchecked-only), checked
- * items are included here — struck through, grouped after unchecked ones within each category —
- * mirroring the main app's list view, which keeps checked items visible rather than hiding them.
+ * Category-grouped item rows for the APL list view (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md
+ * Stage 3), flattened into one array with a `type` discriminator (`header`/`item`) rather than
+ * nested per-category lists — see `apl_document.ts` for why. Ordering comes from
+ * `buildFlatDisplayOrder` — the same category-clustered, ranked-or-alphabetical order the app and
+ * the Android widget use — with headers inserted wherever the category changes; a list with
+ * `useCategories: false` gets no headers at all, matching how the app itself collapses it to a
+ * single flat section. Whether checked items are included at all is the caller's call
+ * (`AlexaPreference.showChecked`, toggled by voice or on-screen tap) — unlike the spoken summary
+ * (`intent_router.ts`'s `handleReadList`, always unchecked-only), the display defaults to
+ * showing them (struck through, in their normal sort position) since screen space is cheaper
+ * than voice attention, but that's now a per-user preference rather than forced.
  */
-function buildRows(items: Item[], categories: Category[], listColor: string): ListRow[] {
-  const byCategory = new Map<number, Item[]>()
-  const uncategorized: Item[] = []
-
-  for (const item of items) {
-    if (item.categoryId === null) {
-      uncategorized.push(item)
-      continue
-    }
-    const bucket = byCategory.get(item.categoryId)
-    if (bucket) bucket.push(item)
-    else byCategory.set(item.categoryId, [item])
+function buildRows(
+  list: List,
+  items: Item[],
+  categories: Category[],
+  includeChecked: boolean,
+  listColor: string
+): ListRow[] {
+  const ordered = buildFlatDisplayOrder(list, items, categories, { includeChecked })
+  if (list.useCategories === false) {
+    return ordered.map((item) => ({
+      type: 'item',
+      id: item.id,
+      name: item.name,
+      checked: item.checked,
+    }))
   }
 
+  const categoryById = new Map(categories.map((category) => [category.id, category]))
   const rows: ListRow[] = []
-  for (const category of categories) {
-    const bucket = byCategory.get(category.id)
-    if (!bucket || bucket.length === 0) continue
-    rows.push({
-      type: 'header',
-      text: category.name,
-      iconUrl: buildIconUrl(category.icon, listColor),
-    })
-    for (const item of sortBucket(bucket)) {
-      rows.push({ type: 'item', id: item.id, name: item.name, checked: item.checked })
+  let currentCategoryId: number | null | undefined
+  for (const item of ordered) {
+    if (item.categoryId !== currentCategoryId) {
+      currentCategoryId = item.categoryId
+      const category = item.categoryId === null ? null : categoryById.get(item.categoryId)
+      rows.push({
+        type: 'header',
+        text: category?.name ?? 'Other',
+        iconUrl: buildIconUrl(category?.icon ?? 'dotsHorizontalCircle', listColor),
+      })
     }
+    rows.push({ type: 'item', id: item.id, name: item.name, checked: item.checked })
   }
-
-  if (uncategorized.length > 0) {
-    rows.push({
-      type: 'header',
-      text: 'Other',
-      iconUrl: buildIconUrl('dotsHorizontalCircle', listColor),
-    })
-    for (const item of sortBucket(uncategorized)) {
-      rows.push({ type: 'item', id: item.id, name: item.name, checked: item.checked })
-    }
-  }
-
   return rows
 }
 
@@ -94,14 +86,17 @@ function buildRows(items: Item[], categories: Category[], listColor: string): Li
  * so `LaunchRequest`, `ReadListIntent`, every mutating intent, and the touch-completion path all
  * show identically-built, always-current displays.
  */
-export async function buildListDisplay(list: List) {
-  const [items, categories] = await Promise.all([
+export async function buildListDisplay(list: List, userId: number) {
+  const [items, categories, preference] = await Promise.all([
     Item.query().where('listId', list.id).whereNull('deletedAt').orderBy('sortOrder', 'asc'),
     getEffectiveCategories(list),
+    AlexaPreference.findBy('userId', userId),
   ])
+  // No saved preference yet (never toggled) defaults to showing checked items — today's behavior.
+  const includeChecked = preference?.showChecked ?? true
 
   const listColor = list.color ?? DEFAULT_LIST_COLOR
-  const rows = buildRows(items, categories, listColor)
+  const rows = buildRows(list, items, categories, includeChecked, listColor)
   logger.debug(
     {
       listId: list.id,
@@ -141,6 +136,10 @@ export async function buildListDisplay(list: List) {
           checkboxSize: '22dp',
           checkboxRadius: '5dp',
           checkboxGap: '16dp',
+          // Drives the header's show/hide-checked button label — `apl_touch_handler.ts`'s
+          // `toggleShowChecked` action flips the underlying `AlexaPreference.showChecked` this
+          // came from.
+          showChecked: includeChecked,
           rows,
         },
       },
