@@ -14,7 +14,13 @@ function hasWindow(): boolean {
 export function getShakeToUndoPreference(): boolean {
 	if (!hasWindow()) return true;
 	const stored = window.localStorage.getItem(STORAGE_KEY);
-	return stored !== 'off';
+	if (stored === 'on') return true;
+	if (stored === 'off') return false;
+	// Never explicitly toggled: default on everywhere except iOS Safari, where turning it on
+	// silently would attach a devicemotion listener that can never actually fire — it needs a
+	// gesture-triggered requestShakePermission() call first, which never happened for a user who
+	// never visited Settings. Looking "on" while doing nothing is worse than defaulting off.
+	return !needsShakePermissionPrompt();
 }
 
 export function setShakeToUndoPreference(enabled: boolean): void {
@@ -66,9 +72,9 @@ export function needsShakePermissionPrompt(): boolean {
 	);
 }
 
-/** Must be called from a user gesture (e.g. the Settings toggle's own click handler) — iOS Safari
- * silently ignores `requestPermission()` calls made outside one. No-ops to `true` everywhere else
- * (native and Android need no such prompt). */
+/** Must be called from a user gesture (e.g. the Settings toggle's own click handler, or the
+ * reprompt banner's) — iOS Safari silently ignores `requestPermission()` calls made outside one.
+ * No-ops to `true` everywhere else (native and Android need no such prompt). */
 export async function requestShakePermission(): Promise<boolean> {
 	if (!needsShakePermissionPrompt()) return true;
 	const requestPermission = (
@@ -85,6 +91,22 @@ export async function requestShakePermission(): Promise<boolean> {
 
 let nativeHandle: PluginListenerHandle | null = null;
 let webListener: ((event: DeviceMotionEvent) => void) | null = null;
+
+/** Whether a shake listener (native or web) is currently attached. */
+export function isShakeListening(): boolean {
+	return nativeHandle !== null || webListener !== null;
+}
+
+/** Whether shake-to-undo is on but nothing is actually listening yet, so the preference is lying —
+ * a stored "on" from a past session doesn't guarantee iOS Safari's motion permission carried over,
+ * since a standalone PWA's grant doesn't persist across app launches and there's no way to check
+ * status without another gesture-triggered prompt (see `initShakeToUndo`, which deliberately skips
+ * starting the listener on mount for exactly this platform). Settings' own toggle sidesteps this by
+ * requesting permission the instant it's flipped on; this is for a returning user who enabled it
+ * before and needs a fresh tap to reconfirm this launch. */
+export function shakeNeedsRepromptThisSession(): boolean {
+	return needsShakePermissionPrompt() && getShakeToUndoPreference() && !isShakeListening();
+}
 
 /** Starts listening for a shake, native (`@capacitor/motion`) or web (`devicemotion`) depending on
  * platform. Safe to call when permission was never granted (iOS Safari before the user has opted
@@ -131,9 +153,12 @@ export function stopShakeListening(): void {
 }
 
 /** Called from the root layout's `onMount`, alongside `initTheme`/`initAccent`/`initOrientation` —
- * starts listening immediately if the stored preference is on. Safe on iOS Safari even before
- * permission was ever granted (see `startShakeListening`); Settings' toggle is what actually
- * requests it, gated behind the user's own tap. */
+ * starts listening immediately if the stored preference is on. Skipped on a platform that
+ * `needsShakePermissionPrompt` — mount isn't a user gesture, so starting the listener there would
+ * just attach one that iOS Safari never actually feeds; `shakeNeedsRepromptThisSession` is how the
+ * UI knows to offer a tap that starts it instead. */
 export function initShakeToUndo(onShake: () => void): void {
-	if (getShakeToUndoPreference()) startShakeListening(onShake);
+	if (!getShakeToUndoPreference()) return;
+	if (needsShakePermissionPrompt()) return;
+	startShakeListening(onShake);
 }

@@ -13,6 +13,7 @@ const {
 	needsShakePermissionPrompt,
 	requestShakePermission,
 	setShakeToUndoPreference,
+	shakeNeedsRepromptThisSession,
 	startShakeListening,
 	stopShakeListening
 } = await import('./shake');
@@ -244,5 +245,58 @@ describe('shake (browser)', () => {
 		window.dispatchEvent(shakeEvent({ x: 30, y: 30, z: 30 }));
 
 		expect(onShake).not.toHaveBeenCalled();
+	});
+
+	describe('iOS Safari (requestPermission API present)', () => {
+		function stubRequestPermission(): void {
+			(window.DeviceMotionEvent as unknown as { requestPermission: () => void }).requestPermission =
+				vi.fn();
+		}
+
+		it('getShakeToUndoPreference defaults to disabled when nothing is stored', () => {
+			stubRequestPermission();
+
+			expect(getShakeToUndoPreference()).toBe(false);
+		});
+
+		it('an explicit "on" from a past session still reads as enabled', () => {
+			stubRequestPermission();
+			setShakeToUndoPreference(true);
+
+			expect(getShakeToUndoPreference()).toBe(true);
+		});
+
+		it('initShakeToUndo does not auto-start on mount, even when the stored preference is on', () => {
+			stubRequestPermission();
+			setShakeToUndoPreference(true);
+			const onShake = vi.fn();
+
+			initShakeToUndo(onShake);
+
+			window.dispatchEvent(shakeEvent({ x: 30, y: 30, z: 30 }));
+			expect(onShake).not.toHaveBeenCalled();
+		});
+
+		it('shakeNeedsRepromptThisSession is true when enabled but nothing is listening yet', () => {
+			stubRequestPermission();
+			setShakeToUndoPreference(true);
+
+			expect(shakeNeedsRepromptThisSession()).toBe(true);
+		});
+
+		it('shakeNeedsRepromptThisSession is false once the listener is actually running', () => {
+			stubRequestPermission();
+			setShakeToUndoPreference(true);
+			startShakeListening(() => {});
+
+			expect(shakeNeedsRepromptThisSession()).toBe(false);
+		});
+
+		it('shakeNeedsRepromptThisSession is false when the preference is off', () => {
+			stubRequestPermission();
+			setShakeToUndoPreference(false);
+
+			expect(shakeNeedsRepromptThisSession()).toBe(false);
+		});
 	});
 });
