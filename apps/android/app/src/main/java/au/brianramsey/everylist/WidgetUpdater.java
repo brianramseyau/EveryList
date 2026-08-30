@@ -1,10 +1,12 @@
 package au.brianramsey.everylist;
 
+import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -35,6 +37,17 @@ import java.util.List;
 public class WidgetUpdater {
 
     private WidgetUpdater() {}
+
+    /** Fetch-failure backoff: doubles from {@link #RETRY_BASE_DELAY_MS} up to {@link
+     *  #RETRY_MAX_ATTEMPTS} attempts, capped at {@link #RETRY_MAX_DELAY_MS}, then gives up until
+     *  the user manually refreshes or the system's own {@code updatePeriodMillis} tick fires
+     *  (see everylist_widget_info.xml). Scheduled with {@code AlarmManager} rather than
+     *  WorkManager or a started Service — both were tried and abandoned for this widget (see this
+     *  class's doc comment) — using {@code setAndAllowWhileIdle} so it still fires under Doze
+     *  without needing the SCHEDULE_EXACT_ALARM permission. */
+    private static final int RETRY_MAX_ATTEMPTS = 6;
+    private static final long RETRY_BASE_DELAY_MS = 30_000L;
+    private static final long RETRY_MAX_DELAY_MS = 16 * 60 * 1000L;
 
     /** Runs one refresh/toggle cycle. Blocking — must be called off the main thread. */
     static void handle(Context context, String action, int appWidgetId, long toggleListId, long toggleItemId) {
@@ -70,9 +83,12 @@ public class WidgetUpdater {
             prefs.setListName(snapshot.listName);
             prefs.saveSnapshot(snapshot.items);
             prefs.setLastError(null);
+            prefs.setRetryCount(0);
+            cancelPendingRetry(context, appWidgetId);
         } catch (IOException e) {
             prefs.setLastError(context.getString(R.string.widget_offline_note));
             failed = true;
+            scheduleRetry(context, prefs, appWidgetId);
         }
 
         render(context, manager, appWidgetId, prefs, failed);
@@ -157,6 +173,34 @@ public class WidgetUpdater {
                 .putExtra(EveryListWidget.EXTRA_APPWIDGET_ID, appWidgetId)));
 
         manager.updateAppWidget(appWidgetId, rv);
+    }
+
+    /** Records the failed attempt and, while under {@link #RETRY_MAX_ATTEMPTS}, arms an alarm to
+     *  re-run {@link EveryListWidget#ACTION_REFRESH} after an exponentially growing delay. */
+    private static void scheduleRetry(Context context, WidgetPrefs prefs, int appWidgetId) {
+        int attempt = prefs.getRetryCount() + 1;
+        prefs.setRetryCount(attempt);
+        if (attempt > RETRY_MAX_ATTEMPTS) return;
+
+        long delayMs = Math.min(RETRY_BASE_DELAY_MS << (attempt - 1), RETRY_MAX_DELAY_MS);
+        AlarmManager alarmManager = context.getSystemService(AlarmManager.class);
+        if (alarmManager == null) return;
+        alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+            SystemClock.elapsedRealtime() + delayMs, retryPendingIntent(context, appWidgetId));
+    }
+
+    static void cancelPendingRetry(Context context, int appWidgetId) {
+        AlarmManager alarmManager = context.getSystemService(AlarmManager.class);
+        if (alarmManager != null) alarmManager.cancel(retryPendingIntent(context, appWidgetId));
+    }
+
+    /** Same request code and action as the widget's own refresh-button broadcast (built in
+     *  {@link #render}), so this doesn't need bookkeeping of its own — arming or cancelling it
+     *  just re-targets that one PendingIntent. */
+    private static PendingIntent retryPendingIntent(Context context, int appWidgetId) {
+        return pendingBroadcast(context, appWidgetId, new Intent(context, EveryListWidget.class)
+            .setAction(EveryListWidget.ACTION_REFRESH)
+            .putExtra(EveryListWidget.EXTRA_APPWIDGET_ID, appWidgetId));
     }
 
     private static PendingIntent pendingBroadcast(Context context, int appWidgetId, Intent intent) {

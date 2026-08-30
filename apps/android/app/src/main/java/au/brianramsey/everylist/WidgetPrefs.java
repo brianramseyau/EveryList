@@ -31,6 +31,7 @@ final class WidgetPrefs {
     private static final String KEY_SHOW_COMPLETED = "showCompleted";
     private static final String KEY_SNAPSHOT = "snapshot";
     private static final String KEY_LAST_ERROR = "lastError";
+    private static final String KEY_RETRY_COUNT = "retryCount";
 
     private final SharedPreferences global;
     private final SharedPreferences instance;
@@ -175,5 +176,15 @@ final class WidgetPrefs {
 
     String getLastError() {
         return instance.getString(KEY_LAST_ERROR, null);
+    }
+
+    /** Consecutive-failure count driving the fetch retry backoff (see WidgetUpdater). Reset to 0
+     *  on any successful fetch. */
+    int getRetryCount() {
+        return instance.getInt(KEY_RETRY_COUNT, 0);
+    }
+
+    void setRetryCount(int count) {
+        instance.edit().putInt(KEY_RETRY_COUNT, count).apply();
     }
 }
