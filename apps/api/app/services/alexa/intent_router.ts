@@ -1,5 +1,6 @@
 import Item from '#models/item'
 import type List from '#models/list'
+import AlexaPreference from '#models/alexa_preference'
 import type { AccessToken } from '@adonisjs/auth/access_tokens'
 import { DateTime } from 'luxon'
 import logger from '@adonisjs/core/services/logger'
@@ -299,6 +300,27 @@ export async function handleSetDefaultList(
 
   await setDefaultList(token, list.id)
   return respond(say(`Okay, ${list.name} is now your default list.`), list)
+}
+
+/**
+ * `ShowCheckedItemsIntent`/`HideCheckedItemsIntent` — flips `AlexaPreference.showChecked`, a
+ * global per-user preference (not scoped to any one list) that also gates whether the APL display
+ * includes checked items at all — the same field an on-screen tap toggles
+ * (`apl_touch_handler.ts`'s `toggleShowChecked` action). Unlike `handleSetDefaultList`, this never
+ * asks "which list did you mean": with more than one accessible list, resolving one to refresh
+ * would be guessing at something the request never named, so the display simply isn't attached —
+ * it catches up on the next launch, read, or tap.
+ */
+export async function handleSetShowChecked(
+  token: AccessToken,
+  show: boolean
+): Promise<IntentResult> {
+  const userId = Number(token.tokenableId)
+  await AlexaPreference.updateOrCreate({ userId }, { userId, showChecked: show })
+
+  const resolution = await resolveList(token, undefined)
+  const list = resolution.kind === 'found' ? resolution.list : undefined
+  return respond(say(show ? 'Okay, showing checked items.' : 'Okay, hiding checked items.'), list)
 }
 
 /**

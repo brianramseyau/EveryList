@@ -1,4 +1,5 @@
 import List from '#models/list'
+import Item from '#models/item'
 import Folder from '#models/folder'
 import ListMember from '#models/list_member'
 import ListPolicy from '#policies/list_policy'
@@ -8,6 +9,8 @@ import ListTransformer from '#transformers/list_transformer'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { createOwnedList } from '#services/list_creation'
+import { getEffectiveCategories } from '#services/category_service'
+import { buildFlatDisplayOrder } from '#services/list_display_order'
 import {
   hasVersionConflict,
   parseExpectedVersion,
@@ -128,6 +131,38 @@ export default class ListsController {
       .firstOrFail()
 
     return serialize(ListTransformer.transform(list))
+  }
+
+  /**
+   * A single pre-ordered, flattened snapshot of a list's active items — for callers that render a
+   * flat display with no room to group by category themselves (the Android home-screen widget)
+   * and would otherwise need to fetch items + categories separately and reproduce the app's own
+   * `groups` ordering client-side. Uses `buildFlatDisplayOrder`, the same category-clustered,
+   * ranked-or-alphabetical order the app's list view and the Alexa display use — dropping
+   * `sortOrder`/`categoryId` from the response since a caller that only renders a flat list has no
+   * use for them once the server has already ordered things.
+   */
+  async widgetSnapshot({ auth, params, request, serialize }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const list = await ListPolicy.requireList(user, params.id, 'viewer')
+    const includeChecked = request.input('includeChecked', 'true') !== 'false'
+
+    const [items, categories] = await Promise.all([
+      Item.query().where('listId', list.id).whereNull('deletedAt'),
+      getEffectiveCategories(list),
+    ])
+    const ordered = buildFlatDisplayOrder(list, items, categories, { includeChecked })
+
+    return serialize({
+      listName: list.name,
+      items: ordered.map((item) => ({
+        id: item.id,
+        name: item.name,
+        checked: item.checked,
+        quantity: item.quantity,
+        price: item.price,
+      })),
+    })
   }
 
   async update({ auth, params, request, response, serialize, logger }: HttpContext) {

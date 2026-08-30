@@ -49,6 +49,7 @@ export const LIST_VIEW_DOCUMENT = {
             alignItems: 'center',
             paddingTop: '24dp',
             paddingLeft: '24dp',
+            paddingRight: '24dp',
             paddingBottom: '12dp',
             items: [
               {
@@ -65,6 +66,27 @@ export const LIST_VIEW_DOCUMENT = {
                 fontSize: '32dp',
                 fontWeight: 'bold',
                 color: '#edeae3',
+                grow: 1,
+              },
+              {
+                // Show/hide-checked toggle — `apl_touch_handler.ts`'s `toggleShowChecked` action
+                // flips `AlexaPreference.showChecked`; the same field the voice intents
+                // `ShowCheckedItemsIntent`/`HideCheckedItemsIntent` set.
+                type: 'TouchWrapper',
+                onPress: [
+                  {
+                    type: 'SendEvent',
+                    arguments: ['toggleShowChecked', null, '${payload.listData.properties.listId}'],
+                  },
+                ],
+                items: [
+                  {
+                    type: 'Text',
+                    text: "${payload.listData.properties.showChecked ? 'Hide checked' : 'Show checked'}",
+                    fontSize: '18dp',
+                    color: '#9a9a9a',
+                  },
+                ],
               },
             ],
           },

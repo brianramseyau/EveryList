@@ -5,6 +5,7 @@ import User from '#models/user'
 import List from '#models/list'
 import Category from '#models/category'
 import Item from '#models/item'
+import AlexaPreference from '#models/alexa_preference'
 import { buildListDisplay, buildIconUrl } from '#services/alexa/apl_view'
 
 async function makeUser(email: string) {
@@ -75,7 +76,7 @@ test.group('buildListDisplay', (group) => {
       version: 1,
     })
 
-    const directive = await buildListDisplay(list)
+    const directive = await buildListDisplay(list, user.id)
     assert.equal(directive.type, 'Alexa.Presentation.APL.RenderDocument')
     assert.isTrue(directive.token.startsWith(`list-${list.id}-`))
     assert.equal(directive.datasources.listData.properties.listName, 'Groceries')
@@ -97,7 +98,9 @@ test.group('buildListDisplay', (group) => {
     ])
   })
 
-  test('within a category, unchecked items come before checked ones', async ({ assert }) => {
+  test('by default (no saved preference), checked items are shown in their normal sortOrder position, not pushed to the bottom', async ({
+    assert,
+  }) => {
     const user = await makeUser('display2@example.com')
     const list = await List.create({ name: 'Groceries', ownerId: user.id })
     const category = await Category.create({
@@ -128,19 +131,75 @@ test.group('buildListDisplay', (group) => {
       version: 1,
     })
 
-    const directive = await buildListDisplay(list)
+    const directive = await buildListDisplay(list, user.id)
     assert.deepEqual(rowsOf(directive), [
       { type: 'header', text: 'Pantry', iconUrl: buildIconUrl('foodCanArrowUp', DEFAULT_COLOR) },
-      { type: 'item', id: uncheckedSecond.id, name: 'Pasta', checked: false },
       { type: 'item', id: checkedFirst.id, name: 'Rice', checked: true },
+      { type: 'item', id: uncheckedSecond.id, name: 'Pasta', checked: false },
     ])
   })
 
-  test('within a category, unchecked items come before checked ones even when the checked item has the lower sortOrder', async ({
+  test('showChecked: false hides checked items entirely, including collapsing a category left with none', async ({
     assert,
   }) => {
     const user = await makeUser('display6@example.com')
+    await AlexaPreference.create({ userId: user.id, showChecked: false })
     const list = await List.create({ name: 'Groceries', ownerId: user.id })
+    const pantry = await Category.create({
+      listId: list.id,
+      name: 'Pantry',
+      icon: 'foodCanArrowUp',
+      sortOrder: 0,
+      isDefault: false,
+      version: 1,
+    })
+    const allChecked = await Category.create({
+      listId: list.id,
+      name: 'All Checked',
+      icon: 'tag',
+      sortOrder: 1,
+      isDefault: false,
+      version: 1,
+    })
+
+    const uncheckedItem = await Item.create({
+      listId: list.id,
+      name: 'Pasta',
+      categoryId: pantry.id,
+      checked: false,
+      sortOrder: 0,
+      createdBy: user.id,
+      version: 1,
+    })
+    await Item.create({
+      listId: list.id,
+      name: 'Rice',
+      categoryId: pantry.id,
+      checked: true,
+      sortOrder: 1,
+      createdBy: user.id,
+      version: 1,
+    })
+    await Item.create({
+      listId: list.id,
+      name: 'Beans',
+      categoryId: allChecked.id,
+      checked: true,
+      sortOrder: 0,
+      createdBy: user.id,
+      version: 1,
+    })
+
+    const directive = await buildListDisplay(list, user.id)
+    assert.deepEqual(rowsOf(directive), [
+      { type: 'header', text: 'Pantry', iconUrl: buildIconUrl('foodCanArrowUp', DEFAULT_COLOR) },
+      { type: 'item', id: uncheckedItem.id, name: 'Pasta', checked: false },
+    ])
+  })
+
+  test('useCategories: false renders a flat list with no headers', async ({ assert }) => {
+    const user = await makeUser('display8@example.com')
+    const list = await List.create({ name: 'Groceries', ownerId: user.id, useCategories: false })
     const category = await Category.create({
       listId: list.id,
       name: 'Pantry',
@@ -150,30 +209,29 @@ test.group('buildListDisplay', (group) => {
       version: 1,
     })
 
-    const uncheckedFirst = await Item.create({
+    const first = await Item.create({
       listId: list.id,
-      name: 'Pasta',
+      name: 'Beans',
       categoryId: category.id,
       checked: false,
       sortOrder: 0,
       createdBy: user.id,
       version: 1,
     })
-    const checkedSecond = await Item.create({
+    const second = await Item.create({
       listId: list.id,
-      name: 'Rice',
-      categoryId: category.id,
-      checked: true,
+      name: 'Batteries',
+      categoryId: null,
+      checked: false,
       sortOrder: 1,
       createdBy: user.id,
       version: 1,
     })
 
-    const directive = await buildListDisplay(list)
+    const directive = await buildListDisplay(list, user.id)
     assert.deepEqual(rowsOf(directive), [
-      { type: 'header', text: 'Pantry', iconUrl: buildIconUrl('foodCanArrowUp', DEFAULT_COLOR) },
-      { type: 'item', id: uncheckedFirst.id, name: 'Pasta', checked: false },
-      { type: 'item', id: checkedSecond.id, name: 'Rice', checked: true },
+      { type: 'item', id: first.id, name: 'Beans', checked: false },
+      { type: 'item', id: second.id, name: 'Batteries', checked: false },
     ])
   })
 
@@ -208,7 +266,7 @@ test.group('buildListDisplay', (group) => {
       version: 1,
     })
 
-    const directive = await buildListDisplay(list)
+    const directive = await buildListDisplay(list, user.id)
     assert.deepEqual(rowsOf(directive), [
       { type: 'header', text: 'Pantry', iconUrl: buildIconUrl('foodCanArrowUp', DEFAULT_COLOR) },
       { type: 'item', id: first.id, name: 'Beans', checked: false },
@@ -228,7 +286,7 @@ test.group('buildListDisplay', (group) => {
       version: 1,
     })
 
-    const directive = await buildListDisplay(list)
+    const directive = await buildListDisplay(list, user.id)
     assert.deepEqual(rowsOf(directive), [])
   })
 
@@ -247,7 +305,7 @@ test.group('buildListDisplay', (group) => {
       deletedAt: DateTime.now(),
     })
 
-    const directive = await buildListDisplay(list)
+    const directive = await buildListDisplay(list, user.id)
     assert.deepEqual(rowsOf(directive), [])
   })
 
@@ -260,7 +318,7 @@ test.group('buildListDisplay', (group) => {
       color: '#c2410c',
     })
 
-    const directive = await buildListDisplay(list)
+    const directive = await buildListDisplay(list, user.id)
     assert.equal(
       directive.datasources.listData.properties.listIconUrl,
       buildIconUrl('basket', '#c2410c')

@@ -8,6 +8,7 @@ export const controllers = {
   Alexa: () => import('#controllers/alexa_controller'),
   AlexaIcons: () => import('#controllers/alexa_icons_controller'),
   AlexaOauth: () => import('#controllers/alexa_oauth_controller'),
+  AlexaPreferences: () => import('#controllers/alexa_preferences_controller'),
   BackupSettings: () => import('#controllers/backup_settings_controller'),
   Categories: () => import('#controllers/categories_controller'),
   CategoryLearnings: () => import('#controllers/category_learnings_controller'),

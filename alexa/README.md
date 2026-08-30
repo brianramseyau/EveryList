@@ -203,6 +203,8 @@ instance, run by whoever set it up.
 | "I got milk", "mark milk as done"               | `CompleteItemIntent`   |
 | "what's on my list", "what's on the groceries list" | `ReadListIntent`   |
 | "set groceries as my default list"              | `SetDefaultListIntent` |
+| "show checked items"                            | `ShowCheckedItemsIntent` |
+| "hide checked items"                            | `HideCheckedItemsIntent` |
 
 If you have more than one list and don't name one, Alexa asks which list you meant — unless you've
 set a default (say "Alexa, ask every list to set groceries as my default list" once), in which case
@@ -226,11 +228,16 @@ This is automatic; there's nothing extra to configure per device.
   an Echo Dot.
 - **The screen stays current.** Adding, removing, or completing an item by voice — or asking
   "what's on my list" — re-renders the display with the current state, grouped by category the
-  same way the EveryList app itself groups a list, with checked items shown struck through
-  rather than hidden.
+  same way the EveryList app itself groups a list (and in the same ranked-or-alphabetical order
+  set on Settings → the list's own settings).
+- **Show or hide checked items.** Checked items are shown by default, struck through, in their
+  normal sort position — say "hide checked items" or "show checked items", or tap the button next
+  to the list name on screen. This is a personal preference (Settings → Alexa in the web app, or
+  voice/tap here), not per-list — it applies the same way across every list you view on Alexa.
 - **Tap an item to check or uncheck it.** No voice needed for that — tapping toggles the item
   straight on EveryList, respecting the same `editor`-role check a voice command would (a
-  `viewer`-linked token can look but not tap-to-toggle).
+  `viewer`-linked token can look but not tap-to-toggle; the show/hide-checked button has no such
+  restriction, since it's a display preference, not a list mutation).
 - **Looks like the app.** The list/category icons and colors match the EveryList app's own —
   rendered on the fly as PNGs by a small, unauthenticated icon endpoint
   (`/api/v1/alexa/icons/:name`) the Alexa display fetches directly, since APL can't render the

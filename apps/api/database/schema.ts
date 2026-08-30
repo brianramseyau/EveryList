@@ -8,14 +8,16 @@ import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
 
 export class AlexaPreferenceSchema extends BaseModel {
-  static $columns = ['createdAt', 'defaultListId', 'id', 'updatedAt', 'userId'] as const
+  static $columns = ['createdAt', 'defaultListId', 'id', 'showChecked', 'updatedAt', 'userId'] as const
   $columns = AlexaPreferenceSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column()
-  declare defaultListId: number
+  declare defaultListId: number | null
   @column({ isPrimary: true })
   declare id: number
+  @column()
+  declare showChecked: boolean
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
   @column()

@@ -1,7 +1,21 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
-import type { ItemDto, ListDto } from '@everylist/shared'
+import type { ApiClient } from '@japa/api-client'
+import type { CategoryDto, ItemDto, ListDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
+
+async function mintPat(
+  client: ApiClient,
+  token: string,
+  listIds: number[],
+  role: 'editor' | 'viewer' = 'editor'
+): Promise<string> {
+  const response = await client
+    .post('/api/v1/tokens')
+    .header('Authorization', `Bearer ${token}`)
+    .json({ name: 'Widget', listIds, role })
+  return bodyData<{ token: string }>(response).token
+}
 
 test.group('Lists CRUD', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
@@ -486,5 +500,142 @@ test.group('Lists CRUD', (group) => {
       .map((list) => list.id)
       .filter((id) => id === firstId || id === secondId)
     assert.deepEqual(viewerIds, [firstId, secondId])
+  })
+})
+
+test.group('Widget snapshot', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('requires authentication', async ({ client }) => {
+    const response = await client.get('/api/v1/lists/1/widget-snapshot')
+    response.assertStatus(401)
+  })
+
+  test("returns items pre-ordered by category then name, matching the app's grouped display, flattened", async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Groceries', itemSortOrder: 'alphabetical' })
+    const listId = bodyData<ListDto>(create).id
+
+    const produce = bodyData<CategoryDto>(
+      await client
+        .post(`/api/v1/lists/${listId}/categories`)
+        .header('Authorization', `Bearer ${owner.token}`)
+        .json({ name: 'Produce', icon: 'fruitCherries' })
+    )
+    const dairy = bodyData<CategoryDto>(
+      await client
+        .post(`/api/v1/lists/${listId}/categories`)
+        .header('Authorization', `Bearer ${owner.token}`)
+        .json({ name: 'Dairy', icon: 'cheese' })
+    )
+    // Dairy sorts before Produce.
+    await client
+      .patch(`/api/v1/lists/${listId}/categories/reorder`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ order: [dairy.id, produce.id] })
+
+    await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Apples', categoryId: produce.id, quantity: '3' })
+    await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Milk', categoryId: dairy.id })
+    await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Batteries', categoryId: null })
+
+    const pat = await mintPat(client, owner.token, [listId], 'viewer')
+    const response = await client
+      .get(`/api/v1/lists/${listId}/widget-snapshot`)
+      .header('Authorization', `Bearer ${pat}`)
+    response.assertStatus(200)
+
+    const snapshot = bodyData<{
+      listName: string
+      items: {
+        id: number
+        name: string
+        checked: boolean
+        quantity: string | null
+        price: number | null
+      }[]
+    }>(response)
+    assert.equal(snapshot.listName, 'Groceries')
+    // Dairy (reordered first) before Produce, uncategorized last — matches
+    // buildFlatDisplayOrder/apl_view.ts's ordering, just without category headers.
+    assert.deepEqual(
+      snapshot.items.map((item) => item.name),
+      ['Milk', 'Apples', 'Batteries']
+    )
+    assert.equal(snapshot.items[0]?.quantity, null)
+    assert.equal(snapshot.items[1]?.quantity, '3')
+  })
+
+  test('includeChecked=false hides checked items', async ({ client, assert }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Groceries' })
+    const listId = bodyData<ListDto>(create).id
+
+    const milk = bodyData<ItemDto>(
+      await client
+        .post(`/api/v1/lists/${listId}/items`)
+        .header('Authorization', `Bearer ${owner.token}`)
+        .json({ name: 'Milk' })
+    )
+    await client
+      .patch(`/api/v1/lists/${listId}/items/${milk.id}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ checked: true })
+    await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Eggs' })
+
+    const withChecked = bodyData<{ items: { name: string }[] }>(
+      await client
+        .get(`/api/v1/lists/${listId}/widget-snapshot`)
+        .header('Authorization', `Bearer ${owner.token}`)
+    )
+    assert.sameMembers(
+      withChecked.items.map((item) => item.name),
+      ['Milk', 'Eggs']
+    )
+
+    const withoutChecked = bodyData<{ items: { name: string }[] }>(
+      await client
+        .get(`/api/v1/lists/${listId}/widget-snapshot?includeChecked=false`)
+        .header('Authorization', `Bearer ${owner.token}`)
+    )
+    assert.deepEqual(
+      withoutChecked.items.map((item) => item.name),
+      ['Eggs']
+    )
+  })
+
+  test('a user with no access to the list is denied', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Groceries' })
+    const listId = bodyData<ListDto>(create).id
+
+    const outsider = await signupAndGetUser(client)
+    const response = await client
+      .get(`/api/v1/lists/${listId}/widget-snapshot`)
+      .header('Authorization', `Bearer ${outsider.token}`)
+    response.assertStatus(404)
   })
 })

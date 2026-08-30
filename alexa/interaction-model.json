@@ -87,6 +87,24 @@
           ]
         },
         {
+          "name": "ShowCheckedItemsIntent",
+          "samples": [
+            "show checked items",
+            "show completed items",
+            "show items I've already got",
+            "show the checked items"
+          ]
+        },
+        {
+          "name": "HideCheckedItemsIntent",
+          "samples": [
+            "hide checked items",
+            "hide completed items",
+            "stop showing items I've already got",
+            "hide the checked items"
+          ]
+        },
+        {
           "name": "ReadListIntent",
           "slots": [{ "name": "ListName", "type": "ListNameType" }],
           "samples": [

@@ -26,42 +26,38 @@ final class WidgetJson {
         return out;
     }
 
-    /** Parses `GET /api/v1/lists/:id/items`. */
-    static List<WidgetModels.WidgetItem> parseItems(String body) throws JSONException {
-        JSONArray data = new JSONObject(body).optJSONArray("data");
-        List<WidgetModels.WidgetItem> out = new ArrayList<>();
-        if (data == null) return out;
-        for (int i = 0; i < data.length(); i++) {
-            out.add(parseItem(data.getJSONObject(i)));
+    /** Parses `GET /api/v1/lists/:id/widget-snapshot` — already filtered and ordered server-side,
+     *  so there's no client-side sorting/grouping logic left to test here beyond field mapping. */
+    static WidgetModels.WidgetSnapshot parseWidgetSnapshot(String body) throws JSONException {
+        JSONObject data = new JSONObject(body).optJSONObject("data");
+        if (data == null) return new WidgetModels.WidgetSnapshot("", new ArrayList<>());
+
+        String listName = data.optString("listName", "");
+        JSONArray itemsJson = data.optJSONArray("items");
+        List<WidgetModels.WidgetItem> items = new ArrayList<>();
+        if (itemsJson != null) {
+            for (int i = 0; i < itemsJson.length(); i++) {
+                JSONObject o = itemsJson.getJSONObject(i);
+                items.add(new WidgetModels.WidgetItem(
+                    o.optLong("id", 0L),
+                    o.optString("name", ""),
+                    o.optBoolean("checked"),
+                    o.isNull("quantity") ? null : o.optString("quantity")));
+            }
         }
-        return out;
+        return new WidgetModels.WidgetSnapshot(listName, items);
     }
 
-    static WidgetModels.WidgetItem parseItem(JSONObject o) throws JSONException {
-        return new WidgetModels.WidgetItem(
-            o.optLong("id", 0L),
-            o.optLong("listId", 0L),
-            o.optString("name", ""),
-            o.optBoolean("checked"),
-            o.optLong("sortOrder", 0L),
-            o.isNull("quantity") ? null : o.optString("quantity"),
-            o.isNull("price") ? null : o.optLong("price"),
-            !o.isNull("deletedAt"));
-    }
-
-    /** Serializes a snapshot of non-deleted items for `WidgetPrefs` storage. */
+    /** Serializes a snapshot's items for `WidgetPrefs` storage — already filtered/ordered, so this
+     *  just round-trips the fields the offline fallback needs to render. */
     static String itemsToJson(List<WidgetModels.WidgetItem> items) throws JSONException {
         JSONArray arr = new JSONArray();
         for (WidgetModels.WidgetItem it : items) {
             JSONObject o = new JSONObject();
             o.put("id", it.id);
-            o.put("listId", it.listId);
             o.put("name", it.name);
             o.put("checked", it.checked);
-            o.put("sortOrder", it.sortOrder);
             if (it.quantity != null) o.put("quantity", it.quantity);
-            if (it.price != null) o.put("price", it.price);
-            o.put("deleted", it.deleted);
             arr.put(o);
         }
         return arr.toString();
@@ -75,13 +71,9 @@ final class WidgetJson {
             JSONObject o = arr.getJSONObject(i);
             out.add(new WidgetModels.WidgetItem(
                 o.optLong("id", 0L),
-                o.optLong("listId", 0L),
                 o.optString("name", ""),
                 o.optBoolean("checked"),
-                o.optLong("sortOrder", 0L),
-                o.isNull("quantity") ? null : o.optString("quantity"),
-                o.isNull("price") ? null : o.optLong("price"),
-                o.optBoolean("deleted")));
+                o.isNull("quantity") ? null : o.optString("quantity")));
         }
         return out;
     }

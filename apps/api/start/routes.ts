@@ -87,6 +87,7 @@ router
         router.get(':id', [controllers.Lists, 'show'])
         router.patch(':id', [controllers.Lists, 'update'])
         router.delete(':id', [controllers.Lists, 'destroy'])
+        router.get(':id/widget-snapshot', [controllers.Lists, 'widgetSnapshot'])
 
         router.get(':listId/categories', [controllers.Categories, 'index'])
         router.post(':listId/categories', [controllers.Categories, 'store'])
@@ -157,6 +158,18 @@ router
       // (also structurally blocked — a PAT can never satisfy the 'owner'
       // check `store` requires, since its effective role is always capped
       // at editor/viewer).
+      .use(middleware.auth())
+
+    router
+      .group(() => {
+        router.get('/', [controllers.AlexaPreferences, 'show'])
+        router.patch('/', [controllers.AlexaPreferences, 'update'])
+      })
+      .prefix('alexa/preferences')
+      .as('alexaPreferences')
+      // Settings → Alexa in the web app — login-session only, unlike the skill's own
+      // `alexa/*` request-signature-verified group below (this is a normal browser request,
+      // reusing the same `alexa_preferences` row `services/alexa/*` reads/writes).
       .use(middleware.auth())
 
     // PAT-only self-introspection — a login session can't authenticate here

@@ -147,8 +147,8 @@ final class WidgetPrefs {
         instance.edit().putBoolean(KEY_SHOW_COMPLETED, showCompleted).apply();
     }
 
-    /** Stores the full non-deleted snapshot (unfiltered by show-completed — the factory filters
-     *  at render time so toggling show/hide doesn't need a refetch). */
+    /** Stores the widget-snapshot's items — already filtered (show/hide-completed) and ordered by
+     *  the server, so the factory just renders this as-is at render time. */
     void saveSnapshot(List<WidgetModels.WidgetItem> items) {
         try {
             instance.edit().putString(KEY_SNAPSHOT, WidgetJson.itemsToJson(items)).apply();

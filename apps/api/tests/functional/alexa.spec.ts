@@ -717,6 +717,85 @@ test.group('Alexa skill endpoint', (group) => {
     assert.include(response.body().response.outputSpeech.text, 'Groceries is now your default')
   })
 
+  test('ShowCheckedItemsIntent and HideCheckedItemsIntent toggle the display, and persist across requests', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+    await addItem(client, owner.token, listId, 'Milk')
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const milk = bodyData<{ id: number }[]>(items)[0]!
+    await client
+      .patch(`/api/v1/lists/${listId}/items/${milk.id}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ checked: true })
+
+    const hide = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        hasDisplay: true,
+        intentName: 'HideCheckedItemsIntent',
+      })
+    )
+    assert.include(hide.body().response.outputSpeech.text, 'hiding checked items')
+    const hiddenRows = hide.body().response.directives[0].datasources.listData.properties.rows
+    assert.isFalse(hiddenRows.some((row: { name?: string }) => row.name === 'Milk'))
+
+    // Persists: a plain read-back afterwards still hides it, without re-toggling.
+    const read = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        hasDisplay: true,
+        intentName: 'ReadListIntent',
+      })
+    )
+    const readRows = read.body().response.directives[0].datasources.listData.properties.rows
+    assert.isFalse(readRows.some((row: { name?: string }) => row.name === 'Milk'))
+
+    const show = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        hasDisplay: true,
+        intentName: 'ShowCheckedItemsIntent',
+      })
+    )
+    assert.include(show.body().response.outputSpeech.text, 'showing checked items')
+    const shownRows = show.body().response.directives[0].datasources.listData.properties.rows
+    assert.isTrue(shownRows.some((row: { name?: string }) => row.name === 'Milk'))
+  })
+
+  test('ShowCheckedItemsIntent/HideCheckedItemsIntent with several accessible lists attaches no display, but still updates the preference', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listAId = await createList(client, owner.token, 'Groceries')
+    const listBId = await createList(client, owner.token, 'Hardware')
+    const pat = await mintPat(client, owner.token, [listAId, listBId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        hasDisplay: true,
+        intentName: 'HideCheckedItemsIntent',
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'hiding checked items')
+    assert.isUndefined(response.body().response.directives)
+  })
+
   test('a viewer accessing a shared list (not just their own) can still use voice control', async ({
     client,
     assert,
@@ -980,6 +1059,59 @@ test.group('Alexa skill endpoint', (group) => {
       .get(`/api/v1/lists/${listId}/items`)
       .header('Authorization', `Bearer ${owner.token}`)
     assert.isFalse(bodyData<{ checked: boolean }[]>(after)[0]!.checked)
+  })
+
+  test('tapping the show/hide-checked button toggles the display, and a viewer-scoped token can use it too', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const viewerPat = await mintPat(client, owner.token, [listId], 'viewer')
+    await addItem(client, owner.token, listId, 'Milk')
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const milk = bodyData<{ id: number }[]>(items)[0]!
+    await client
+      .patch(`/api/v1/lists/${listId}/items/${milk.id}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ checked: true })
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: viewerPat,
+        hasDisplay: true,
+        args: ['toggleShowChecked', null, listId],
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'Hiding checked items')
+    const rows = response.body().response.directives[0].datasources.listData.properties.rows
+    assert.isFalse(rows.some((row: { name?: string }) => row.name === 'Milk'))
+  })
+
+  test('a UserEvent toggling show-checked for a list the token cannot see at all is denied', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const otherOwner = await signupAndGetUser(client)
+    const otherListId = await createList(client, otherOwner.token, 'Other')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['toggleShowChecked', null, otherListId],
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, "don't have permission")
   })
 
   test('a UserEvent from a viewer-scoped token cannot uncheck an item', async ({

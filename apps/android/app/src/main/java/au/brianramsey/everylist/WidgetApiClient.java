@@ -29,13 +29,18 @@ final class WidgetApiClient {
         }
     }
 
-    /** `GET /api/v1/lists/:id/items` — the rows. */
-    static List<WidgetModels.WidgetItem> fetchItems(String token, String serverUrl, long listId) throws IOException {
-        String body = request("GET", serverUrl + "/api/v1/lists/" + listId + "/items", token, null);
+    /** `GET /api/v1/lists/:id/widget-snapshot` — the list name plus rows, already filtered
+     *  (show/hide-completed) and ordered (category-clustered, ranked-or-alphabetical) server-side,
+     *  matching the app's own grouped display order flattened. One round trip instead of the three
+     *  (lists + items + categories) the widget used to make and then join/sort itself. */
+    static WidgetModels.WidgetSnapshot fetchWidgetSnapshot(
+            String token, String serverUrl, long listId, boolean includeChecked) throws IOException {
+        String body = request("GET", serverUrl + "/api/v1/lists/" + listId
+            + "/widget-snapshot?includeChecked=" + includeChecked, token, null);
         try {
-            return WidgetJson.parseItems(body);
+            return WidgetJson.parseWidgetSnapshot(body);
         } catch (Exception e) {
-            throw new IOException("Malformed items response", e);
+            throw new IOException("Malformed widget-snapshot response", e);
         }
     }
 

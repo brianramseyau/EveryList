@@ -63,13 +63,12 @@ public class WidgetUpdater {
                 boolean nowChecked = !isChecked(prefs.loadSnapshot(), toggleItemId);
                 WidgetApiClient.toggleItem(token, serverUrl, toggleListId, toggleItemId, nowChecked);
             }
-            // Re-fetch everything we render: list names (for the header) and the rows.
-            List<WidgetModels.WidgetList> lists = WidgetApiClient.fetchLists(token, serverUrl);
-            WidgetModels.WidgetList selected = findList(lists, listId);
-            if (selected != null) prefs.setListName(selected.name);
-
-            List<WidgetModels.WidgetItem> all = WidgetApiClient.fetchItems(token, serverUrl, listId);
-            prefs.saveSnapshot(WidgetData.filter(all, true)); // store all non-deleted; factory filters
+            // One round trip for everything we render: list name (for the header) and the rows,
+            // already filtered (show/hide-completed) and ordered server-side.
+            WidgetModels.WidgetSnapshot snapshot =
+                WidgetApiClient.fetchWidgetSnapshot(token, serverUrl, listId, prefs.getShowCompleted());
+            prefs.setListName(snapshot.listName);
+            prefs.saveSnapshot(snapshot.items);
             prefs.setLastError(null);
         } catch (IOException e) {
             prefs.setLastError(context.getString(R.string.widget_offline_note));
@@ -84,13 +83,6 @@ public class WidgetUpdater {
             if (it.id == itemId) return it.checked;
         }
         return false;
-    }
-
-    private static WidgetModels.WidgetList findList(List<WidgetModels.WidgetList> lists, long listId) {
-        for (WidgetModels.WidgetList l : lists) {
-            if (l.id == listId) return l;
-        }
-        return null;
     }
 
     private static void render(Context context, AppWidgetManager manager, int appWidgetId,
