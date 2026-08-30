@@ -2159,7 +2159,7 @@ describe('List detail +page.svelte', () => {
 		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ categoryId: 10 }));
 	});
 
-	it('preserves an item\'s leftover categoryId when dragged in a categories-disabled list', async () => {
+	it("preserves an item's leftover categoryId when dragged in a categories-disabled list", async () => {
 		// The single flat section's container id is always null (see
 		// data-container-id in the template), so a drop handler that blindly
 		// assigns toContainerId would clear this item's leftover categoryId
