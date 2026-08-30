@@ -64,12 +64,14 @@
 	{#if loading}
 		<Loader />
 	{:else if preference}
+		{@const showChecked = preference.showChecked ?? true}
 		<section class="flex flex-col gap-4">
 			<div class="flex flex-col gap-1">
 				<span class="text-xs text-gray-500 dark:text-gray-400">Default list</span>
 				<Select
 					aria-label="Default list"
 					size="sm"
+					placeholder=""
 					items={[
 						{ value: '', name: 'Ask each time' },
 						...lists.map((list) => ({ value: String(list.id), name: list.name }))
@@ -86,10 +88,7 @@
 				</span>
 			</div>
 
-			<Toggle
-				checked={preference.showChecked ?? true}
-				onchange={() => void onupdate({ showChecked: !(preference?.showChecked ?? true) })}
-			>
+			<Toggle checked={showChecked} onchange={() => void onupdate({ showChecked: !showChecked })}>
 				Show checked items
 			</Toggle>
 			<span class="-mt-3 text-xs text-gray-500 dark:text-gray-400">
