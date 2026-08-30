@@ -338,6 +338,26 @@ describe('List detail +page.svelte', () => {
 		expect(order).toEqual([...order].sort((a, b) => a - b));
 	});
 
+	it('sorts a categories-disabled list alphabetically when itemSortOrder is alphabetical', async () => {
+		vi.mocked(fetchList).mockResolvedValue({
+			...list,
+			useCategories: false,
+			itemSortOrder: 'alphabetical'
+		});
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Milk', categoryId: 10, sortOrder: 0 }),
+			makeItem({ id: 101, name: 'Apples', categoryId: 11, sortOrder: 1 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Apples')).toBeInTheDocument();
+
+		const names = [...document.querySelectorAll('li')].map((li) => li.textContent);
+		const appleIndex = names.findIndex((text) => text?.includes('Apples'));
+		const milkIndex = names.findIndex((text) => text?.includes('Milk'));
+		expect(appleIndex).toBeLessThan(milkIndex);
+	});
+
 	it('renders no groups when a categories-free list has only hidden checked items', async () => {
 		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
 		vi.mocked(fetchItems).mockResolvedValue([
