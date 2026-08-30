@@ -19,6 +19,14 @@
 		supportsScreenOrientationLock,
 		type OrientationPreference
 	} from '$lib/orientation';
+	import {
+		getShakeToUndoPreference,
+		requestShakePermission,
+		setShakeToUndoPreference,
+		startShakeListening,
+		stopShakeListening
+	} from '$lib/shake';
+	import { runUndo } from '$lib/undo';
 	import { fetchProfile, logout, updateProfile } from '$lib/api/auth';
 	import { ApiError } from '$lib/api/client';
 	import { resetApp } from '$lib/pwa/reset';
@@ -44,6 +52,8 @@
 	let isNative = $state(false);
 	let isAndroid = $state(false);
 	let orientationFeedback = $state<string | null>(null);
+	let shakeToUndoEnabled = $state(true);
+	let shakeFeedback = $state<string | null>(null);
 	let serverUrl = $state('');
 	let nativeInfo = $state<{ version: string; build: string } | null>(null);
 
@@ -100,6 +110,29 @@
 				? "This device didn't allow locking the screen orientation."
 				: "Your device's screen rotation (Auto-rotate) may be off — turn it on in your system settings, then rotate your phone once. For a guaranteed lock, use the native app.";
 		}
+	}
+
+	/** Toggling on has to (re-)request iOS Safari's motion permission from this very click — it's a
+	 * user gesture, the only context that API will actually prompt in (see
+	 * PLAN_21_PHASE_SHAKE_TO_UNDO.md); native and Android never need it, so `requestShakePermission`
+	 * resolves `true` immediately there. Toggling off just stops the shared listener started by
+	 * `+layout.svelte`'s `initShakeToUndo` (or by a previous call here) — there's nothing else to
+	 * revoke. */
+	async function chooseShakeToUndo(enabled: boolean) {
+		shakeFeedback = null;
+		if (enabled) {
+			const granted = await requestShakePermission();
+			if (!granted) {
+				shakeFeedback =
+					"This browser didn't allow motion access, which shake to undo needs to detect a shake.";
+				return;
+			}
+			startShakeListening(() => void runUndo());
+		} else {
+			stopShakeListening();
+		}
+		shakeToUndoEnabled = enabled;
+		setShakeToUndoPreference(enabled);
 	}
 
 	async function handleLogout() {
@@ -163,6 +196,7 @@
 		themePreference = getThemePreference();
 		accentPreference = getAccentPreference();
 		orientationPreference = getOrientationPreference();
+		shakeToUndoEnabled = getShakeToUndoPreference();
 		canLockOrientationNow = canLockOrientation();
 		supportsOrientationLock = supportsScreenOrientationLock();
 		isNative = Capacitor.isNativePlatform();
@@ -340,6 +374,42 @@
 		{/if}
 		{#if orientationFeedback}
 			<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">{orientationFeedback}</p>
+		{/if}
+		<div
+			class="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700"
+		>
+			<span class="text-sm font-medium">Shake to undo</span>
+			<div
+				role="radiogroup"
+				aria-label="Shake to undo"
+				class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
+			>
+				<button
+					type="button"
+					role="radio"
+					aria-checked={shakeToUndoEnabled}
+					onclick={() => chooseShakeToUndo(true)}
+					class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {shakeToUndoEnabled
+						? 'bg-primary-600 text-white'
+						: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+				>
+					On
+				</button>
+				<button
+					type="button"
+					role="radio"
+					aria-checked={!shakeToUndoEnabled}
+					onclick={() => chooseShakeToUndo(false)}
+					class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {!shakeToUndoEnabled
+						? 'bg-primary-600 text-white'
+						: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+				>
+					Off
+				</button>
+			</div>
+		</div>
+		{#if shakeFeedback}
+			<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">{shakeFeedback}</p>
 		{/if}
 	</section>
 

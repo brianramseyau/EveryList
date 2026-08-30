@@ -5,6 +5,8 @@ import {
 	resetConnectivityForTesting,
 	setServerUnavailableForTesting
 } from '$lib/offline/connectivity.svelte';
+import { stopShakeListening } from '$lib/shake';
+import { registerUndo, resetUndoForTesting } from '$lib/undo';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/auth', () => ({
@@ -26,6 +28,7 @@ vi.mock('@capacitor/app', () => ({
 vi.mock('@capacitor/screen-orientation', () => ({
 	ScreenOrientation: { lock: vi.fn(), unlock: vi.fn() }
 }));
+vi.mock('@capacitor/motion', () => ({ Motion: { addListener: vi.fn() } }));
 vi.mock('$lib/api/server-url', () => ({
 	getServerUrl: vi.fn().mockReturnValue(''),
 	clearServerUrl: vi.fn()
@@ -63,6 +66,11 @@ describe('Settings +page.svelte', () => {
 		// auto-rotate/not-supported tests) — clear it so it can't leak into a
 		// later spec file sharing this worker's browser context.
 		window.localStorage.removeItem('everylist:orientation');
+		window.localStorage.removeItem('everylist:shakeToUndo');
+		delete (window.DeviceMotionEvent as unknown as { requestPermission?: unknown })
+			.requestPermission;
+		stopShakeListening();
+		resetUndoForTesting();
 		resetConnectivityForTesting();
 	});
 
@@ -336,6 +344,89 @@ describe('Settings +page.svelte', () => {
 				})
 			)
 			.toBeInTheDocument();
+	});
+
+	describe('shake to undo (PLAN_21_PHASE_SHAKE_TO_UNDO.md)', () => {
+		it('is on by default, reflected in the radio group', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+			render(SettingsPage);
+
+			await expect.element(page.getByRole('radio', { name: 'On' })).toBeChecked();
+			await expect.element(page.getByRole('radio', { name: 'Off' })).not.toBeChecked();
+		});
+
+		it('turning it off persists the preference and reflects the choice in the radio group', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+			render(SettingsPage);
+			await page.getByRole('radio', { name: 'Off' }).click();
+
+			await expect.element(page.getByRole('radio', { name: 'Off' })).toBeChecked();
+			expect(window.localStorage.getItem('everylist:shakeToUndo')).toBe('off');
+		});
+
+		it('turning it back on persists the preference, with no permission prompt needed outside iOS Safari', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+			render(SettingsPage);
+			await page.getByRole('radio', { name: 'Off' }).click();
+			await page.getByRole('radio', { name: 'On' }).click();
+
+			await expect.element(page.getByRole('radio', { name: 'On' })).toBeChecked();
+			expect(window.localStorage.getItem('everylist:shakeToUndo')).toBe('on');
+		});
+
+		it("shows a note and leaves the preference off when iOS Safari's motion permission is denied", async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+			render(SettingsPage);
+			await page.getByRole('radio', { name: 'Off' }).click();
+
+			(
+				window.DeviceMotionEvent as unknown as { requestPermission: () => Promise<string> }
+			).requestPermission = vi.fn().mockResolvedValue('denied');
+			await page.getByRole('radio', { name: 'On' }).click();
+
+			await expect
+				.element(page.getByText("This browser didn't allow motion access", { exact: false }))
+				.toBeInTheDocument();
+			await expect.element(page.getByRole('radio', { name: 'Off' })).toBeChecked();
+			expect(window.localStorage.getItem('everylist:shakeToUndo')).toBe('off');
+		});
+
+		it('requests permission and turns on when iOS Safari grants motion access', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+			const requestPermission = vi.fn().mockResolvedValue('granted');
+			(
+				window.DeviceMotionEvent as unknown as { requestPermission: () => Promise<string> }
+			).requestPermission = requestPermission;
+
+			render(SettingsPage);
+			await page.getByRole('radio', { name: 'On' }).click();
+
+			expect(requestPermission).toHaveBeenCalledOnce();
+			await expect.element(page.getByRole('radio', { name: 'On' })).toBeChecked();
+			expect(window.localStorage.getItem('everylist:shakeToUndo')).toBe('on');
+		});
+
+		it('a real shake, after re-enabling from Settings, runs whatever undo is currently pending', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+			const undo = vi.fn(async () => {});
+
+			render(SettingsPage);
+			await page.getByRole('radio', { name: 'Off' }).click();
+			await page.getByRole('radio', { name: 'On' }).click();
+			registerUndo(undo);
+
+			window.dispatchEvent(
+				new DeviceMotionEvent('devicemotion', {
+					accelerationIncludingGravity: { x: 30, y: 30, z: 30 }
+				})
+			);
+
+			await expect.poll(() => undo.mock.calls.length).toBe(1);
+		});
 	});
 
 	it('clears cached app data via the Reset button after confirmation', async () => {

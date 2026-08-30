@@ -37,6 +37,7 @@
 	import PopoutMenu from '$lib/components/PopoutMenu.svelte';
 	import PopoutMenuItem from '$lib/components/PopoutMenuItem.svelte';
 	import UndoToast from '$lib/components/UndoToast.svelte';
+	import { registerUndo, clearUndo, runUndo } from '$lib/undo';
 	import Loader from '$lib/components/Loader.svelte';
 
 	const listId = $derived(Number(page.params.id));
@@ -407,6 +408,9 @@
 		unsubscribeConflict?.();
 		unsubscribeFlushOutcome?.();
 		if (highlightTimeout) clearTimeout(highlightTimeout);
+		// Leaving the page forfeits its undo window — a shake on some other page later shouldn't
+		// reach back into a callback closed over this now-destroyed component's state.
+		clearUndo();
 	});
 
 	async function addItem(rawName: string) {
@@ -440,6 +444,13 @@
 					: items.map((current, index) => (index === existingIndex ? item : current));
 			flashHighlight(item.id);
 			newItemName = '';
+			// A matched existing item was really just unchecked, not created — undoing "add" there
+			// means re-checking it, not deleting a pre-existing item.
+			if (existingIndex === -1) {
+				showUndo('Item added', () => undoAddItem(item));
+			} else {
+				showUndo('Item added', () => undoToggleChecked(item, false));
+			}
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to add item.';
 		} finally {
@@ -463,6 +474,9 @@
 		} else {
 			checkAnimatingIds.delete(item.id);
 		}
+		showUndo(nextChecked ? 'Item checked' : 'Item unchecked', () =>
+			undoToggleChecked(item, nextChecked)
+		);
 		try {
 			await updateItem(listId, item.id, { checked: nextChecked });
 			void refreshBadgeCount();
@@ -537,27 +551,41 @@
 		}
 	}
 
-	// Undo-delete toast (PLAN_20_PHASE_UNDO_DELETE_TOAST.md) — wraps only the two direct
-	// single-item delete gestures (swipe and the X button), not `clearChecked`'s bulk path, which
-	// keeps calling `removeItem` directly. One slot: a second delete while a toast is showing
-	// replaces it outright, same as Gmail/Todoist's "latest wins" — the superseded delete is
+	// Undo (PLAN_20_PHASE_UNDO_DELETE_TOAST.md, generalized in PLAN_21_PHASE_SHAKE_TO_UNDO.md) — the
+	// toast itself is page-local `$state` (a shared cross-page reactive value, read directly by
+	// every independently mounted page instance across a test run, broke Svelte's reactivity
+	// tracking), but the actual undo callback is also registered into `$lib/undo.ts`'s plain,
+	// non-reactive slot, which the app-wide shake gesture (wired up in the root layout, outside
+	// this page's component tree) can trigger with no idea this page even exists. Either trigger —
+	// this page's own toast button, or a shake — runs the same wrapped callback, which clears this
+	// page's own toast state as its first step. One slot: a second undoable action while a toast is
+	// showing replaces it outright, same as Gmail/Todoist's "latest wins" — the superseded action is
 	// simply no longer undoable.
-	let pendingUndo = $state<ItemDto | null>(null);
+	let pendingUndo = $state<{ id: number; message: string } | null>(null);
+	let undoIdCounter = 0;
 
+	function showUndo(message: string, action: () => Promise<void>) {
+		undoIdCounter += 1;
+		pendingUndo = { id: undoIdCounter, message };
+		registerUndo(async () => {
+			pendingUndo = null;
+			await action();
+		});
+	}
+
+	function dismissUndo() {
+		pendingUndo = null;
+		clearUndo();
+	}
+
+	// Wraps only the two direct single-item delete gestures (swipe and the X button), not
+	// `clearChecked`'s bulk path, which keeps calling `removeItem` directly.
 	function removeItemWithUndo(item: ItemDto) {
-		pendingUndo = item;
+		showUndo('Item deleted', () => undoRemove(item));
 		void removeItem(item);
 	}
 
-	function expireUndo() {
-		pendingUndo = null;
-	}
-
-	// Only reachable via the toast's own onAction, which only renders while `pendingUndo` is set.
-	async function undoRemove() {
-		const item = pendingUndo!;
-		pendingUndo = null;
-
+	async function undoRemove(item: ItemDto) {
 		// `removeItem`'s own delete request can fail independently (e.g. the server rejected it) and
 		// self-heal via `loadAll()`, which may already have put the item back into `items` before
 		// Undo is clicked — concatenating unconditionally would then duplicate it.
@@ -568,6 +596,33 @@
 			await undoDeleteItem(listId, item.id);
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to undo delete.';
+			void loadAll();
+		}
+	}
+
+	// Shared by both the checked-toggle undo below and the add-item undo's "actually matched an
+	// existing checked item" branch — reverts a single item's `checked` flag back to what it was
+	// before `toggleChecked` (or the auto-uncheck-on-re-add) flipped it.
+	async function undoToggleChecked(item: ItemDto, checkedApplied: boolean) {
+		const revertTo = !checkedApplied;
+		items = items.map((current) =>
+			current.id === item.id ? { ...current, checked: revertTo } : current
+		);
+		try {
+			await updateItem(listId, item.id, { checked: revertTo });
+			void refreshBadgeCount();
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to undo update.';
+			void loadAll();
+		}
+	}
+
+	async function undoAddItem(item: ItemDto) {
+		items = items.filter((current) => current.id !== item.id);
+		try {
+			await deleteItem(listId, item.id);
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to undo add.';
 			void loadAll();
 		}
 	}
@@ -1218,7 +1273,7 @@
 
 	{#if pendingUndo}
 		{#key pendingUndo.id}
-			<UndoToast message="Item deleted" onAction={undoRemove} onDismiss={expireUndo} />
+			<UndoToast message={pendingUndo.message} onAction={() => runUndo()} onDismiss={dismissUndo} />
 		{/key}
 	{/if}
 </main>
