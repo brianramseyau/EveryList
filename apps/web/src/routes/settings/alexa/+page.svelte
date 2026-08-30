@@ -41,6 +41,7 @@
 	) {
 		try {
 			preference = await updateAlexaPreference(input);
+			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to update Alexa settings.';
 		}

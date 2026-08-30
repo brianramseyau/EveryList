@@ -1090,6 +1090,20 @@ test.group('Alexa skill endpoint', (group) => {
     assert.include(response.body().response.outputSpeech.text, 'Hiding checked items')
     const rows = response.body().response.directives[0].datasources.listData.properties.rows
     assert.isFalse(rows.some((row: { name?: string }) => row.name === 'Milk'))
+
+    // A second tap flips it back — this time from an existing (not never-set) preference row.
+    const again = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: viewerPat,
+        hasDisplay: true,
+        args: ['toggleShowChecked', null, listId],
+      })
+    )
+    assert.include(again.body().response.outputSpeech.text, 'Showing checked items')
+    const againRows = again.body().response.directives[0].datasources.listData.properties.rows
+    assert.isTrue(againRows.some((row: { name?: string }) => row.name === 'Milk'))
   })
 
   test('a UserEvent toggling show-checked for a list the token cannot see at all is denied', async ({
@@ -1112,6 +1126,27 @@ test.group('Alexa skill endpoint', (group) => {
       })
     )
     assert.include(response.body().response.outputSpeech.text, "don't have permission")
+  })
+
+  test('a UserEvent toggling show-checked for a list that no longer exists reports not found', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+    await client.delete(`/api/v1/lists/${listId}`).header('Authorization', `Bearer ${owner.token}`)
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['toggleShowChecked', null, listId],
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, "couldn't find that list")
   })
 
   test('a UserEvent from a viewer-scoped token cannot uncheck an item', async ({

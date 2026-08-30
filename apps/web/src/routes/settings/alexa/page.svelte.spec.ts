@@ -174,4 +174,20 @@ describe('Alexa +page.svelte', () => {
 
 		await expect.element(page.getByText('Failed to update Alexa settings.')).toBeInTheDocument();
 	});
+
+	it('clears a stale error once a later update succeeds', async () => {
+		vi.mocked(updateAlexaPreference).mockRejectedValueOnce(new ApiError(403, 'Not allowed'));
+
+		render(AlexaPage);
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Show checked items' }))
+			.toBeInTheDocument();
+		await page.getByRole('checkbox', { name: 'Show checked items' }).click();
+		await expect.element(page.getByText('Not allowed')).toBeInTheDocument();
+
+		vi.mocked(updateAlexaPreference).mockResolvedValueOnce(preference({ showChecked: true }));
+		await page.getByRole('checkbox', { name: 'Show checked items' }).click();
+
+		await expect.element(page.getByText('Not allowed')).not.toBeInTheDocument();
+	});
 });

@@ -235,6 +235,43 @@ test.group('buildListDisplay', (group) => {
     ])
   })
 
+  test('useCategories: false combined with itemSortOrder: alphabetical sorts the flat list by name', async ({
+    assert,
+  }) => {
+    const user = await makeUser('display9@example.com')
+    const list = await List.create({
+      name: 'Groceries',
+      ownerId: user.id,
+      useCategories: false,
+      itemSortOrder: 'alphabetical',
+    })
+
+    const zebra = await Item.create({
+      listId: list.id,
+      name: 'Zucchini',
+      categoryId: null,
+      checked: false,
+      sortOrder: 0,
+      createdBy: user.id,
+      version: 1,
+    })
+    const apple = await Item.create({
+      listId: list.id,
+      name: 'Apples',
+      categoryId: null,
+      checked: false,
+      sortOrder: 1,
+      createdBy: user.id,
+      version: 1,
+    })
+
+    const directive = await buildListDisplay(list, user.id)
+    assert.deepEqual(rowsOf(directive), [
+      { type: 'item', id: apple.id, name: 'Apples', checked: false },
+      { type: 'item', id: zebra.id, name: 'Zucchini', checked: false },
+    ])
+  })
+
   test('within the same checked state, items are ordered by sortOrder', async ({ assert }) => {
     const user = await makeUser('display5@example.com')
     const list = await List.create({ name: 'Groceries', ownerId: user.id })
