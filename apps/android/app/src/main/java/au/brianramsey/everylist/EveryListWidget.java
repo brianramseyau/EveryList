@@ -48,6 +48,16 @@ public class EveryListWidget extends AppWidgetProvider {
     }
 
     @Override
+    public void onDeleted(Context context, int[] appWidgetIds) {
+        // A removed widget's own updatePeriodMillis ticks stop automatically, but a retry alarm
+        // WidgetUpdater armed for it (WidgetUpdater.scheduleRetry) would otherwise keep firing
+        // into a widget id nothing renders anymore until it exhausts its backoff.
+        for (int appWidgetId : appWidgetIds) {
+            WidgetUpdater.cancelPendingRetry(context, appWidgetId);
+        }
+    }
+
+    @Override
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
         int appWidgetId = intent.getIntExtra(EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
