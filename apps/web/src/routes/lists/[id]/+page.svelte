@@ -211,9 +211,23 @@
 	);
 
 	const groups = $derived.by(() => {
+		const visible = visibleItems.filter(
+			(item) => !(item.checked && !showChecked && !checkAnimatingIds.has(item.id))
+		);
+
+		// Lists that opt out of categories (PLAN_11_PHASE_LIST_FEATURE_REFINEMENTS.md §E) render as a single
+		// flat section, ordered by the items' own sortOrder — a leftover categoryId from before
+		// categories were disabled must not affect grouping or ordering here.
+		if (list?.useCategories === false) {
+			const flat = [...visible];
+			if (list?.itemSortOrder === 'alphabetical') {
+				flat.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+			}
+			return flat.length ? [{ category: null, items: flat }] : [];
+		}
+
 		const byCategory = new SvelteMap<number | null, ItemDto[]>();
-		for (const item of visibleItems) {
-			if (item.checked && !showChecked && !checkAnimatingIds.has(item.id)) continue;
+		for (const item of visible) {
 			const key = item.categoryId;
 			if (!byCategory.has(key)) byCategory.set(key, []);
 			byCategory.get(key)!.push(item);
@@ -225,13 +239,6 @@
 			for (const bucket of byCategory.values()) {
 				bucket.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 			}
-		}
-
-		// Lists that opt out of categories (PLAN_11_PHASE_LIST_FEATURE_REFINEMENTS.md §E) render as a single
-		// flat section — collapse every bucket instead of grouping by categoryId.
-		if (list?.useCategories === false) {
-			const flat = [...byCategory.values()].flat();
-			return flat.length ? [{ category: null, items: flat }] : [];
 		}
 
 		const orderedCategories = [...categories].sort((a, b) => {
@@ -497,10 +504,12 @@
 		const newSortOrder = computeMidpointSortOrder(beforeItem?.sortOrder, afterItem?.sortOrder);
 
 		// Reassigns categoryId when the drop lands in a different section —
-		// matching AnyList's drag-to-recategorize.
+		// matching AnyList's drag-to-recategorize. Categories-disabled lists have
+		// only one (uncategorized) container, so leave categoryId untouched —
+		// otherwise every drag would clear whatever value the item already had.
 		const updatedItem: ItemDto = {
 			...draggedItem,
-			categoryId: params.toContainerId,
+			categoryId: list?.useCategories === false ? draggedItem.categoryId : params.toContainerId,
 			sortOrder: newSortOrder
 		};
 
