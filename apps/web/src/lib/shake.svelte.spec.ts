@@ -124,6 +124,27 @@ describe('shake (browser)', () => {
 		expect(onShake).toHaveBeenCalledOnce();
 	});
 
+	it('ignores a native accel event with no real accelerometer data backing it — observed on an Android emulator before the first real reading arrives', async () => {
+		vi.mocked(isNativePlatform).mockReturnValue(true);
+		let listener: AccelListener | undefined;
+		vi.mocked(Motion.addListener).mockImplementation(async (_event, fn) => {
+			listener = fn as unknown as AccelListener;
+			return { remove: vi.fn().mockResolvedValue(undefined) };
+		});
+
+		const onShake = vi.fn();
+		startShakeListening(onShake);
+		await vi.waitFor(() => expect(listener).toBeDefined());
+		listener!({
+			acceleration: { x: 0, y: 0, z: 0 },
+			accelerationIncludingGravity: {} as unknown as { x: number; y: number; z: number },
+			rotationRate: { alpha: 0, beta: 0, gamma: 0 },
+			interval: 16
+		});
+
+		expect(onShake).not.toHaveBeenCalled();
+	});
+
 	it('stopShakeListening removes the native Motion listener', async () => {
 		vi.mocked(isNativePlatform).mockReturnValue(true);
 		const handle = { remove: vi.fn().mockResolvedValue(undefined) };

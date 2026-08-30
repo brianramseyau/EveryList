@@ -96,8 +96,9 @@ export function startShakeListening(onShake: () => void): void {
 
 	if (Capacitor.isNativePlatform()) {
 		void Motion.addListener('accel', (event) => {
-			const { x, y, z } = event.accelerationIncludingGravity;
-			detector.handleReading(x, y, z);
+			const g = event.accelerationIncludingGravity;
+			if (!g || g.x == null || g.y == null || g.z == null) return;
+			detector.handleReading(g.x, g.y, g.z);
 		}).then((handle) => {
 			nativeHandle = handle;
 		});
@@ -107,7 +108,11 @@ export function startShakeListening(onShake: () => void): void {
 	if (!hasWindow()) return;
 	webListener = (event: DeviceMotionEvent) => {
 		const g = event.accelerationIncludingGravity;
-		if (!g || g.x === null || g.y === null || g.z === null) return;
+		// Loose nulls: some WebViews (observed on an Android emulator) fire devicemotion
+		// continuously but leave x/y/z as `undefined` rather than absent/`null` when no real
+		// accelerometer data backs the event — `=== null` alone lets that slip through as NaN
+		// math that silently never crosses the threshold.
+		if (!g || g.x == null || g.y == null || g.z == null) return;
 		detector.handleReading(g.x, g.y, g.z);
 	};
 	window.addEventListener('devicemotion', webListener);
