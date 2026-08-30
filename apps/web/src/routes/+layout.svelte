@@ -24,6 +24,7 @@
 	import { setUpdateRegistration } from '$lib/pwa/update';
 	import BottomNav from '$lib/components/BottomNav.svelte';
 	import SyncStatusIcon from '$lib/components/SyncStatusIcon.svelte';
+	import ShakeRepromptBanner from '$lib/components/ShakeRepromptBanner.svelte';
 
 	let { children } = $props();
 
@@ -193,6 +194,7 @@
 	{#if loggedIn}
 		<div class="print:hidden">
 			<SyncStatusIcon />
+			<ShakeRepromptBanner />
 		</div>
 	{/if}
 </div>
