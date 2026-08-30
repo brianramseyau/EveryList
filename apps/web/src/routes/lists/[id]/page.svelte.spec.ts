@@ -817,6 +817,25 @@ describe('List detail +page.svelte', () => {
 			await expect.element(page.getByRole('checkbox', { name: 'Bread' })).toBeChecked();
 		});
 
+		it('skips the return animation under prefers-reduced-motion but still undoes the check', async () => {
+			const matchMediaSpy = mockReducedMotion();
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+			]);
+			vi.mocked(updateItem).mockResolvedValue(undefined);
+
+			render(ListDetailPage);
+			await page.getByRole('checkbox', { name: 'Bananas' }).click();
+			await expect.element(page.getByText('Item checked')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			expect(updateItem).toHaveBeenCalledWith(1, 100, { checked: false });
+			await expect.element(page.getByRole('checkbox', { name: 'Bananas' })).not.toBeChecked();
+
+			matchMediaSpy.mockRestore();
+		});
+
 		it('shows an undo toast after unchecking an item, and Undo checks it again', async () => {
 			vi.mocked(fetchItems).mockResolvedValue([
 				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true })
