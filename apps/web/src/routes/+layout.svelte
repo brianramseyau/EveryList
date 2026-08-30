@@ -12,6 +12,8 @@
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
 	import { initOrientation } from '$lib/orientation';
+	import { initShakeToUndo, stopShakeListening } from '$lib/shake';
+	import { runUndo } from '$lib/undo';
 	import { disablePinchZoom } from '$lib/pinch-zoom';
 	import { consumeNavDirection, consumeSkipTransition } from '$lib/nav-direction';
 	import { startFlushLoop } from '$lib/offline/flush';
@@ -47,6 +49,7 @@
 		initTheme();
 		initAccent();
 		void initOrientation();
+		initShakeToUndo(() => void runUndo());
 		disablePinchZoom();
 		refreshAuth();
 		syncBadge();
@@ -123,6 +126,7 @@
 		// (e.g. in tests).
 		return () => {
 			void deepLinkHandle?.then((handle) => handle.remove());
+			stopShakeListening();
 		};
 	});
 	afterNavigate(() => {

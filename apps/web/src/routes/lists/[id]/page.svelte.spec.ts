@@ -7,6 +7,7 @@ import { ApiError } from '$lib/api/client';
 import type { SortableReorderParams } from '$lib/actions/sortable-reorder';
 import type { ConflictListener, FlushOutcomeListener } from '$lib/offline/flush';
 import { markSelfMutation, resetSelfMutationsForTesting } from '$lib/offline/self-mutations';
+import { resetUndoForTesting } from '$lib/undo';
 import { consumeListOrigin, rememberListScroll } from '$lib/nav-direction';
 
 // SortableJS drives real mouse/touch gestures against real layout, neither of
@@ -191,6 +192,7 @@ describe('List detail +page.svelte', () => {
 		window.localStorage.clear();
 		window.history.replaceState(null, '', '/');
 		resetSelfMutationsForTesting();
+		resetUndoForTesting();
 		await resetDbForTesting();
 	});
 
@@ -712,6 +714,156 @@ describe('List detail +page.svelte', () => {
 		expect(createItem).not.toHaveBeenCalled();
 		await expect.element(input).toHaveValue('');
 		expect(page.getByText('Bananas', { exact: true }).elements()).toHaveLength(1);
+	});
+
+	describe('undo (shake-to-undo, PLAN_21_PHASE_SHAKE_TO_UNDO.md)', () => {
+		it('shows an undo toast after adding an item, and Undo deletes it back off', async () => {
+			vi.mocked(createItem).mockResolvedValue(makeItem({ id: 200, name: 'Bread' }));
+
+			render(ListDetailPage);
+			await page.getByPlaceholder('Item name').fill('Bread');
+			page
+				.getByPlaceholder('Item name')
+				.element()
+				.closest('form')
+				?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+			await expect.element(page.getByText('Bread')).toBeInTheDocument();
+			await expect.element(page.getByText('Item added')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			expect(deleteItem).toHaveBeenCalledWith(1, 200);
+			await expect.element(page.getByText('Bread')).not.toBeInTheDocument();
+			await expect.element(page.getByText('Item added')).not.toBeInTheDocument();
+		});
+
+		it('reloads the list when undoing an add fails without an ApiError', async () => {
+			vi.mocked(createItem).mockResolvedValue(makeItem({ id: 200, name: 'Bread' }));
+			vi.mocked(deleteItem).mockRejectedValueOnce(new TypeError('network down'));
+
+			render(ListDetailPage);
+			await page.getByPlaceholder('Item name').fill('Bread');
+			page
+				.getByPlaceholder('Item name')
+				.element()
+				.closest('form')
+				?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+			await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+		});
+
+		it('reloads the list when undoing an add fails with an ApiError', async () => {
+			vi.mocked(createItem).mockResolvedValue(makeItem({ id: 200, name: 'Bread' }));
+			vi.mocked(deleteItem).mockRejectedValueOnce(new ApiError(500, 'Could not delete'));
+
+			render(ListDetailPage);
+			await page.getByPlaceholder('Item name').fill('Bread');
+			page
+				.getByPlaceholder('Item name')
+				.element()
+				.closest('form')
+				?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+			await expect.element(page.getByText('Bread')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+		});
+
+		it('undoing an "add" that actually matched (and unchecked) an existing item re-checks it instead of deleting it', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Milk', categoryId: 10, checked: true })
+			]);
+			vi.mocked(createItem).mockResolvedValue(
+				makeItem({ id: 100, name: 'Milk', categoryId: 10, checked: false })
+			);
+
+			render(ListDetailPage);
+			await page.getByPlaceholder('Item name').fill('milk');
+			page
+				.getByPlaceholder('Item name')
+				.element()
+				.closest('form')
+				?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+			await expect.element(page.getByRole('checkbox', { name: 'Milk' })).not.toBeChecked();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			expect(deleteItem).not.toHaveBeenCalled();
+			expect(updateItem).toHaveBeenCalledWith(1, 100, { checked: true });
+			await expect.element(page.getByRole('checkbox', { name: 'Milk' })).toBeChecked();
+		});
+
+		it('shows an undo toast after checking an item, and Undo unchecks it without affecting a sibling item', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+				makeItem({ id: 101, name: 'Bread', categoryId: 10, checked: true })
+			]);
+			vi.mocked(updateItem).mockResolvedValue(undefined);
+
+			render(ListDetailPage);
+			await page.getByRole('checkbox', { name: 'Bananas' }).click();
+			await expect.element(page.getByText('Item checked')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			expect(updateItem).toHaveBeenCalledWith(1, 100, { checked: false });
+			await expect.element(page.getByRole('checkbox', { name: 'Bananas' })).not.toBeChecked();
+			await expect.element(page.getByText('Item checked')).not.toBeInTheDocument();
+			// Bread stays checked, proving the map only reverted the undone item.
+			await expect.element(page.getByRole('checkbox', { name: 'Bread' })).toBeChecked();
+		});
+
+		it('shows an undo toast after unchecking an item, and Undo checks it again', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true })
+			]);
+			vi.mocked(updateItem).mockResolvedValue(undefined);
+
+			render(ListDetailPage);
+			await page.getByRole('checkbox', { name: 'Bananas' }).click();
+			await expect.element(page.getByText('Item unchecked')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			expect(updateItem).toHaveBeenCalledWith(1, 100, { checked: true });
+			await expect.element(page.getByRole('checkbox', { name: 'Bananas' })).toBeChecked();
+		});
+
+		it('reloads the list when undoing a check/uncheck fails without an ApiError', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+			]);
+			vi.mocked(updateItem)
+				.mockResolvedValueOnce(undefined)
+				.mockRejectedValueOnce(new TypeError('network down'));
+
+			render(ListDetailPage);
+			await page.getByRole('checkbox', { name: 'Bananas' }).click();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+		});
+
+		it('reloads the list when undoing a check/uncheck fails with an ApiError', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+			]);
+			vi.mocked(updateItem)
+				.mockResolvedValueOnce(undefined)
+				.mockRejectedValueOnce(new ApiError(500, 'Could not update'));
+
+			render(ListDetailPage);
+			await page.getByRole('checkbox', { name: 'Bananas' }).click();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+		});
 	});
 
 	it('adds the item immediately when a suggestion is picked, without touching the Add button', async () => {
