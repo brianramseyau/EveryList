@@ -316,6 +316,48 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Uncategorized')).not.toBeInTheDocument();
 	});
 
+	it('orders a categories-disabled list by sortOrder, not by leftover categoryId', async () => {
+		// These categoryIds are leftover from before the list opted out of
+		// categories — interleaved by sortOrder rather than clustered by
+		// category, so a bug that groups by categoryId before flattening
+		// would clump Apples with Bananas instead of leaving Milk between them.
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0 }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 11, sortOrder: 1 }),
+			makeItem({ id: 102, name: 'Apples', categoryId: 10, sortOrder: 2 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Apples')).toBeInTheDocument();
+
+		const names = [...document.querySelectorAll('li')].map((li) => li.textContent);
+		const order = ['Bananas', 'Milk', 'Apples'].map((name) =>
+			names.findIndex((text) => text?.includes(name))
+		);
+		expect(order).toEqual([...order].sort((a, b) => a - b));
+	});
+
+	it('sorts a categories-disabled list alphabetically when itemSortOrder is alphabetical', async () => {
+		vi.mocked(fetchList).mockResolvedValue({
+			...list,
+			useCategories: false,
+			itemSortOrder: 'alphabetical'
+		});
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Milk', categoryId: 10, sortOrder: 0 }),
+			makeItem({ id: 101, name: 'Apples', categoryId: 11, sortOrder: 1 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Apples')).toBeInTheDocument();
+
+		const names = [...document.querySelectorAll('li')].map((li) => li.textContent);
+		const appleIndex = names.findIndex((text) => text?.includes('Apples'));
+		const milkIndex = names.findIndex((text) => text?.includes('Milk'));
+		expect(appleIndex).toBeLessThan(milkIndex);
+	});
+
 	it('renders no groups when a categories-free list has only hidden checked items', async () => {
 		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
 		vi.mocked(fetchItems).mockResolvedValue([
@@ -2132,6 +2174,27 @@ describe('List detail +page.svelte', () => {
 
 		// No before neighbor at all — Bread becomes the sole after-neighbor.
 		triggerDrop({ itemId: 100, toContainerId: 10, beforeItemId: null, afterItemId: 101 });
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ categoryId: 10 }));
+	});
+
+	it("preserves an item's leftover categoryId when dragged in a categories-disabled list", async () => {
+		// The single flat section's container id is always null (see
+		// data-container-id in the template), so a drop handler that blindly
+		// assigns toContainerId would clear this item's leftover categoryId
+		// on every drag even though categories are disabled.
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 11 })
+		]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+
+		triggerDrop({ itemId: 100, toContainerId: null, beforeItemId: 101, afterItemId: null });
 
 		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
 		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ categoryId: 10 }));
