@@ -151,6 +151,20 @@
 	const CHECK_ANIMATION_MS = 320;
 	let checkAnimatingIds = new SvelteSet<number>();
 
+	// Item ids mid "return" animation: an undo (shake or toast tap) just made this item
+	// reappear in the list — re-checked-off, unchecked back on, or un-deleted. Gates the `<li>`'s
+	// `in:slide` below so the reverse of the check-off `out:slide` only plays for that specific
+	// return, not for every ordinary item that ends up in the DOM (initial load, a plain add,
+	// filter changes) — those keep appearing instantly, same as before this existed.
+	const UNDO_ANIMATION_MS = 200;
+	let undoAnimatingIds = new SvelteSet<number>();
+
+	function markUndoAnimating(itemId: number) {
+		if (prefersReducedMotion) return;
+		undoAnimatingIds.add(itemId);
+		setTimeout(() => undoAnimatingIds.delete(itemId), UNDO_ANIMATION_MS);
+	}
+
 	// Store-specific aisle order, if the shopper has picked a store for this
 	// list on this device — purely local, see $lib/api/selected-store.ts.
 	let storeCategoryOverrides: Map<number, number> = new SvelteMap();
@@ -590,6 +604,7 @@
 		// self-heal via `loadAll()`, which may already have put the item back into `items` before
 		// Undo is clicked — concatenating unconditionally would then duplicate it.
 		if (!items.some((current) => current.id === item.id)) {
+			markUndoAnimating(item.id);
 			items = [...items, item].sort((a, b) => a.sortOrder - b.sortOrder);
 		}
 		try {
@@ -605,6 +620,9 @@
 	// before `toggleChecked` (or the auto-uncheck-on-re-add) flipped it.
 	async function undoToggleChecked(item: ItemDto, checkedApplied: boolean) {
 		const revertTo = !checkedApplied;
+		// Only unchecking a hidden-when-checked item brings it back into the visible list (the
+		// opposite direction removes it, which `out:slide` already covers).
+		if (!revertTo) markUndoAnimating(item.id);
 		items = items.map((current) =>
 			current.id === item.id ? { ...current, checked: revertTo } : current
 		);
@@ -1113,6 +1131,7 @@
 											class="relative overflow-hidden rounded-lg"
 											data-item-id={item.id}
 											animate:flip={{ duration: prefersReducedMotion ? 0 : 250 }}
+											in:slide={{ duration: undoAnimatingIds.has(item.id) ? UNDO_ANIMATION_MS : 0 }}
 											out:slide={{ duration: prefersReducedMotion ? 0 : 200 }}
 										>
 											<div
