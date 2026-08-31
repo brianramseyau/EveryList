@@ -817,6 +817,44 @@ describe('List detail +page.svelte', () => {
 			await expect.element(page.getByRole('checkbox', { name: 'Bread' })).toBeChecked();
 		});
 
+		it('reverses the strike-wipe in place when undoing a check with checked items still shown', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+			]);
+			vi.mocked(updateItem).mockResolvedValue(undefined);
+
+			render(ListDetailPage);
+			await page.getByRole('checkbox', { name: 'Bananas' }).click();
+			await expect.element(page.getByText('Item checked')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			// The item never left the DOM (checked items stay visible by default), so there's
+			// nothing to slide in — the reverse strike-wipe plays instead.
+			const li = page.getByRole('checkbox', { name: 'Bananas' }).element().closest('li')!;
+			expect(li.className).not.toContain('item-return-slide');
+			const nameSpan = page.getByText('Bananas').element();
+			expect(nameSpan.className).toContain('item-unstrike-wipe');
+		});
+
+		it('slides the item back in when undoing a check that had hidden it', async () => {
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+			]);
+			vi.mocked(updateItem).mockResolvedValue(undefined);
+
+			render(ListDetailPage);
+			await page.getByRole('button', { name: 'Hide checked items' }).click();
+			await page.getByRole('checkbox', { name: 'Bananas' }).click();
+			await expect.element(page.getByText('Bananas')).not.toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Undo' }).click();
+
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+			const li = page.getByText('Bananas').element().closest('li')!;
+			expect(li.className).toContain('item-return-slide');
+		});
+
 		it('skips the return animation under prefers-reduced-motion but still undoes the check', async () => {
 			const matchMediaSpy = mockReducedMotion();
 			vi.mocked(fetchItems).mockResolvedValue([
