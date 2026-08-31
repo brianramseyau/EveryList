@@ -2941,4 +2941,100 @@ describe('List detail +page.svelte', () => {
 
 		await expect.element(page.getByText('This list is locked')).not.toBeInTheDocument();
 	});
+
+	describe('viewer role', () => {
+		it('does not toggle a checked item, since the server would reject it as a viewer anyway', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, role: 'viewer' });
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: false })
+			]);
+
+			render(ListDetailPage);
+			const checkbox = page.getByRole('checkbox', { name: 'Bananas' });
+			await expect.element(checkbox).toHaveAttribute('aria-disabled', 'true');
+			await expect
+				.element(checkbox)
+				.toHaveAttribute('title', 'You have view-only access to this list');
+			await expect
+				.element(
+					page.getByText(
+						'You have view-only access to this list — checking off, adding, and deleting items is turned off.'
+					)
+				)
+				.toBeInTheDocument();
+
+			// aria-disabled (not the native `disabled` attribute — see the component's own comment
+			// on why) still blocks Playwright's normal actionability check, so `force` is needed to
+			// simulate the click actually reaching the handler and exercise its own `isViewer`
+			// guard, same as a stray keyboard/assistive-tech interaction might.
+			await checkbox.click({ force: true });
+
+			expect(updateItem).not.toHaveBeenCalled();
+			await expect.element(checkbox).not.toBeChecked();
+		});
+
+		it('shows a checked item as a filled grey box (not the normal green) so its state stays legible without hover', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, role: 'viewer' });
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true })
+			]);
+
+			render(ListDetailPage);
+			const checkbox = page.getByRole('checkbox', { name: 'Bananas' });
+			await expect.element(checkbox).toBeChecked();
+			await expect.element(checkbox).toHaveClass(/bg-gray-400/);
+			await expect.element(checkbox).not.toHaveClass(/bg-signal/);
+		});
+
+		it('hides the add-item form', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, role: 'viewer' });
+			vi.mocked(fetchItems).mockResolvedValue([]);
+
+			render(ListDetailPage);
+			await expect
+				.element(page.getByText('Nothing here yet. Add your first item above.'))
+				.toBeInTheDocument();
+
+			await expect.element(page.getByRole('textbox')).not.toBeInTheDocument();
+		});
+
+		it('hides the per-item Edit and Delete controls', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, role: 'viewer' });
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await expect
+				.element(page.getByRole('link', { name: 'Edit Bananas' }))
+				.not.toBeInTheDocument();
+			await expect
+				.element(page.getByRole('button', { name: 'Delete Bananas' }))
+				.not.toBeInTheDocument();
+		});
+
+		it('disables the bulk checked-item actions in the overflow menu even when items are checked', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, role: 'viewer' });
+			vi.mocked(fetchItems).mockResolvedValue([
+				makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true })
+			]);
+
+			render(ListDetailPage);
+			await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'List menu' }).click();
+			await expect
+				.element(page.getByRole('button', { name: 'Clear checked off items' }))
+				.toBeDisabled();
+			await expect.element(page.getByRole('button', { name: 'Uncheck all items' })).toBeDisabled();
+			await expect
+				.element(page.getByRole('button', { name: 'Clear all list items' }))
+				.toBeDisabled();
+
+			expect(deleteItem).not.toHaveBeenCalled();
+			expect(updateItem).not.toHaveBeenCalled();
+		});
+	});
 });
