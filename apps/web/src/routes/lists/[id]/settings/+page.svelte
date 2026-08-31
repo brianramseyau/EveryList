@@ -79,6 +79,7 @@
 			archived: boolean;
 			badgeExcluded: boolean;
 			useCategories: boolean;
+			useCategoryLearning: boolean;
 			useShops: boolean;
 			useFavorites: boolean;
 			useRecent: boolean;
@@ -143,6 +144,7 @@
 
 	type BooleanFeatureField =
 		| 'useCategories'
+		| 'useCategoryLearning'
 		| 'useShops'
 		| 'useFavorites'
 		| 'useRecent'
@@ -296,6 +298,16 @@
 			>
 				Categories
 			</Toggle>
+
+			{#if list.useCategories !== false}
+				<Toggle
+					checked={list.useCategoryLearning !== false}
+					onchange={() => toggleFeature('useCategoryLearning', list!)}
+					class="ml-4 w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
+				>
+					Learn item categories
+				</Toggle>
+			{/if}
 
 			<Toggle
 				checked={list.useShops !== false}

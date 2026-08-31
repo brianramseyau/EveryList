@@ -150,6 +150,12 @@ const routes = {
     tokens: [{"old":"/api/v1/lists/:id","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:id","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:id","type":1,"val":"id","end":""}],
     types: placeholder as Registry['lists.lists.destroy']['types'],
   },
+  'lists.lists.widget_snapshot': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/lists/:id/widget-snapshot',
+    tokens: [{"old":"/api/v1/lists/:id/widget-snapshot","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:id/widget-snapshot","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:id/widget-snapshot","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:id/widget-snapshot","type":1,"val":"id","end":""},{"old":"/api/v1/lists/:id/widget-snapshot","type":0,"val":"widget-snapshot","end":""}],
+    types: placeholder as Registry['lists.lists.widget_snapshot']['types'],
+  },
   'lists.categories.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/lists/:listId/categories',
@@ -395,6 +401,18 @@ const routes = {
     pattern: '/api/v1/tokens/:tokenId',
     tokens: [{"old":"/api/v1/tokens/:tokenId","type":0,"val":"api","end":""},{"old":"/api/v1/tokens/:tokenId","type":0,"val":"v1","end":""},{"old":"/api/v1/tokens/:tokenId","type":0,"val":"tokens","end":""},{"old":"/api/v1/tokens/:tokenId","type":1,"val":"tokenId","end":""}],
     types: placeholder as Registry['tokens.personal_access_tokens.destroy']['types'],
+  },
+  'alexaPreferences.alexa_preferences.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/alexa/preferences',
+    tokens: [{"old":"/api/v1/alexa/preferences","type":0,"val":"api","end":""},{"old":"/api/v1/alexa/preferences","type":0,"val":"v1","end":""},{"old":"/api/v1/alexa/preferences","type":0,"val":"alexa","end":""},{"old":"/api/v1/alexa/preferences","type":0,"val":"preferences","end":""}],
+    types: placeholder as Registry['alexaPreferences.alexa_preferences.show']['types'],
+  },
+  'alexaPreferences.alexa_preferences.update': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/alexa/preferences',
+    tokens: [{"old":"/api/v1/alexa/preferences","type":0,"val":"api","end":""},{"old":"/api/v1/alexa/preferences","type":0,"val":"v1","end":""},{"old":"/api/v1/alexa/preferences","type":0,"val":"alexa","end":""},{"old":"/api/v1/alexa/preferences","type":0,"val":"preferences","end":""}],
+    types: placeholder as Registry['alexaPreferences.alexa_preferences.update']['types'],
   },
   'personal_access_tokens.me': {
     methods: ["GET","HEAD"],

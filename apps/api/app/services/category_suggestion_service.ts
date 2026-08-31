@@ -20,8 +20,15 @@ import { DateTime } from 'luxon'
  * each name token's count is incremented and its `lastSeenAt` bumped. Rows
  * are never decremented or deleted, so a dormant-but-uncontested mapping
  * still categorizes forever.
+ *
+ * A list with `useCategoryLearning` disabled (the per-list toggle nested
+ * under Categories in list settings) never teaches the model — useful for
+ * lists where name→category patterns are meaningless and the learned rows
+ * would be pure bloat.
  */
 export async function learnCategory(list: List, name: string, categoryId: number): Promise<void> {
+  if (list.useCategoryLearning === false) return
+
   const tokens = tokenizeItemName(name)
   if (tokens.length === 0) return
 
@@ -54,8 +61,15 @@ export async function learnCategory(list: List, name: string, categoryId: number
  * soft-deleted category's learned rows are dropped here so its stale id is
  * never suggested (the bug the old item-derived heuristic had). Ordered most
  * recently seen first.
+ *
+ * A list with `useCategoryLearning` disabled reports an empty model — this
+ * one gate covers both the read endpoint (and thus the client's offline
+ * cache) and `suggestCategoryId`'s learned tier, which falls through to the
+ * static keyword table.
  */
 export async function getCategoryLearnings(list: List): Promise<CategoryLearningDto[]> {
+  if (list.useCategoryLearning === false) return []
+
   const rows = await CategoryLearning.query()
     .where('listId', list.id)
     .whereHas('category', (query) => query.whereNull('deletedAt'))

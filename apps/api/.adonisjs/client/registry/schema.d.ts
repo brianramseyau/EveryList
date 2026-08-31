@@ -295,6 +295,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['destroy']>>>
     }
   }
+  'lists.lists.widget_snapshot': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:id/widget-snapshot'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['widgetSnapshot']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/lists_controller').default['widgetSnapshot']>>>
+    }
+  }
   'lists.categories.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/lists/:listId/categories'
@@ -785,6 +797,30 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['destroy']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/personal_access_tokens_controller').default['destroy']>>>
+    }
+  }
+  'alexaPreferences.alexa_preferences.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/alexa/preferences'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/alexa_preferences_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/alexa_preferences_controller').default['show']>>>
+    }
+  }
+  'alexaPreferences.alexa_preferences.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/alexa/preferences'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/alexa_preference').updateAlexaPreferenceValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/alexa_preference').updateAlexaPreferenceValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/alexa_preferences_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/alexa_preferences_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
   'personal_access_tokens.me': {

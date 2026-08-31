@@ -50,6 +50,7 @@ export interface ApiDefinition {
       show: typeof routes['lists.lists.show']
       update: typeof routes['lists.lists.update']
       destroy: typeof routes['lists.lists.destroy']
+      widgetSnapshot: typeof routes['lists.lists.widget_snapshot']
     }
     categories: {
       index: typeof routes['lists.categories.index']
@@ -111,6 +112,12 @@ export interface ApiDefinition {
       store: typeof routes['tokens.personal_access_tokens.store']
       update: typeof routes['tokens.personal_access_tokens.update']
       destroy: typeof routes['tokens.personal_access_tokens.destroy']
+    }
+  }
+  alexaPreferences: {
+    alexaPreferences: {
+      show: typeof routes['alexaPreferences.alexa_preferences.show']
+      update: typeof routes['alexaPreferences.alexa_preferences.update']
     }
   }
   personalAccessTokens: {

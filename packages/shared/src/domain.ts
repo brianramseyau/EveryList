@@ -13,6 +13,11 @@ export interface ListDto {
    *  responses; optional here only so existing test fixtures don't all need updating —
    *  treat a missing value as `true` (the server-side default), same convention as `role` above. */
   useCategories?: boolean
+  /** Whether explicit category assignments teach the list's learned
+   *  (tokenized name → category) model. Turning it off also forgets the
+   *  list's existing learned rows. Same "missing = server default (true)"
+   *  convention as useCategories above. */
+  useCategoryLearning?: boolean
   /** Same "missing = server default (true)" convention as useCategories above. */
   useShops?: boolean
   useFavorites?: boolean

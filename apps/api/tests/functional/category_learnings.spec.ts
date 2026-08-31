@@ -2,6 +2,8 @@ import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
 import type { CategoryDto, CategoryLearningDto, ListDto } from '@everylist/shared'
+import { DateTime } from 'luxon'
+import CategoryLearning from '#models/category_learning'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 async function createList(client: ApiClient, token: string, name = 'Test List') {
@@ -262,6 +264,112 @@ test.group('Category learnings (learned auto-categorization)', (group) => {
     )
 
     assert.deepEqual(await learnings(client, token, listId), [])
+  })
+
+  test('disabling learned categories purges the model and stops every teach path', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const categories = await seedStarterCategories(client, token, listId)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+    const produce = categories.find((category) => category.name === 'Produce')!
+    const household = categories.find((category) => category.name === 'Household')!
+
+    // Build up a learned model first.
+    await auth(
+      client
+        .post(`/api/v1/lists/${listId}/items`)
+        .json({ name: 'Banana', categoryId: household.id })
+    )
+    await auth(
+      client
+        .post(`/api/v1/lists/${listId}/items/import`)
+        .json({ text: 'PRODUCE\n• Apples\n• Apple juice' })
+    )
+    assert.lengthOf(await learnings(client, token, listId), 3)
+
+    const disable = await auth(
+      client.patch(`/api/v1/lists/${listId}`).json({ useCategoryLearning: false })
+    )
+    disable.assertStatus(200)
+    assert.deepEqual(await learnings(client, token, listId), [])
+
+    // No teach path may write while the toggle is off — explicit store…
+    await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk', categoryId: produce.id })
+    )
+    // …and a bulk import's section headers (otherwise an explicit assignment).
+    await auth(
+      client
+        .post(`/api/v1/lists/${listId}/items/import`)
+        .json({ text: 'HOUSEHOLD\n• Sponges\n• Sponges' })
+    )
+    assert.deepEqual(await learnings(client, token, listId), [])
+
+    // Re-enabling proves the rows were purged, not merely hidden behind the
+    // gate, and that the fresh model teaches again from explicit assignments.
+    const enable = await auth(
+      client.patch(`/api/v1/lists/${listId}`).json({ useCategoryLearning: true })
+    )
+    enable.assertStatus(200)
+    assert.deepEqual(await learnings(client, token, listId), [])
+
+    // A name that doesn't already exist in the list — store() returns early
+    // on a name match without reaching the teach step at all.
+    await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Pears', categoryId: produce.id })
+    )
+    const rows = await learnings(client, token, listId)
+    assert.deepEqual(
+      rows.map((row) => ({ token: row.token, categoryId: row.categoryId, count: row.count })),
+      [{ token: 'pear', categoryId: produce.id, count: 1 }]
+    )
+  })
+
+  test('with learning disabled, pre-existing learned rows are ignored everywhere', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const categories = await seedStarterCategories(client, token, listId)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+    const produce = categories.find((category) => category.name === 'Produce')!
+    const household = categories.find((category) => category.name === 'Household')!
+
+    await auth(client.patch(`/api/v1/lists/${listId}`).json({ useCategoryLearning: false }))
+
+    // Seed a learned row out-of-band (bypassing the API's teach paths, which
+    // the disable purge above would otherwise remove) — e.g. the shape a
+    // stray row or a future bug might leave behind.
+    await CategoryLearning.create({
+      listId,
+      categoryId: household.id,
+      token: 'banana',
+      count: 5,
+      lastSeenAt: DateTime.now(),
+    })
+
+    // The read endpoint hides it…
+    assert.deepEqual(await learnings(client, token, listId), [])
+
+    // …and the suggestion endpoint skips the learned tier entirely: 'banana'
+    // would have won via the model, so it must fall back to the static
+    // keyword table (Produce), not the row's Household.
+    const suggestion = await auth(
+      client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Banana' })
+    )
+    assert.equal(suggestion.body().categoryId, produce.id)
+
+    // Lifting the gate exposes the row again — proving the gate, not a
+    // missing row, was what the endpoint and suggestion skipped.
+    await auth(client.patch(`/api/v1/lists/${listId}`).json({ useCategoryLearning: true }))
+    const rows = await learnings(client, token, listId)
+    assert.lengthOf(rows, 1)
+    assert.equal(rows[0]!.token, 'banana')
+    assert.equal(rows[0]!.categoryId, household.id)
   })
 
   test('category-learnings is viewer-accessible but requires list membership', async ({

@@ -63,6 +63,7 @@ export function updateList(
 		archived: boolean;
 		badgeExcluded: boolean;
 		useCategories: boolean;
+		useCategoryLearning: boolean;
 		folderId: number | null;
 		passcodeHash: string | null;
 	}>
