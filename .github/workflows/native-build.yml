@@ -252,7 +252,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        # windows-latest pinned to windows-2022, not the newer image: its bundled node-gyp
+        # doesn't recognize the VS 2026 (v18) toolchain that image ships, so any workspace
+        # package needing a native build (better-sqlite3, pulled in by apps/api even though
+        # this job never touches it — pnpm installs the whole workspace) fails to compile.
+        os: [macos-latest, windows-2022, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -314,7 +318,7 @@ jobs:
             dist/android-aab-release/*.aab
             dist/ios-simulator-build/*.zip
             dist/desktop-macos-latest/*
-            dist/desktop-windows-latest/*
+            dist/desktop-windows-2022/*
             dist/desktop-ubuntu-latest/*
 
   prune-prereleases:
