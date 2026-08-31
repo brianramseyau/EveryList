@@ -205,8 +205,19 @@
 
 	async function handleCheckForDesktopUpdate() {
 		desktopUpdateResult = { status: 'checking' };
-		const result = await checkForDesktopUpdate();
-		desktopUpdateResult = result.status === 'unavailable' ? { status: 'idle' } : result;
+		try {
+			const result = await checkForDesktopUpdate();
+			desktopUpdateResult = result.status === 'unavailable' ? { status: 'idle' } : result;
+		} catch (err) {
+			// checkForDesktopUpdate() itself never throws (main.cjs's update-check.cjs already turns
+			// network/parse failures into a `status: 'error'` result) — this only guards the IPC
+			// bridge call around it, so a dropped/unresponsive main process still resolves the
+			// "Checking..." button instead of leaving it stuck forever.
+			desktopUpdateResult = {
+				status: 'error',
+				message: err instanceof Error ? err.message : 'Failed to check for updates.'
+			};
+		}
 	}
 
 	/** Changing servers invalidates the current session (a token from one server means nothing to

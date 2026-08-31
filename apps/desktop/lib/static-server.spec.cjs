@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const http = require('node:http')
 const os = require('node:os')
 const path = require('node:path')
+const { PassThrough } = require('node:stream')
 const { createStaticServer, listen } = require('./static-server.cjs')
 
 /**
@@ -85,6 +86,42 @@ describe('static server', () => {
       req.end()
     })
     expect(response.status).toBe(403)
+  })
+
+  it('destroys the response instead of crashing when the read stream errors after headers are sent', async () => {
+    // Simulates the TOCTOU race resolveStaticRequest's own file-exists check can't close (the
+    // file is removed, or a permission error hits) between that check and the stream actually
+    // reading it. What this guards is that the stream error never becomes an uncaught exception —
+    // which is what would crash the whole Electron main process — not any particular client-side
+    // outcome (an aborted response is expected and fine).
+    const spy = vi.spyOn(fs, 'createReadStream').mockImplementation(() => {
+      const stream = new PassThrough()
+      process.nextTick(() => stream.emit('error', new Error('simulated read failure')))
+      // A PassThrough behaves identically to a ReadStream for this server's purposes (it only
+      // ever pipes it and listens for 'error') — cast to satisfy createReadStream's declared type.
+      return /** @type {fs.ReadStream} */ (/** @type {unknown} */ (stream))
+    })
+
+    let uncaught
+    /** @param {Error} err */
+    const onUncaughtException = (err) => {
+      uncaught = err
+    }
+    process.on('uncaughtException', onUncaughtException)
+
+    await new Promise((resolvePromise) => {
+      const req = http.get(`${baseUrl}/`, (res) => {
+        res.on('data', () => {})
+        res.on('end', resolvePromise)
+        res.on('error', resolvePromise)
+      })
+      req.on('error', resolvePromise)
+    })
+
+    process.removeListener('uncaughtException', onUncaughtException)
+    expect(uncaught).toBeUndefined()
+
+    spy.mockRestore()
   })
 
   it('rejects with the correct code when listen fails (port already in use)', async () => {

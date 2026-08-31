@@ -68,6 +68,9 @@ jobs:
     needs: [test, meta]
     if: needs.meta.outputs.is_rc == 'true'
     runs-on: ubuntu-latest
+    env:
+      # See test.yml's env block — this job doesn't build apps/desktop either.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -118,6 +121,9 @@ jobs:
     needs: [test, meta]
     if: needs.meta.outputs.is_rc == 'false'
     runs-on: ubuntu-latest
+    env:
+      # See test.yml's env block — this job doesn't build apps/desktop either.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -195,6 +201,9 @@ jobs:
     name: Build iOS Simulator app
     needs: test
     runs-on: macos-latest
+    env:
+      # See test.yml's env block — this job doesn't build apps/desktop either.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
 

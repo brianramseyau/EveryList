@@ -24,7 +24,12 @@ function createStaticServer(buildRoot) {
       return
     }
     res.writeHead(200, { 'Content-Type': result.contentType })
-    fs.createReadStream(result.filePath).pipe(res)
+    const stream = fs.createReadStream(result.filePath)
+    // A read failure after the file passed resolveStaticRequest's own check (removed mid-request,
+    // a permission error, etc.) — without this listener, `fs.createReadStream` emits 'error' on
+    // the stream, which Node treats as unhandled and crashes the whole Electron main process.
+    stream.on('error', () => res.destroy())
+    stream.pipe(res)
   })
 }
 

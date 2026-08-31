@@ -850,6 +850,31 @@ describe('Settings +page.svelte', () => {
 		await expect.element(page.getByText(/is available/)).not.toBeInTheDocument();
 	});
 
+	it('desktop: recovers from a rejected IPC bridge call instead of leaving the button stuck on "Checking..."', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(checkForDesktopUpdate).mockRejectedValue(new Error('main process unreachable'));
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Check' }).click();
+
+		await expect.element(page.getByText('main process unreachable')).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Check' })).not.toBeDisabled();
+	});
+
+	it('desktop: falls back to a generic message when the rejection is not an Error', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(checkForDesktopUpdate).mockRejectedValue('boom');
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Check' }).click();
+
+		await expect.element(page.getByText('Failed to check for updates.')).toBeInTheDocument();
+	});
+
 	it('desktop: disables the Check button and shows "Checking..." while the request is in flight', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(isDesktop).mockReturnValue(true);
