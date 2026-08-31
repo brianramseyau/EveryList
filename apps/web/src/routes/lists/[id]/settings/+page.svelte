@@ -42,6 +42,14 @@
 		loading = true;
 		try {
 			[list, folders] = await Promise.all([fetchList(listId), fetchFolders()]);
+			// Every control on this page mutates the list — nothing here is readable-only, so a
+			// viewer landing here (via a stale link, browser history, or typing the URL) has
+			// nothing to do but bounce back. The menu entry that links here is also hidden/disabled
+			// for viewers; this is the defense-in-depth backstop for direct navigation.
+			if (list.role === 'viewer') {
+				await goto(resolve('/lists/[id]', { id: String(listId) }));
+				return;
+			}
 			draftName = list.name;
 			draftIcon = list.icon ?? 'formatListChecks';
 			draftColor = list.color;

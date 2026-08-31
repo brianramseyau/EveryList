@@ -995,6 +995,7 @@
 						<PopoutMenuItem
 							href={resolve('/lists/[id]/settings', { id: String(listId) })}
 							onclick={markListOriginAndScroll}
+							disabled={isViewer}
 						>
 							List Settings
 						</PopoutMenuItem>

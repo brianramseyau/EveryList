@@ -39,4 +39,23 @@ describe('PopoutMenuItem.svelte', () => {
 
 		await expect.element(page.getByRole('button', { name: 'Settings' })).toBeDisabled();
 	});
+
+	it('renders a disabled link greyed out (same as a disabled button) and blocks onclick/navigation', async () => {
+		const onclick = vi.fn();
+		render(PopoutMenuItem, { href: '/lists/1/settings', onclick, disabled: true, children: label });
+
+		const link = page.getByRole('link', { name: 'Settings' }).element();
+		await expect
+			.element(page.getByRole('link', { name: 'Settings' }))
+			.toHaveAttribute('aria-disabled', 'true');
+		expect(link.className).toMatch(/\bopacity-40\b/);
+		expect(link.className).toMatch(/\bcursor-not-allowed\b/);
+
+		const preventNav = (event: Event) => event.preventDefault();
+		document.addEventListener('click', preventNav, { capture: true });
+		link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		document.removeEventListener('click', preventNav, { capture: true });
+
+		expect(onclick).not.toHaveBeenCalled();
+	});
 });
