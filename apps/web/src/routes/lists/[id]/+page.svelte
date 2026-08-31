@@ -152,17 +152,26 @@
 	let checkAnimatingIds = new SvelteSet<number>();
 
 	// Item ids mid "return" animation: an undo (shake or toast tap) just made this item
-	// reappear in the list — re-checked-off, unchecked back on, or un-deleted. Gates the `<li>`'s
-	// `in:slide` below so the reverse of the check-off `out:slide` only plays for that specific
-	// return, not for every ordinary item that ends up in the DOM (initial load, a plain add,
-	// filter changes) — those keep appearing instantly, same as before this existed.
+	// reappear in the list — un-deleted, or unchecked back on while "Hide checked items" had
+	// removed it from view. Gates the `<li>`'s slide-in class below so the reverse of the
+	// check-off/delete `out:slide` only plays for that specific return, not for every ordinary
+	// item that ends up in the DOM (initial load, a plain add, filter changes) — those keep
+	// appearing instantly, same as before this existed.
 	const UNDO_ANIMATION_MS = 200;
-	let undoAnimatingIds = new SvelteSet<number>();
+	let undoSlideIds = new SvelteSet<number>();
 
-	function markUndoAnimating(itemId: number) {
+	// Item ids mid "return" animation where the item never actually left the DOM — unchecking
+	// while "Hide checked items" is off, so it was visible in place the whole time. A slide-in
+	// has nothing to slide from there (there was no matching out:slide on check-off either, since
+	// nothing left), so this instead reverses the check-off strike-wipe: the strikethrough erases
+	// from the opposite end it was drawn from. See the `.item-unstrike-wipe` styles below.
+	let undoUnstrikeIds = new SvelteSet<number>();
+
+	function markUndoAnimating(itemId: number, kind: 'slide' | 'unstrike') {
 		if (prefersReducedMotion) return;
-		undoAnimatingIds.add(itemId);
-		setTimeout(() => undoAnimatingIds.delete(itemId), UNDO_ANIMATION_MS);
+		const ids = kind === 'slide' ? undoSlideIds : undoUnstrikeIds;
+		ids.add(itemId);
+		setTimeout(() => ids.delete(itemId), UNDO_ANIMATION_MS);
 	}
 
 	// Store-specific aisle order, if the shopper has picked a store for this
@@ -604,7 +613,7 @@
 		// self-heal via `loadAll()`, which may already have put the item back into `items` before
 		// Undo is clicked — concatenating unconditionally would then duplicate it.
 		if (!items.some((current) => current.id === item.id)) {
-			markUndoAnimating(item.id);
+			markUndoAnimating(item.id, 'slide');
 			items = [...items, item].sort((a, b) => a.sortOrder - b.sortOrder);
 		}
 		try {
@@ -620,9 +629,13 @@
 	// before `toggleChecked` (or the auto-uncheck-on-re-add) flipped it.
 	async function undoToggleChecked(item: ItemDto, checkedApplied: boolean) {
 		const revertTo = !checkedApplied;
-		// Only unchecking a hidden-when-checked item brings it back into the visible list (the
-		// opposite direction removes it, which `out:slide` already covers).
-		if (!revertTo) markUndoAnimating(item.id);
+		// Only unchecking brings the item back — the opposite direction (re-checking) removes it
+		// when hidden, which `out:slide` already covers, or just re-strikes it in place, which the
+		// ordinary check-off strike-wipe already covers. Whether the returning item was actually
+		// hidden (and so needs a slide-in) or stayed visible in place (and so needs the reverse
+		// strike instead) depends on `showChecked` *now*, not on whatever it was when it was
+		// checked off.
+		if (!revertTo) markUndoAnimating(item.id, showChecked ? 'unstrike' : 'slide');
 		items = items.map((current) =>
 			current.id === item.id ? { ...current, checked: revertTo } : current
 		);
@@ -1129,9 +1142,9 @@
 									{#each group.items as item (item.id)}
 										<li
 											class="relative overflow-hidden rounded-lg"
+											class:item-return-slide={undoSlideIds.has(item.id)}
 											data-item-id={item.id}
 											animate:flip={{ duration: prefersReducedMotion ? 0 : 250 }}
-											in:slide={{ duration: undoAnimatingIds.has(item.id) ? UNDO_ANIMATION_MS : 0 }}
 											out:slide={{ duration: prefersReducedMotion ? 0 : 200 }}
 										>
 											<div
@@ -1201,6 +1214,7 @@
 														<span
 															class="wrap-anywhere"
 															class:item-strike-wipe={checkAnimatingIds.has(item.id)}
+															class:item-unstrike-wipe={undoUnstrikeIds.has(item.id)}
 															class:text-gray-400={item.checked && !checkAnimatingIds.has(item.id)}
 															class:line-through={item.checked && !checkAnimatingIds.has(item.id)}
 														>
@@ -1360,8 +1374,12 @@
 	   too, the same way a background-color highlight would. Swapped back to
 	   the static text-gray-400/line-through classes once CHECK_ANIMATION_MS
 	   elapses (see `toggleChecked`), which is what actually keeps the strike
-	   once the list re-groups/hides the item. */
-	.item-strike-wipe {
+	   once the list re-groups/hides the item. `.item-unstrike-wipe` reuses the
+	   same gradient for undoing an uncheck-off while the item stayed visible in
+	   place (`showChecked` on) — there's nothing to slide in from since nothing
+	   left, so the strike erases from the opposite end it was drawn from instead. */
+	.item-strike-wipe,
+	.item-unstrike-wipe {
 		background-image: linear-gradient(currentColor, currentColor);
 		background-repeat: no-repeat;
 		background-position: left center;
@@ -1372,10 +1390,20 @@
 		.item-strike-wipe {
 			animation: strike-wipe 320ms ease-out forwards;
 		}
+
+		.item-unstrike-wipe {
+			animation: unstrike-wipe 200ms ease-out forwards;
+		}
 	}
 
 	@keyframes strike-wipe {
 		to {
+			background-size: 100% 2px;
+		}
+	}
+
+	@keyframes unstrike-wipe {
+		from {
 			background-size: 100% 2px;
 		}
 	}
@@ -1391,6 +1419,26 @@
 		}
 		100% {
 			transform: scale(1);
+		}
+	}
+
+	/* A CSS keyframe animation, not a Svelte in: transition, so it plays reliably on a
+	   freshly-inserted <li> (undoing a delete, or unchecking while "Hide checked items" hid it)
+	   — a Svelte in: transition can silently no-op when the item is the last one in its category
+	   section, since re-populating an emptied-out #each block doesn't reliably re-run its
+	   children's in: transitions. Only used when the item actually left and re-enters the DOM;
+	   see `.item-unstrike-wipe` above for the case where it stayed visible in place the whole
+	   time. See markUndoAnimating. */
+	@media (prefers-reduced-motion: no-preference) {
+		.item-return-slide {
+			animation: item-return-slide 200ms ease-out;
+		}
+	}
+
+	@keyframes item-return-slide {
+		from {
+			opacity: 0;
+			transform: translateY(-8px);
 		}
 	}
 </style>
