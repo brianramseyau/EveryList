@@ -6,6 +6,8 @@ dist/
 build/
 .svelte-kit/
 apps/web/build/
+apps/desktop/renderer/
+apps/desktop/release/
 
 # Env
 .env

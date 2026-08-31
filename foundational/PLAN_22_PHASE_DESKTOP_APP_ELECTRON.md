@@ -308,6 +308,13 @@ Responsibilities, in order:
    - Default size ~`1100×820`, `minWidth: 380`, `minHeight: 520`. The web layout is already
      responsive (`layout.css`'s `app-max-w` → `max-w-lg md:max-w-3xl lg:max-w-5xl`), so a desktop-width
      window renders sensibly without any CSS work in this phase.
+   - `maxWidth: 1280` — `app-max-w` caps the content column at `1024px` (`lg:max-w-5xl`); beyond
+     that, a wider window only grows empty background gutters, not the app. `1280` leaves a
+     deliberate margin around that column without letting the window balloon on an
+     ultrawide/4K display. Height is left uncapped (content scrolls, so more height is useful).
+     `fullscreenable: false` for the same reason — full-screen would stretch that same
+     capped-width column across an entire display. — **done** (added after a real launch made
+     the wasted-space problem visible).
    - **Window state persistence** (position/size/maximized) in `<userData>/window-state.json`.
      Restoring blind is a known footgun when a monitor is unplugged — clamp the restored rectangle to
      an actually-present display before applying it.
@@ -553,25 +560,74 @@ coverage target (100% where feasible, with a named exclusion rule). What remains
 Each step is independently reviewable, and steps 1–2 are the ones most likely to surface a surprise,
 so they come first deliberately.
 
-1. **Workspace skeleton + repo plumbing.** `apps/desktop/package.json` with `start`/`package`/`lint`/
-   `typecheck`/`test` scripts, `onlyBuiltDependencies` entry, `ELECTRON_SKIP_BINARY_DOWNLOAD` in
-   existing CI jobs, eslint/prettier config. No Dockerfile change (§0). **Green `pnpm check` and a
-   green local `docker build -f docker/Dockerfile .` are the exit criteria for this step alone** —
-   before any Electron code exists, so that if the Docker build ever does object to the new
-   workspace, it surfaces in a PR that contains nothing else.
-2. **Static server + window boot.** §2 + the §5 window/lifecycle basics + error dialog. Loads the
-   already-built `apps/web/build` and shows the app against a manually-set server URL. Verify origin
-   stability (relaunch → still logged in) here, not later.
-3. **Desktop detection + web-side gates.** §1 and §4: `isDesktop()`/`isRemoteClient()`, `/server-setup`
-   redirect, SW skip, Settings sections, About version row. Full test coverage on the web side.
-4. **CORS.** §3, plus the `/server-setup` hint and README note. Small, but it's an API change to a
-   production security config — its own PR.
-5. **Menus, external links, navigation guard, window state.** The rest of §5.
-6. **Packaging.** §6: `electron-builder` config, icons, local `dmg`/`nsis`/`AppImage` produced and
-   manually verified per the §9 checklist.
-7. **CI release job.** §7, verified end to end with an `-rc.N` tag before a real release tag.
-8. **Update check + docs.** §8's check-and-link action and §10's README/AGENTS entries, with the
-   unsigned-build caveats stated plainly rather than buried.
+1. **Workspace skeleton + repo plumbing — done.** `apps/desktop/package.json` with
+   `start`/`package`/`lint`/`typecheck`/`test` scripts, `onlyBuiltDependencies` entry,
+   `ELECTRON_SKIP_BINARY_DOWNLOAD` in `test.yml`/`ci.yml`, eslint config (root `.prettierrc.json`
+   covers formatting — no per-workspace prettier config, matching `packages/shared`/`apps/api`).
+   No Dockerfile change (§0), verified for real: `pnpm install` with the new workspace present
+   shows `Ignored build scripts: electron@38.8.6` and installs none of Electron's ~150 MB runtime;
+   `docker build -f docker/Dockerfile .` built clean twice (once before this workspace existed,
+   once after every change in this phase landed).
+2. **Static server + window boot — done, verified on a real launch (2026-08-31).** §2's
+   `lib/static-server.cjs`/`lib/resolve-static-request.cjs`/`lib/config.cjs` are 100%
+   unit-tested, and a real unpackaged launch (`electron .`, macOS) confirmed: the window opens
+   with no startup-error dialog; origin stability holds across a full quit/relaunch (still
+   logged in, same list open, `window-state.json` correctly restored position/size); realtime
+   SSE updates land in the window with no reload (verified by writing an item via a direct API
+   call and watching it appear); a deep route (`/settings/sync`) survives `Cmd+R` via the
+   `200.html` fallback rather than bouncing to root. One real bug found and fixed this way —
+   see the preload note under step 5.
+   - The offline queue flow was also exercised for real (kill the API process, queue a mix of
+     check/uncheck/delete mutations across three lists, restart the process) and drained
+     correctly with no duplicates once the server was back — including one delete the server
+     correctly rejected with 403 (a viewer-role list membership), surfaced as a real error
+     rather than failing silently or duplicating. **This surfaced two real, pre-existing bugs,
+     neither desktop-specific (shared `apps/web` code, reachable from every client) and both
+     out of this phase's scope to fix:**
+     1. `apps/routes/lists/[id]/+page.svelte` never reads the list's `role` DTO field at all —
+        a viewer sees the identical check/delete/edit affordances an editor does, so a
+        destructive action a viewer can never actually perform is queueable (even optimistically
+        applied locally) in the first place, only to be rejected after the fact. The fix belongs
+        in the shared list UI, gating those affordances on `role`, not in anything this phase
+        owns.
+     2. `apps/web/src/lib/offline/connectivity.svelte.ts`'s "server unavailable" indicator stays
+        lit as long as _any_ mutation remains queued, even a permanently-rejected one — so a
+        stuck permission error reads as a connectivity problem instead of a permissions one.
+        (1) fixing the queueability at the source would prevent this particular trigger, but the
+        indicator's own logic is still worth revisiting on its own.
+   - Not covered by this pass: an `https://` server (no https dev server available in this
+     environment) and a packaged (non-`electron .`) build — see step 6.
+3. **Desktop detection + web-side gates — done.** §1 and §4: `isDesktop()`/`isRemoteClient()`
+   (`apps/web/src/lib/platform/desktop.ts`), `/server-setup` redirect, SW skip, Settings'
+   Orientation-hide/Server-section/About-version-row/Troubleshooting-swap. 100% branch coverage
+   on the web side (`pnpm --filter @everylist/web test`), verified passing standalone.
+4. **CORS — done.** §3's predicate lands in `apps/api/config/cors.ts`. Confirmed directly (not
+   assumed) that no route in `apps/api/start/routes.ts` defaults to the `web` session guard —
+   every route the desktop/native clients call is `api`/`pat` token-guarded, so the widened
+   predicate grants a new origin nothing a token doesn't already gate. `/server-setup`
+   min-version hint and README note still to do as a small follow-up.
+5. **Menus, external links, navigation guard, window state — code done, NOT verified by an
+   actual launch.** All of §5 is in `main.cjs`/`lib/navigation.cjs`/`lib/window-state.cjs`, the
+   latter two 100% unit-tested. The macOS menu-roles Cmd+C/V proof, the note-link-opens-system-
+   browser proof, and the will-navigate guard all require the same real launch step 2 is waiting
+   on.
+6. **Packaging — config done, NOT verified by an actual `electron-builder` run.**
+   `apps/desktop/package.json`'s `build` block, `resources/icon.png` (generated from
+   `branding/icon.svg` via `scripts/generate-icon.mjs`, checked in), and
+   `scripts/copy-renderer.mjs` (the plain-copy fallback for the `files` mapping, used
+   unconditionally rather than risking the pnpm-symlink `from`/`to` mapping) are all in place.
+   No `dmg`/`nsis`/`AppImage` has actually been produced or opened yet — that needs the CI
+   matrix job (step 7) or a local run with network access to Electron's binary CDN.
+7. **CI release job — wired, NOT run end to end.** `build-desktop` added to
+   `native-build.yml`'s matrix (macos-latest/windows-latest/ubuntu-latest), gated on `test`,
+   injecting the tag version via `npm pkg set`, `--publish never`, artifacts folded into the
+   existing `release` job's `files:` list. Per the plan's own instruction, this should be proven
+   against a real `-rc.N` tag before a real release tag ships off it.
+8. **Update check + docs — done.** §8's check-and-link (`apps/desktop/lib/update-check.cjs`,
+   100% unit-tested including offline/rate-limited/malformed-body paths, relayed to the renderer
+   via `apps/web/src/lib/platform/desktop-update.ts`) plus README's "Desktop app (Electron)"
+   section and this file's AGENTS.md footgun entries (origin-stability rule,
+   `onlyBuiltDependencies`/Dockerfile interaction).
 
 ## Exit criteria
 

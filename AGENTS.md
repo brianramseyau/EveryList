@@ -279,6 +279,37 @@ Settings surfaces feedback.
   still returns the result and that `chooseOrientation` in `routes/settings/+page.svelte` still gates
   on `canLockOrientationNow` (a regression there would reproduce the exact original symptom).
 
+### The desktop app's origin must never be randomized
+
+`apps/desktop` (Electron) serves the same static `apps/web/build` output as every other client,
+but from an **in-process HTTP server bound to a fixed loopback port** rather than `file://` or a
+random free port — see `foundational/PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md` §2 for the full
+rationale. The reason the port must be fixed, not random: the server URL, login token, and the
+entire offline mutation queue/cache (Dexie/IndexedDB) are all keyed by **origin**, and
+`http://127.0.0.1:<port>` is that origin. Randomizing the port on every launch — which is what a
+naive `getFreePort()`-style implementation would do — silently wipes all of that on every single
+app start. If you ever touch `apps/desktop/lib/config.cjs` or `apps/desktop/main.cjs`'s server
+startup: the port must come from a fixed default (`DEFAULT_PORT` in `config.cjs`) or an explicit
+user override in `config.json`, never from an ephemeral OS-assigned port.
+
+### pnpm `onlyBuiltDependencies` gates Electron's runtime download — don't let it leak into every CI job
+
+`electron`'s postinstall script downloads its ~150 MB runtime binary. pnpm 10 blocks all
+postinstall scripts by default, so `electron` (and `electron-builder`) had to be added to
+`pnpm-workspace.yaml`'s `onlyBuiltDependencies` for `apps/desktop`'s local dev and CI packaging
+job to have a runnable Electron at all. The tradeoff: **every** `pnpm install --frozen-lockfile`
+across the whole repo would otherwise pay for that download too, including jobs that never touch
+`apps/desktop` (`test.yml`, `ci.yml`'s `e2e`/`docker-smoke` jobs). Those jobs set
+`ELECTRON_SKIP_BINARY_DOWNLOAD=1` in their `env:` block specifically to opt back out — if you add a
+new workflow job that runs `pnpm install` and doesn't build the desktop app, it needs that env var
+too, or it'll silently start downloading Electron on every run. The failure mode if it's forgotten
+is a slower CI job, not a broken one, so it's easy to miss.
+
+Separately: a new pnpm-workspace package that's absent from the Docker build context does **not**
+break `pnpm install --frozen-lockfile` inside `docker/Dockerfile` — this was verified directly
+(§0 of the plan above), not assumed. `apps/desktop` being a real workspace member doesn't require
+any Dockerfile change, and one shouldn't be added "just in case."
+
 ## Working conventions
 
 - Full-stack features go migration → backend (model/validator/controller/policy) → shared DTO → frontend, in that order — see any `Phase 6:` commit for the pattern.

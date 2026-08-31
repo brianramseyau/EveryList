@@ -1,0 +1,89 @@
+{
+  "name": "@everylist/desktop",
+  "private": true,
+  "version": "0.0.0",
+  "description": "EveryList desktop app shell (Electron) — a client for a self-hosted EveryList server, not a bundled deployment. See foundational/PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md.",
+  "license": "MIT",
+  "type": "module",
+  "main": "main.cjs",
+  "scripts": {
+    "copy-renderer": "node scripts/copy-renderer.mjs",
+    "start": "node scripts/copy-renderer.mjs && electron .",
+    "package": "node scripts/copy-renderer.mjs && electron-builder",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --coverage",
+    "generate-icon": "node scripts/generate-icon.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@vitest/coverage-v8": "^4.1.8",
+    "electron": "^38.8.6",
+    "electron-builder": "^25.1.8",
+    "eslint": "^9.16.0",
+    "globals": "^15.13.0",
+    "sharp": "^0.32.6",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.8"
+  },
+  "build": {
+    "appId": "au.brianramsey.everylist",
+    "productName": "EveryList",
+    "directories": {
+      "buildResources": "resources",
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "lib/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "identity": null,
+      "category": "public.app-category.productivity",
+      "icon": "resources/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "icon": "resources/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "resources/icon.png",
+      "category": "Utility",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
+  }
+}

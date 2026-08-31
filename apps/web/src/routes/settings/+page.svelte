@@ -31,6 +31,8 @@
 	import { ApiError } from '$lib/api/client';
 	import { resetApp } from '$lib/pwa/reset';
 	import { checkForUpdate } from '$lib/pwa/update';
+	import { desktopInfo, isDesktop } from '$lib/platform/desktop';
+	import { checkForDesktopUpdate } from '$lib/platform/desktop-update';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
@@ -51,6 +53,9 @@
 	let supportsOrientationLock = $state(false);
 	let isNative = $state(false);
 	let isAndroid = $state(false);
+	let isDesktopApp = $state(false);
+	let isRemote = $state(false);
+	let desktopVersionInfo = $state<{ version: string; platform: string } | null>(null);
 	let orientationFeedback = $state<string | null>(null);
 	let shakeToUndoEnabled = $state(true);
 	let shakeFeedback = $state<string | null>(null);
@@ -183,6 +188,27 @@
 		updateStatus = result;
 	}
 
+	/** Desktop's "check and link" update flow (PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §8) — there's no
+	 * service worker to check, so this replaces the row above entirely rather than reusing it.
+	 * Kept non-nullable (an explicit 'idle' state) like `updateStatus` above, rather than `| null`
+	 * — a nullable member of a template-narrowed union makes Svelte insert a defensive null check
+	 * on every property read that can never actually be null at runtime, which is an untestable
+	 * branch (see apps/desktop/lib/static-server.cjs's `req.url ?? '/'` for the same class of
+	 * issue on the Electron side). */
+	let desktopUpdateResult = $state<
+		| { status: 'idle' }
+		| { status: 'checking' }
+		| { status: 'update-available'; latestVersion: string; url: string }
+		| { status: 'up-to-date' }
+		| { status: 'error'; message: string }
+	>({ status: 'idle' });
+
+	async function handleCheckForDesktopUpdate() {
+		desktopUpdateResult = { status: 'checking' };
+		const result = await checkForDesktopUpdate();
+		desktopUpdateResult = result.status === 'unavailable' ? { status: 'idle' } : result;
+	}
+
 	/** Changing servers invalidates the current session (a token from one server means nothing to
 	 * another), so this clears both and sends the user back through /server-setup — mirrors
 	 * handleLogout's directness, no confirmation step. */
@@ -201,6 +227,12 @@
 		supportsOrientationLock = supportsScreenOrientationLock();
 		isNative = Capacitor.isNativePlatform();
 		isAndroid = isNative && Capacitor.getPlatform() === 'android';
+		isDesktopApp = isDesktop();
+		// Composed locally rather than via $lib/platform/desktop's isRemoteClient() — this
+		// component already tracks isNative and isDesktopApp separately (for nativeInfo vs.
+		// desktopVersionInfo), so this is the same check without a second, independently-mocked
+		// source of truth in tests.
+		isRemote = isNative || isDesktopApp;
 		serverUrl = getServerUrl();
 		if (isNative) {
 			try {
@@ -209,6 +241,9 @@
 			} catch {
 				nativeInfo = null;
 			}
+		}
+		if (isDesktopApp) {
+			desktopVersionInfo = desktopInfo();
 		}
 		try {
 			meta = await fetchMeta();
@@ -339,41 +374,44 @@
 				{/each}
 			</div>
 		</div>
-		<div class="flex items-center justify-between px-4 py-3">
-			<span class="text-sm font-medium">Screen Orientation</span>
-			<div
-				role="radiogroup"
-				aria-label="Screen orientation"
-				class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
-			>
-				{#each orientationOptions as option (option.value)}
-					<button
-						type="button"
-						role="radio"
-						aria-checked={orientationPreference === option.value}
-						onclick={() => chooseOrientation(option.value)}
-						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {orientationPreference ===
-						option.value
-							? 'bg-primary-600 text-white'
-							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
-					>
-						{option.label}
-					</button>
-				{/each}
+		{#if !isDesktopApp}
+			<div class="flex items-center justify-between px-4 py-3">
+				<span class="text-sm font-medium">Screen Orientation</span>
+				<div
+					role="radiogroup"
+					aria-label="Screen orientation"
+					class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
+				>
+					{#each orientationOptions as option (option.value)}
+						<button
+							type="button"
+							role="radio"
+							aria-checked={orientationPreference === option.value}
+							onclick={() => chooseOrientation(option.value)}
+							class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {orientationPreference ===
+							option.value
+								? 'bg-primary-600 text-white'
+								: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+						>
+							{option.label}
+						</button>
+					{/each}
+				</div>
 			</div>
-		</div>
-		{#if !canLockOrientationNow}
-			<p class="px-4 pb-3 text-xs text-gray-500 dark:text-gray-400">
-				{#if supportsOrientationLock}
-					Install EveryList to your home screen to lock orientation — it only takes effect once
-					running as an installed app.
-				{:else}
-					Screen orientation lock isn't supported in this browser — it only works in the native app.
-				{/if}
-			</p>
-		{/if}
-		{#if orientationFeedback}
-			<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">{orientationFeedback}</p>
+			{#if !canLockOrientationNow}
+				<p class="px-4 pb-3 text-xs text-gray-500 dark:text-gray-400">
+					{#if supportsOrientationLock}
+						Install EveryList to your home screen to lock orientation — it only takes effect once
+						running as an installed app.
+					{:else}
+						Screen orientation lock isn't supported in this browser — it only works in the native
+						app.
+					{/if}
+				</p>
+			{/if}
+			{#if orientationFeedback}
+				<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">{orientationFeedback}</p>
+			{/if}
 		{/if}
 		<div
 			class="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700"
@@ -424,6 +462,10 @@
 				<div>
 					App <span>{nativeInfo.version}</span> (<span>{nativeInfo.build}</span>)
 				</div>
+			{:else if isDesktopApp && desktopVersionInfo}
+				<div>
+					App <span>{desktopVersionInfo.version}</span>
+				</div>
 			{/if}
 			{#if meta}
 				<div>
@@ -439,7 +481,7 @@
 		<InstallPrompt />
 	</section>
 
-	{#if isNative}
+	{#if isRemote}
 		<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 			<h2
 				class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
@@ -535,39 +577,81 @@
 				Troubleshooting
 			</h2>
 			<div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-				{#if updateStatus === 'up-to-date'}
-					<p
-						class="mb-3 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400"
-					>
-						You're on the latest version.
-					</p>
-				{:else if updateStatus === 'unavailable'}
-					<p
-						class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-					>
-						Update check unavailable right now — try again in a moment.
-					</p>
-				{:else if updateStatus === 'updating'}
-					<p
-						class="mb-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-700 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
-					>
-						An update is ready — it will apply when the app refreshes.
-					</p>
+				{#if isDesktopApp}
+					<!-- No service worker on desktop — this checks GitHub Releases instead and links to
+					     the download rather than updating in place (PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §8;
+					     unsigned macOS builds can't auto-update at all). -->
+					{#if desktopUpdateResult.status === 'up-to-date'}
+						<p
+							class="mb-3 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400"
+						>
+							You're on the latest version.
+						</p>
+					{:else if desktopUpdateResult.status === 'error'}
+						<p
+							class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+						>
+							{desktopUpdateResult.message}
+						</p>
+					{:else if desktopUpdateResult.status === 'update-available'}
+						{@const latestVersion = desktopUpdateResult.latestVersion}
+						{@const releaseUrl = desktopUpdateResult.url}
+						<p
+							class="mb-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-700 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
+						>
+							<span>{latestVersion}</span> is available —
+							<a href={releaseUrl} target="_blank" class="underline">download it</a>
+							and reinstall.
+						</p>
+					{/if}
+					<div class="flex items-center justify-between gap-4">
+						<span class="text-sm text-gray-600 dark:text-gray-300">
+							Check GitHub for a newer release of the app.
+						</span>
+						<button
+							type="button"
+							onclick={handleCheckForDesktopUpdate}
+							disabled={desktopUpdateResult.status === 'checking'}
+							class="w-28 shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-white hover:bg-primary-700 disabled:opacity-50"
+						>
+							{desktopUpdateResult.status === 'checking' ? 'Checking...' : 'Check'}
+						</button>
+					</div>
+				{:else}
+					{#if updateStatus === 'up-to-date'}
+						<p
+							class="mb-3 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400"
+						>
+							You're on the latest version.
+						</p>
+					{:else if updateStatus === 'unavailable'}
+						<p
+							class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+						>
+							Update check unavailable right now — try again in a moment.
+						</p>
+					{:else if updateStatus === 'updating'}
+						<p
+							class="mb-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-700 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
+						>
+							An update is ready — it will apply when the app refreshes.
+						</p>
+					{/if}
+					<div class="flex items-center justify-between gap-4">
+						<span class="text-sm text-gray-600 dark:text-gray-300">
+							Check for a newer version of the app right now, instead of waiting for it to update on
+							its own.
+						</span>
+						<button
+							type="button"
+							onclick={handleCheckForUpdate}
+							disabled={updateStatus === 'checking'}
+							class="w-28 shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-white hover:bg-primary-700 disabled:opacity-50"
+						>
+							{updateStatus === 'checking' ? 'Updating...' : 'Update'}
+						</button>
+					</div>
 				{/if}
-				<div class="flex items-center justify-between gap-4">
-					<span class="text-sm text-gray-600 dark:text-gray-300">
-						Check for a newer version of the app right now, instead of waiting for it to update on
-						its own.
-					</span>
-					<button
-						type="button"
-						onclick={handleCheckForUpdate}
-						disabled={updateStatus === 'checking'}
-						class="w-28 shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-white hover:bg-primary-700 disabled:opacity-50"
-					>
-						{updateStatus === 'checking' ? 'Updating...' : 'Update'}
-					</button>
-				</div>
 			</div>
 			{#if confirmingReset}
 				<div
