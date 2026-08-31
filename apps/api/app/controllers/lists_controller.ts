@@ -2,6 +2,7 @@ import List from '#models/list'
 import Item from '#models/item'
 import Folder from '#models/folder'
 import ListMember from '#models/list_member'
+import CategoryLearning from '#models/category_learning'
 import ListPolicy from '#policies/list_policy'
 import { createListValidator, updateListValidator, reorderListsValidator } from '#validators/list'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -102,6 +103,7 @@ export default class ListsController {
       color: payload.color ?? '#3b82f6',
       icon: payload.icon ?? null,
       useCategories: payload.useCategories,
+      useCategoryLearning: payload.useCategoryLearning,
       useShops: payload.useShops,
       useFavorites: payload.useFavorites,
       useRecent: payload.useRecent,
@@ -204,6 +206,19 @@ export default class ListsController {
     list.merge(rest)
     list.version += 1
     await list.save()
+
+    // Turning learning off forgets everything the list's model had learned —
+    // the learned rows are pure derived data (token → category counts), and
+    // keeping them would be exactly the dead-weight bloat the toggle exists
+    // to stop. Re-enabling starts from an empty model and re-teaches through
+    // normal explicit assignments.
+    if (rest.useCategoryLearning === false) {
+      const deleted = await CategoryLearning.query().where('listId', list.id).delete()
+      logger.debug(
+        { listId: list.id, rowsDeleted: deleted },
+        'category learning disabled, purged learned rows'
+      )
+    }
 
     await broadcastSync({
       listId: list.id,

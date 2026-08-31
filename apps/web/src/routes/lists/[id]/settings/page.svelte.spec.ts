@@ -314,12 +314,16 @@ describe('List settings +page.svelte', () => {
 		vi.mocked(updateList).mockResolvedValue({ ...list, useCategories: false });
 
 		render(SettingsPage);
-		await expect.element(page.getByRole('checkbox', { name: 'Categories' })).toBeInTheDocument();
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Categories', exact: true }))
+			.toBeInTheDocument();
 
-		await page.getByRole('checkbox', { name: 'Categories' }).click();
+		await page.getByRole('checkbox', { name: 'Categories', exact: true }).click();
 
 		expect(updateList).toHaveBeenCalledWith(1, { useCategories: false });
-		await expect.element(page.getByRole('checkbox', { name: 'Categories' })).not.toBeChecked();
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Categories', exact: true }))
+			.not.toBeChecked();
 		await expect.element(page.getByRole('link', { name: 'Categories' })).not.toBeInTheDocument();
 	});
 
@@ -328,12 +332,41 @@ describe('List settings +page.svelte', () => {
 		vi.mocked(updateList).mockResolvedValue({ ...list, useCategories: true });
 
 		render(SettingsPage);
-		await expect.element(page.getByRole('checkbox', { name: 'Categories' })).not.toBeChecked();
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Categories', exact: true }))
+			.not.toBeChecked();
 
-		await page.getByRole('checkbox', { name: 'Categories' }).click();
+		await page.getByRole('checkbox', { name: 'Categories', exact: true }).click();
 
 		expect(updateList).toHaveBeenCalledWith(1, { useCategories: true });
-		await expect.element(page.getByRole('checkbox', { name: 'Categories' })).toBeChecked();
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Categories', exact: true }))
+			.toBeChecked();
+	});
+
+	it('nests the learned-categories sub-toggle under Categories and toggles it both ways', async () => {
+		vi.mocked(updateList).mockImplementation(async (_id, patch) => ({ ...list, ...patch }));
+
+		render(SettingsPage);
+		const learning = page.getByRole('checkbox', { name: 'Learn item categories' });
+		await expect.element(learning).toBeChecked();
+
+		await learning.click();
+		expect(updateList).toHaveBeenCalledWith(1, { useCategoryLearning: false });
+
+		await learning.click();
+		expect(updateList).toHaveBeenCalledWith(1, { useCategoryLearning: true });
+	});
+
+	it('hides the learned-categories sub-toggle when categories are off', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useCategories: false });
+
+		render(SettingsPage);
+		await expect.element(page.getByRole('link', { name: 'Members' })).toBeInTheDocument();
+
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Learn item categories' }))
+			.not.toBeInTheDocument();
 	});
 
 	it('toggles Shops, Favorites, Recently deleted, Quantity, and Price, revealing their sub-toggles', async () => {

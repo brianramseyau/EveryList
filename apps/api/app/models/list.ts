@@ -22,6 +22,9 @@ export default class List extends ListSchema {
   declare useCategories: boolean
 
   @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare useCategoryLearning: boolean
+
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
   declare useShops: boolean
 
   @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })

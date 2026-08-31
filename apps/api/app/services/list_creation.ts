@@ -56,6 +56,7 @@ export interface CreateOwnedListInput {
   color: string
   icon: string | null
   useCategories?: boolean
+  useCategoryLearning?: boolean
   useShops?: boolean
   useFavorites?: boolean
   useRecent?: boolean
@@ -80,6 +81,7 @@ export async function createOwnedList(input: CreateOwnedListInput) {
     ownerId: input.ownerId,
     archived: false,
     useCategories: input.useCategories ?? true,
+    useCategoryLearning: input.useCategoryLearning ?? true,
     useShops: input.useShops ?? true,
     useFavorites: input.useFavorites ?? true,
     useRecent: input.useRecent ?? true,

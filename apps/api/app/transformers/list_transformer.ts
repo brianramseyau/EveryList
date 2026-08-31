@@ -14,6 +14,7 @@ export default class ListTransformer extends BaseTransformer<List> {
         'archived',
         'badgeExcluded',
         'useCategories',
+        'useCategoryLearning',
         'useShops',
         'useFavorites',
         'useRecent',

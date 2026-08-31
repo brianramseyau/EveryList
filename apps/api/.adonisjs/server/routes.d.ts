@@ -28,6 +28,7 @@ export type ScannedRoutes = {
     'lists.lists.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.lists.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.lists.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'lists.lists.widget_snapshot': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.categories.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.categories.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.categories.import': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
@@ -69,6 +70,8 @@ export type ScannedRoutes = {
     'tokens.personal_access_tokens.store': { paramsTuple?: []; params?: {} }
     'tokens.personal_access_tokens.update': { paramsTuple: [ParamValue]; params: {'tokenId': ParamValue} }
     'tokens.personal_access_tokens.destroy': { paramsTuple: [ParamValue]; params: {'tokenId': ParamValue} }
+    'alexaPreferences.alexa_preferences.show': { paramsTuple?: []; params?: {} }
+    'alexaPreferences.alexa_preferences.update': { paramsTuple?: []; params?: {} }
     'personal_access_tokens.me': { paramsTuple?: []; params?: {} }
     'alexa.alexa': { paramsTuple?: []; params?: {} }
     'alexa.alexa_oauth.token': { paramsTuple?: []; params?: {} }
@@ -91,6 +94,7 @@ export type ScannedRoutes = {
     'folders.folders.index': { paramsTuple?: []; params?: {} }
     'lists.lists.index': { paramsTuple?: []; params?: {} }
     'lists.lists.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'lists.lists.widget_snapshot': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.categories.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.recent': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
@@ -103,6 +107,7 @@ export type ScannedRoutes = {
     'lists.list_members.candidates': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_invites.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'tokens.personal_access_tokens.index': { paramsTuple?: []; params?: {} }
+    'alexaPreferences.alexa_preferences.show': { paramsTuple?: []; params?: {} }
     'personal_access_tokens.me': { paramsTuple?: []; params?: {} }
     'alexa.alexa_icons.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
@@ -117,6 +122,7 @@ export type ScannedRoutes = {
     'folders.folders.index': { paramsTuple?: []; params?: {} }
     'lists.lists.index': { paramsTuple?: []; params?: {} }
     'lists.lists.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'lists.lists.widget_snapshot': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.categories.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.recent': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
@@ -129,6 +135,7 @@ export type ScannedRoutes = {
     'lists.list_members.candidates': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.list_invites.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'tokens.personal_access_tokens.index': { paramsTuple?: []; params?: {} }
+    'alexaPreferences.alexa_preferences.show': { paramsTuple?: []; params?: {} }
     'personal_access_tokens.me': { paramsTuple?: []; params?: {} }
     'alexa.alexa_icons.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
@@ -178,6 +185,7 @@ export type ScannedRoutes = {
     'lists.favorite_items.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'id': ParamValue} }
     'lists.list_members.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'memberId': ParamValue} }
     'tokens.personal_access_tokens.update': { paramsTuple: [ParamValue]; params: {'tokenId': ParamValue} }
+    'alexaPreferences.alexa_preferences.update': { paramsTuple?: []; params?: {} }
     'stores.stores.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'stores.stores.reorder_categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'backupSettings.backup_settings.update': { paramsTuple?: []; params?: {} }

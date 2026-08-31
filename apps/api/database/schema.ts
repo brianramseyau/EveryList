@@ -265,7 +265,7 @@ export class ListStoreSchema extends BaseModel {
 }
 
 export class ListSchema extends BaseModel {
-  static $columns = ['archived', 'badgeExcluded', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'insertPosition', 'itemSortOrder', 'name', 'ownerId', 'passcodeHash', 'showPriceInList', 'showStoreInList', 'updatedAt', 'useCategories', 'useFavorites', 'usePrice', 'useQuantity', 'useRecent', 'useShops', 'version'] as const
+  static $columns = ['archived', 'badgeExcluded', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'insertPosition', 'itemSortOrder', 'name', 'ownerId', 'passcodeHash', 'showPriceInList', 'showStoreInList', 'updatedAt', 'useCategories', 'useCategoryLearning', 'useFavorites', 'usePrice', 'useQuantity', 'useRecent', 'useShops', 'version'] as const
   $columns = ListSchema.$columns
   @column()
   declare archived: boolean
@@ -301,6 +301,8 @@ export class ListSchema extends BaseModel {
   declare updatedAt: DateTime | null
   @column()
   declare useCategories: boolean
+  @column()
+  declare useCategoryLearning: boolean
   @column()
   declare useFavorites: boolean
   @column()
