@@ -68,6 +68,9 @@ jobs:
     needs: [test, meta]
     if: needs.meta.outputs.is_rc == 'true'
     runs-on: ubuntu-latest
+    env:
+      # See test.yml's env block — this job doesn't build apps/desktop either.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -118,6 +121,9 @@ jobs:
     needs: [test, meta]
     if: needs.meta.outputs.is_rc == 'false'
     runs-on: ubuntu-latest
+    env:
+      # See test.yml's env block — this job doesn't build apps/desktop either.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -195,6 +201,9 @@ jobs:
     name: Build iOS Simulator app
     needs: test
     runs-on: macos-latest
+    env:
+      # See test.yml's env block — this job doesn't build apps/desktop either.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -237,9 +246,57 @@ jobs:
           path: EveryList-ios-simulator.zip
           if-no-files-found: error
 
+  build-desktop:
+    name: Build desktop app (${{ matrix.os }})
+    needs: [test, meta]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # Unlike test.yml/ci.yml, this job actually needs Electron's runtime binary — leave
+      # ELECTRON_SKIP_BINARY_DOWNLOAD unset here (see pnpm-workspace.yaml's onlyBuiltDependencies
+      # comment and PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §6).
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @everylist/shared build
+
+      - run: pnpm --filter @everylist/web build
+
+      # Matrix builds per-OS not because of native modules (there are none — see §6) but because
+      # dmg/nsis/AppImage each need their own OS toolchain.
+      - name: Package the desktop app
+        working-directory: apps/desktop
+        # electron-builder reads `version` from package.json; inject the tag's version rather
+        # than hand-bumping a file that would inevitably drift (§6).
+        run: |
+          npm pkg set version=${{ needs.meta.outputs.version_name }}
+          node scripts/copy-renderer.mjs
+          pnpm exec electron-builder --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.AppImage
+          if-no-files-found: error
+
   release:
     name: Attach builds to the GitHub Release
-    needs: [meta, build-android-debug, build-android-release, build-ios]
+    needs: [meta, build-android-debug, build-android-release, build-ios, build-desktop]
     if: ${{ always() && !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     permissions:
@@ -256,6 +313,9 @@ jobs:
             dist/android-apk-debug/*.apk
             dist/android-aab-release/*.aab
             dist/ios-simulator-build/*.zip
+            dist/desktop-macos-latest/*
+            dist/desktop-windows-latest/*
+            dist/desktop-ubuntu-latest/*
 
   prune-prereleases:
     name: Prune superseded pre-release tags

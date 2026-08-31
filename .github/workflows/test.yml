@@ -32,6 +32,11 @@ jobs:
       APP_URL: http://127.0.0.1:3333
       SESSION_DRIVER: cookie
       LIMITER_STORE: database
+      # This job never builds apps/desktop, so it has no use for Electron's ~150 MB runtime
+      # binary — pnpm-workspace.yaml's onlyBuiltDependencies allows electron's postinstall to
+      # run (for apps/desktop's own dev/CI use), so without this every job here would pay for
+      # that download too. See PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §6.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
 

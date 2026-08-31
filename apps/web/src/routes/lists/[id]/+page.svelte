@@ -43,6 +43,13 @@
 	const listId = $derived(Number(page.params.id));
 
 	let list = $state<ListDto | null>(null);
+	// The server is authoritative on permissions — this only mirrors the `role` it already sent
+	// back on the list DTO, so a viewer never sees affordances for actions they cannot actually
+	// perform. Defense-in-depth still guards the mutating functions themselves (toggleChecked,
+	// addItem, removeItem) in case any call site here forgets this check — a rejected mutation
+	// should never have been queueable in the first place, not just correctly rejected by the
+	// server after the fact.
+	const isViewer = $derived(list?.role === 'viewer');
 	// Not persisted anywhere — only lives for as long as this page stays mounted
 	// and foregrounded. Navigating away (e.g. back to the lists page), the tab
 	// going to the background, or closing the app all drop it, so the passcode
@@ -438,6 +445,11 @@
 
 	async function addItem(rawName: string) {
 		if (adding) return;
+		// The add-item form is hidden entirely for a viewer (see the `!isViewer` guard around its
+		// `{#if}` below), so this can't actually be reached from the UI — kept as defense-in-depth
+		// in case a future call site (e.g. ItemAutocomplete's onselect, reused elsewhere) forgets.
+		/* v8 ignore next */
+		if (isViewer) return;
 		const name = rawName.trim();
 		if (!name) return;
 
@@ -487,6 +499,7 @@
 	}
 
 	async function toggleChecked(item: ItemDto) {
+		if (isViewer) return;
 		const nextChecked = !item.checked;
 		items = items.map((current) =>
 			current.id === item.id ? { ...current, checked: nextChecked } : current
@@ -524,6 +537,10 @@
 		beforeItemId: number | null;
 		afterItemId: number | null;
 	}) {
+		// Drag-reorder is disabled for a viewer (see sortableReorder's `disabled` option below), so
+		// this can't actually be reached from the UI — kept as defense-in-depth.
+		/* v8 ignore next */
+		if (isViewer) return;
 		const draggedItem = items.find((current) => current.id === params.itemId);
 		// The dragged row is always still present at drop time — nothing
 		// mutates `items` mid-gesture.
@@ -565,6 +582,11 @@
 	}
 
 	async function removeItem(item: ItemDto) {
+		// Every caller (removeItemWithUndo, clearChecked, clearAllItems) is itself gated on
+		// `!isViewer` before reaching here, so this can't actually be reached from the UI — kept
+		// as defense-in-depth.
+		/* v8 ignore next */
+		if (isViewer) return;
 		items = items.filter((current) => current.id !== item.id);
 		try {
 			await deleteItem(listId, item.id);
@@ -604,6 +626,10 @@
 	// Wraps only the two direct single-item delete gestures (swipe and the X button), not
 	// `clearChecked`'s bulk path, which keeps calling `removeItem` directly.
 	function removeItemWithUndo(item: ItemDto) {
+		// The swipe gesture and the X delete button are both disabled/hidden for a viewer, so this
+		// can't actually be reached from the UI — kept as defense-in-depth.
+		/* v8 ignore next */
+		if (isViewer) return;
 		showUndo('Item deleted', () => undoRemove(item));
 		void removeItem(item);
 	}
@@ -671,6 +697,10 @@
 	// update request per item — same shape as `clearChecked`, but reusing the
 	// single-item update path (and its offline queue) instead of deleting.
 	async function uncheckAllItems() {
+		// Reachable only via the overflow menu's "Uncheck All Items" item, which is disabled for a
+		// viewer — kept as defense-in-depth.
+		/* v8 ignore next */
+		if (isViewer) return;
 		confirmAction = null;
 		const toUncheck = items.filter((item) => item.checked);
 		items = items.map((item) => (item.checked ? { ...item, checked: false } : item));
@@ -935,7 +965,7 @@
 						{/if}
 					{:else}
 						<PopoutMenuItem
-							disabled={checkedItems.length === 0}
+							disabled={checkedItems.length === 0 || isViewer}
 							onclick={() => {
 								confirmAction = 'clearChecked';
 								close();
@@ -944,7 +974,7 @@
 							Clear Checked Off Items
 						</PopoutMenuItem>
 						<PopoutMenuItem
-							disabled={checkedItems.length === 0}
+							disabled={checkedItems.length === 0 || isViewer}
 							onclick={() => {
 								confirmAction = 'uncheckAll';
 								close();
@@ -953,7 +983,7 @@
 							Uncheck All Items
 						</PopoutMenuItem>
 						<PopoutMenuItem
-							disabled={items.length === 0}
+							disabled={items.length === 0 || isViewer}
 							onclick={() => {
 								confirmAction = 'clearAll';
 								close();
@@ -965,6 +995,7 @@
 						<PopoutMenuItem
 							href={resolve('/lists/[id]/settings', { id: String(listId) })}
 							onclick={markListOriginAndScroll}
+							disabled={isViewer}
 						>
 							List Settings
 						</PopoutMenuItem>
@@ -985,7 +1016,7 @@
 				</a>
 			{/snippet}
 
-			{#if list && !(list.passcodeHash && !unlocked)}
+			{#if list && !(list.passcodeHash && !unlocked) && !isViewer}
 				<form class="flex items-center gap-2 print:hidden" onsubmit={handleAddItem}>
 					<div
 						class="flex shrink-0 items-center gap-2 overflow-hidden transition-all duration-200 {itemInputFocused
@@ -1089,6 +1120,15 @@
 					<p class="text-sm text-red-600 dark:text-red-400 print:hidden">{error}</p>
 				{/if}
 
+				{#if isViewer}
+					<p
+						class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 print:hidden"
+					>
+						You have view-only access to this list — checking off, adding, and deleting items is
+						turned off.
+					</p>
+				{/if}
+
 				{#if items.length === 0}
 					<div class="flex flex-col items-center gap-2 py-8 text-center">
 						<span style:color={list.color}>
@@ -1136,7 +1176,7 @@
 										group: 'list-items',
 										fallbackAxis: 'y',
 										onDrop: handleItemDrop,
-										disabled: list?.itemSortOrder === 'alphabetical'
+										disabled: list?.itemSortOrder === 'alphabetical' || isViewer
 									}}
 								>
 									{#each group.items as item (item.id)}
@@ -1166,7 +1206,7 @@
 													: ''}"
 												style="touch-action: pan-y;"
 												use:swipeReveal={{
-													disabled: !isCoarsePointer,
+													disabled: !isCoarsePointer || isViewer,
 													onCommitRight: () => removeItemWithUndo(item),
 													onCommitLeft: () => {
 														markListOriginAndScroll();
@@ -1184,12 +1224,16 @@
 													type="button"
 													role="checkbox"
 													aria-checked={item.checked}
+													aria-disabled={isViewer}
 													aria-label={item.name}
+													title={isViewer ? 'You have view-only access to this list' : undefined}
 													data-reorder-ignore
 													onclick={() => toggleChecked(item)}
-													class="check-glyph flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 {item.checked
-														? 'border-signal bg-signal'
-														: 'border-gray-300 bg-transparent dark:border-gray-600'}"
+													class="check-glyph flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 {isViewer
+														? 'cursor-not-allowed border-gray-400 bg-gray-400 dark:border-gray-500 dark:bg-gray-500'
+														: item.checked
+															? 'border-signal bg-signal'
+															: 'border-gray-300 bg-transparent dark:border-gray-600'}"
 												>
 													{#if item.checked}
 														<svg
@@ -1253,7 +1297,7 @@
 														</p>
 													{/if}
 												</div>
-												{#if !isCoarsePointer}
+												{#if !isCoarsePointer && !isViewer}
 													<a
 														href={resolve('/lists/[id]/items/[itemId]', {
 															id: String(listId),

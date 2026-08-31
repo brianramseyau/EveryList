@@ -9,6 +9,7 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import { getToken } from '$lib/api/token';
 	import { getServerUrl } from '$lib/api/server-url';
+	import { isRemoteClient } from '$lib/platform/desktop';
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
 	import { initOrientation } from '$lib/orientation';
@@ -40,11 +41,12 @@
 	}
 
 	onMount(() => {
-		// Native builds have no baked-in server address (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1) — gate here rather
-		// than on /login itself, since a fresh native install also has no token, and every other
-		// API call (including login) needs somewhere real to point before it can work at all.
+		// Native/desktop builds have no baked-in server address (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1,
+		// PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §1/§4) — gate here rather than on /login itself, since a
+		// fresh install also has no token, and every other API call (including login) needs
+		// somewhere real to point before it can work at all.
 		const serverSetupPath = resolve('/server-setup');
-		if (Capacitor.isNativePlatform() && !getServerUrl() && page.url.pathname !== serverSetupPath) {
+		if (isRemoteClient() && !getServerUrl() && page.url.pathname !== serverSetupPath) {
 			void goto(serverSetupPath);
 		}
 		initTheme();
@@ -94,9 +96,11 @@
 		// update prompts) but Capacitor's WebView already loads the bundle from local files —
 		// there's no real network layer for it to usefully intercept there, and registering one
 		// against a `capacitor://`/local `https://` origin is unsupported/unreliable in practice
-		// (PLAN_13_PHASE_NATIVE_APP_SHELL.md §3). Skip it entirely on native rather than relying on it merely
-		// no-oping harmlessly.
-		if (!Capacitor.isNativePlatform()) {
+		// (PLAN_13_PHASE_NATIVE_APP_SHELL.md §3). The Electron build is served from local disk too
+		// (PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §2/§4) — a Workbox precache over that loopback origin adds
+		// nothing and reintroduces the same stale-asset bug class. Skip it entirely on either
+		// rather than relying on it merely no-oping harmlessly.
+		if (!isRemoteClient()) {
 			// vite-plugin-pwa's virtual module only exists in a built/dev-served app, never under
 			// Vitest — dynamic-imported so test runs never need to resolve it.
 			void import('virtual:pwa-register').then(({ registerSW }) =>

@@ -18,4 +18,11 @@ onlyBuiltDependencies:
   - better-sqlite3
   - "@swc/core"
   - sharp
+  # Needed for apps/desktop's local dev (`pnpm --filter @everylist/desktop start`) and its CI
+  # packaging job to actually have a runnable Electron binary — without this, pnpm 10 blocks
+  # electron's postinstall (which downloads the ~150 MB runtime) by default. Every other job
+  # (test.yml, ci.yml's e2e/docker jobs) sets ELECTRON_SKIP_BINARY_DOWNLOAD=1 so this entry
+  # doesn't cost them the download too. See PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §0/§6.
+  - electron
+  - electron-builder
 

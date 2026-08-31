@@ -36,6 +36,8 @@ jobs:
       APP_URL: http://127.0.0.1:3333
       SESSION_DRIVER: cookie
       LIMITER_STORE: database
+      # See test.yml's env block — this job doesn't build apps/desktop either.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -58,6 +60,9 @@ jobs:
     name: Build image and smoke test
     needs: test
     runs-on: ubuntu-latest
+    env:
+      # See test.yml's env block — this job doesn't build apps/desktop either.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
 

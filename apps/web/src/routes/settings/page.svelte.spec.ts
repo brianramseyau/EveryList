@@ -33,6 +33,13 @@ vi.mock('$lib/api/server-url', () => ({
 	getServerUrl: vi.fn().mockReturnValue(''),
 	clearServerUrl: vi.fn()
 }));
+vi.mock('$lib/platform/desktop', () => ({
+	isDesktop: vi.fn().mockReturnValue(false),
+	desktopInfo: vi.fn().mockReturnValue(null)
+}));
+vi.mock('$lib/platform/desktop-update', () => ({
+	checkForDesktopUpdate: vi.fn()
+}));
 
 const { goto } = await import('$app/navigation');
 const { logout, fetchProfile, updateProfile } = await import('$lib/api/auth');
@@ -43,6 +50,8 @@ const { Capacitor } = await import('@capacitor/core');
 const { App } = await import('@capacitor/app');
 const { getServerUrl, clearServerUrl } = await import('$lib/api/server-url');
 const { getToken, setToken } = await import('$lib/api/token');
+const { isDesktop, desktopInfo } = await import('$lib/platform/desktop');
+const { checkForDesktopUpdate } = await import('$lib/platform/desktop-update');
 const SettingsPage = (await import('./+page.svelte')).default;
 
 const profile = {
@@ -62,6 +71,8 @@ describe('Settings +page.svelte', () => {
 		vi.mocked(Capacitor.getPlatform).mockReturnValue('web');
 		vi.mocked(App.getInfo).mockRejectedValue(new Error('web'));
 		vi.mocked(getServerUrl).mockReturnValue('');
+		vi.mocked(isDesktop).mockReturnValue(false);
+		vi.mocked(desktopInfo).mockReturnValue(null);
 		// Orientation radio clicks persist the choice to localStorage (see the
 		// auto-rotate/not-supported tests) — clear it so it can't leak into a
 		// later spec file sharing this worker's browser context.
@@ -728,5 +739,161 @@ describe('Settings +page.svelte', () => {
 		render(SettingsPage);
 
 		await expect.element(page.getByText('Home-screen widget')).toBeInTheDocument();
+	});
+
+	it('hides Screen Orientation on the desktop build', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Screen Orientation')).not.toBeInTheDocument();
+	});
+
+	it('shows the Server section on the desktop build', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(getServerUrl).mockReturnValue('http://127.0.0.1:41783');
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('http://127.0.0.1:41783')).toBeInTheDocument();
+	});
+
+	it('shows the desktop app version in About', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(desktopInfo).mockReturnValue({ version: '1.2.3', platform: 'darwin' });
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('App 1.2.3')).toBeInTheDocument();
+	});
+
+	it('shows Troubleshooting on desktop but no App version row when the bridge never exposed info', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(desktopInfo).mockReturnValue(null);
+
+		render(SettingsPage);
+
+		// isNative is false and isDesktop is true, so the Troubleshooting section shows, but with
+		// no App version row (desktopInfo() returned null — the same "compiled but never wired"
+		// guard as PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §1 calls for).
+		await expect.element(page.getByText('Troubleshooting')).toBeInTheDocument();
+		await expect.element(page.getByText(/^App \d/)).not.toBeInTheDocument();
+	});
+
+	it('desktop: checks GitHub releases instead of the service worker, and shows up-to-date', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(checkForDesktopUpdate).mockResolvedValue({ status: 'up-to-date' });
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Check' }).click();
+
+		expect(checkForDesktopUpdate).toHaveBeenCalled();
+		expect(checkForUpdate).not.toHaveBeenCalled();
+		await expect.element(page.getByText("You're on the latest version.")).toBeInTheDocument();
+	});
+
+	it('desktop: shows the friendly error message from a failed check', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(checkForDesktopUpdate).mockResolvedValue({
+			status: 'error',
+			message: "Couldn't check for updates right now."
+		});
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Check' }).click();
+
+		await expect
+			.element(page.getByText("Couldn't check for updates right now."))
+			.toBeInTheDocument();
+	});
+
+	it('desktop: shows a download link when a newer release is available', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(checkForDesktopUpdate).mockResolvedValue({
+			status: 'update-available',
+			latestVersion: 'v9.9.9',
+			url: 'https://github.com/brianramseyau/EveryList/releases/tag/v9.9.9'
+		});
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Check' }).click();
+
+		await expect.element(page.getByText(/v9\.9\.9 is available/)).toBeInTheDocument();
+		const link = page.getByRole('link', { name: 'download it' });
+		await expect.element(link).toHaveAttribute('target', '_blank');
+		await expect
+			.element(link)
+			.toHaveAttribute('href', 'https://github.com/brianramseyau/EveryList/releases/tag/v9.9.9');
+	});
+
+	it('desktop: treats an unavailable check result the same as never having checked', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(checkForDesktopUpdate).mockResolvedValue({ status: 'unavailable' });
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Check' }).click();
+
+		expect(checkForDesktopUpdate).toHaveBeenCalled();
+		await expect.element(page.getByText("You're on the latest version.")).not.toBeInTheDocument();
+		await expect.element(page.getByText(/is available/)).not.toBeInTheDocument();
+	});
+
+	it('desktop: recovers from a rejected IPC bridge call instead of leaving the button stuck on "Checking..."', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(checkForDesktopUpdate).mockRejectedValue(new Error('main process unreachable'));
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Check' }).click();
+
+		await expect.element(page.getByText('main process unreachable')).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Check' })).not.toBeDisabled();
+	});
+
+	it('desktop: falls back to a generic message when the rejection is not an Error', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(checkForDesktopUpdate).mockRejectedValue('boom');
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Check' }).click();
+
+		await expect.element(page.getByText('Failed to check for updates.')).toBeInTheDocument();
+	});
+
+	it('desktop: disables the Check button and shows "Checking..." while the request is in flight', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		let resolveCheck!: (result: { status: 'up-to-date' }) => void;
+		vi.mocked(checkForDesktopUpdate).mockReturnValue(
+			new Promise((resolve) => {
+				resolveCheck = resolve;
+			})
+		);
+
+		render(SettingsPage);
+
+		const checkButton = page.getByRole('button', { name: 'Check' });
+		await checkButton.click();
+
+		await expect.element(page.getByRole('button', { name: 'Checking...' })).toBeDisabled();
+
+		resolveCheck({ status: 'up-to-date' });
+
+		await expect.element(page.getByText("You're on the latest version.")).toBeInTheDocument();
 	});
 });

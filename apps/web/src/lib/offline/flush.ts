@@ -237,6 +237,22 @@ export async function flushQueue(): Promise<void> {
 					await dequeueMutation(id);
 					continue;
 				}
+				if (err.status < 500) {
+					// The server is authoritative: a 4xx other than a conflict (bad input,
+					// permission denied, the row no longer exists) is its final word on this
+					// exact request, not a transient condition — retrying the identical mutation
+					// would only ever reproduce the identical rejection. Terminal immediately
+					// rather than retried up to MAX_ATTEMPTS, which otherwise left a permanently
+					// rejected mutation looking "stuck" (and, since the connectivity indicator
+					// mirrors flush outcomes, misread as a connectivity problem) for no reason.
+					await updateMutation(id, {
+						status: 'failed',
+						attempts: mutation.attempts + 1,
+						lastError: err.message
+					});
+					continue;
+				}
+				// 5xx — a real server-side failure, plausibly transient, worth retrying.
 				const attempts = mutation.attempts + 1;
 				if (attempts >= MAX_ATTEMPTS) {
 					await updateMutation(id, { status: 'failed', attempts, lastError: err.message });

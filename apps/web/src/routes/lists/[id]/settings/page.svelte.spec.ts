@@ -94,6 +94,15 @@ describe('List settings +page.svelte', () => {
 		await expect.element(page.getByText('List not found')).toBeInTheDocument();
 	});
 
+	it('bounces a viewer straight back to the list, since nothing on this page is usable read-only', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, role: 'viewer' });
+
+		render(SettingsPage);
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(goto).toHaveBeenCalledWith('/lists/1');
+	});
+
 	it('goes back in history instead of pushing a new navigation when this page was reached from the list', async () => {
 		const historyBackSpy = vi.spyOn(window.history, 'back').mockImplementation(() => {});
 		markListOrigin();

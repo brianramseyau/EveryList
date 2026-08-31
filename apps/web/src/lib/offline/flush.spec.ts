@@ -8,7 +8,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 const { apiPost, apiPatch, apiDelete, ApiError } = await import('$lib/api/client');
 const { getDb, resetDbForTesting } = await import('./db');
-const { enqueueMutation, pendingMutations } = await import('./sync-queue');
+const { enqueueMutation, pendingMutations, failedMutations } = await import('./sync-queue');
 const { flushQueue, onConflict, onFlushOutcome } = await import('./flush');
 
 afterEach(async () => {
@@ -379,7 +379,7 @@ describe('flushQueue', () => {
 		expect(listener).toHaveBeenCalledTimes(1);
 	});
 
-	it('increments attempts and records the error on a non-conflict ApiError, without marking failed below the cap', async () => {
+	it('marks a mutation failed immediately on a non-conflict 4xx — the server is authoritative and a retry would only reproduce the same rejection', async () => {
 		vi.mocked(apiPatch).mockRejectedValue(new ApiError(403, 'Forbidden'));
 		await enqueueMutation({
 			entityType: 'item',
@@ -392,12 +392,51 @@ describe('flushQueue', () => {
 
 		await flushQueue();
 
-		const [mutation] = await pendingMutations();
-		expect(mutation).toMatchObject({ status: 'pending', attempts: 1, lastError: 'Forbidden' });
+		expect(await pendingMutations()).toHaveLength(0);
+		const [mutation] = await failedMutations();
+		expect(mutation).toMatchObject({ status: 'failed', attempts: 1, lastError: 'Forbidden' });
 	});
 
-	it('marks a mutation failed once it reaches the max attempt count', async () => {
-		vi.mocked(apiPatch).mockRejectedValue(new ApiError(403, 'Forbidden'));
+	it('marks a 4xx failed on the very first attempt, never retrying regardless of a low attempt count', async () => {
+		vi.mocked(apiPatch).mockRejectedValue(new ApiError(422, 'Validation failed'));
+		const id = await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5'
+		});
+
+		await flushQueue();
+
+		const mutation = await getDb()!.syncQueue.get(id!);
+		expect(mutation).toMatchObject({ status: 'failed', attempts: 1 });
+	});
+
+	it('increments attempts and records the error on a 5xx, without marking failed below the cap (a server error is plausibly transient)', async () => {
+		vi.mocked(apiPatch).mockRejectedValue(new ApiError(500, 'Internal Server Error'));
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'update',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5'
+		});
+
+		await flushQueue();
+
+		const [mutation] = await pendingMutations();
+		expect(mutation).toMatchObject({
+			status: 'pending',
+			attempts: 1,
+			lastError: 'Internal Server Error'
+		});
+	});
+
+	it('marks a mutation failed once a 5xx reaches the max attempt count', async () => {
+		vi.mocked(apiPatch).mockRejectedValue(new ApiError(500, 'Internal Server Error'));
 		const id = await enqueueMutation({
 			entityType: 'item',
 			op: 'update',
