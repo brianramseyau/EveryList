@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -6,12 +7,24 @@
 	import type { ResolvedPathname } from '$app/types';
 	import { Button, Label, Input, Helper } from 'flowbite-svelte';
 	import { login } from '$lib/api/auth';
+	import { fetchMeta } from '$lib/api/meta';
 	import { ApiError } from '$lib/api/client';
 
 	let email = $state('');
 	let password = $state('');
 	let error = $state<string | null>(null);
 	let submitting = $state(false);
+	// Defaults to shown: a failed meta fetch shouldn't hide a legitimate signup
+	// flow, and the API itself still enforces the real check on submit either way.
+	let publicSignupEnabled = $state(true);
+
+	onMount(async () => {
+		try {
+			({ publicSignupEnabled } = await fetchMeta());
+		} catch {
+			// Keep the default (shown) — see comment above.
+		}
+	});
 
 	// After accepting a join link while logged out, `next` sends the user
 	// back to /join/[token] instead of the default /lists landing. This is a
@@ -90,8 +103,10 @@
 		</div>
 	</form>
 
-	<p class="text-sm text-gray-600 dark:text-gray-300">
-		Don't have an account?
-		<a href={signupHref} class="text-primary-700 underline dark:text-primary-400">Sign up</a>
-	</p>
+	{#if publicSignupEnabled}
+		<p class="text-sm text-gray-600 dark:text-gray-300">
+			Don't have an account?
+			<a href={signupHref} class="text-primary-700 underline dark:text-primary-400">Sign up</a>
+		</p>
+	{/if}
 </main>

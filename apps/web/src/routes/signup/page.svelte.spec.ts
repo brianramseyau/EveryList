@@ -7,15 +7,23 @@ const mockPageState = vi.hoisted(() => ({ url: { searchParams: new URLSearchPara
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/state', () => ({ page: mockPageState }));
 vi.mock('$lib/api/auth', () => ({ signup: vi.fn() }));
+vi.mock('$lib/api/meta', () => ({ fetchMeta: vi.fn() }));
 
 const { goto } = await import('$app/navigation');
 const { signup } = await import('$lib/api/auth');
+const { fetchMeta } = await import('$lib/api/meta');
 const SignupPage = (await import('./+page.svelte')).default;
 
 describe('Signup +page.svelte', () => {
 	beforeEach(() => {
 		mockPageState.url.searchParams = new URLSearchParams();
 		vi.mocked(goto).mockResolvedValue(undefined);
+		vi.mocked(fetchMeta).mockResolvedValue({
+			version: 'nightly',
+			commit: 'abc123',
+			builtAt: '2026-08-01T00:00:00.000Z',
+			publicSignupEnabled: true
+		});
 	});
 
 	afterEach(() => {
@@ -169,6 +177,61 @@ describe('Signup +page.svelte', () => {
 		await expect
 			.element(page.getByText('Something went wrong. Please try again.'))
 			.toBeInTheDocument();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('redirects to /login without rendering the form when public signup is disabled', async () => {
+		vi.mocked(fetchMeta).mockResolvedValue({
+			version: 'nightly',
+			commit: 'abc123',
+			builtAt: '2026-08-01T00:00:00.000Z',
+			publicSignupEnabled: false
+		});
+
+		render(SignupPage);
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(goto).toHaveBeenCalledWith('/login', { replaceState: true });
+		await expect.element(page.getByLabelText('Email')).not.toBeInTheDocument();
+	});
+
+	it('carries the next param when redirecting to /login', async () => {
+		mockPageState.url.searchParams = new URLSearchParams({ next: '/lists' });
+		vi.mocked(fetchMeta).mockResolvedValue({
+			version: 'nightly',
+			commit: 'abc123',
+			builtAt: '2026-08-01T00:00:00.000Z',
+			publicSignupEnabled: false
+		});
+
+		render(SignupPage);
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(goto).toHaveBeenCalledWith('/login?next=%2Flists', { replaceState: true });
+	});
+
+	it('still renders the form via an invite token even when public signup is disabled', async () => {
+		mockPageState.url.searchParams = new URLSearchParams({ next: '/join/abc123' });
+		vi.mocked(fetchMeta).mockResolvedValue({
+			version: 'nightly',
+			commit: 'abc123',
+			builtAt: '2026-08-01T00:00:00.000Z',
+			publicSignupEnabled: false
+		});
+
+		render(SignupPage);
+
+		await expect.element(page.getByLabelText('Email')).toBeInTheDocument();
+		expect(fetchMeta).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('renders the form when the meta fetch fails (fails open)', async () => {
+		vi.mocked(fetchMeta).mockRejectedValue(new Error('network down'));
+
+		render(SignupPage);
+
+		await expect.element(page.getByLabelText('Email')).toBeInTheDocument();
 		expect(goto).not.toHaveBeenCalled();
 	});
 });
