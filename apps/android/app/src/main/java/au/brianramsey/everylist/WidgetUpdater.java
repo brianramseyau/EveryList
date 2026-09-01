@@ -86,9 +86,12 @@ public class WidgetUpdater {
             prefs.setRetryCount(0);
             cancelPendingRetry(context, appWidgetId);
         } catch (IOException e) {
-            prefs.setLastError(context.getString(R.string.widget_offline_note));
-            failed = true;
-            scheduleRetry(context, prefs, appWidgetId);
+            // Stay quiet through the retry backoff — a blip shouldn't flash an error over a still-good
+            // snapshot. Only surface it once retries are exhausted, per RETRY_MAX_ATTEMPTS.
+            if (scheduleRetry(context, prefs, appWidgetId)) {
+                prefs.setLastError(context.getString(R.string.widget_offline_note));
+                failed = true;
+            }
         }
 
         render(context, manager, appWidgetId, prefs, failed);
@@ -176,17 +179,21 @@ public class WidgetUpdater {
     }
 
     /** Records the failed attempt and, while under {@link #RETRY_MAX_ATTEMPTS}, arms an alarm to
-     *  re-run {@link EveryListWidget#ACTION_REFRESH} after an exponentially growing delay. */
-    private static void scheduleRetry(Context context, WidgetPrefs prefs, int appWidgetId) {
+     *  re-run {@link EveryListWidget#ACTION_REFRESH} after an exponentially growing delay.
+     *
+     *  @return true once the backoff is exhausted (attempts used up, no further alarm armed) —
+     *      the caller's cue that this failure is no longer transient and should be shown. */
+    private static boolean scheduleRetry(Context context, WidgetPrefs prefs, int appWidgetId) {
         int attempt = prefs.getRetryCount() + 1;
         prefs.setRetryCount(attempt);
-        if (attempt > RETRY_MAX_ATTEMPTS) return;
+        if (attempt > RETRY_MAX_ATTEMPTS) return true;
 
         long delayMs = Math.min(RETRY_BASE_DELAY_MS << (attempt - 1), RETRY_MAX_DELAY_MS);
         AlarmManager alarmManager = context.getSystemService(AlarmManager.class);
-        if (alarmManager == null) return;
+        if (alarmManager == null) return true;
         alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
             SystemClock.elapsedRealtime() + delayMs, retryPendingIntent(context, appWidgetId));
+        return false;
     }
 
     static void cancelPendingRetry(Context context, int appWidgetId) {
