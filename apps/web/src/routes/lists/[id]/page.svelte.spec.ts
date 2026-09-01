@@ -409,7 +409,7 @@ describe('List detail +page.svelte', () => {
 		expect(names).toEqual(['Milk', 'Bananas']);
 
 		// Neither item has a price set, so the progress strip's total is hidden.
-		await expect.element(page.getByText('1 of 2 done')).toBeInTheDocument();
+		await expect.element(page.getByText('1 of 2 remaining')).toBeInTheDocument();
 		await expect.element(page.getByText(/^Total:/)).not.toBeInTheDocument();
 	});
 
@@ -1345,12 +1345,12 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
-		await expect.element(page.getByText('0 of 2 done')).toBeInTheDocument();
+		await expect.element(page.getByText('2 of 2 remaining')).toBeInTheDocument();
 
 		await page.getByRole('checkbox', { name: 'Bananas' }).click();
 
 		expect(updateItem).toHaveBeenCalledWith(1, 100, { checked: true });
-		await expect.element(page.getByText('1 of 2 done')).toBeInTheDocument();
+		await expect.element(page.getByText('1 of 2 remaining')).toBeInTheDocument();
 		// Bread stays unchecked, proving the map only updates the toggled item.
 		await expect.element(page.getByRole('checkbox', { name: 'Bread' })).not.toBeChecked();
 		expect(refreshBadgeCount).toHaveBeenCalled();

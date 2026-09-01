@@ -211,6 +211,24 @@ describe('Settings +page.svelte', () => {
 		document.documentElement.classList.remove('dark');
 	});
 
+	it('switches the list progress count preference and reflects the choice in the radio group', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+		render(SettingsPage);
+
+		const doneOption = page.getByRole('radio', { name: 'Completed' });
+		const remainingOption = page.getByRole('radio', { name: 'Remaining' });
+		await expect.element(remainingOption).toHaveAttribute('aria-checked', 'true');
+		await expect.element(doneOption).toHaveAttribute('aria-checked', 'false');
+
+		await doneOption.click();
+
+		await expect.element(doneOption).toHaveAttribute('aria-checked', 'true');
+		expect(window.localStorage.getItem('everylist:progressDisplay')).toBe('done');
+
+		window.localStorage.removeItem('everylist:progressDisplay');
+	});
+
 	it('switches the accent color preference and reflects the choice in the radio group', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
