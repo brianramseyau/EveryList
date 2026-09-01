@@ -182,8 +182,7 @@
 	}
 
 	async function confirmCategoryLearningOff() {
-		if (!list) return;
-		await toggleFeature('useCategoryLearning', list);
+		await toggleFeature('useCategoryLearning', list!);
 		confirmingCategoryLearningOff = false;
 	}
 
