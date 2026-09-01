@@ -29,6 +29,7 @@
 	let draftColor = $state('#3b82f6');
 	let draftFolderId = $state<number | null>(null);
 	let savingName = $state(false);
+	let confirmingCategoryLearningOff = $state(false);
 	let confirmingDelete = $state(false);
 	let deleting = $state(false);
 	let settingPasscode = $state(false);
@@ -166,6 +167,24 @@
 	// ListDto's field comments).
 	async function toggleFeature(field: BooleanFeatureField, current: ListDto) {
 		await onupdate({ [field]: current[field] === false });
+	}
+
+	// Turning this off makes the server permanently delete everything it's
+	// learned for this list (see lists_controller.ts), so unlike the other
+	// feature toggles above, turning it off goes through a confirm step;
+	// turning it back on is harmless and applies immediately.
+	function handleCategoryLearningToggle(current: ListDto) {
+		if (current.useCategoryLearning !== false) {
+			confirmingCategoryLearningOff = true;
+		} else {
+			void toggleFeature('useCategoryLearning', current);
+		}
+	}
+
+	async function confirmCategoryLearningOff() {
+		if (!list) return;
+		await toggleFeature('useCategoryLearning', list);
+		confirmingCategoryLearningOff = false;
 	}
 
 	async function savePasscode(event: SubmitEvent) {
@@ -308,13 +327,36 @@
 			</Toggle>
 
 			{#if list.useCategories !== false}
-				<Toggle
-					checked={list.useCategoryLearning !== false}
-					onchange={() => toggleFeature('useCategoryLearning', list!)}
-					class="ml-4 w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
-				>
-					Learn item categories
-				</Toggle>
+				{#if confirmingCategoryLearningOff}
+					<div
+						class="ml-4 flex flex-col gap-2 rounded-lg border border-red-200 p-3 dark:border-red-900"
+					>
+						<p class="text-sm text-red-600 dark:text-red-400">
+							Turning this off deletes everything this list has learned about item
+							categories. This can't be undone.
+						</p>
+						<div class="flex gap-2">
+							<Button size="sm" color="red" onclick={confirmCategoryLearningOff}>
+								Confirm turn off
+							</Button>
+							<Button
+								size="sm"
+								color="alternative"
+								onclick={() => (confirmingCategoryLearningOff = false)}
+							>
+								Cancel
+							</Button>
+						</div>
+					</div>
+				{:else}
+					<Toggle
+						checked={list.useCategoryLearning !== false}
+						onchange={() => handleCategoryLearningToggle(list!)}
+						class="ml-4 w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
+					>
+						Learn item categories
+					</Toggle>
+				{/if}
 			{/if}
 
 			<Toggle
