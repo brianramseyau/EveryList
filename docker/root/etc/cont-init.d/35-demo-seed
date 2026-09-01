@@ -1,0 +1,13 @@
+#!/command/with-contenv sh
+# Seeds the fixed demo/review accounts (demo@example.com / sharing@example.com)
+# on every boot — a no-op unless DEMO_SEED_ENABLED=true is set (only true on
+# the public demo instance used for app-store review) and the database is
+# genuinely fresh. See apps/api/commands/demo_seed.ts for the actual guards
+# and seeded data; this script just always invokes it after migrations
+# (30-migrate) so a demo instance's replaced/fresh /config volume seeds
+# itself with zero manual steps.
+set -e
+
+echo "[35-demo-seed] checking demo seed"
+s6-setuidgid appuser node /app/build/ace.js demo:seed
+echo "[35-demo-seed] demo seed check complete"
