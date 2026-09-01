@@ -360,11 +360,32 @@ describe('List settings +page.svelte', () => {
 		const learning = page.getByRole('checkbox', { name: 'Learn item categories' });
 		await expect.element(learning).toBeChecked();
 
+		// Turning off is destructive server-side, so it goes through a confirm
+		// step rather than applying immediately.
 		await learning.click();
+		expect(updateList).not.toHaveBeenCalledWith(1, { useCategoryLearning: false });
+		await expect
+			.element(page.getByRole('button', { name: 'Confirm turn off' }))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Confirm turn off' }).click();
 		expect(updateList).toHaveBeenCalledWith(1, { useCategoryLearning: false });
 
 		await learning.click();
 		expect(updateList).toHaveBeenCalledWith(1, { useCategoryLearning: true });
+	});
+
+	it('cancels turning off the learned-categories sub-toggle without updating the list', async () => {
+		vi.mocked(updateList).mockImplementation(async (_id, patch) => ({ ...list, ...patch }));
+
+		render(SettingsPage);
+		const learning = page.getByRole('checkbox', { name: 'Learn item categories' });
+		await learning.click();
+		await expect.element(page.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+		expect(updateList).not.toHaveBeenCalled();
+		await expect.element(learning).toBeChecked();
 	});
 
 	it('hides the learned-categories sub-toggle when categories are off', async () => {
