@@ -413,6 +413,18 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText(/^Total:/)).not.toBeInTheDocument();
 	});
 
+	it('shows the done count instead of remaining when that display preference is set', async () => {
+		window.localStorage.setItem('everylist:progressDisplay', 'done');
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, checked: true }),
+			makeItem({ id: 101, name: 'Bread', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('1 of 2 done')).toBeInTheDocument();
+	});
+
 	it("sorts items alphabetically within a category when itemSortOrder is 'alphabetical'", async () => {
 		vi.mocked(fetchList).mockResolvedValue({ ...list, itemSortOrder: 'alphabetical' });
 		vi.mocked(fetchItems).mockResolvedValue([
