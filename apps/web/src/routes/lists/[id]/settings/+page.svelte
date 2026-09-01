@@ -261,7 +261,9 @@
 		{/if}
 
 		<form class="flex flex-col gap-3" onsubmit={saveSettings}>
-			<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">List settings</span>
+			<h2 class="text-sm font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+				List settings
+			</h2>
 
 			<div class="flex flex-col gap-1">
 				<span class="text-xs text-gray-500 dark:text-gray-400">Name</span>
@@ -315,7 +317,9 @@
 		</button>
 
 		<div class="flex flex-col gap-2">
-			<span class="text-xs font-semibold text-gray-600 dark:text-gray-400">Features</span>
+			<h2 class="text-sm font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
+				Features
+			</h2>
 
 			<Toggle
 				checked={list.useCategories !== false}
@@ -363,7 +367,7 @@
 				onchange={() => toggleFeature('useShops', list!)}
 				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
 			>
-				Shops
+				Stores
 			</Toggle>
 
 			{#if list.useShops !== false}

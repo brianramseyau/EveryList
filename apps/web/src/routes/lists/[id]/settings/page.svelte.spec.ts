@@ -399,11 +399,11 @@ describe('List settings +page.svelte', () => {
 			.not.toBeInTheDocument();
 	});
 
-	it('toggles Shops, Favorites, Recently deleted, Quantity, and Price, revealing their sub-toggles', async () => {
+	it('toggles Stores, Favorites, Recently deleted, Quantity, and Price, revealing their sub-toggles', async () => {
 		vi.mocked(updateList).mockImplementation(async (_id, patch) => ({ ...list, ...patch }));
 
 		render(SettingsPage);
-		await expect.element(page.getByRole('checkbox', { name: 'Shops' })).toBeChecked();
+		await expect.element(page.getByRole('checkbox', { name: 'Stores' })).toBeChecked();
 		await expect
 			.element(page.getByRole('checkbox', { name: 'Show store name in list' }))
 			.toBeInTheDocument();
@@ -411,7 +411,7 @@ describe('List settings +page.svelte', () => {
 			.element(page.getByRole('checkbox', { name: 'Show price in list' }))
 			.toBeInTheDocument();
 
-		await page.getByRole('checkbox', { name: 'Shops' }).click();
+		await page.getByRole('checkbox', { name: 'Stores' }).click();
 		expect(updateList).toHaveBeenCalledWith(1, { useShops: false });
 		await expect
 			.element(page.getByRole('checkbox', { name: 'Show store name in list' }))
