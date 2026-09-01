@@ -1,5 +1,6 @@
 import type List from '#models/list'
 import Category from '#models/category'
+import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import { broadcastSync } from '#services/sync_broadcaster'
 import logger from '@adonisjs/core/services/logger'
 
@@ -29,18 +30,24 @@ const STARTER_CATEGORIES = [
   { name: 'Other', icon: 'dotsHorizontalCircle' },
 ] as const
 
-export async function seedStarterCategories(list: List): Promise<Category[]> {
+export async function seedStarterCategories(
+  list: List,
+  client?: QueryClientContract
+): Promise<Category[]> {
   const categories: Category[] = []
 
   for (const [index, starter] of STARTER_CATEGORIES.entries()) {
-    const category = await Category.create({
-      listId: list.id,
-      name: starter.name,
-      icon: starter.icon,
-      sortOrder: index,
-      isDefault: false,
-      version: 1,
-    })
+    const category = await Category.create(
+      {
+        listId: list.id,
+        name: starter.name,
+        icon: starter.icon,
+        sortOrder: index,
+        isDefault: false,
+        version: 1,
+      },
+      { client }
+    )
     categories.push(category)
 
     await broadcastSync({
@@ -49,6 +56,7 @@ export async function seedStarterCategories(list: List): Promise<Category[]> {
       entityId: category.id,
       op: 'create',
       version: category.version,
+      client,
     })
   }
 

@@ -62,6 +62,7 @@ export default class DemoSeed extends BaseCommand {
       return
     }
 
+    const { default: db } = await import('@adonisjs/lucid/services/db')
     const { DateTime } = await import('luxon')
     const { default: User } = await import('#models/user')
     const { default: ListMember } = await import('#models/list_member')
@@ -81,56 +82,78 @@ export default class DemoSeed extends BaseCommand {
 
     this.logger.info('demo:seed: seeding demo accounts')
 
-    const main = await User.create(MAIN_ACCOUNT)
-    const sharing = await User.create(SHARING_ACCOUNT)
+    // All writes share one transaction: a failure partway through (e.g. the
+    // second createOwnedList call) would otherwise leave real user rows
+    // behind, and the userCount guard above would then treat that partial
+    // state as "already seeded" and refuse to retry on the next boot.
+    await db.transaction(async (trx) => {
+      const main = await User.create(MAIN_ACCOUNT, { client: trx })
+      const sharing = await User.create(SHARING_ACCOUNT, { client: trx })
 
-    for (const owner of [main, sharing]) {
-      await createOwnedList({
-        ownerId: owner.id,
-        ...TODOS_LIST,
-        useCategories: false,
-        useShops: false,
-        useFavorites: false,
-        useRecent: false,
-        useQuantity: false,
-        usePrice: false,
-        seedStarterTodoItems: true,
+      for (const owner of [main, sharing]) {
+        await createOwnedList({
+          ownerId: owner.id,
+          ...TODOS_LIST,
+          useCategories: false,
+          useShops: false,
+          useFavorites: false,
+          useRecent: false,
+          useQuantity: false,
+          usePrice: false,
+          seedStarterTodoItems: true,
+          client: trx,
+        })
+        await createOwnedList({
+          ownerId: owner.id,
+          ...STARTER_LIST,
+          seedStarterCategories: true,
+          client: trx,
+        })
+      }
+
+      const sharedList = await createOwnedList({ ownerId: sharing.id, ...SHARED_LIST, client: trx })
+      await Item.create(
+        {
+          listId: sharedList.id,
+          createdBy: sharing.id,
+          name: 'Tent',
+          checked: false,
+          sortOrder: 0,
+          version: 1,
+        },
+        { client: trx }
+      )
+      await Item.create(
+        {
+          listId: sharedList.id,
+          createdBy: sharing.id,
+          name: 'Sleeping bags',
+          checked: false,
+          sortOrder: 1,
+          version: 1,
+        },
+        { client: trx }
+      )
+
+      const now = DateTime.now()
+      await ListMember.create(
+        {
+          listId: sharedList.id,
+          userId: main.id,
+          role: 'viewer',
+          invitedAt: now,
+          acceptedAt: now,
+          sortOrder: await nextListMemberSortOrder(main.id, trx),
+        },
+        { client: trx }
+      )
+      await broadcastSync({
+        listId: sharedList.id,
+        entityType: 'list',
+        entityId: sharedList.id,
+        op: 'update',
+        client: trx,
       })
-      await createOwnedList({ ownerId: owner.id, ...STARTER_LIST, seedStarterCategories: true })
-    }
-
-    const sharedList = await createOwnedList({ ownerId: sharing.id, ...SHARED_LIST })
-    await Item.create({
-      listId: sharedList.id,
-      createdBy: sharing.id,
-      name: 'Tent',
-      checked: false,
-      sortOrder: 0,
-      version: 1,
-    })
-    await Item.create({
-      listId: sharedList.id,
-      createdBy: sharing.id,
-      name: 'Sleeping bags',
-      checked: false,
-      sortOrder: 1,
-      version: 1,
-    })
-
-    const now = DateTime.now()
-    await ListMember.create({
-      listId: sharedList.id,
-      userId: main.id,
-      role: 'viewer',
-      invitedAt: now,
-      acceptedAt: now,
-      sortOrder: await nextListMemberSortOrder(main.id),
-    })
-    await broadcastSync({
-      listId: sharedList.id,
-      entityType: 'list',
-      entityId: sharedList.id,
-      op: 'update',
     })
 
     this.logger.success('demo:seed: seeded demo@example.com and sharing@example.com')

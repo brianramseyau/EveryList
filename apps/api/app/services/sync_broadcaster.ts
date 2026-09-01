@@ -2,6 +2,7 @@ import { DateTime } from 'luxon'
 import SyncEvent from '#models/sync_event'
 import type { SyncEntityType, SyncOp } from '#models/sync_event'
 import type Store from '#models/store'
+import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import transmit from '@adonisjs/transmit/services/main'
 import logger from '@adonisjs/core/services/logger'
 
@@ -15,6 +16,15 @@ export interface SyncBroadcastInput {
   payload?: Record<string, unknown>
   /** Omitted only for batch events (e.g. bulk import) that don't map to one row's version. */
   version?: number
+  /**
+   * Runs the `SyncEvent` write on this transaction client instead of the
+   * default connection. Required (not just nice-to-have) for any caller
+   * inside an open `db.transaction()` — the SQLite pool is effectively
+   * single-connection, so acquiring a second, untransacted connection from
+   * inside an open transaction deadlocks waiting for the first to free up.
+   * See #commands/demo_seed for the caller that hit this.
+   */
+  client?: QueryClientContract
 }
 
 export interface SyncBroadcaster {
@@ -24,14 +34,17 @@ export interface SyncBroadcaster {
 /** Persists a `SyncEvent` row and pushes it over the list's Transmit channel — see PLAN_00_FOUNDATIONAL_PLAN.md §8. */
 export class TransmitSyncBroadcaster implements SyncBroadcaster {
   async broadcast(input: SyncBroadcastInput): Promise<void> {
-    await SyncEvent.create({
-      listId: input.listId,
-      entityType: input.entityType,
-      entityId: input.entityId,
-      op: input.op,
-      occurredAt: DateTime.now(),
-      payload: input.payload ?? null,
-    })
+    await SyncEvent.create(
+      {
+        listId: input.listId,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        op: input.op,
+        occurredAt: DateTime.now(),
+        payload: input.payload ?? null,
+      },
+      { client: input.client }
+    )
 
     const channel = `list/${input.listId}`
     // Subscriber count is captured *before* the broadcast call for
