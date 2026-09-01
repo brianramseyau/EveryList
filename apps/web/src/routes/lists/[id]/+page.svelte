@@ -23,6 +23,7 @@
 	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import { markListOrigin, rememberListScroll, consumeListScroll } from '$lib/nav-direction';
 	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
+	import { getProgressDisplayPreference, type ProgressDisplayPreference } from '$lib/listProgress';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { longPress } from '$lib/actions/long-press';
 	import { anchorPanel } from '$lib/actions/anchor-panel';
@@ -134,6 +135,7 @@
 	// they're visible at all, defaulting to shown. Persisted per list/device
 	// via $lib/list-prefs so it survives reload and revisiting the list.
 	let showChecked = $state(true);
+	let progressDisplay = $state<ProgressDisplayPreference>('remaining');
 
 	let unsubscribeRealtime: (() => void) | null = null;
 	let unsubscribeConflict: (() => void) | null = null;
@@ -323,7 +325,13 @@
 
 	const totalText = $derived(`Total: ${formatPrice(totalCents)}`);
 
-	const progressText = $derived(`${checkedItems.length} of ${visibleItems.length} done`);
+	const progressText = $derived.by(() => {
+		if (progressDisplay === 'remaining') {
+			const remaining = visibleItems.length - checkedItems.length;
+			return `${remaining} of ${visibleItems.length} remaining`;
+		}
+		return `${checkedItems.length} of ${visibleItems.length} done`;
+	});
 
 	async function loadAll() {
 		// Only the very first load (before `list` exists) should show the loading
@@ -386,6 +394,7 @@
 		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		showChecked = getShowChecked(listId);
+		progressDisplay = getProgressDisplayPreference();
 		document.addEventListener('visibilitychange', lockOnHide);
 		// A back-navigation into this page (see nav-direction.ts's
 		// `rememberListScroll`) has SvelteKit apply its own restored scroll

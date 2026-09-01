@@ -11,6 +11,11 @@
 	import { clearToken } from '$lib/api/token';
 	import { clearServerUrl, getServerUrl } from '$lib/api/server-url';
 	import { getThemePreference, setThemePreference, type ThemePreference } from '$lib/theme';
+	import {
+		getProgressDisplayPreference,
+		setProgressDisplayPreference,
+		type ProgressDisplayPreference
+	} from '$lib/listProgress';
 	import { getAccentPreference, setAccentPreference, type AccentPreference } from '$lib/accent';
 	import {
 		canLockOrientation,
@@ -47,6 +52,7 @@
 	let editStartName: string | null = null;
 	let editingName = $state(false);
 	let themePreference = $state<ThemePreference>('automatic');
+	let progressDisplayPreference = $state<ProgressDisplayPreference>('remaining');
 	let accentPreference = $state<AccentPreference>('slate');
 	let orientationPreference = $state<OrientationPreference>('automatic');
 	let canLockOrientationNow = $state(false);
@@ -68,6 +74,11 @@
 		{ value: 'dark', label: 'Dark' }
 	];
 
+	const progressDisplayOptions: { value: ProgressDisplayPreference; label: string }[] = [
+		{ value: 'remaining', label: 'Remaining' },
+		{ value: 'done', label: 'Completed' }
+	];
+
 	const orientationOptions: { value: OrientationPreference; label: string }[] = [
 		{ value: 'automatic', label: 'Auto' },
 		{ value: 'portrait', label: 'Portrait' },
@@ -85,6 +96,11 @@
 	function chooseTheme(preference: ThemePreference) {
 		themePreference = preference;
 		setThemePreference(preference);
+	}
+
+	function chooseProgressDisplay(preference: ProgressDisplayPreference) {
+		progressDisplayPreference = preference;
+		setProgressDisplayPreference(preference);
 	}
 
 	function chooseAccent(preference: AccentPreference) {
@@ -231,6 +247,7 @@
 
 	onMount(async () => {
 		themePreference = getThemePreference();
+		progressDisplayPreference = getProgressDisplayPreference();
 		accentPreference = getAccentPreference();
 		orientationPreference = getOrientationPreference();
 		shakeToUndoEnabled = getShakeToUndoPreference();
@@ -357,6 +374,29 @@
 						aria-checked={themePreference === option.value}
 						onclick={() => chooseTheme(option.value)}
 						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {themePreference ===
+						option.value
+							? 'bg-primary-600 text-white'
+							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+					>
+						{option.label}
+					</button>
+				{/each}
+			</div>
+		</div>
+		<div class="flex items-center justify-between px-4 py-3">
+			<span class="text-sm font-medium">List progress count</span>
+			<div
+				role="radiogroup"
+				aria-label="List progress count"
+				class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
+			>
+				{#each progressDisplayOptions as option (option.value)}
+					<button
+						type="button"
+						role="radio"
+						aria-checked={progressDisplayPreference === option.value}
+						onclick={() => chooseProgressDisplay(option.value)}
+						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {progressDisplayPreference ===
 						option.value
 							? 'bg-primary-600 text-white'
 							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
