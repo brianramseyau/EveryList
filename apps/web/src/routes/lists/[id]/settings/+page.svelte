@@ -332,8 +332,8 @@
 						class="ml-4 flex flex-col gap-2 rounded-lg border border-red-200 p-3 dark:border-red-900"
 					>
 						<p class="text-sm text-red-600 dark:text-red-400">
-							Turning this off deletes everything this list has learned about item
-							categories. This can't be undone.
+							Turning this off deletes everything this list has learned about item categories. This
+							can't be undone.
 						</p>
 						<div class="flex gap-2">
 							<Button size="sm" color="red" onclick={confirmCategoryLearningOff}>
