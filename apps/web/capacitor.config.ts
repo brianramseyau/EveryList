@@ -18,6 +18,21 @@ const config: CapacitorConfig = {
 	},
 	android: {
 		path: '../android'
+	},
+	plugins: {
+		// The app talks to a user-configured, cross-origin server (see server-url.ts) and sends an
+		// `Authorization` header on every authenticated request. That combination forces a CORS
+		// preflight `OPTIONS` round trip before every real request under the WebView's own fetch/XHR
+		// stack. Routing through the native OS HTTP client instead (OkHttp on Android, URLSession on
+		// iOS) skips the browser CORS model entirely — no preflight, ever — since CORS is a
+		// browser-enforced policy that native HTTP clients don't implement. `apiFetch` (client.ts)
+		// and Transmit's subscription create/delete (realtime.ts, which calls plain `fetch`) both
+		// benefit; the actual SSE stream uses `EventSource` directly (transmit-client's
+		// `eventSourceFactory`), which this plugin does not intercept, so realtime behavior is
+		// unaffected either way.
+		CapacitorHttp: {
+			enabled: true
+		}
 	}
 };
 
