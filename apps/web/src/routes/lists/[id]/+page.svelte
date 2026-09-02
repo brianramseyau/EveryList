@@ -361,10 +361,13 @@
 				getCachedStores()
 			]);
 			if (cachedList) {
+				// getCachedCategories/getCachedItems/getCachedStores can only resolve
+				// `undefined` when getDb() has no IndexedDB to hand back — the same gate
+				// getCachedList just passed to get here, so they're guaranteed defined too.
 				list = cachedList;
-				categories = cachedCategories ?? [];
-				items = cachedItems ?? [];
-				stores = cachedStores ?? [];
+				categories = cachedCategories!;
+				items = cachedItems!;
+				stores = cachedStores!;
 				loading = false;
 			} else {
 				loading = true;

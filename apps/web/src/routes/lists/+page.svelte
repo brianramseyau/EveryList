@@ -97,8 +97,11 @@
 		// still shows the placeholder same as before.
 		const [cachedLists, cachedFolders] = await Promise.all([getCachedLists(), getCachedFolders()]);
 		if (cachedLists && cachedLists.length > 0) {
+			// getCachedFolders can only resolve `undefined` when getDb() has no IndexedDB
+			// to hand back — the same gate cachedLists just passed to get here, so it's
+			// guaranteed defined too.
 			lists = cachedLists;
-			folders = cachedFolders ?? [];
+			folders = cachedFolders!;
 			loading = false;
 		} else {
 			loading = true;
