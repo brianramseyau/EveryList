@@ -103,6 +103,10 @@
 			lists = cachedLists;
 			folders = cachedFolders!;
 			loading = false;
+			// A previous loadAll's network failure may have left an error showing —
+			// it no longer does now that cached data is on screen. If the
+			// revalidation below also fails, its catch sets it again.
+			error = null;
 		} else {
 			loading = true;
 		}
