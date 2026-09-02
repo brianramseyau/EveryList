@@ -2,7 +2,7 @@ import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { setToken, clearToken } from '$lib/api/token';
-import { resetDbForTesting } from '$lib/offline/db';
+import { getDb, resetDbForTesting } from '$lib/offline/db';
 import type { SortableReorderParams } from '$lib/actions/sortable-reorder';
 
 // See the item-list page's spec for why this is mocked: SortableJS's own
@@ -133,6 +133,37 @@ describe('Lists +page.svelte', () => {
 		await expect.element(page.getByText('Archived')).toBeInTheDocument();
 		await expect.element(page.getByText('3 items')).toBeInTheDocument();
 		await expect.element(page.getByText('0 items')).toBeInTheDocument();
+	});
+
+	it('paints instantly from the Dexie cache, without waiting on the network revalidation', async () => {
+		setToken('test-token');
+		const db = getDb()!;
+		await db.lists.put({
+			id: 1,
+			name: 'Groceries',
+			color: '#3b82f6',
+			icon: null,
+			ownerId: 1,
+			folderId: null,
+			badgeExcluded: false,
+			passcodeHash: null,
+			archived: false,
+			itemCount: 3,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			version: 1,
+			_localSortOrder: 0
+		});
+		// Never resolves during this test — proves the cached paint above didn't wait on it.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(() => new Promise(() => {}))
+		);
+
+		render(ListsPage);
+
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+		await expect.element(page.getByText('Loading…')).not.toBeInTheDocument();
 	});
 
 	it('shows a lock badge only on passcode-protected lists', async () => {

@@ -15,29 +15,29 @@ import { withCacheFallback } from './cache-fallback';
 
 export type { StoreCategoryOrderDto };
 
+/** Every cached store across any list — see `getCachedItems` in items.ts for why an instant,
+ * network-free read is safe to paint from directly. Stores aren't list-scoped in Dexie
+ * (`StoreDto` has no `listId`), same as `fetchStores`'s own fallback below. */
+export async function getCachedStores(): Promise<StoreDto[] | undefined> {
+	const db = getDb();
+	if (!db) return undefined;
+	return db.stores.filter((store) => !store.deletedAt).toArray();
+}
+
 export async function fetchStores(listId: number): Promise<StoreDto[]> {
-	return withCacheFallback(
-		async () => {
-			const stores = await apiGet<StoreDto[]>(`/api/v1/lists/${listId}/stores`);
-			// Cache the server's copies into Dexie so a later offline edit can read the row's
-			// `version` for its `expectedVersion` — see fetchItems in items.ts for the full rationale.
-			const db = getDb();
-			if (db) {
-				const ids = stores.map((store) => store.id);
-				const existing = await db.stores.bulkGet(ids);
-				const toPut = stores.filter((_store, index) => !existing[index]?._dirty);
-				if (toPut.length > 0) await db.stores.bulkPut(toPut);
-			}
-			return stores;
-		},
-		async () => {
-			const db = getDb();
-			if (!db) return undefined;
-			// Stores aren't list-scoped in Dexie (`StoreDto` has no `listId`) — the cache holds
-			// every store this client has ever fetched across any list.
-			return db.stores.filter((store) => !store.deletedAt).toArray();
+	return withCacheFallback(async () => {
+		const stores = await apiGet<StoreDto[]>(`/api/v1/lists/${listId}/stores`);
+		// Cache the server's copies into Dexie so a later offline edit can read the row's
+		// `version` for its `expectedVersion` — see fetchItems in items.ts for the full rationale.
+		const db = getDb();
+		if (db) {
+			const ids = stores.map((store) => store.id);
+			const existing = await db.stores.bulkGet(ids);
+			const toPut = stores.filter((_store, index) => !existing[index]?._dirty);
+			if (toPut.length > 0) await db.stores.bulkPut(toPut);
 		}
-	);
+		return stores;
+	}, getCachedStores);
 }
 
 /** Attaches an existing store (storeId) or creates + attaches a new one (name). Attaching by id

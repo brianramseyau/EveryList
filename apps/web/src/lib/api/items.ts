@@ -8,6 +8,18 @@ import { dequeueMutation, findPendingMutation } from '$lib/offline/sync-queue';
 import { withCacheFallback } from './cache-fallback';
 /* v8 ignore stop */
 
+/** This list's cached items, sorted the same way the network response is — read directly from
+ * Dexie with no network round trip. Already includes any unacked local edits (`_dirty` rows live
+ * in this same table, see `fetchItems` below), so it's a safe instant paint for a page that's
+ * about to revalidate via `fetchItems` right after — the caller's own optimistic changes won't
+ * flash away and reappear once the real fetch lands. */
+export async function getCachedItems(listId: number): Promise<ItemDto[] | undefined> {
+	const db = getDb();
+	if (!db) return undefined;
+	const rows = await db.items.filter((item) => item.listId === listId && !item.deletedAt).toArray();
+	return rows.sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
 export async function fetchItems(listId: number): Promise<ItemDto[]> {
 	return withCacheFallback(
 		async () => {
@@ -41,14 +53,7 @@ export async function fetchItems(listId: number): Promise<ItemDto[]> {
 			}
 			return [...byId.values()];
 		},
-		async () => {
-			const db = getDb();
-			if (!db) return undefined;
-			const rows = await db.items
-				.filter((item) => item.listId === listId && !item.deletedAt)
-				.toArray();
-			return rows.sort((a, b) => a.sortOrder - b.sortOrder);
-		}
+		() => getCachedItems(listId)
 	);
 }
 

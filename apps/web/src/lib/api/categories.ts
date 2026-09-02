@@ -8,6 +8,17 @@ import { getDb } from '$lib/offline/db';
 import { withCacheFallback } from './cache-fallback';
 /* v8 ignore stop */
 
+/** This list's cached categories — see `getCachedItems` in items.ts for why an instant,
+ * network-free read is safe to paint from directly. */
+export async function getCachedCategories(listId: number): Promise<CategoryDto[] | undefined> {
+	const db = getDb();
+	if (!db) return undefined;
+	const rows = await db.categories
+		.filter((category) => category.listId === listId && !category.deletedAt)
+		.toArray();
+	return rows.sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
 export async function fetchCategories(listId: number): Promise<CategoryDto[]> {
 	return withCacheFallback(
 		async () => {
@@ -23,14 +34,7 @@ export async function fetchCategories(listId: number): Promise<CategoryDto[]> {
 			}
 			return categories;
 		},
-		async () => {
-			const db = getDb();
-			if (!db) return undefined;
-			const rows = await db.categories
-				.filter((category) => category.listId === listId && !category.deletedAt)
-				.toArray();
-			return rows.sort((a, b) => a.sortOrder - b.sortOrder);
-		}
+		() => getCachedCategories(listId)
 	);
 }
 
