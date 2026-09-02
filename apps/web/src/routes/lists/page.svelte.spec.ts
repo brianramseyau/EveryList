@@ -135,6 +135,67 @@ describe('Lists +page.svelte', () => {
 		await expect.element(page.getByText('0 items')).toBeInTheDocument();
 	});
 
+	it('prevents the browser context menu on a long-press of a list card', async () => {
+		setToken('test-token');
+		stubFetchByUrl({
+			lists: [
+				{
+					id: 1,
+					name: 'Groceries',
+					archived: false,
+					color: '#3b82f6',
+					icon: null,
+					folderId: null,
+					itemCount: 0
+				}
+			]
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		const card = page.getByText('Groceries').element().closest('a')!;
+		const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+		card.dispatchEvent(event);
+
+		expect(event.defaultPrevented).toBe(true);
+	});
+
+	it('hides the drag handle on a coarse-pointer device', async () => {
+		const matchMediaSpy = vi.spyOn(window, 'matchMedia').mockReturnValue({
+			matches: true,
+			media: '(pointer: coarse)',
+			onchange: null,
+			addListener: vi.fn(),
+			removeListener: vi.fn(),
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			dispatchEvent: vi.fn()
+		} as unknown as MediaQueryList);
+		setToken('test-token');
+		stubFetchByUrl({
+			lists: [
+				{
+					id: 1,
+					name: 'Groceries',
+					archived: false,
+					color: '#3b82f6',
+					icon: null,
+					folderId: null,
+					itemCount: 0
+				}
+			]
+		});
+
+		render(ListsPage);
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+
+		const card = page.getByText('Groceries').element().closest('a')!;
+		expect(card.querySelector('.w-6')).toBeNull();
+
+		matchMediaSpy.mockRestore();
+	});
+
 	it('paints instantly from the Dexie cache, without waiting on the network revalidation', async () => {
 		setToken('test-token');
 		const db = getDb()!;
