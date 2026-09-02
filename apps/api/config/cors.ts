@@ -59,9 +59,16 @@ const corsConfig = defineConfig({
   credentials: true,
 
   /**
-   * Cache CORS preflight response for N seconds.
+   * Cache CORS preflight response for N seconds. Raised from the AdonisJS default of 90s: the
+   * native/desktop clients (see the `origin` predicate above) are cross-origin and send an
+   * `Authorization` header on every request, which forces a preflight `OPTIONS` round trip ahead
+   * of it. A short cache meant that round trip repeated on almost every app reopen even within
+   * the same short session — 24h keeps a given endpoint's preflight valid across a normal day of
+   * use while the WebView process stays alive, without meaningfully weakening the CORS policy
+   * (see the security note above: this only caches "is this origin/header/method combo allowed",
+   * which doesn't change from request to request).
    */
-  maxAge: 90,
+  maxAge: 86400,
 })
 
 export default corsConfig
