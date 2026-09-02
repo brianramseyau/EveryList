@@ -5,8 +5,8 @@
 	import { resolve } from '$app/paths';
 	import type { FolderDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { fetchLists, updateList, reorderLists } from '$lib/api/lists';
-	import { fetchFolders } from '$lib/api/folders';
+	import { fetchLists, getCachedLists, updateList, reorderLists } from '$lib/api/lists';
+	import { fetchFolders, getCachedFolders } from '$lib/api/folders';
 	import { ApiError } from '$lib/api/client';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -87,7 +87,29 @@
 	const unfiledLists = $derived(lists.filter((list) => list.folderId === null));
 
 	async function loadAll() {
-		loading = true;
+		// Paint instantly from Dexie before the network round trip below even starts,
+		// same rationale as the single-list page's loadAll — a re-visit to this page
+		// shouldn't sit on the loading placeholder for data we already have cached.
+		// Gated on a non-empty result (not just "cached row exists") since an empty
+		// array is also what a never-yet-fetched cache looks like — unlike the
+		// single-list page's getCachedList, there's no separate "not cached at all"
+		// signal for a collection read, so a first-ever visit with nothing cached
+		// still shows the placeholder same as before.
+		const [cachedLists, cachedFolders] = await Promise.all([getCachedLists(), getCachedFolders()]);
+		if (cachedLists && cachedLists.length > 0) {
+			// getCachedFolders can only resolve `undefined` when getDb() has no IndexedDB
+			// to hand back — the same gate cachedLists just passed to get here, so it's
+			// guaranteed defined too.
+			lists = cachedLists;
+			folders = cachedFolders!;
+			loading = false;
+			// A previous loadAll's network failure may have left an error showing —
+			// it no longer does now that cached data is on screen. If the
+			// revalidation below also fails, its catch sets it again.
+			error = null;
+		} else {
+			loading = true;
+		}
 		try {
 			[lists, folders] = await Promise.all([fetchLists(), fetchFolders()]);
 			error = null;

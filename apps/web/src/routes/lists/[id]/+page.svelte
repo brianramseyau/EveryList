@@ -9,11 +9,18 @@
 	import { Button, Input } from 'flowbite-svelte';
 	import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { emailExportList, fetchList } from '$lib/api/lists';
-	import { fetchCategories } from '$lib/api/categories';
+	import { emailExportList, fetchList, getCachedList } from '$lib/api/lists';
+	import { fetchCategories, getCachedCategories } from '$lib/api/categories';
 	import { fetchCategoryLearnings } from '$lib/api/category-learnings';
-	import { createItem, deleteItem, fetchItems, undoDeleteItem, updateItem } from '$lib/api/items';
-	import { fetchStoreCategoryOrder, fetchStores } from '$lib/api/stores';
+	import {
+		createItem,
+		deleteItem,
+		fetchItems,
+		getCachedItems,
+		undoDeleteItem,
+		updateItem
+	} from '$lib/api/items';
+	import { fetchStoreCategoryOrder, fetchStores, getCachedStores } from '$lib/api/stores';
 	import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
 	import { isRowDirty, type StoreFilter } from '$lib/offline/db';
 	import { isSelfMutation } from '$lib/offline/self-mutations';
@@ -339,7 +346,37 @@
 		// scroll position. Realtime/conflict/flush-outcome refreshes reuse this same
 		// function while `list` is already populated, and must patch state in place
 		// instead of tearing the DOM down and rebuilding it under the user.
-		if (!list) loading = true;
+		const isFirstLoad = !list;
+		if (isFirstLoad) {
+			// Paint instantly from Dexie (already includes any of this device's own
+			// unacked optimistic edits — see getCachedItems) before the network round
+			// trip below even starts, rather than sitting on the loading placeholder
+			// for a re-visit to a list we've already fetched once. Only actually skips
+			// the placeholder when a cached list row exists; a first-ever visit with
+			// nothing cached yet still shows it same as before.
+			const [cachedList, cachedCategories, cachedItems, cachedStores] = await Promise.all([
+				getCachedList(listId),
+				getCachedCategories(listId),
+				getCachedItems(listId),
+				getCachedStores()
+			]);
+			if (cachedList) {
+				// getCachedCategories/getCachedItems/getCachedStores can only resolve
+				// `undefined` when getDb() has no IndexedDB to hand back — the same gate
+				// getCachedList just passed to get here, so they're guaranteed defined too.
+				list = cachedList;
+				categories = cachedCategories!;
+				items = cachedItems!;
+				stores = cachedStores!;
+				loading = false;
+				// A previous loadAll's network failure may have left an error showing —
+				// it no longer does now that cached data is on screen. If the
+				// revalidation below also fails, its catch sets it again.
+				error = null;
+			} else {
+				loading = true;
+			}
+		}
 		try {
 			[list, categories, items, stores] = await Promise.all([
 				fetchList(listId),

@@ -59,12 +59,14 @@ vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/lists', () => ({
 	fetchList: vi.fn(),
+	getCachedList: vi.fn(),
 	emailExportList: vi.fn()
 }));
-vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
+vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn(), getCachedCategories: vi.fn() }));
 vi.mock('$lib/api/category-learnings', () => ({ fetchCategoryLearnings: vi.fn() }));
 vi.mock('$lib/api/items', () => ({
 	fetchItems: vi.fn(),
+	getCachedItems: vi.fn(),
 	createItem: vi.fn(),
 	deleteItem: vi.fn(),
 	undoDeleteItem: vi.fn(),
@@ -72,7 +74,11 @@ vi.mock('$lib/api/items', () => ({
 	fetchRecentItemNames: vi.fn()
 }));
 vi.mock('$lib/api/favorites', () => ({ fetchFavorites: vi.fn() }));
-vi.mock('$lib/api/stores', () => ({ fetchStoreCategoryOrder: vi.fn(), fetchStores: vi.fn() }));
+vi.mock('$lib/api/stores', () => ({
+	fetchStoreCategoryOrder: vi.fn(),
+	fetchStores: vi.fn(),
+	getCachedStores: vi.fn()
+}));
 vi.mock('$lib/api/selected-store', () => ({
 	getSelectedStoreSettings: vi.fn(),
 	setSelectedStoreSettings: vi.fn()
@@ -85,13 +91,20 @@ vi.mock('$lib/offline/flush', () => ({
 vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 vi.mock('$lib/open-external-link', () => ({ openExternalLink: vi.fn() }));
 
-const { fetchList, emailExportList } = await import('$lib/api/lists');
-const { fetchCategories } = await import('$lib/api/categories');
+const { fetchList, getCachedList, emailExportList } = await import('$lib/api/lists');
+const { fetchCategories, getCachedCategories } = await import('$lib/api/categories');
 const { fetchCategoryLearnings } = await import('$lib/api/category-learnings');
-const { fetchItems, createItem, deleteItem, undoDeleteItem, updateItem, fetchRecentItemNames } =
-	await import('$lib/api/items');
+const {
+	fetchItems,
+	getCachedItems,
+	createItem,
+	deleteItem,
+	undoDeleteItem,
+	updateItem,
+	fetchRecentItemNames
+} = await import('$lib/api/items');
 const { fetchFavorites } = await import('$lib/api/favorites');
-const { fetchStoreCategoryOrder, fetchStores } = await import('$lib/api/stores');
+const { fetchStoreCategoryOrder, fetchStores, getCachedStores } = await import('$lib/api/stores');
 const { getSelectedStoreSettings, setSelectedStoreSettings } =
 	await import('$lib/api/selected-store');
 const { subscribeToList } = await import('$lib/realtime');
@@ -168,11 +181,15 @@ describe('List detail +page.svelte', () => {
 	beforeEach(() => {
 		setToken('test-token');
 		vi.mocked(fetchList).mockResolvedValue(list);
+		vi.mocked(getCachedList).mockResolvedValue(undefined);
 		vi.mocked(fetchCategories).mockResolvedValue([produce, dairy]);
+		vi.mocked(getCachedCategories).mockResolvedValue(undefined);
 		vi.mocked(fetchCategoryLearnings).mockResolvedValue([]);
 		vi.mocked(fetchItems).mockResolvedValue([]);
+		vi.mocked(getCachedItems).mockResolvedValue(undefined);
 		vi.mocked(fetchStoreCategoryOrder).mockResolvedValue([]);
 		vi.mocked(fetchStores).mockResolvedValue([]);
+		vi.mocked(getCachedStores).mockResolvedValue(undefined);
 		vi.mocked(getSelectedStoreSettings).mockResolvedValue({
 			storeId: null,
 			filter: 'store'
@@ -210,6 +227,42 @@ describe('List detail +page.svelte', () => {
 		render(ListDetailPage);
 
 		await expect.element(page.getByText('Failed to load list.')).toBeInTheDocument();
+	});
+
+	it('paints instantly from the Dexie cache, without waiting on the network revalidation', async () => {
+		vi.mocked(getCachedList).mockResolvedValue(list);
+		vi.mocked(getCachedCategories).mockResolvedValue([produce, dairy]);
+		vi.mocked(getCachedItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+		vi.mocked(getCachedStores).mockResolvedValue([]);
+		// Never resolves during this test — proves the cached paint above didn't wait on it.
+		vi.mocked(fetchList).mockReturnValue(new Promise(() => {}));
+		vi.mocked(fetchCategories).mockReturnValue(new Promise(() => {}));
+		vi.mocked(fetchItems).mockReturnValue(new Promise(() => {}));
+		vi.mocked(fetchStores).mockReturnValue(new Promise(() => {}));
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText('Loading…')).not.toBeInTheDocument();
+	});
+
+	it('still shows the loading placeholder on a first-ever visit with nothing cached yet', async () => {
+		let resolveFetch!: (value: typeof list) => void;
+		vi.mocked(fetchList).mockReturnValue(
+			new Promise((resolve) => {
+				resolveFetch = resolve;
+			})
+		);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Loading…')).toBeInTheDocument();
+
+		resolveFetch(list);
+
+		await expect.element(page.getByText('Loading…')).not.toBeInTheDocument();
 	});
 
 	it('sets the document title to the loading fallback before the list resolves, then to the list name', async () => {

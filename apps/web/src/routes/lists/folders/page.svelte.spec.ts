@@ -26,7 +26,12 @@ vi.mock('$lib/actions/sortable-reorder', () => ({
 }));
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/api/folders', () => ({
+// Spread the real module in so its script still evaluates in the browser —
+// a full factory mock makes V8 misattribute the real folders.ts's branches
+// in the merged coverage run (the artifact documented on $lib/api/folders.ts),
+// zeroing getCachedFolders's no-IndexedDB gate.
+vi.mock('$lib/api/folders', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/folders')>()),
 	fetchFolders: vi.fn(),
 	updateFolder: vi.fn(),
 	deleteFolder: vi.fn(),
