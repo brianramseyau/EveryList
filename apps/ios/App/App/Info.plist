@@ -26,6 +26,8 @@
 	<true/>
 	<key>NSMotionUsageDescription</key>
 	<string>EveryList uses motion data to detect a shake gesture for undoing your last change.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>EveryList uses Face ID to unlock passcode-protected lists.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
