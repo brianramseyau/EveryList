@@ -160,6 +160,13 @@
 	// — checked once on mount since input capability doesn't change mid-session.
 	let isCoarsePointer = $state(false);
 
+	// True while a press-and-hold SortableJS drag is armed (set via
+	// sortableReorder's onDragStateChange). The swipe-to-delete/edit gesture
+	// must be impossible while a drag is active — otherwise swiping
+	// horizontally after the drag arms reveals the delete/edit panels and
+	// commits them on drop (see swipe-reveal.ts).
+	let dragActive = $state(false);
+
 	// Checked once on mount, same as isCoarsePointer — gates the check-off
 	// wipe animation and the flip/slide used to close the gap when a checked
 	// item leaves the list (see `toggleChecked` and the item `<li>` below).
@@ -1270,7 +1277,10 @@
 										disabled:
 											list?.itemSortOrder === 'alphabetical' ||
 											list?.itemSortOrder === 'deadline' ||
-											isViewer
+											isViewer,
+										onDragStateChange: (active) => {
+											dragActive = active;
+										}
 									}}
 								>
 									{#each group.items as item (item.id)}
@@ -1300,7 +1310,7 @@
 													: ''}"
 												style="touch-action: pan-y;"
 												use:swipeReveal={{
-													disabled: !isCoarsePointer || isViewer,
+													disabled: !isCoarsePointer || isViewer || dragActive,
 													onCommitRight: () => removeItemWithUndo(item),
 													onCommitLeft: () => {
 														markListOriginAndScroll();
