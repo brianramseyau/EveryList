@@ -255,6 +255,7 @@ export default class ItemsController {
       categoryId,
       storeId: payload.storeId ?? null,
       price: payload.price ?? null,
+      deadline: payload.deadline ?? null,
       checked: false,
       sortOrder: await nextSortOrder(list, { respectInsertPosition: true }),
       createdBy: user.id,

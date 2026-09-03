@@ -209,6 +209,23 @@ describe('sortableReorder', () => {
 		});
 	});
 
+	it('reports drag start and end via onDragStateChange', async () => {
+		const ul = makeList('7');
+		lists.push(ul);
+		const a = makeRow(1);
+		const b = makeRow(2);
+		ul.append(a, b);
+
+		const onDrop = vi.fn();
+		const onDragStateChange = vi.fn();
+		sortableReorder(ul, { group: 'test-drag-state', onDrop, onDragStateChange });
+
+		expect(onDragStateChange).not.toHaveBeenCalled();
+		await drag(a, b, 0.9);
+		expect(onDragStateChange).toHaveBeenNthCalledWith(1, true);
+		expect(onDragStateChange).toHaveBeenLastCalledWith(false);
+	});
+
 	it('does not call onDrop when a drop leaves the item in its original slot', async () => {
 		const ul = makeList('7');
 		lists.push(ul);

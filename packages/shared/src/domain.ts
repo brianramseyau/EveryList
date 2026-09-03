@@ -24,11 +24,19 @@ export interface ListDto {
   useRecent?: boolean
   useQuantity?: boolean
   usePrice?: boolean
+  /** Whether items on this list carry a Deadline / "Required by" date (and
+   *  optional time). Unlike every other feature flag, this one **defaults to
+   *  `false`** server-side — a todos-style feature, not useful on shopping
+   *  lists — so the usual "missing = true" convention is INVERTED here:
+   *  treat a missing/undefined value as OFF, and gate reads with
+   *  `useDeadline === true`. See PLAN_24_PHASE_ITEM_DEADLINES.md. */
+  useDeadline?: boolean
   /** Display-only, independent of useShops/usePrice — same "missing = true" convention. */
   showStoreInList?: boolean
   showPriceInList?: boolean
-  /** Missing = server default `'ranked'`. */
-  itemSortOrder?: 'ranked' | 'alphabetical'
+  /** Missing = server default `'ranked'`. `'deadline'` is only meaningful when
+   *  useDeadline is on (items without a deadline keep rank order at the tail). */
+  itemSortOrder?: 'ranked' | 'alphabetical' | 'deadline'
   /** Only meaningful when itemSortOrder is 'ranked'. Missing = server default `'bottom'`. */
   insertPosition?: 'top' | 'bottom'
   /** Cap on unchecked ("open") items — checking one off frees a slot. Missing/null = no
@@ -73,6 +81,11 @@ export interface ItemDto {
   storeId: number | null
   /** Integer cents (like Stripe) to avoid floating-point drift when summing a list's total. */
   price: number | null
+  /** Deadline / "Required by" — naive-local ISO 8601: either 'YYYY-MM-DD'
+   *  (due by end of that day) or 'YYYY-MM-DDTHH:mm' (minute precision, no
+   *  seconds, no timezone). Null = no deadline. Only edited/shown on lists
+   *  whose useDeadline flag is on. See PLAN_24_PHASE_ITEM_DEADLINES.md. */
+  deadline: string | null
   checked: boolean
   checkedAt: string | null
   sortOrder: number

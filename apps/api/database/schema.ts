@@ -167,7 +167,7 @@ export class FolderSchema extends BaseModel {
 }
 
 export class ItemSchema extends BaseModel {
-  static $columns = ['categoryId', 'checked', 'checkedAt', 'createdAt', 'createdBy', 'deletedAt', 'id', 'listId', 'name', 'notes', 'price', 'quantity', 'sortOrder', 'storeId', 'updatedAt', 'version'] as const
+  static $columns = ['categoryId', 'checked', 'checkedAt', 'createdAt', 'createdBy', 'deadline', 'deletedAt', 'id', 'listId', 'name', 'notes', 'price', 'quantity', 'sortOrder', 'storeId', 'updatedAt', 'version'] as const
   $columns = ItemSchema.$columns
   @column()
   declare categoryId: number | null
@@ -179,6 +179,8 @@ export class ItemSchema extends BaseModel {
   declare createdAt: DateTime
   @column()
   declare createdBy: number
+  @column()
+  declare deadline: string | null
   @column.dateTime()
   declare deletedAt: DateTime | null
   @column({ isPrimary: true })
@@ -265,7 +267,7 @@ export class ListStoreSchema extends BaseModel {
 }
 
 export class ListSchema extends BaseModel {
-  static $columns = ['archived', 'badgeExcluded', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'insertPosition', 'itemSortOrder', 'maxUncheckedItems', 'name', 'ownerId', 'passcodeHash', 'showPriceInList', 'showStoreInList', 'updatedAt', 'useCategories', 'useCategoryLearning', 'useFavorites', 'usePrice', 'useQuantity', 'useRecent', 'useShops', 'version'] as const
+  static $columns = ['archived', 'badgeExcluded', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'insertPosition', 'itemSortOrder', 'maxUncheckedItems', 'name', 'ownerId', 'passcodeHash', 'showPriceInList', 'showStoreInList', 'updatedAt', 'useCategories', 'useCategoryLearning', 'useDeadline', 'useFavorites', 'usePrice', 'useQuantity', 'useRecent', 'useShops', 'version'] as const
   $columns = ListSchema.$columns
   @column()
   declare archived: boolean
@@ -305,6 +307,8 @@ export class ListSchema extends BaseModel {
   declare useCategories: boolean
   @column()
   declare useCategoryLearning: boolean
+  @column()
+  declare useDeadline: boolean
   @column()
   declare useFavorites: boolean
   @column()

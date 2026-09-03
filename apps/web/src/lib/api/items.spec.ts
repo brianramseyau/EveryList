@@ -86,6 +86,14 @@ describe('items api', () => {
 		});
 	});
 
+	it('createItem POSTs a deadline when given', () => {
+		createItem(1, { name: 'Return book', deadline: '2026-09-11' });
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items', {
+			name: 'Return book',
+			deadline: '2026-09-11'
+		});
+	});
+
 	it('importItems POSTs the pasted text', () => {
 		importItems(1, 'Milk\nBread');
 		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items/import', { text: 'Milk\nBread' });
@@ -104,6 +112,19 @@ describe('items api', () => {
 	it('updateItem PATCHes a price in cents', () => {
 		updateItem(1, 100, { price: 399 });
 		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/items/100', { price: 399 });
+	});
+
+	it('updateItem PATCHes a deadline, both shapes, and clears it with null', () => {
+		updateItem(1, 100, { deadline: '2026-09-11' });
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/items/100', {
+			deadline: '2026-09-11'
+		});
+		updateItem(1, 100, { deadline: '2026-09-11T17:30' });
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/items/100', {
+			deadline: '2026-09-11T17:30'
+		});
+		updateItem(1, 100, { deadline: null });
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/items/100', { deadline: null });
 	});
 
 	it('deleteItem DELETEs the given item', () => {

@@ -119,6 +119,7 @@ describe('offlineMutate', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,

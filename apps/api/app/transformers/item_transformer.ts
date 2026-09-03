@@ -12,6 +12,7 @@ export default class ItemTransformer extends BaseTransformer<Item> {
       'categoryId',
       'storeId',
       'price',
+      'deadline',
       'checked',
       'checkedAt',
       'sortOrder',

@@ -14,6 +14,7 @@
 	import { getDb } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
+	import { splitDeadline } from '$lib/deadline';
 	import { consumeListOrigin } from '$lib/nav-direction';
 	import Icon from '$lib/components/Icon.svelte';
 	import ItemFields from '$lib/components/ItemFields.svelte';
@@ -60,6 +61,11 @@
 	let draftPrice = $state('');
 	let draftCategoryId = $state<number | null>(null);
 	let draftStoreId = $state<number | null>(null);
+	// PLAN_24: date and time drafts are kept separately ('' = unset) so the
+	// native date/time inputs bind directly; save() recombines them into the
+	// API's single 'YYYY-MM-DD[THH:mm]' string.
+	let draftDeadlineDate = $state('');
+	let draftDeadlineTime = $state('');
 
 	// Offline-first: an item opened from the list-detail page is already in
 	// Dexie, so this reads locally first (works with zero network, matching
@@ -99,6 +105,9 @@
 				draftPrice = item.price !== null ? (item.price / 100).toFixed(2) : '';
 				draftCategoryId = item.categoryId;
 				draftStoreId = item.storeId;
+				const deadline = item.deadline ? splitDeadline(item.deadline) : null;
+				draftDeadlineDate = deadline?.date ?? '';
+				draftDeadlineTime = deadline?.time ?? '';
 				error = null;
 			} else {
 				error = 'Item not found.';
@@ -148,7 +157,15 @@
 				notes: draftNotes.trim() || null,
 				price,
 				categoryId: draftCategoryId,
-				storeId: draftStoreId
+				storeId: draftStoreId,
+				// Time requires a date — ItemFields clears the time draft when the
+				// date is cleared, but the guard here makes the invariant hold even
+				// if that ever regresses.
+				deadline: draftDeadlineDate
+					? draftDeadlineTime
+						? `${draftDeadlineDate}T${draftDeadlineTime}`
+						: draftDeadlineDate
+					: null
 			});
 			await returnToList();
 		} catch (err) {
@@ -246,12 +263,15 @@
 				bind:categoryId={draftCategoryId}
 				bind:storeId={draftStoreId}
 				bind:notes={draftNotes}
+				bind:deadlineDate={draftDeadlineDate}
+				bind:deadlineTime={draftDeadlineTime}
 				{categories}
 				{stores}
 				showCategory={list?.useCategories !== false}
 				showQuantity={list?.useQuantity !== false}
 				showPrice={list?.usePrice !== false}
 				showStore={list?.useShops !== false}
+				showDeadline={list?.useDeadline === true}
 			/>
 		</form>
 

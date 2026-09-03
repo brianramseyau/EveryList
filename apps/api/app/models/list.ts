@@ -45,6 +45,12 @@ export default class List extends ListSchema {
   @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
   declare showPriceInList: boolean
 
+  // Defaults to false server-side (unlike the flags above, which default true) —
+  // deadlines are a todos-style feature, not useful on shopping lists. Missing/
+  // undefined therefore reads as OFF everywhere on the frontend (`=== true`).
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare useDeadline: boolean
+
   @belongsTo(() => User, { foreignKey: 'ownerId' })
   declare owner: BelongsTo<typeof User>
 

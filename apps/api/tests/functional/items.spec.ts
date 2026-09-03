@@ -1395,3 +1395,114 @@ test.group('Open item limit', (group) => {
     fourthRetry.assertStatus(200)
   })
 })
+test.group('Item deadlines (PLAN_24_PHASE_ITEM_DEADLINES.md)', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('creates an item with a date-only deadline and round-trips it', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Return library book', deadline: '2026-09-11' })
+    create.assertStatus(200)
+    const item = bodyData<ItemDto>(create)
+    assert.equal(item.deadline, '2026-09-11')
+
+    const index = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+    index.assertStatus(200)
+    const fetched = bodyData<ItemDto[]>(index).find((current) => current.id === item.id)
+    assert.equal(fetched?.deadline, '2026-09-11')
+  })
+
+  test('creates an item with a date+time deadline (naive local, minute precision)', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Rent is due', deadline: '2026-10-01T17:30' })
+    create.assertStatus(200)
+    assert.equal(bodyData<ItemDto>(create).deadline, '2026-10-01T17:30')
+  })
+
+  test('defaults deadline to null and updates/clears it through PATCH', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'No deadline yet' })
+    create.assertStatus(200)
+    const item = bodyData<ItemDto>(create)
+    assert.isNull(item.deadline)
+
+    const set = await client
+      .patch(`/api/v1/lists/${listId}/items/${item.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ deadline: '2026-12-24T08:00', expectedVersion: item.version })
+    set.assertStatus(200)
+    assert.equal(bodyData<ItemDto>(set).deadline, '2026-12-24T08:00')
+
+    const cleared = await client
+      .patch(`/api/v1/lists/${listId}/items/${item.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ deadline: null, expectedVersion: bodyData<ItemDto>(set).version })
+    cleared.assertStatus(200)
+    assert.isNull(bodyData<ItemDto>(cleared).deadline)
+  })
+
+  test('rejects calendar-impossible dates with 422', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    // Passes the YYYY-MM-DD shape but is not a real date — the Luxon
+    // round-trip rule must catch what the regex cannot.
+    const response = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Impossible date', deadline: '2026-02-31' })
+    response.assertStatus(422)
+    assert.exists(response.body().errors)
+  })
+
+  test('rejects out-of-range times with 422', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    for (const deadline of ['2026-09-05T25:00', '2026-09-05T14:61']) {
+      const response = await client
+        .post(`/api/v1/lists/${listId}/items`)
+        .header('Authorization', `Bearer ${token}`)
+        .json({ name: `Bad time ${deadline}`, deadline })
+      response.assertStatus(422)
+      assert.exists(response.body().errors)
+    }
+  })
+
+  test('rejects a partial time with 422', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const response = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Partial time', deadline: '2026-09-05T14' })
+    response.assertStatus(422)
+    assert.exists(response.body().errors)
+  })
+})

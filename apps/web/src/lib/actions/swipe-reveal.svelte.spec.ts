@@ -166,6 +166,66 @@ describe('swipeReveal', () => {
 		expect(node.style.transform).toBe('');
 	});
 
+	it('cancels an in-progress hold when disabled mid-gesture, so a later horizontal move reveals nothing and a release commits nothing', () => {
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		const onTap = vi.fn();
+		const action = swipeReveal(node, { onCommitRight, onCommitLeft, onTap });
+
+		// A hold hasn't locked a direction yet, so no pointer capture is held.
+		node.hasPointerCapture = vi.fn(() => false);
+
+		// pointerdown starts a hold — the same pointerdown that arms a
+		// sortable long-press drag 400ms later.
+		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
+		// The drag arms → the page flips this action disabled mid-hold.
+		action.update({ disabled: true, onCommitRight, onCommitLeft, onTap });
+		expect(node.releasePointerCapture).not.toHaveBeenCalled();
+
+		// The swipe that follows the drag's activation must reveal nothing.
+		firePointer(node, 'pointermove', { clientX: -60, clientY: 0 });
+		expect(node.style.transform).toBe('');
+
+		// And the release that drops the drag must commit nothing.
+		firePointer(node, 'pointerup', { clientX: -60, clientY: 0 });
+		expect(onCommitRight).not.toHaveBeenCalled();
+		expect(onCommitLeft).not.toHaveBeenCalled();
+		expect(onTap).not.toHaveBeenCalled();
+	});
+
+	it('hides an already-revealed panel and releases capture when disabled mid-gesture', () => {
+		const onCommitRight = vi.fn();
+		const onCommitLeft = vi.fn();
+		const action = swipeReveal(node, { onCommitRight, onCommitLeft });
+
+		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
+		firePointer(node, 'pointermove', { clientX: -40, clientY: 0 });
+		expect(node.style.transform).toBe('translateX(-40px)');
+		expect(node.setPointerCapture).toHaveBeenCalledWith(1);
+
+		action.update({ disabled: true, onCommitRight, onCommitLeft });
+
+		expect(node.style.transform).toBe('');
+		expect(node.releasePointerCapture).toHaveBeenCalledWith(1);
+		firePointer(node, 'pointerup', { clientX: -40, clientY: 0 });
+		expect(onCommitRight).not.toHaveBeenCalled();
+		expect(onCommitLeft).not.toHaveBeenCalled();
+	});
+
+	it('does not cancel anything when disabled arrives with no active gesture', () => {
+		const onTap = vi.fn();
+		const action = swipeReveal(node, { onCommitRight: vi.fn(), onCommitLeft: vi.fn(), onTap });
+
+		action.update({ disabled: true, onCommitRight: vi.fn(), onCommitLeft: vi.fn(), onTap });
+
+		// A pointerdown while disabled is already ignored — there is no
+		// tracking state to stand down, and nothing may reveal or commit.
+		firePointer(node, 'pointerdown', { clientX: 0, clientY: 0 });
+		firePointer(node, 'pointerup', { clientX: 0, clientY: 0 });
+		expect(node.style.transform).toBe('');
+		expect(onTap).not.toHaveBeenCalled();
+	});
+
 	it('ignores events from an unrelated pointer id', () => {
 		const onCommitRight = vi.fn();
 		const onCommitLeft = vi.fn();

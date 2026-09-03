@@ -45,6 +45,24 @@ describe('createItem (Dexie available)', () => {
 		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items', { name: 'Bananas' });
 	});
 
+	// Captures the optimistic row's deadline the same way
+	// capturedOptimisticCategoryId does — offlineCreate deletes the temp row
+	// once the (mocked) request resolves, so the read must happen mid-flight.
+	it('carries the deadline into the optimistic row, defaulting to null', async () => {
+		const db = getDb()!;
+		const deadlines: Array<string | null | undefined> = [];
+		vi.mocked(apiPost).mockImplementation(async () => {
+			const [cached] = await db.items.toArray();
+			deadlines.push(cached?.deadline);
+			return { id: 42, name: 'x', version: 1 };
+		});
+
+		await createItem(1, { name: 'Return book', deadline: '2026-09-11T17:30' });
+		await createItem(1, { name: 'No deadline' });
+
+		expect(deadlines).toEqual(['2026-09-11T17:30', null]);
+	});
+
 	// Captures the optimistic Dexie row's categoryId at the moment apiPost is
 	// invoked — by then offlineCreate has already written it (see
 	// sync-engine.ts's offlineCreate: table.put happens before request()) —
@@ -247,6 +265,7 @@ describe('updateItem (Dexie available)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,
@@ -277,6 +296,7 @@ describe('updateItem (Dexie available)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: true,
 			checkedAt: '2026-08-01T00:00:00.000Z',
 			sortOrder: 0,
@@ -310,6 +330,7 @@ describe('updateItem (Dexie available)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,
@@ -338,6 +359,7 @@ describe('updateItem (Dexie available)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: true,
 			checkedAt: '2026-08-01T00:00:00.000Z',
 			sortOrder: 0,
@@ -368,6 +390,7 @@ describe('deleteItem (Dexie available)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,
@@ -402,6 +425,7 @@ describe('undoDeleteItem (Dexie available)', () => {
 		categoryId: null,
 		storeId: null,
 		price: null,
+		deadline: null,
 		checked: false,
 		checkedAt: null,
 		sortOrder: 0,
@@ -459,6 +483,7 @@ describe('restoreItem (Dexie available)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,
@@ -495,6 +520,7 @@ describe('restoreItem (Dexie available)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,
@@ -534,6 +560,7 @@ describe('fetchRecentItemNames', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,
@@ -583,6 +610,7 @@ describe('fetchRecentItemNames', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,
@@ -638,6 +666,7 @@ describe('fetchItems (cache hydration)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,
@@ -663,6 +692,7 @@ describe('fetchItems (cache hydration)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: true,
 			checkedAt: '2026-08-17T00:00:00.000Z',
 			sortOrder: 0,
@@ -704,6 +734,7 @@ describe('fetchItems (cache hydration)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: true,
 			checkedAt: '2026-08-17T00:00:00.000Z',
 			sortOrder: 0,
@@ -733,6 +764,7 @@ describe('fetchItems (cache hydration)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 999,
@@ -763,6 +795,7 @@ describe('fetchItems (cache hydration)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,
@@ -803,6 +836,7 @@ describe('fetchRecentItems (cache hydration)', () => {
 			categoryId: null,
 			storeId: null,
 			price: null,
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: 0,
@@ -834,6 +868,7 @@ describe('fetchRecentItems (cache hydration)', () => {
 				categoryId: null,
 				storeId: null,
 				price: null,
+				deadline: null,
 				checked: false,
 				checkedAt: null,
 				sortOrder: 0,
@@ -852,6 +887,7 @@ describe('fetchRecentItems (cache hydration)', () => {
 				categoryId: null,
 				storeId: null,
 				price: null,
+				deadline: null,
 				checked: false,
 				checkedAt: null,
 				sortOrder: 0,
@@ -870,6 +906,7 @@ describe('fetchRecentItems (cache hydration)', () => {
 				categoryId: null,
 				storeId: null,
 				price: null,
+				deadline: null,
 				checked: false,
 				checkedAt: null,
 				sortOrder: 0,
