@@ -531,7 +531,7 @@ describe('Settings +page.svelte', () => {
 				.click();
 
 			await expect
-				.element(page.getByText("This device didn't allow notifications", { exact: false }))
+				.element(page.getByText("Couldn't turn on notifications", { exact: false }))
 				.toBeInTheDocument();
 			await expect
 				.element(

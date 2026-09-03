@@ -125,6 +125,15 @@ describe('enableDeadlineNotifications', () => {
 		expect(getDeadlineNotificationsPreference()).toBe(false);
 	});
 
+	it('native: false and no preference change when the resync fails partway (e.g. a network error)', async () => {
+		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+		vi.mocked(native.requestNativeNotificationPermission).mockResolvedValue(true);
+		vi.mocked(fetchLists).mockRejectedValue(new Error('network down'));
+
+		expect(await enableDeadlineNotifications()).toBe(false);
+		expect(getDeadlineNotificationsPreference()).toBe(false);
+	});
+
 	it('electron: requests permission, syncs, persists the preference, and enables tray background-run', async () => {
 		vi.mocked(isDesktop).mockReturnValue(true);
 		vi.mocked(electron.requestElectronNotificationPermission).mockResolvedValue(true);
@@ -168,6 +177,14 @@ describe('enableDeadlineNotifications', () => {
 	it('web: does not persist the preference when subscribe fails', async () => {
 		vi.mocked(push.isPushSupported).mockReturnValue(true);
 		vi.mocked(push.requestPermissionAndSubscribe).mockResolvedValue(false);
+
+		expect(await enableDeadlineNotifications()).toBe(false);
+		expect(getDeadlineNotificationsPreference()).toBe(false);
+	});
+
+	it('web: false, not an unhandled rejection, when subscribing throws', async () => {
+		vi.mocked(push.isPushSupported).mockReturnValue(true);
+		vi.mocked(push.requestPermissionAndSubscribe).mockRejectedValue(new Error('network down'));
 
 		expect(await enableDeadlineNotifications()).toBe(false);
 		expect(getDeadlineNotificationsPreference()).toBe(false);

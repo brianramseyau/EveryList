@@ -1,5 +1,6 @@
 import webpush from 'web-push'
 import logger from '@adonisjs/core/services/logger'
+import env from '#start/env'
 import PushSetting from '#models/push_setting'
 import type PushSubscription from '#models/push_subscription'
 
@@ -8,6 +9,18 @@ export interface DeadlinePushPayload {
   body: string
   itemId: number
   listId: number
+}
+
+/**
+ * The VAPID spec requires the subject to be a `mailto:` address or an `https:` URL — APP_URL
+ * itself is often `http://` in local/self-hosted setups without a TLS-terminating reverse
+ * proxy in front, so it can't be used directly. A `mailto:` built from APP_URL's own hostname
+ * avoids both the protocol restriction and a hardcoded placeholder contact some push services
+ * surface back to the subscriber.
+ */
+function vapidSubject(): string {
+  const hostname = new URL(env.get('APP_URL')).hostname
+  return `mailto:push@${hostname}`
 }
 
 /**
@@ -21,11 +34,7 @@ export async function sendPush(
   payload: DeadlinePushPayload
 ): Promise<void> {
   const settings = await PushSetting.current()
-  webpush.setVapidDetails(
-    'mailto:admin@localhost',
-    settings.vapidPublicKey,
-    settings.vapidPrivateKey
-  )
+  webpush.setVapidDetails(vapidSubject(), settings.vapidPublicKey, settings.vapidPrivateKey)
 
   try {
     await webpush.sendNotification(

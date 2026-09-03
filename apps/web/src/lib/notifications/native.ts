@@ -9,6 +9,16 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 /* v8 ignore stop */
 import { computeScheduledDeadlines } from './scheduled-deadlines';
 
+/** Tags every notification this module schedules, so cancel logic below only ever touches
+ * its own notifications — not some future feature's unrelated `@capacitor/local-notifications`
+ * entries that happen to land in the same pending set. */
+const SOURCE = 'deadline';
+
+function isOwnNotification(notification: { extra?: unknown }): boolean {
+	const extra = notification.extra as { source?: string } | undefined;
+	return extra?.source === SOURCE;
+}
+
 // Provably covered in isolation (run native.svelte.spec.ts alone and this
 // function reports 100%) — sync.svelte.spec.ts's `vi.mock('./native', …)`
 // corrupts this function's V8 attribution once merged into the full suite,
@@ -38,7 +48,9 @@ export async function syncNativeDeadlineNotifications(
 	const dueIds = new Set(due.map((notification) => notification.itemId));
 
 	const pending = await LocalNotifications.getPending();
-	const toCancel = pending.notifications.filter((notification) => !dueIds.has(notification.id));
+	const toCancel = pending.notifications.filter(
+		(notification) => isOwnNotification(notification) && !dueIds.has(notification.id)
+	);
 	if (toCancel.length > 0) {
 		await LocalNotifications.cancel({ notifications: toCancel.map(({ id }) => ({ id })) });
 	}
@@ -50,17 +62,17 @@ export async function syncNativeDeadlineNotifications(
 			title: notification.title,
 			body: notification.body,
 			schedule: { at: notification.at },
-			extra: { listId: notification.listId, itemId: notification.itemId }
+			extra: { listId: notification.listId, itemId: notification.itemId, source: SOURCE }
 		}))
 	});
 }
 
-/** Cancels every pending deadline notification — used when the user turns
- * the notifications toggle off. */
+/** Cancels every pending deadline notification (identified by the `source` tag
+ * `syncNativeDeadlineNotifications` schedules with) — used when the user turns the
+ * notifications toggle off. Leaves any other plugin consumer's notifications untouched. */
 export async function cancelAllNativeDeadlineNotifications(): Promise<void> {
 	const pending = await LocalNotifications.getPending();
-	if (pending.notifications.length === 0) return;
-	await LocalNotifications.cancel({
-		notifications: pending.notifications.map(({ id }) => ({ id }))
-	});
+	const ours = pending.notifications.filter(isOwnNotification);
+	if (ours.length === 0) return;
+	await LocalNotifications.cancel({ notifications: ours.map(({ id }) => ({ id })) });
 }

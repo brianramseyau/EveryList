@@ -11,6 +11,12 @@
 | REPL, etc.) — neither should be sending real push notifications or holding
 | the process open with a live interval.
 |
+| Guarded against overlap: a slow tick (many recipients × slow push
+| endpoints taking >60s) must not let the next tick start while the
+| previous is still running — two ticks racing over the same due item would
+| both read `deadline_notification_sends` before either had written its
+| row, double-sending to the same subscription.
+|
 */
 
 import app from '@adonisjs/core/services/app'
@@ -22,10 +28,17 @@ const CHECK_INTERVAL_MS = 60 * 1000
 if (!app.inTest && app.getEnvironment() !== 'console') {
   logger.debug({ intervalMs: CHECK_INTERVAL_MS }, 'starting deadline notification scheduler')
 
+  let checkInFlight = false
   const check = () => {
-    sendDueDeadlineNotifications().catch((error: unknown) => {
-      logger.error({ err: error }, 'deadline notification check failed')
-    })
+    if (checkInFlight) return
+    checkInFlight = true
+    sendDueDeadlineNotifications()
+      .catch((error: unknown) => {
+        logger.error({ err: error }, 'deadline notification check failed')
+      })
+      .finally(() => {
+        checkInFlight = false
+      })
   }
 
   check()

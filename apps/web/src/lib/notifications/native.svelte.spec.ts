@@ -86,8 +86,8 @@ describe('syncNativeDeadlineNotifications', () => {
 	it('schedules due items and cancels pending ones no longer due', async () => {
 		vi.mocked(LocalNotifications.getPending).mockResolvedValue({
 			notifications: [
-				{ id: 1, title: '', body: '' } as never,
-				{ id: 99, title: '', body: '' } as never
+				{ id: 1, title: '', body: '', extra: { source: 'deadline' } } as never,
+				{ id: 99, title: '', body: '', extra: { source: 'deadline' } } as never
 			]
 		});
 
@@ -103,10 +103,20 @@ describe('syncNativeDeadlineNotifications', () => {
 					title: 'Required by',
 					body: 'Return library book',
 					schedule: { at: new Date(2026, 8, 6, 9, 0) },
-					extra: { listId: 1, itemId: 1 }
+					extra: { listId: 1, itemId: 1, source: 'deadline' }
 				}
 			]
 		});
+	});
+
+	it('never cancels a pending notification scheduled by some other feature', async () => {
+		vi.mocked(LocalNotifications.getPending).mockResolvedValue({
+			notifications: [{ id: 99, title: '', body: '', extra: { source: 'something-else' } } as never]
+		});
+
+		await syncNativeDeadlineNotifications([makeList()], new Map(), now);
+
+		expect(LocalNotifications.cancel).not.toHaveBeenCalled();
 	});
 
 	it('does not call schedule when nothing is due', async () => {
@@ -129,9 +139,12 @@ describe('syncNativeDeadlineNotifications', () => {
 });
 
 describe('cancelAllNativeDeadlineNotifications', () => {
-	it('cancels every pending notification', async () => {
+	it('cancels every pending deadline notification', async () => {
 		vi.mocked(LocalNotifications.getPending).mockResolvedValue({
-			notifications: [{ id: 1 } as never, { id: 2 } as never]
+			notifications: [
+				{ id: 1, extra: { source: 'deadline' } } as never,
+				{ id: 2, extra: { source: 'deadline' } } as never
+			]
 		});
 
 		await cancelAllNativeDeadlineNotifications();
@@ -143,6 +156,16 @@ describe('cancelAllNativeDeadlineNotifications', () => {
 
 	it('does nothing when nothing is pending', async () => {
 		vi.mocked(LocalNotifications.getPending).mockResolvedValue({ notifications: [] });
+
+		await cancelAllNativeDeadlineNotifications();
+
+		expect(LocalNotifications.cancel).not.toHaveBeenCalled();
+	});
+
+	it("leaves another feature's pending notifications untouched", async () => {
+		vi.mocked(LocalNotifications.getPending).mockResolvedValue({
+			notifications: [{ id: 1, extra: { source: 'something-else' } } as never]
+		});
 
 		await cancelAllNativeDeadlineNotifications();
 

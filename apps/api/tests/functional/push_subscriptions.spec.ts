@@ -76,6 +76,36 @@ test.group('Push subscriptions', (group) => {
     assert.isNotNull(remaining)
   })
 
+  test('a second user re-subscribing the same endpoint (shared device) takes ownership, not a silent update', async ({
+    client,
+    assert,
+  }) => {
+    const firstUser = await signupAndGetUser(client)
+    const secondUser = await signupAndGetUser(client)
+    const endpoint = 'https://push.example.com/shared-device'
+
+    const firstSubscribe = await client
+      .post('/api/v1/push/subscriptions')
+      .header('Authorization', `Bearer ${firstUser.token}`)
+      .json({ endpoint, p256dh: 'first-p256dh', auth: 'first-auth' })
+    const { id: firstId } = bodyData<{ id: number }>(firstSubscribe)
+
+    const secondSubscribe = await client
+      .post('/api/v1/push/subscriptions')
+      .header('Authorization', `Bearer ${secondUser.token}`)
+      .json({ endpoint, p256dh: 'second-p256dh', auth: 'second-auth' })
+    secondSubscribe.assertStatus(201)
+    const { id: secondId } = bodyData<{ id: number }>(secondSubscribe)
+
+    // The first user's row is gone (not reassigned in place) — a fresh row belongs to the
+    // second user, so the first id no longer resolves to anything.
+    assert.notEqual(firstId, secondId)
+    const matching = await PushSubscription.query().where('endpoint', endpoint)
+    assert.lengthOf(matching, 1)
+    assert.equal(matching[0]?.userId, secondUser.id)
+    assert.equal(matching[0]?.p256Dh, 'second-p256dh')
+  })
+
   test('re-subscribing the same endpoint updates it in place, not duplicated', async ({
     client,
     assert,

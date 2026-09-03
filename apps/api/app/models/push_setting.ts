@@ -9,10 +9,15 @@ import webpush from 'web-push'
  */
 export default class PushSetting extends PushSettingSchema {
   static async current(): Promise<PushSetting> {
-    // Generated unconditionally (cheap) and only used if no row exists yet —
-    // `firstOrCreate` is atomic, so this can't race into two different
-    // keypairs across concurrent callers the way a separate find-then-create
-    // would.
+    // Checked first so the (comparatively expensive) ECDSA keypair generation only ever runs
+    // on the very first call after a fresh install, not on every `sendPush`/`current()` call —
+    // `sendDueDeadlineNotifications` calls this once per subscription per scheduler tick.
+    const existing = await PushSetting.find(1)
+    if (existing) return existing
+
+    // A find-then-create has a race window on truly concurrent first-ever callers (each
+    // generates its own keypair), but `firstOrCreate` is still atomic against the actual
+    // insert — worst case is one generated keypair goes unused, not two different rows.
     const { publicKey, privateKey } = webpush.generateVAPIDKeys()
     return PushSetting.firstOrCreate(
       { id: 1 },

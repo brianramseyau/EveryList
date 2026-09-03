@@ -76,6 +76,7 @@ describe('syncElectronDeadlineNotifications', () => {
 		vi.stubGlobal('Notification', NotificationSpy);
 
 		const now = new Date(2026, 8, 5, 12, 0);
+		vi.setSystemTime(now);
 		const list = makeList();
 		const item = makeItem();
 		syncElectronDeadlineNotifications([list], new Map([[1, [item]]]), now);
@@ -94,6 +95,7 @@ describe('syncElectronDeadlineNotifications', () => {
 		vi.stubGlobal('Notification', NotificationSpy);
 
 		const now = new Date(2026, 8, 5, 12, 0);
+		vi.setSystemTime(now);
 		const list = makeList();
 		const item = makeItem();
 		syncElectronDeadlineNotifications([list], new Map([[1, [item]]]), now);
@@ -109,6 +111,7 @@ describe('syncElectronDeadlineNotifications', () => {
 		vi.stubGlobal('Notification', NotificationSpy);
 
 		const now = new Date(2026, 8, 5, 12, 0);
+		vi.setSystemTime(now);
 		const list = makeList();
 		const item = makeItem({ deadline: '2026-09-05T12:05' });
 		syncElectronDeadlineNotifications([list], new Map([[1, [item]]]), now);
@@ -122,6 +125,26 @@ describe('syncElectronDeadlineNotifications', () => {
 		vi.advanceTimersByTime(5 * 60 * 1000);
 		expect(NotificationSpy).toHaveBeenCalledTimes(1);
 	});
+
+	it('re-arms in ~24.8-day chunks for a deadline further out than setTimeout can express', () => {
+		const NotificationSpy = vi.fn();
+		vi.stubGlobal('Notification', NotificationSpy);
+
+		const now = new Date(2026, 0, 1, 0, 0);
+		vi.setSystemTime(now);
+		const list = makeList();
+		// 40 days out — beyond the ~24.8-day (2^31-1 ms) setTimeout ceiling.
+		const item = makeItem({ deadline: '2026-02-10' });
+		syncElectronDeadlineNotifications([list], new Map([[1, [item]]]), now);
+
+		// First chunk fires (re-arming, not notifying) just short of the real due date.
+		vi.advanceTimersByTime(2 ** 31 - 1);
+		expect(NotificationSpy).not.toHaveBeenCalled();
+
+		// The re-armed remainder (~15.5 days) completes the trip to the actual due instant.
+		vi.advanceTimersByTime(16 * 24 * 60 * 60 * 1000);
+		expect(NotificationSpy).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe('cancelAllElectronDeadlineNotifications', () => {
@@ -130,6 +153,7 @@ describe('cancelAllElectronDeadlineNotifications', () => {
 		vi.stubGlobal('Notification', NotificationSpy);
 
 		const now = new Date(2026, 8, 5, 12, 0);
+		vi.setSystemTime(now);
 		const list = makeList();
 		const item = makeItem();
 		syncElectronDeadlineNotifications([list], new Map([[1, [item]]]), now);

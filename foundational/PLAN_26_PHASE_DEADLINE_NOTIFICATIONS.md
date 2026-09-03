@@ -141,6 +141,58 @@ scheduler needs.
   reschedule drops it on next recompute).
 - Edited deadline → server clears `deadline_notification_sends` for that
   item; native/Electron reschedule replaces the timer.
+- Native/Electron's local schedule is otherwise frozen from whenever it was
+  last computed (launch, or an explicit enable), so `+layout.svelte` also
+  re-syncs it on native app resume and on a 5-minute interval while the app
+  stays open, closing the gap for an item added/edited/checked (or a list's
+  `useDeadline` toggled) after launch. Not wired to every individual item
+  mutation call site (would multiply network calls significantly for a
+  background feature) — the interval keeps staleness bounded well within a
+  deadline's minute-level precision instead.
+
+## Post-review fixes (Kilo Code, PR #189)
+
+- `push_subscriptions_controller.ts#store` used to `updateOrCreate` keyed
+  only on `endpoint`, silently reassigning an existing subscription (and its
+  `userId`) to whoever POSTs that endpoint next — a cross-user mutation with
+  no ownership check. Fixed: an endpoint already owned by a different user is
+  explicitly deleted (logged) before a fresh row is created for the new
+  owner, instead of updated in place.
+- `subscribePushValidator`'s `endpoint` was validated only as a non-empty
+  string — a trust-boundary input the server later POSTs to via `web-push`,
+  and an arbitrary string was a weak SSRF primitive. Now requires an
+  `https:` URL (no `.normalizeUrl()` — must round-trip byte-for-byte).
+- `push_service.ts` hardcoded a fake `mailto:admin@localhost` VAPID subject
+  and regenerated (then discarded) a VAPID keypair on every `sendPush` call.
+  Fixed: the subject is derived from `APP_URL`'s own hostname (`mailto:` —
+  VAPID requires `mailto:`/`https:`, and `APP_URL` is often `http:` in a
+  self-hosted setup without a TLS-terminating proxy), and `PushSetting.current()`
+  checks for an existing row before generating a keypair, rather than
+  generating unconditionally.
+- `deadline_notification_scheduler.ts`'s 60s `setInterval` had no overlap
+  guard — a slow tick (many recipients × slow push endpoints) could let the
+  next tick start before the previous finished, racing the dedup read/write
+  in `deadline_notification_sends` into a double-send. Fixed with an
+  `inFlight` flag.
+- `electron.ts`'s `setTimeout` used a raw `notification.at - now` delay,
+  which silently clamps past ~24.8 days (`setTimeout`'s 32-bit signed int
+  ceiling), firing early for any deadline further out. Fixed: re-arms in
+  `2^31-1`-ms chunks, recomputing the remaining delay each time, until it
+  actually reaches the due instant.
+- `native.ts`'s cancel logic assumed every pending `@capacitor/local-notifications`
+  entry belonged to this feature (`cancelAllNativeDeadlineNotifications`
+  cancelled the *entire* pending set). Fixed: every notification this module
+  schedules is tagged `extra: { source: 'deadline' }`, and both cancel paths
+  filter on that tag — future non-deadline local notifications are left
+  alone.
+- `enableDeadlineNotifications` persisted the "on" preference *before*
+  confirming native/Electron's resync (or web's subscribe) actually
+  succeeded, and let a thrown error (network failure fetching lists/items,
+  a rejected plugin call) become an unhandled rejection with no user
+  feedback. Fixed: wrapped in try/catch returning `false`, and the
+  preference is only persisted after the platform mechanism is confirmed
+  working — a failed attempt now correctly leaves the toggle off instead of
+  showing "on" with nothing scheduled.
 
 ## Test strategy
 

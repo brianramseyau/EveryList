@@ -175,7 +175,7 @@
 			const granted = await enableDeadlineNotifications();
 			if (!granted) {
 				deadlineNotificationsFeedback =
-					"This device didn't allow notifications — check your browser/system notification permission for EveryList.";
+					"Couldn't turn on notifications — either this device didn't allow the permission, or something went wrong while setting it up. Check your browser/system notification permission for EveryList and try again.";
 				return;
 			}
 		} else {

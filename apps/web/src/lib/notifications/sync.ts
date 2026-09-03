@@ -53,33 +53,48 @@ export async function resyncDeadlineNotifications(now: Date = new Date()): Promi
 	}
 }
 
-/** Requests platform permission and, for native/Electron, does an initial
+/**
+ * Requests platform permission and, for native/Electron, does an initial
  * schedule sync; for web, subscribes to Web Push. Returns whether it ended
- * up enabled. */
+ * up enabled — `false` both when permission is denied and when an
+ * otherwise-granted attempt fails partway (network error fetching
+ * lists/items, a plugin call rejecting, etc.), so a caller never has to
+ * catch this itself. The preference is only persisted once the platform's
+ * mechanism is actually confirmed working — persisting it first (before the
+ * resync/subscribe settles) would leave the toggle showing "on" with
+ * nothing actually scheduled if that step then failed.
+ */
 export async function enableDeadlineNotifications(): Promise<boolean> {
 	const platform = notificationPlatform();
 
-	if (platform === 'native') {
-		const granted = await requestNativeNotificationPermission();
-		if (!granted) return false;
-		setDeadlineNotificationsPreference(true);
-		await resyncDeadlineNotifications();
-		return true;
-	}
+	try {
+		if (platform === 'native') {
+			const granted = await requestNativeNotificationPermission();
+			if (!granted) return false;
+			await resyncDeadlineNotifications();
+			setDeadlineNotificationsPreference(true);
+			return true;
+		}
 
-	if (platform === 'electron') {
-		const granted = await requestElectronNotificationPermission();
-		if (!granted) return false;
-		setDeadlineNotificationsPreference(true);
-		await window.everylistDesktop?.setBackgroundRun(true);
-		await resyncDeadlineNotifications();
-		return true;
-	}
+		if (platform === 'electron') {
+			const granted = await requestElectronNotificationPermission();
+			if (!granted) return false;
+			await window.everylistDesktop?.setBackgroundRun(true);
+			await resyncDeadlineNotifications();
+			setDeadlineNotificationsPreference(true);
+			return true;
+		}
 
-	if (platform !== 'web') return false;
-	const subscribed = await requestPermissionAndSubscribe();
-	if (subscribed) setDeadlineNotificationsPreference(true);
-	return subscribed;
+		if (platform !== 'web') return false;
+		const subscribed = await requestPermissionAndSubscribe();
+		if (subscribed) setDeadlineNotificationsPreference(true);
+		return subscribed;
+	} catch {
+		// A network failure fetching lists/items (native/Electron) or subscribing (web) — the
+		// preference is never persisted above this point, so the toggle correctly falls back
+		// to "off" rather than claiming success with nothing actually scheduled.
+		return false;
+	}
 }
 
 export async function disableDeadlineNotifications(): Promise<void> {
