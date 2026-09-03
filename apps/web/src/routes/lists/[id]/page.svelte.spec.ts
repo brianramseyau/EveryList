@@ -3464,8 +3464,10 @@ describe('List detail +page.svelte', () => {
 				expect(updateItem).toHaveBeenCalledWith(list.id, 2, { checked: false });
 			});
 
-			it("shows the red toast (not the generic error banner) when the server backstops a stale local count", async () => {
-				mountWithLimit(null, [makeItem({ id: 100, name: 'Bananas', checked: true, checkedAt: TS })]);
+			it('shows the red toast (not the generic error banner) when the server backstops a stale local count', async () => {
+				mountWithLimit(null, [
+					makeItem({ id: 100, name: 'Bananas', checked: true, checkedAt: TS })
+				]);
 				vi.mocked(updateItem).mockRejectedValue(
 					new ApiError(
 						400,

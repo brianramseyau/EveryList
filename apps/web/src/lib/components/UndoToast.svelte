@@ -62,8 +62,10 @@
 		: 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900'}"
 	style="bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));"
 >
-	<span class={variant === 'error' ? 'text-red-900 dark:text-red-200' : 'text-amber-900 dark:text-amber-200'}
-		>{message}</span
+	<span
+		class={variant === 'error'
+			? 'text-red-900 dark:text-red-200'
+			: 'text-amber-900 dark:text-amber-200'}>{message}</span
 	>
 	<button
 		type="button"
