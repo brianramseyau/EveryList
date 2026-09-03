@@ -622,10 +622,32 @@ describe('List settings +page.svelte', () => {
 				.toBeInTheDocument();
 		});
 
-		it('shows the no-cap helper text for a list without a limit', async () => {
+		it('shows the no-cap helper text for a list without a limit, singularized for one item', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, itemCount: 1 });
 			render(SettingsPage);
 
-			await expect.element(page.getByText('No cap — 0 unchecked items now.')).toBeInTheDocument();
+			await expect.element(page.getByText('No cap — 1 unchecked item now.')).toBeInTheDocument();
+		});
+
+		it('singularizes the helper text for a limit of 1', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, maxUncheckedItems: 1, itemCount: 1 });
+			render(SettingsPage);
+
+			await expect
+				.element(page.getByText('At most 1 unchecked item at a time — 1 open now.'))
+				.toBeInTheDocument();
+		});
+
+		it('reverts an out-of-range draft back to empty when the list has no limit', async () => {
+			render(SettingsPage);
+
+			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
+			await expect.element(input).toHaveValue(null);
+			await input.fill('0');
+			(input.element() as HTMLInputElement).blur();
+
+			expect(updateList).not.toHaveBeenCalled();
+			await expect.element(input).toHaveValue(null);
 		});
 
 		it('applies a valid limit on blur', async () => {

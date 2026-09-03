@@ -823,6 +823,27 @@ describe('flushQueue', () => {
 });
 
 describe('terminal create rejections (DLQ seam, PLAN_25)', () => {
+	it('stops notifying a listener once its onCreateRejected subscription is unsubscribed', async () => {
+		const events: unknown[] = [];
+		const unsubscribe = onCreateRejected((event) => events.push(event));
+		unsubscribe();
+		onCreateRejected(null)();
+
+		vi.mocked(apiPost).mockRejectedValue(new ApiError(400, 'nope'));
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'create',
+			targetId: -1,
+			expectedVersion: null,
+			payload: { name: 'Milk' },
+			url: '/api/v1/lists/1/items'
+		});
+
+		await flushQueue();
+
+		expect(events).toEqual([]);
+	});
+
 	it('severs the optimistic row and notifies when a queued item create is terminally rejected', async () => {
 		vi.mocked(apiPost).mockRejectedValue(
 			new ApiError(400, 'This list allows at most 5 open items — check one off to add more.')

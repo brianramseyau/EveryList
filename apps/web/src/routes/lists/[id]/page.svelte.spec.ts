@@ -3119,11 +3119,25 @@ describe('List detail +page.svelte', () => {
 			mountWithLimit(5);
 			render(ListDetailPage);
 
-			// One unchecked item (Bread) out of 5 allowed.
+			// One unchecked item (Bread) out of 5 allowed — under the limit, so the
+			// counter renders in its muted (gray) style.
+			const counter = page.getByLabelText('1 of 5 open items allowed');
+			await expect.element(counter).toBeInTheDocument();
+			await expect.element(counter).toHaveTextContent('1/5');
+			await expect.element(counter).toHaveClass('text-gray-600');
+		});
+
+		it('renders the counter alongside the price total when both apply', async () => {
+			mountWithLimit(5, [
+				makeItem({ id: 1, name: 'Bread', price: 250 }),
+				makeItem({ id: 2, name: 'Eggs', checked: true, checkedAt: TS })
+			]);
+			render(ListDetailPage);
+
+			// list.usePrice/showPriceInList are absent → treated as on (the standard
+			// "missing = default true" read), so the total shows next to the counter.
 			await expect.element(page.getByLabelText('1 of 5 open items allowed')).toBeInTheDocument();
-			await expect
-				.element(page.getByLabelText('1 of 5 open items allowed'))
-				.toHaveTextContent('1/5');
+			await expect.element(page.getByText('Total: $2.50')).toBeInTheDocument();
 		});
 
 		it('omits the counter entirely when the list has no limit', async () => {
@@ -3138,10 +3152,12 @@ describe('List detail +page.svelte', () => {
 			mountWithLimit(2, [makeItem({ id: 1, name: 'Bread' }), makeItem({ id: 2, name: 'Eggs' })]);
 			render(ListDetailPage);
 
-			// Two unchecked items against a limit of 2: the counter reads 2/2 and the
-			// input is disabled so no further add can even be attempted from the UI.
+			// Two unchecked items against a limit of 2: the counter reads 2/2 in its
+			// amber "full" style, and the input is disabled so no further add can
+			// even be attempted from the UI.
 			const counter = page.getByLabelText('2 of 2 open items allowed');
 			await expect.element(counter).toBeInTheDocument();
+			await expect.element(counter).toHaveClass('text-amber-600');
 			await expect.element(page.getByPlaceholder('Item name')).toBeDisabled();
 			expect(createItem).not.toHaveBeenCalled();
 		});
