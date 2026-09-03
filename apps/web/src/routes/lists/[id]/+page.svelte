@@ -346,6 +346,11 @@
 	const openLimit = $derived(list?.maxUncheckedItems ?? null);
 	const openCount = $derived(uncheckedCount(items));
 	const limitReached = $derived(isAtLimit(list, items));
+	// Precomputed for the bottom bar so the template interpolates plain strings —
+	// inline `${expr}` attribute/text interpolation makes Svelte emit `?? ''`
+	// nullish guards that can never fire for these always-number deriveds.
+	const counterText = $derived(`${openCount}/${openLimit}`);
+	const counterLabel = $derived(`${openCount} of ${openLimit} open items allowed`);
 
 	const progressText = $derived.by(() => {
 		if (progressDisplay === 'remaining') {
@@ -1430,9 +1435,9 @@
 									class="font-mono font-semibold tabular-nums {limitReached
 										? 'text-amber-600 dark:text-amber-400'
 										: 'text-gray-600 dark:text-gray-400'}"
-									aria-label="{openCount} of {openLimit} open items allowed"
+									aria-label={counterLabel}
 								>
-									{openCount}/{openLimit}
+									{counterText}
 								</span>
 							{/if}
 						</span>

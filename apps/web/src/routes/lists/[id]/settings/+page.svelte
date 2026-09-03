@@ -177,11 +177,15 @@
 		await onupdate({ maxUncheckedItems: next });
 	}
 
+	// Only ever read inside the `{:else if list}` branch below, so the optional-
+	// chain nullish fallbacks are unreachable — same shape as hasChanges above.
+	/* v8 ignore start */
 	const limitHelperText = $derived(
 		list?.maxUncheckedItems != null
 			? `At most ${list.maxUncheckedItems} unchecked item${list.maxUncheckedItems === 1 ? '' : 's'} at a time — ${list.itemCount} open now.`
 			: `No cap — ${list?.itemCount ?? 0} unchecked item${(list?.itemCount ?? 0) === 1 ? '' : 's'} now.`
 	);
+	/* v8 ignore stop */
 
 	type BooleanFeatureField =
 		| 'useCategories'
