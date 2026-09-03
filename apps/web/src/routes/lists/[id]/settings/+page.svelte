@@ -162,6 +162,10 @@
 	// a lower limit than the current open count is allowed on purpose: the limit
 	// gates intake, it isn't a maintained invariant (PLAN_25).
 	async function applyLimitDraft() {
+		// Only reachable from the input's onblur, which renders inside the
+		// `{:else if list}` branch below — same unreachable-guard shape as
+		// hasChanges above.
+		/* v8 ignore next */
 		if (!list) return;
 		const trimmed = String(draftLimitText ?? '').trim();
 		const next = trimmed === '' ? null : Number(trimmed);

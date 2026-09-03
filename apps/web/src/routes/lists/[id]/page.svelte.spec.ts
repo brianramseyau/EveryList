@@ -3207,5 +3207,57 @@ describe('List detail +page.svelte', () => {
 				message: 'Forbidden'
 			});
 		});
+
+		it('lets the rejection toast be dismissed by its button', async () => {
+			let rejectedListener: ((event: unknown) => void) | undefined;
+			vi.mocked(onCreateRejected).mockImplementation((listener) => {
+				rejectedListener = listener as (event: unknown) => void;
+				return vi.fn();
+			});
+			mountWithLimit(null);
+			render(ListDetailPage);
+			await expect.element(page.getByText('1 of 2 remaining')).toBeInTheDocument();
+
+			rejectedListener!({
+				entityType: 'item',
+				name: 'Milk',
+				listId: 1,
+				message: 'This list allows only 1 open item — check it off to add more.'
+			});
+			const toast = page.getByText(
+				"Milk wasn't added — This list allows only 1 open item — check it off to add more."
+			);
+			await expect.element(toast).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Dismiss' }).click();
+			await expect.element(toast).not.toBeInTheDocument();
+		});
+
+		it('lets the rejection toast time out on its own', async () => {
+			vi.useFakeTimers();
+			let rejectedListener: ((event: unknown) => void) | undefined;
+			vi.mocked(onCreateRejected).mockImplementation((listener) => {
+				rejectedListener = listener as (event: unknown) => void;
+				return vi.fn();
+			});
+			mountWithLimit(null);
+			render(ListDetailPage);
+			await expect.element(page.getByText('1 of 2 remaining')).toBeInTheDocument();
+
+			rejectedListener!({
+				entityType: 'item',
+				name: 'Milk',
+				listId: 1,
+				message: 'This list allows only 1 open item — check it off to add more.'
+			});
+			const toast = page.getByText(
+				"Milk wasn't added — This list allows only 1 open item — check it off to add more."
+			);
+			await expect.element(toast).toBeInTheDocument();
+
+			await vi.advanceTimersByTimeAsync(5000);
+
+			await expect.element(toast).not.toBeInTheDocument();
+		});
 	});
 });
