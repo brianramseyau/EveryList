@@ -616,7 +616,7 @@ describe('List settings +page.svelte', () => {
 			render(SettingsPage);
 
 			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
-			await expect.element(input).toHaveValue('5');
+			await expect.element(input).toHaveValue(5);
 			await expect
 				.element(page.getByText('At most 5 unchecked items at a time — 2 open now.'))
 				.toBeInTheDocument();
@@ -633,7 +633,7 @@ describe('List settings +page.svelte', () => {
 			render(SettingsPage);
 
 			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
-			await expect.element(input).toHaveValue('');
+			await expect.element(input).toHaveValue(null);
 			await input.fill('3');
 			(input.element() as HTMLInputElement).blur();
 
@@ -646,7 +646,7 @@ describe('List settings +page.svelte', () => {
 			render(SettingsPage);
 
 			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
-			await expect.element(input).toHaveValue('5');
+			await expect.element(input).toHaveValue(5);
 			await input.fill('');
 			(input.element() as HTMLInputElement).blur();
 
@@ -658,12 +658,12 @@ describe('List settings +page.svelte', () => {
 			render(SettingsPage);
 
 			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
-			await expect.element(input).toHaveValue('5');
+			await expect.element(input).toHaveValue(5);
 			await input.fill('1000');
 			(input.element() as HTMLInputElement).blur();
 
 			expect(updateList).not.toHaveBeenCalled();
-			await expect.element(input).toHaveValue('5');
+			await expect.element(input).toHaveValue(5);
 		});
 
 		it('does not re-save an unchanged value', async () => {
@@ -671,7 +671,7 @@ describe('List settings +page.svelte', () => {
 			render(SettingsPage);
 
 			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
-			await expect.element(input).toHaveValue('5');
+			await expect.element(input).toHaveValue(5);
 			await input.fill('5');
 			(input.element() as HTMLInputElement).blur();
 

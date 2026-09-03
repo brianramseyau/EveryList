@@ -28,9 +28,10 @@
 	let draftIcon = $state('formatListChecks');
 	let draftColor = $state('#3b82f6');
 	let draftFolderId = $state<number | null>(null);
-	// The open-item limit's input draft — kept as text so "empty = no limit" is a
-	// first-class state rather than a magic number; applied on blur (see applyLimitDraft).
-	let draftLimitText = $state('');
+	// The open-item limit's input draft — kept loose (string | number) because a
+	// Flowbite number input's bind:value hands back numbers (and null when
+	// emptied, not ''); normalized in applyLimitDraft. Empty = no limit.
+	let draftLimitText = $state<string | number>('');
 	let savingName = $state(false);
 	let confirmingCategoryLearningOff = $state(false);
 	let confirmingDelete = $state(false);
@@ -162,7 +163,7 @@
 	// gates intake, it isn't a maintained invariant (PLAN_25).
 	async function applyLimitDraft() {
 		if (!list) return;
-		const trimmed = draftLimitText.trim();
+		const trimmed = String(draftLimitText ?? '').trim();
 		const next = trimmed === '' ? null : Number(trimmed);
 		if (next !== null && (!Number.isInteger(next) || next < 1 || next > 999)) {
 			draftLimitText = list.maxUncheckedItems != null ? String(list.maxUncheckedItems) : '';
