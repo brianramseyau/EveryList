@@ -3445,6 +3445,25 @@ describe('List detail +page.svelte', () => {
 				await expect.element(toast).not.toBeInTheDocument();
 			});
 
+			it('lets the blocked-uncheck toast time out on its own', async () => {
+				vi.useFakeTimers();
+				mountWithLimit(1, [
+					makeItem({ id: 1, name: 'Bread' }),
+					makeItem({ id: 2, name: 'Eggs', checked: true, checkedAt: TS })
+				]);
+				render(ListDetailPage);
+
+				await page.getByRole('checkbox', { name: 'Eggs' }).click();
+				const toast = page.getByText(
+					'This list allows at most 1 open items — check one off or remove one before unchecking this.'
+				);
+				await expect.element(toast).toBeInTheDocument();
+
+				await vi.advanceTimersByTimeAsync(5000);
+
+				await expect.element(toast).not.toBeInTheDocument();
+			});
+
 			it('allows unchecking once room opens up', async () => {
 				mountWithLimit(2, [
 					makeItem({ id: 1, name: 'Bread' }),
