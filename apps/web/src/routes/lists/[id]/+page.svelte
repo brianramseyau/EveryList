@@ -34,8 +34,9 @@
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { longPress } from '$lib/actions/long-press';
 	import { anchorPanel } from '$lib/actions/anchor-panel';
-	import { computeMidpointSortOrder } from '$lib/item-sort-order';
+	import { computeMidpointSortOrder, sortItemsWithinBucket } from '$lib/item-sort-order';
 	import { isAtLimit, uncheckedCount } from '$lib/unchecked-limit';
+	import { deadlineChip } from '$lib/deadline';
 	import { swipeReveal } from '$lib/actions/swipe-reveal';
 	import { splitTextWithLinks } from '$lib/linkify';
 	import Icon from '$lib/components/Icon.svelte';
@@ -262,13 +263,10 @@
 		);
 
 		// Lists that opt out of categories (PLAN_11_PHASE_LIST_FEATURE_REFINEMENTS.md §E) render as a single
-		// flat section, ordered by the items' own sortOrder — a leftover categoryId from before
+		// flat section, ordered per the list's itemSortOrder — a leftover categoryId from before
 		// categories were disabled must not affect grouping or ordering here.
 		if (list?.useCategories === false) {
-			const flat = [...visible];
-			if (list?.itemSortOrder === 'alphabetical') {
-				flat.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-			}
+			const flat = sortItemsWithinBucket([...visible], list?.itemSortOrder);
 			return flat.length ? [{ category: null, items: flat }] : [];
 		}
 
@@ -279,12 +277,12 @@
 			byCategory.get(key)!.push(item);
 		}
 
-		// itemSortOrder: 'alphabetical' (PLAN_19_PHASE_LIST_FEATURE_TOGGLES.md) only changes the
-		// ordering *within* each bucket — category grouping (or lack of it) is unaffected.
-		if (list?.itemSortOrder === 'alphabetical') {
-			for (const bucket of byCategory.values()) {
-				bucket.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-			}
+		// itemSortOrder (PLAN_19_PHASE_LIST_FEATURE_TOGGLES.md, extended with 'deadline' by
+		// PLAN_24_PHASE_ITEM_DEADLINES.md) only changes the ordering *within* each bucket —
+		// category grouping (or lack of it) is unaffected. Sorted in place: setting back
+		// into the SvelteMap mid-derivation would invalidate the derived itself.
+		for (const bucket of byCategory.values()) {
+			sortItemsWithinBucket(bucket, list?.itemSortOrder);
 		}
 
 		const orderedCategories = [...categories].sort((a, b) => {
@@ -868,10 +866,9 @@
 			if (!byCategory.has(key)) byCategory.set(key, []);
 			byCategory.get(key)!.push(item);
 		}
-		if (list!.itemSortOrder === 'alphabetical') {
-			for (const bucket of byCategory.values()) {
-				bucket.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-			}
+		// Match the on-screen ordering for any computed sort (see sortItemsWithinBucket).
+		for (const bucket of byCategory.values()) {
+			sortItemsWithinBucket(bucket, list!.itemSortOrder);
 		}
 
 		const lines: string[] = [list!.name, ''];
@@ -1267,7 +1264,13 @@
 										group: 'list-items',
 										fallbackAxis: 'y',
 										onDrop: handleItemDrop,
-										disabled: list?.itemSortOrder === 'alphabetical' || isViewer
+										// Computed orders ignore manual rank, so dragging is
+										// meaningless there ('alphabetical' today, 'deadline'
+										// since PLAN_24) — same disable as a viewer role.
+										disabled:
+											list?.itemSortOrder === 'alphabetical' ||
+											list?.itemSortOrder === 'deadline' ||
+											isViewer
 									}}
 								>
 									{#each group.items as item (item.id)}
@@ -1368,6 +1371,20 @@
 															</span>
 														{/if}
 													</div>
+													{#if list?.useDeadline === true && item.deadline}
+														{@const chip = deadlineChip(item.deadline)}
+														<span
+															class="text-xs font-medium"
+															class:text-red-600={chip.overdue}
+															class:dark:text-red-400={chip.overdue}
+															class:text-amber-600={chip.dueToday}
+															class:dark:text-amber-400={chip.dueToday}
+															class:text-gray-500={!chip.overdue && !chip.dueToday}
+															class:dark:text-gray-400={!chip.overdue && !chip.dueToday}
+														>
+															{chip.label}
+														</span>
+													{/if}
 													{#if item.storeId && showStoreInList}
 														{@const itemStore = stores.find((store) => store.id === item.storeId)}
 														{#if itemStore}

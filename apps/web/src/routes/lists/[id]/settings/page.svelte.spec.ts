@@ -460,6 +460,70 @@ describe('List settings +page.svelte', () => {
 			.not.toBeInTheDocument();
 	});
 
+	it('enables the default-off Deadlines flag on the first click even when the field is missing', async () => {
+		vi.mocked(updateList).mockImplementation(async (_id, patch) => ({ ...list, ...patch }));
+
+		render(SettingsPage);
+		// The list fixture has no useDeadline field — missing means OFF for this
+		// flag (unlike every other toggle here), which is exactly why the generic
+		// toggleFeature would send `false` and no-op this click.
+		await page.getByRole('checkbox', { name: 'Deadlines' }).click();
+
+		expect(updateList).toHaveBeenCalledWith(1, { useDeadline: true });
+	});
+
+	it('disables Deadlines without touching the sort order when the list is not sorted by deadline', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateList).mockImplementation(async (_id, patch) => ({
+			...list,
+			useDeadline: true,
+			...patch
+		}));
+
+		render(SettingsPage);
+		await page.getByRole('checkbox', { name: 'Deadlines' }).click();
+
+		expect(updateList).toHaveBeenCalledWith(1, { useDeadline: false });
+	});
+
+	it('resets a deadline sort order to ranked when Deadlines is toggled off', async () => {
+		vi.mocked(fetchList).mockResolvedValue({
+			...list,
+			useDeadline: true,
+			itemSortOrder: 'deadline'
+		});
+		vi.mocked(updateList).mockImplementation(async (_id, patch) => ({
+			...list,
+			useDeadline: true,
+			itemSortOrder: 'deadline',
+			...patch
+		}));
+
+		render(SettingsPage);
+		await page.getByRole('checkbox', { name: 'Deadlines' }).click();
+
+		expect(updateList).toHaveBeenCalledWith(1, { useDeadline: false, itemSortOrder: 'ranked' });
+	});
+
+	it('offers the By-deadline sort option only while Deadlines is enabled', async () => {
+		vi.mocked(updateList).mockImplementation(async (_id, patch) => ({ ...list, ...patch }));
+
+		render(SettingsPage);
+
+		const sortSelect = page.getByRole('combobox', { name: 'Item Sort Order' });
+		// .element() is a synchronous read — the settings content only renders
+		// once fetchList resolves, so wait for the select to exist first.
+		await expect.element(sortSelect).toBeInTheDocument();
+		const hasDeadlineOption = () =>
+			[...sortSelect.element().querySelectorAll('option')].some(
+				(option) => option.value === 'deadline'
+			);
+		expect(hasDeadlineOption()).toBe(false);
+
+		await page.getByRole('checkbox', { name: 'Deadlines' }).click();
+		await expect.poll(hasDeadlineOption).toBe(true);
+	});
+
 	it('changes Insert new items to "At top"', async () => {
 		vi.mocked(updateList).mockResolvedValue({ ...list, insertPosition: 'top' });
 

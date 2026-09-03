@@ -22,7 +22,22 @@ export function buildFlatDisplayOrder(
   const byName = (a: Item, b: Item) =>
     a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
   const byRank = (a: Item, b: Item) => a.sortOrder - b.sortOrder
-  const compare = list.itemSortOrder === 'alphabetical' ? byName : byRank
+  // PLAN_24_PHASE_ITEM_DEADLINES.md: deadline ascending — ISO 'YYYY-MM-DD' and
+  // 'YYYY-MM-DDTHH:mm' compare correctly as plain strings — with same-deadline
+  // ties broken by name; items without a deadline keep their manual rank order
+  // at the end. Must mirror the web app's sortItemsWithinBucket.
+  const byDeadline = (a: Item, b: Item) => {
+    if (a.deadline === null && b.deadline === null) return byRank(a, b)
+    if (a.deadline === null) return 1
+    if (b.deadline === null) return -1
+    return a.deadline.localeCompare(b.deadline) || byName(a, b)
+  }
+  const compare =
+    list.itemSortOrder === 'alphabetical'
+      ? byName
+      : list.itemSortOrder === 'deadline'
+        ? byDeadline
+        : byRank
 
   // Lists that opt out of categories render as one flat, unclustered group. Explicit `=== false`
   // (not `!list.useCategories`) since missing/undefined means the server default, `true` — same

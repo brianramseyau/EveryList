@@ -71,9 +71,11 @@ export interface CreateOwnedListInput {
   useRecent?: boolean
   useQuantity?: boolean
   usePrice?: boolean
+  /** Deadlines default off (todos-style feature, not useful on shopping lists). */
+  useDeadline?: boolean
   showStoreInList?: boolean
   showPriceInList?: boolean
-  itemSortOrder?: 'ranked' | 'alphabetical'
+  itemSortOrder?: 'ranked' | 'alphabetical' | 'deadline'
   insertPosition?: 'top' | 'bottom'
   maxUncheckedItems?: number | null
   /** Only for a brand-new user's very first list — see #controllers/new_account_controller. */
@@ -107,6 +109,7 @@ export async function createOwnedList(input: CreateOwnedListInput) {
       useRecent: input.useRecent ?? true,
       useQuantity: input.useQuantity ?? true,
       usePrice: input.usePrice ?? true,
+      useDeadline: input.useDeadline ?? false,
       showStoreInList: input.showStoreInList ?? true,
       showPriceInList: input.showPriceInList ?? true,
       itemSortOrder: input.itemSortOrder ?? 'ranked',

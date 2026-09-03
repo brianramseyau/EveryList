@@ -99,9 +99,10 @@
 			useRecent: boolean;
 			useQuantity: boolean;
 			usePrice: boolean;
+			useDeadline: boolean;
 			showStoreInList: boolean;
 			showPriceInList: boolean;
-			itemSortOrder: 'ranked' | 'alphabetical';
+			itemSortOrder: 'ranked' | 'alphabetical' | 'deadline';
 			insertPosition: 'top' | 'bottom';
 			maxUncheckedItems: number | null;
 			passcodeHash: string | null;
@@ -198,11 +199,29 @@
 		| 'showStoreInList'
 		| 'showPriceInList';
 
-	// Every feature toggle defaults to `true` server-side — `!== false` is the
-	// standard "missing/undefined means on" read used across this page (see
+	// Every feature toggle above defaults to `true` server-side — `!== false` is
+	// the standard "missing/undefined means on" read used across this page (see
 	// ListDto's field comments).
 	async function toggleFeature(field: BooleanFeatureField, current: ListDto) {
 		await onupdate({ [field]: current[field] === false });
+	}
+
+	// Deadlines are the one default-OFF flag (PLAN_24_PHASE_ITEM_DEADLINES.md) —
+	// a missing value means off, so it can't reuse toggleFeature above: that one
+	// computes the new value as `current[field] === false`, which for a missing
+	// field sends `false` and makes the first "enable" click a silent no-op.
+	// Toggling off while the list sorts by deadline also resets the sort to
+	// 'ranked' in the same update — a deadline sort without deadlines is
+	// meaningless, and the sort option is hidden when the feature is off.
+	async function toggleDeadline(current: ListDto) {
+		const enabling = current.useDeadline !== true;
+		if (enabling) {
+			await onupdate({ useDeadline: true });
+		} else if (current.itemSortOrder === 'deadline') {
+			await onupdate({ useDeadline: false, itemSortOrder: 'ranked' });
+		} else {
+			await onupdate({ useDeadline: false });
+		}
 	}
 
 	// Turning this off makes the server permanently delete everything it's
@@ -457,6 +476,16 @@
 					Show price in list
 				</Toggle>
 			{/if}
+
+			<!-- The one default-off feature flag (PLAN_24_PHASE_ITEM_DEADLINES.md) — a
+				todos-style feature; hidden fields only, stored deadlines are kept. -->
+			<Toggle
+				checked={list.useDeadline === true}
+				onchange={() => toggleDeadline(list!)}
+				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
+			>
+				Deadlines
+			</Toggle>
 		</div>
 
 		<div class="flex flex-col gap-1">
@@ -485,17 +514,21 @@
 				size="sm"
 				items={[
 					{ value: 'ranked', name: 'Ranked' },
-					{ value: 'alphabetical', name: 'Alphabetical' }
+					{ value: 'alphabetical', name: 'Alphabetical' },
+					// Only offered while deadlines are on — a deadline sort with the
+					// feature off would be meaningless (toggleDeadline resets it).
+					...(list.useDeadline === true ? [{ value: 'deadline', name: 'By deadline' }] : [])
 				]}
 				value={list.itemSortOrder ?? 'ranked'}
 				onchange={(event) => {
-					const value = (event.target as HTMLSelectElement).value as 'ranked' | 'alphabetical';
+					const value = (event.target as HTMLSelectElement).value as
+						'ranked' | 'alphabetical' | 'deadline';
 					void onupdate({ itemSortOrder: value });
 				}}
 			/>
 		</div>
 
-		{#if (list.itemSortOrder ?? 'ranked') !== 'alphabetical'}
+		{#if (list.itemSortOrder ?? 'ranked') === 'ranked'}
 			<div class="flex flex-col gap-1">
 				<span class="text-xs text-gray-500 dark:text-gray-400">Insert new items</span>
 				<Select

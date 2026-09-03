@@ -217,6 +217,7 @@ export async function createItem(
 		categoryId?: number | null;
 		storeId?: number | null;
 		price?: number | null;
+		deadline?: string | null;
 	}
 ): Promise<ItemDto> {
 	// Provably covered in isolation (run items.spec.ts + items-offline.spec.ts
@@ -247,6 +248,7 @@ export async function createItem(
 			categoryId,
 			storeId: input.storeId ?? null,
 			price: input.price ?? null,
+			deadline: input.deadline ?? null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: Date.now(),
@@ -306,6 +308,7 @@ export async function updateItem(
 		categoryId: number | null;
 		storeId: number | null;
 		price: number | null;
+		deadline: string | null;
 		checked: boolean;
 		sortOrder: number;
 	}>

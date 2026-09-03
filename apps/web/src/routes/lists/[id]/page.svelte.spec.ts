@@ -166,6 +166,7 @@ function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): I
 		categoryId: null,
 		storeId: null,
 		price: null,
+		deadline: null,
 		checked: false,
 		checkedAt: null,
 		sortOrder: 0,
@@ -496,6 +497,89 @@ describe('List detail +page.svelte', () => {
 			.map((el) => el.textContent?.trim())
 			.filter((t) => t === 'Bananas' || t === 'Apples');
 		expect(names).toEqual(['Apples', 'Bananas']);
+	});
+
+	it("sorts items by deadline within a category when itemSortOrder is 'deadline'", async () => {
+		vi.mocked(fetchList).mockResolvedValue({
+			...list,
+			itemSortOrder: 'deadline',
+			useDeadline: true
+		});
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, sortOrder: 0, deadline: '2026-09-10' }),
+			makeItem({ id: 101, name: 'Apples', categoryId: 10, sortOrder: 1, deadline: '2026-09-05' }),
+			makeItem({ id: 102, name: 'Milk', categoryId: 10, sortOrder: 2 })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Groceries')).toBeInTheDocument();
+		const produceHeader = page.getByText('Produce').element().closest('h2');
+		expect(produceHeader).not.toBeNull();
+
+		const names = [...produceHeader!.parentElement!.querySelectorAll('li span')]
+			.map((el) => el.textContent?.trim())
+			.filter((t) => t === 'Bananas' || t === 'Apples' || t === 'Milk');
+		// Earliest deadline first, then the no-deadline item in its rank position.
+		expect(names).toEqual(['Apples', 'Bananas', 'Milk']);
+	});
+
+	it('shows the deadline chip only when the list has deadlines enabled and the item carries one', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, deadline: '2099-09-10' }),
+			makeItem({ id: 101, name: 'Milk', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Required by Sep 10')).toBeInTheDocument();
+		await expect.element(page.getByText('Milk')).toBeInTheDocument();
+		// Milk has no deadline — the only chip on the page is Bananas'.
+		expect(page.getByText(/Required by|Overdue|Today/).element().textContent).toBe(
+			'Required by Sep 10'
+		);
+	});
+
+	it('marks a past deadline with the red Overdue chip', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, deadline: '2020-01-01' })
+		]);
+
+		render(ListDetailPage);
+
+		const chip = page.getByText('Overdue (Jan 1)');
+		await expect.element(chip).toBeInTheDocument();
+		expect(chip.element().className).toContain('text-red-600');
+	});
+
+	it('shows a date-only deadline due today as the amber Today chip', async () => {
+		const now = new Date();
+		const pad = (value: number) => (value < 10 ? `0${value}` : String(value));
+		const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, deadline: today })
+		]);
+
+		render(ListDetailPage);
+
+		const chip = page.getByText('Today', { exact: true });
+		await expect.element(chip).toBeInTheDocument();
+		expect(chip.element().className).toContain('text-amber-600');
+	});
+
+	it('hides the deadline chip when the list does not have deadlines enabled, even if items carry deadlines', async () => {
+		// The `list` fixture has no useDeadline field — missing means OFF for this flag.
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10, deadline: '2020-01-01' })
+		]);
+
+		render(ListDetailPage);
+
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+		await expect.element(page.getByText(/Overdue|Required by|Today/)).not.toBeInTheDocument();
 	});
 
 	it('hides checked items when the eye toggle is switched off, and shows them again on toggle', async () => {

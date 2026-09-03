@@ -45,6 +45,7 @@ function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): I
 		categoryId: null,
 		storeId: null,
 		price: null,
+		deadline: null,
 		checked: false,
 		checkedAt: null,
 		sortOrder: 0,
