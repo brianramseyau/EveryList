@@ -703,3 +703,54 @@ test.group('Open item limit settings', (group) => {
     patch.assertStatus(422)
   })
 })
+test.group('List deadline flag (PLAN_24_PHASE_ITEM_DEADLINES.md)', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('useDeadline defaults to false and persists enable/disable updates', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Deadlines off by default' })
+    create.assertStatus(200)
+    const list = bodyData<ListDto>(create)
+    assert.isFalse(list.useDeadline, 'the one default-off feature flag')
+
+    const enable = await client
+      .patch(`/api/v1/lists/${list.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ useDeadline: true })
+    enable.assertStatus(200)
+    assert.isTrue(bodyData<ListDto>(enable).useDeadline)
+
+    const fetched = await client
+      .get(`/api/v1/lists/${list.id}`)
+      .header('Authorization', `Bearer ${token}`)
+    fetched.assertStatus(200)
+    assert.isTrue(bodyData<ListDto>(fetched).useDeadline)
+
+    const disable = await client
+      .patch(`/api/v1/lists/${list.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ useDeadline: false })
+    disable.assertStatus(200)
+    assert.isFalse(bodyData<ListDto>(disable).useDeadline)
+  })
+
+  test('accepts itemSortOrder deadline alongside enabling the flag', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Deadline sorted', useDeadline: true, itemSortOrder: 'deadline' })
+    create.assertStatus(200)
+    const list = bodyData<ListDto>(create)
+    assert.isTrue(list.useDeadline)
+    assert.equal(list.itemSortOrder, 'deadline')
+  })
+})

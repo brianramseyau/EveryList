@@ -109,6 +109,7 @@ export default class ListsController {
       useRecent: payload.useRecent,
       useQuantity: payload.useQuantity,
       usePrice: payload.usePrice,
+      useDeadline: payload.useDeadline,
       showStoreInList: payload.showStoreInList,
       showPriceInList: payload.showPriceInList,
       itemSortOrder: payload.itemSortOrder,

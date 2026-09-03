@@ -70,6 +70,17 @@ export function updateList(
 		badgeExcluded: boolean;
 		useCategories: boolean;
 		useCategoryLearning: boolean;
+		useShops: boolean;
+		useFavorites: boolean;
+		useRecent: boolean;
+		useQuantity: boolean;
+		usePrice: boolean;
+		/** Defaults off server-side — see ListDto's doc comment. */
+		useDeadline: boolean;
+		showStoreInList: boolean;
+		showPriceInList: boolean;
+		itemSortOrder: 'ranked' | 'alphabetical' | 'deadline';
+		insertPosition: 'top' | 'bottom';
 		folderId: number | null;
 		passcodeHash: string | null;
 	}>

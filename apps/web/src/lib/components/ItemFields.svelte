@@ -10,12 +10,15 @@
 		categoryId = $bindable(null),
 		storeId = $bindable(null),
 		notes = $bindable(''),
+		deadlineDate = $bindable(''),
+		deadlineTime = $bindable(''),
 		categories,
 		stores,
 		showCategory = true,
 		showQuantity = true,
 		showPrice = true,
 		showStore = true,
+		showDeadline = false,
 		autofocusName = true
 	}: {
 		name?: string;
@@ -24,12 +27,17 @@
 		categoryId?: number | null;
 		storeId?: number | null;
 		notes?: string;
+		/** 'YYYY-MM-DD' or '' when unset — deadline editing requires a date first. */
+		deadlineDate?: string;
+		/** 'HH:mm' or '' when unset — only editable once a date is set (PLAN_24). */
+		deadlineTime?: string;
 		categories: CategoryDto[];
 		stores: StoreDto[];
 		showCategory?: boolean;
 		showQuantity?: boolean;
 		showPrice?: boolean;
 		showStore?: boolean;
+		showDeadline?: boolean;
 		autofocusName?: boolean;
 	} = $props();
 </script>
@@ -74,6 +82,38 @@
 					Price (optional)
 				</Label>
 				<Input id="item-price" inputmode="decimal" placeholder="0.00" bind:value={price} />
+			</div>
+		{/if}
+	</div>
+{/if}
+
+{#if showDeadline}
+	<div class="grid grid-cols-2 gap-4">
+		<div class="flex flex-col gap-1" class:col-span-2={!deadlineDate}>
+			<Label for="item-deadline-date" class="flex items-center gap-1">
+				<Icon name="calendar" class="h-4 w-4" />
+				Required by (optional)
+			</Label>
+			<Input
+				id="item-deadline-date"
+				type="date"
+				bind:value={deadlineDate}
+				onchange={() => {
+					// A time is only meaningful with a date — clearing the date
+					// clears the time rather than leaving an unsavable leftover
+					// (PLAN_24: "time would require a date to be set").
+					if (!deadlineDate) deadlineTime = '';
+				}}
+			/>
+		</div>
+
+		{#if deadlineDate}
+			<div class="flex flex-col gap-1">
+				<Label for="item-deadline-time" class="flex items-center gap-1">
+					<Icon name="clockOutline" class="h-4 w-4" />
+					Time (optional)
+				</Label>
+				<Input id="item-deadline-time" type="time" bind:value={deadlineTime} />
 			</div>
 		{/if}
 	</div>

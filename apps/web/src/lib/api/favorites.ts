@@ -148,6 +148,8 @@ export async function addFavoriteToList(listId: number, favoriteId: number): Pro
 			categoryId: favorite?.defaultCategoryId ?? null,
 			storeId: favorite?.storeId ?? null,
 			price: favorite?.price ?? null,
+			// Favorites carry no deadline — only the item edit form sets one (PLAN_24).
+			deadline: null,
 			checked: false,
 			checkedAt: null,
 			sortOrder: Date.now(),

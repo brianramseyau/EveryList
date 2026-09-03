@@ -20,6 +20,7 @@ export default class ListTransformer extends BaseTransformer<List> {
         'useRecent',
         'useQuantity',
         'usePrice',
+        'useDeadline',
         'showStoreInList',
         'showPriceInList',
         'itemSortOrder',

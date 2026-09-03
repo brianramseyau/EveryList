@@ -109,6 +109,7 @@ function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): I
 		categoryId: null,
 		storeId: null,
 		price: null,
+		deadline: null,
 		checked: false,
 		checkedAt: null,
 		sortOrder: 0,
@@ -263,7 +264,8 @@ describe('Item detail +page.svelte', () => {
 			notes: 'Yellow, not green',
 			price: 450,
 			categoryId: null,
-			storeId: null
+			storeId: null,
+			deadline: null
 		});
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 		expect(vi.mocked(goto).mock.calls[0]?.[0]).toBe('/lists/1');
@@ -308,8 +310,87 @@ describe('Item detail +page.svelte', () => {
 			notes: null,
 			price: null,
 			categoryId: null,
-			storeId: null
+			storeId: null,
+			deadline: null
 		});
+	});
+
+	it('hides the deadline fields when the list does not have deadlines enabled', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11' }));
+
+		render(ItemDetailPage);
+
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+		await expect.element(page.getByLabelText('Required by (optional)')).not.toBeInTheDocument();
+	});
+
+	it('shows the time input only once a deadline date is set', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+
+		render(ItemDetailPage);
+
+		const dateInput = page.getByLabelText('Required by (optional)');
+		await expect.element(dateInput).toHaveValue('');
+		await expect.element(page.getByLabelText('Time (optional)')).not.toBeInTheDocument();
+
+		await dateInput.fill('2026-09-11');
+		await expect.element(page.getByLabelText('Time (optional)')).toBeInTheDocument();
+	});
+
+	it('pre-fills a datetime deadline from the item and saves it back unchanged', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+
+		await expect.element(page.getByLabelText('Required by (optional)')).toHaveValue('2026-09-11');
+		await expect.element(page.getByLabelText('Time (optional)')).toHaveValue('17:30');
+
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(
+			1,
+			100,
+			expect.objectContaining({ deadline: '2026-09-11T17:30' })
+		);
+	});
+
+	it('saves a date-only deadline without a time part', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await page.getByLabelText('Required by (optional)').fill('2026-09-11');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(
+			1,
+			100,
+			expect.objectContaining({ deadline: '2026-09-11' })
+		);
+	});
+
+	it('clears the time when the deadline date is cleared, and saves null', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Time (optional)')).toHaveValue('17:30');
+
+		await page.getByLabelText('Required by (optional)').fill('');
+		await expect.element(page.getByLabelText('Time (optional)')).not.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Save' }).click();
+		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ deadline: null }));
 	});
 
 	it('saves via the form submit event, not just the header Save button', async () => {
