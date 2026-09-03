@@ -651,7 +651,7 @@
 							class="mb-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-700 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
 						>
 							<span>{latestVersion}</span> is available —
-							<a href={releaseUrl} target="_blank" class="underline">download it</a>
+							<a href={releaseUrl} target="_blank" rel="external" class="underline">download it</a>
 							and reinstall.
 						</p>
 					{/if}
