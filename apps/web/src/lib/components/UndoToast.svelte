@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { swipeDismiss } from '$lib/actions/swipe-dismiss';
 
 	// Small, generic undo toast (PLAN_20_PHASE_UNDO_DELETE_TOAST.md) — a fixed bottom banner with
 	// a single action, auto-dismissing after `durationMs`. `onDismiss` fires only when the timer
@@ -42,7 +43,8 @@
 
 <div
 	role="status"
-	class="fixed inset-x-4 z-20 mx-auto flex app-max-w items-center justify-between gap-3 rounded-t-xl border border-b-0 border-amber-300 bg-amber-50 px-4 py-2 text-sm shadow-sm dark:border-amber-700 dark:bg-amber-900/30 print:hidden"
+	use:swipeDismiss={{ onDismiss: () => onDismiss?.() }}
+	class="fixed inset-x-4 z-20 mx-auto flex app-max-w touch-pan-x items-center justify-between gap-3 rounded-t-xl border border-b-0 border-amber-300 bg-amber-50 px-4 py-2 text-sm shadow-sm dark:border-amber-700 dark:bg-amber-900 print:hidden"
 	style="bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));"
 >
 	<span class="text-amber-900 dark:text-amber-200">{message}</span>
