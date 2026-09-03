@@ -337,7 +337,18 @@ describe('Item detail +page.svelte', () => {
 		await expect.element(page.getByLabelText('Time (optional)')).not.toBeInTheDocument();
 
 		await dateInput.fill('2026-09-11');
-		await expect.element(page.getByLabelText('Time (optional)')).toBeInTheDocument();
+		const timeInput = page.getByLabelText('Time (optional)');
+		await expect.element(timeInput).toBeInTheDocument();
+
+		// Typing a time writes it back into the draft, and saving must combine
+		// it with the date into the API's single 'YYYY-MM-DDTHH:mm' string.
+		await timeInput.fill('08:15');
+		await page.getByRole('button', { name: 'Save' }).click();
+		expect(updateItem).toHaveBeenCalledWith(
+			1,
+			100,
+			expect.objectContaining({ deadline: '2026-09-11T08:15' })
+		);
 	});
 
 	it('pre-fills a datetime deadline from the item and saves it back unchanged', async () => {

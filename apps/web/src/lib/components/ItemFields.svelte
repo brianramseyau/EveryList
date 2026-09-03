@@ -40,16 +40,6 @@
 		showDeadline?: boolean;
 		autofocusName?: boolean;
 	} = $props();
-
-	// A time is only meaningful with a date — whenever the date is unset the
-	// time draft resets too (PLAN_24: "time would require a date to be set").
-	// An effect rather than an onchange handler so it holds no matter HOW the
-	// date input is cleared (Chromium notably doesn't fire `change` when a
-	// date input's value is programmatically emptied, only `input`), and it
-	// also normalizes any pre-filled date-less state on mount.
-	$effect(() => {
-		if (!deadlineDate) deadlineTime = '';
-	});
 </script>
 
 <div class="flex flex-col gap-1">
@@ -104,7 +94,21 @@
 				<Icon name="calendar" class="h-4 w-4" />
 				Required by (optional)
 			</Label>
-			<Input id="item-deadline-date" type="date" bind:value={deadlineDate} />
+			<Input
+				id="item-deadline-date"
+				type="date"
+				bind:value={deadlineDate}
+				oninput={(event) => {
+					// A time is only meaningful with a date — clearing the date clears
+					// the time rather than leaving a stale value that would reappear
+					// if a new date gets picked (PLAN_24: "time would require a date
+					// to be set"). Read the DOM value directly: Chromium fires
+					// `input` (not `change`) when a date input is emptied, and this
+					// doesn't depend on bind:value's listener running first.
+					const input = event.currentTarget;
+					if (input instanceof HTMLInputElement && !input.value) deadlineTime = '';
+				}}
+			/>
 		</div>
 
 		{#if deadlineDate}
