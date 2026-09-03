@@ -72,6 +72,21 @@ repositories {
     }
 }
 
+// @aparajita/capacitor-biometric-auth declares com.google.android.material via
+// the stock Capacitor plugin template's boilerplate, but never imports it — its
+// styles all parent off AppCompat themes, androidx.biometric's POM doesn't pull
+// material, and nothing else in this app (a WebView shell) uses it. With
+// minifyEnabled false in every build type it would otherwise ship ~3 MB of dead
+// dex/resources in each APK/AAB (v1.2.5-rc.1: 9.85 MB vs 6.83 MB before the
+// plugin). Drop it from the graph. If a future plugin version ever requires
+// material classes, the failure is loud (resource-link error at build time, or
+// NoClassDefFoundError at the first biometric prompt) — re-check that plugin's
+// android/build.gradle and remove this exclude only after confirming a real
+// material import.
+configurations.all {
+    exclude group: 'com.google.android.material', module: 'material'
+}
+
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"

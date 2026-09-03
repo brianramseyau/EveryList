@@ -47,6 +47,7 @@ The PIN form remains the universal fallback. **Do not touch the parent page's `u
 
 - `apps/ios/App/App/Info.plist`: add `NSFaceIDUsageDescription` (required by Apple whenever Face ID is invoked).
 - **Verified:** Android needs no manifest change — but not for the reason first assumed. This plugin's Android side uses `androidx.biometric.BiometricPrompt`, which requires no `USE_BIOMETRIC` permission (that permission is only for the deprecated FingerprintManager path), and the plugin's own `AndroidManifest.xml` declares none — so there is nothing to merge. `cap sync` registration (Gradle `settings.gradle`/`build.gradle` + iOS SPM `Package.swift`) is the only native-project change.
+- **APK size:** the plugin's `android/build.gradle` carries the stock Capacitor-plugin-template `com.google.android.material:material:1.13.0` dependency, which it never imports (all its styles parent off AppCompat; `androidx.biometric`'s POM doesn't pull material either). With `minifyEnabled false` in every build type that shipped ~3 MB of dead dex/resources per APK/AAB (debug APK 6.83 MB → 9.85 MB on `v1.2.5-rc.1`). `apps/android/app/build.gradle` excludes material globally with a comment explaining when to re-check; verified working on an Android device (rc.1, 2026-09-03) — the exclude is a follow-up size fix, behavior unchanged.
 
 ## Tests (100% coverage gates apply on `apps/web`)
 
