@@ -28,6 +28,9 @@
 	let draftIcon = $state('formatListChecks');
 	let draftColor = $state('#3b82f6');
 	let draftFolderId = $state<number | null>(null);
+	// The open-item limit's input draft — kept as text so "empty = no limit" is a
+	// first-class state rather than a magic number; applied on blur (see applyLimitDraft).
+	let draftLimitText = $state('');
 	let savingName = $state(false);
 	let confirmingCategoryLearningOff = $state(false);
 	let confirmingDelete = $state(false);
@@ -55,6 +58,7 @@
 			draftIcon = list.icon ?? 'formatListChecks';
 			draftColor = list.color;
 			draftFolderId = list.folderId;
+			draftLimitText = list.maxUncheckedItems != null ? String(list.maxUncheckedItems) : '';
 			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to load list settings.';
@@ -98,6 +102,7 @@
 			showPriceInList: boolean;
 			itemSortOrder: 'ranked' | 'alphabetical';
 			insertPosition: 'top' | 'bottom';
+			maxUncheckedItems: number | null;
 			passcodeHash: string | null;
 			folderId: number | null;
 		}>
@@ -150,6 +155,28 @@
 	async function toggleBadgeExcluded(current: ListDto) {
 		await onupdate({ badgeExcluded: !current.badgeExcluded });
 	}
+
+	// Empty text = no limit (null); anything else must be a whole number 1–999
+	// (the validator's range — reverting the draft beats a 422 round trip). Saving
+	// a lower limit than the current open count is allowed on purpose: the limit
+	// gates intake, it isn't a maintained invariant (PLAN_25).
+	async function applyLimitDraft() {
+		if (!list) return;
+		const trimmed = draftLimitText.trim();
+		const next = trimmed === '' ? null : Number(trimmed);
+		if (next !== null && (!Number.isInteger(next) || next < 1 || next > 999)) {
+			draftLimitText = list.maxUncheckedItems != null ? String(list.maxUncheckedItems) : '';
+			return;
+		}
+		if (next === (list.maxUncheckedItems ?? null)) return;
+		await onupdate({ maxUncheckedItems: next });
+	}
+
+	const limitHelperText = $derived(
+		list?.maxUncheckedItems != null
+			? `At most ${list.maxUncheckedItems} unchecked item${list.maxUncheckedItems === 1 ? '' : 's'} at a time — ${list.itemCount} open now.`
+			: `No cap — ${list?.itemCount ?? 0} unchecked item${(list?.itemCount ?? 0) === 1 ? '' : 's'} now.`
+	);
 
 	type BooleanFeatureField =
 		| 'useCategories'
@@ -421,6 +448,25 @@
 					Show price in list
 				</Toggle>
 			{/if}
+		</div>
+
+		<div class="flex flex-col gap-1">
+			<span class="text-xs text-gray-500 dark:text-gray-400">Open item limit</span>
+			<Input
+				aria-label="Open item limit"
+				type="number"
+				min={1}
+				max={999}
+				size="sm"
+				placeholder="No limit"
+				bind:value={draftLimitText}
+				onblur={applyLimitDraft}
+			/>
+			<span class="text-xs text-gray-500 dark:text-gray-400">{limitHelperText}</span>
+			<span class="text-xs text-gray-500 dark:text-gray-400">
+				Leave empty for no limit. Checking an item off frees a slot; adding is blocked while the
+				list is full.
+			</span>
 		</div>
 
 		<div class="flex flex-col gap-1">

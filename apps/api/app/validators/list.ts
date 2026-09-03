@@ -15,6 +15,7 @@ export const createListValidator = vine.create({
   showPriceInList: vine.boolean().optional(),
   itemSortOrder: vine.enum(['ranked', 'alphabetical'] as const).optional(),
   insertPosition: vine.enum(['top', 'bottom'] as const).optional(),
+  maxUncheckedItems: vine.number().range([1, 999]).withoutDecimals().nullable().optional(),
 })
 
 export const updateListValidator = vine.create({
@@ -34,6 +35,7 @@ export const updateListValidator = vine.create({
   showPriceInList: vine.boolean().optional(),
   itemSortOrder: vine.enum(['ranked', 'alphabetical'] as const).optional(),
   insertPosition: vine.enum(['top', 'bottom'] as const).optional(),
+  maxUncheckedItems: vine.number().range([1, 999]).withoutDecimals().nullable().optional(),
   folderId: vine.number().positive().nullable().optional(),
   passcodeHash: vine.string().trim().maxLength(200).nullable().optional(),
   expectedVersion: vine.number().optional(),

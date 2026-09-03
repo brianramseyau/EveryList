@@ -18,6 +18,12 @@ import type { CategorizeSuggestionDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
 import {
+  UNCHECKED_LIMIT_REACHED,
+  hasCapacityFor,
+  limitReachedMessage,
+  remainingCapacity,
+} from '#services/unchecked_limit'
+import {
   hasVersionConflict,
   parseExpectedVersion,
   reportVersionConflict,
@@ -164,7 +170,7 @@ export default class ItemsController {
     return response.ok({ data: names })
   }
 
-  async store({ auth, params, request, serialize, logger }: HttpContext) {
+  async store({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createItemValidator)
@@ -213,6 +219,15 @@ export default class ItemsController {
       .first()
 
     if (deletedMatch) {
+      // Restoring a soft-deleted row brings an invisible item back as unchecked —
+      // intake, so the open-item limit gates it (the reactivate-*checked* branch
+      // above does not: unchecking is not intake).
+      if (!(await hasCapacityFor(list))) {
+        return response.badRequest({
+          message: limitReachedMessage(list),
+          code: UNCHECKED_LIMIT_REACHED,
+        })
+      }
       await restoreItemRow(list, deletedMatch)
       logger.debug(
         { listId: list.id, itemId: deletedMatch.id },
@@ -222,6 +237,15 @@ export default class ItemsController {
     }
 
     const categoryId = await resolveCategoryId(list, payload.name, payload.categoryId)
+
+    // Checked as late as possible — right before the insert — to keep the
+    // count-then-insert race window as small as the duplicate-name check's.
+    if (!(await hasCapacityFor(list))) {
+      return response.badRequest({
+        message: limitReachedMessage(list),
+        code: UNCHECKED_LIMIT_REACHED,
+      })
+    }
 
     const item = await Item.create({
       listId: list.id,
@@ -256,7 +280,7 @@ export default class ItemsController {
     return serialize(ItemTransformer.transform(item))
   }
 
-  async import({ auth, params, request, serialize, logger }: HttpContext) {
+  async import({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const { text } = await request.validateUsing(importItemsValidator)
@@ -266,6 +290,21 @@ export default class ItemsController {
       { listId: list.id, sectionCount: parsed.sections.length },
       'item bulk import requested'
     )
+
+    // The import is atomic in spirit — every parsed line becomes an unchecked
+    // item — so it's gated as a whole rather than partially applied up to the
+    // cap. The message says how much would have fit.
+    const incomingCount = parsed.sections.reduce(
+      (total, section) => total + section.items.length,
+      0
+    )
+    const remaining = await remainingCapacity(list)
+    if (remaining !== null && incomingCount > remaining) {
+      return response.badRequest({
+        message: `Bulk import would exceed this list's limit of ${list.maxUncheckedItems} open items (${remaining} slot${remaining === 1 ? '' : 's'} left).`,
+        code: UNCHECKED_LIMIT_REACHED,
+      })
+    }
 
     // Section headers become the item's category — an existing category with
     // the same name (case-insensitive) is reused, otherwise a new one is
@@ -528,6 +567,15 @@ export default class ItemsController {
       storeId = attached ? item.storeId : null
     }
 
+    // Moving an unchecked item in is intake on the destination list; moving a
+    // checked one isn't (it arrives checked).
+    if (!item.checked && !(await hasCapacityFor(destination))) {
+      return response.badRequest({
+        message: limitReachedMessage(destination),
+        code: UNCHECKED_LIMIT_REACHED,
+      })
+    }
+
     const sourceListId = list.id
     item.listId = destination.id
     item.categoryId = categoryId
@@ -599,7 +647,7 @@ export default class ItemsController {
     return response.noContent()
   }
 
-  async restore({ auth, params, serialize, logger }: HttpContext) {
+  async restore({ auth, params, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const item = await Item.query()
@@ -607,6 +655,15 @@ export default class ItemsController {
       .where('listId', list.id)
       .whereNotNull('deletedAt')
       .firstOrFail()
+
+    // Restoring makes the row unchecked again — intake, so gated like every
+    // other path that brings an item back onto a full list.
+    if (!(await hasCapacityFor(list))) {
+      return response.badRequest({
+        message: limitReachedMessage(list),
+        code: UNCHECKED_LIMIT_REACHED,
+      })
+    }
 
     await restoreItemRow(list, item)
 

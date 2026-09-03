@@ -639,3 +639,67 @@ test.group('Widget snapshot', (group) => {
     response.assertStatus(404)
   })
 })
+
+test.group('Open item limit settings', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('maxUncheckedItems round-trips through create and update, clearing back to no limit', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Today', maxUncheckedItems: 5 })
+    create.assertStatus(200)
+    const created = bodyData<ListDto>(create)
+    assert.equal(created.maxUncheckedItems, 5)
+
+    const lower = await client
+      .patch(`/api/v1/lists/${created.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ maxUncheckedItems: 3 })
+    lower.assertStatus(200)
+    assert.equal(bodyData<ListDto>(lower).maxUncheckedItems, 3)
+
+    const clear = await client
+      .patch(`/api/v1/lists/${created.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ maxUncheckedItems: null })
+    clear.assertStatus(200)
+    assert.isNull(bodyData<ListDto>(clear).maxUncheckedItems)
+
+    const show = await client
+      .get(`/api/v1/lists/${created.id}`)
+      .header('Authorization', `Bearer ${token}`)
+    assert.isNull(bodyData<ListDto>(show).maxUncheckedItems)
+  })
+
+  test('maxUncheckedItems rejects out-of-range and non-whole values', async ({ client }) => {
+    const token = await signupAndGetToken(client)
+
+    for (const bad of [0, -1, 1000, 2.5, 'two']) {
+      const create = await client
+        .post('/api/v1/lists')
+        .header('Authorization', `Bearer ${token}`)
+        .json({ name: `Bad ${bad}`, maxUncheckedItems: bad })
+      create.assertStatus(422)
+    }
+
+    // Validation runs inside the controller, after the policy's 404 gate —
+    // so the 422 is asserted against a list the user actually owns.
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Real list' })
+    const listId = bodyData<ListDto>(create).id
+
+    const patch = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ maxUncheckedItems: 0 })
+    patch.assertStatus(422)
+  })
+})

@@ -1165,3 +1165,233 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     )
   })
 })
+
+test.group('Open item limit', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  async function createLimitedList(
+    client: ApiClient,
+    token: string,
+    name: string,
+    maxUncheckedItems: number | null
+  ) {
+    const response = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name, maxUncheckedItems })
+    response.assertStatus(200)
+    return bodyData<ListDto>(response).id
+  }
+
+  async function addItem(client: ApiClient, token: string, listId: number, name: string) {
+    return client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name })
+  }
+
+  async function setChecked(
+    client: ApiClient,
+    token: string,
+    listId: number,
+    itemId: number,
+    checked: boolean
+  ) {
+    const response = await client
+      .patch(`/api/v1/lists/${listId}/items/${itemId}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ checked })
+    response.assertStatus(200)
+  }
+
+  test('blocks adding past the limit, frees a slot on check-off, and allows unchecking while over', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createLimitedList(client, token, 'Today', 2)
+
+    const first = await addItem(client, token, listId, 'First')
+    first.assertStatus(200)
+    const firstItem = bodyData<ItemDto>(first)
+    const second = await addItem(client, token, listId, 'Second')
+    second.assertStatus(200)
+    const secondItem = bodyData<ItemDto>(second)
+
+    const third = await addItem(client, token, listId, 'Third')
+    third.assertStatus(400)
+    assert.equal(third.body().code, 'unchecked_limit_reached')
+    assert.include(third.body().message, 'at most 2 open items')
+
+    // Checking an item off frees a slot immediately.
+    await setChecked(client, token, listId, firstItem.id, true)
+    const thirdRetry = await addItem(client, token, listId, 'Third')
+    thirdRetry.assertStatus(200)
+
+    // Unchecking while at the limit is never blocked, even though it pushes the
+    // list over its own cap (3 open > 2) — the limit gates intake, it isn't a
+    // maintained invariant. Adds stay blocked until the count drops back.
+    await setChecked(client, token, listId, firstItem.id, false)
+    const fourth = await addItem(client, token, listId, 'Fourth')
+    fourth.assertStatus(400)
+    assert.equal(fourth.body().code, 'unchecked_limit_reached')
+
+    await setChecked(client, token, listId, firstItem.id, true)
+    await setChecked(client, token, listId, secondItem.id, true)
+    const fourthRetry = await addItem(client, token, listId, 'Fourth')
+    fourthRetry.assertStatus(200)
+  })
+
+  test('gates restore-on-name-match but allows re-adding a checked item by name', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createLimitedList(client, token, 'Today', 1)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const milk = await addItem(client, token, listId, 'Milk')
+    milk.assertStatus(200)
+    const milkItem = bodyData<ItemDto>(milk)
+
+    // Re-adding a checked item's name is the reactivate branch — unchecking, not intake.
+    await setChecked(client, token, listId, milkItem.id, true)
+    const reactivate = await addItem(client, token, listId, 'Milk')
+    reactivate.assertStatus(200)
+    assert.isFalse(bodyData<ItemDto>(reactivate).checked)
+
+    // Fill the list's only slot with a different item, then re-add the now-deleted
+    // Milk: the restore branch is intake and must be gated.
+    await setChecked(client, token, listId, milkItem.id, true)
+    const eggs = await addItem(client, token, listId, 'Eggs')
+    eggs.assertStatus(200)
+    await client
+      .delete(`/api/v1/lists/${listId}/items/${milkItem.id}`)
+      .header('Authorization', `Bearer ${token}`)
+
+    const restore = await addItem(client, token, listId, 'Milk')
+    restore.assertStatus(400)
+    assert.equal(restore.body().code, 'unchecked_limit_reached')
+
+    const index = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.lengthOf(bodyData<unknown[]>(index), 1, 'only Eggs remains active')
+  })
+
+  test('gates the explicit restore endpoint', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createLimitedList(client, token, 'Today', 1)
+
+    const milk = await addItem(client, token, listId, 'Milk')
+    const milkItem = bodyData<ItemDto>(milk)
+    await client
+      .delete(`/api/v1/lists/${listId}/items/${milkItem.id}`)
+      .header('Authorization', `Bearer ${token}`)
+
+    const eggs = await addItem(client, token, listId, 'Eggs')
+    eggs.assertStatus(200)
+
+    const restore = await client
+      .post(`/api/v1/lists/${listId}/items/${milkItem.id}/restore`)
+      .header('Authorization', `Bearer ${token}`)
+    restore.assertStatus(400)
+    assert.equal(restore.body().code, 'unchecked_limit_reached')
+  })
+
+  test('rejects a bulk import that would not fit, naming the remaining slots', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createLimitedList(client, token, 'Today', 3)
+    await addItem(client, token, listId, 'First')
+    await addItem(client, token, listId, 'Second')
+
+    const tooBig = await client
+      .post(`/api/v1/lists/${listId}/items/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ text: 'One\nTwo\nThree' })
+    tooBig.assertStatus(400)
+    assert.equal(tooBig.body().code, 'unchecked_limit_reached')
+    assert.include(tooBig.body().message, '1 slot left')
+
+    // One line fits in the single remaining slot; two would not.
+    const fits = await client
+      .post(`/api/v1/lists/${listId}/items/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ text: 'One' })
+    fits.assertStatus(200)
+    assert.lengthOf(bodyData<unknown[]>(fits), 1)
+
+    // Now full: even a one-line import is refused, and the plural slots copy
+    // reads correctly at zero.
+    const full = await client
+      .post(`/api/v1/lists/${listId}/items/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ text: 'Two' })
+    full.assertStatus(400)
+    assert.equal(full.body().code, 'unchecked_limit_reached')
+    assert.include(full.body().message, '0 slots left')
+  })
+
+  test('gates moveToList for unchecked items only, and only on the destination', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const sourceId = await createLimitedList(client, token, 'Source', null)
+    const destinationId = await createLimitedList(client, token, 'Destination', 1)
+
+    const blocker = await addItem(client, token, destinationId, 'Blocker')
+    blocker.assertStatus(200)
+
+    const item = await addItem(client, token, sourceId, 'Traveler')
+    const itemBody = bodyData<ItemDto>(item)
+
+    const blocked = await client
+      .post(`/api/v1/lists/${sourceId}/items/${itemBody.id}/move-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ destinationListId: destinationId })
+    blocked.assertStatus(400)
+    assert.equal(blocked.body().code, 'unchecked_limit_reached')
+
+    // A checked item arrives checked — not intake — so it moves freely.
+    await setChecked(client, token, sourceId, itemBody.id, true)
+    const allowed = await client
+      .post(`/api/v1/lists/${sourceId}/items/${itemBody.id}/move-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ destinationListId: destinationId })
+    allowed.assertStatus(200)
+    assert.equal(bodyData<ItemDto>(allowed).listId, destinationId)
+  })
+
+  test('a limit can be lowered below the current count and cleared again', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createLimitedList(client, token, 'Today', null)
+    await addItem(client, token, listId, 'First')
+    await addItem(client, token, listId, 'Second')
+    await addItem(client, token, listId, 'Third')
+
+    const lower = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ maxUncheckedItems: 2 })
+    lower.assertStatus(200)
+    assert.equal(bodyData<ListDto>(lower).maxUncheckedItems, 2)
+
+    const fourth = await addItem(client, token, listId, 'Fourth')
+    fourth.assertStatus(400)
+
+    const clear = await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ maxUncheckedItems: null })
+    clear.assertStatus(200)
+    assert.isNull(bodyData<ListDto>(clear).maxUncheckedItems)
+
+    const fourthRetry = await addItem(client, token, listId, 'Fourth')
+    fourthRetry.assertStatus(200)
+  })
+})

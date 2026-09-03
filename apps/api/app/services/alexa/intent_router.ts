@@ -9,6 +9,7 @@ import { broadcastSync } from '#services/sync_broadcaster'
 import { closestMatch } from '#services/alexa/fuzzy_match'
 import { resolveList, roleFor, setDefaultList } from '#services/alexa/list_resolution'
 import { say, type AlexaResponse } from '#services/alexa/response_builder'
+import { hasCapacityFor, limitReachedMessage } from '#services/unchecked_limit'
 
 type AlexaSlots = Record<string, string | undefined>
 
@@ -163,6 +164,12 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots): Prom
     .first()
 
   if (deletedMatch) {
+    // Restoring brings an invisible item back as unchecked — intake, so the
+    // open-item limit gates it here like every other path (the reactivate-
+    // checked branch above is not intake).
+    if (!(await hasCapacityFor(list))) {
+      return respond(say(limitReachedMessage(list)), list)
+    }
     deletedMatch.deletedAt = null
     deletedMatch.sortOrder = await nextSortOrder(list.id)
     deletedMatch.version += 1
@@ -176,6 +183,12 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots): Prom
       version: deletedMatch.version,
     })
     return respond(say(`Added ${deletedMatch.name} to ${list.name}.`), list)
+  }
+
+  // The fresh-create branch is intake — the open-item limit gates it (the
+  // reactivate-checked branch above is not: unchecking isn't intake).
+  if (!(await hasCapacityFor(list))) {
+    return respond(say(limitReachedMessage(list)), list)
   }
 
   const item = await Item.create({

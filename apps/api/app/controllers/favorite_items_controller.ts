@@ -8,6 +8,11 @@ import ItemTransformer from '#transformers/item_transformer'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { learnCategory } from '#services/category_suggestion_service'
 import {
+  UNCHECKED_LIMIT_REACHED,
+  hasCapacityFor,
+  limitReachedMessage,
+} from '#services/unchecked_limit'
+import {
   hasVersionConflict,
   parseExpectedVersion,
   reportVersionConflict,
@@ -185,7 +190,7 @@ export default class FavoriteItemsController {
    * seeded with its default category/quantity — the "master list" loop
    * from PLAN_00_FOUNDATIONAL_PLAN.md §3, now scoped to a single list.
    */
-  async addToList({ auth, params, serialize, logger }: HttpContext) {
+  async addToList({ auth, params, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const favorite = await FavoriteItem.query()
@@ -229,6 +234,15 @@ export default class FavoriteItemsController {
       .whereNull('deletedAt')
       .max('sort_order as maxSortOrder')
       .first()
+
+    // The create branch is intake (the reactivate-checked branch above is not —
+    // unchecking isn't intake), so the open-item limit gates it here.
+    if (!(await hasCapacityFor(list))) {
+      return response.badRequest({
+        message: limitReachedMessage(list),
+        code: UNCHECKED_LIMIT_REACHED,
+      })
+    }
 
     const item = await Item.create({
       listId: list.id,

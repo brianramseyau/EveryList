@@ -125,6 +125,19 @@ export async function updateMutation(id: number, changes: Partial<QueuedMutation
 	await db.syncQueue.update(id, changes);
 }
 
+/** Returns a DLQ'd (`failed`) mutation to the pending queue — the sync-status page's per-entry
+ * Retry action (PLAN_25_PHASE_OPEN_ITEM_LIMIT.md). `flushQueue` only ever replays `pending`
+ * rows, so a failed mutation is otherwise unreachable; attempts reset so the retry limit
+ * starts fresh. The server's dedup/reactivate logic makes re-replaying a create safe even
+ * if the same name landed in the meantime. */
+export async function retryMutation(id: number): Promise<void> {
+	/* v8 ignore next */
+	const db = getDb();
+	if (!db) return;
+
+	await db.syncQueue.update(id, { status: 'pending', attempts: 0, lastError: undefined });
+}
+
 export async function dequeueMutation(id: number): Promise<void> {
 	/* v8 ignore next */
 	const db = getDb();

@@ -113,6 +113,7 @@ export default class ListsController {
       showPriceInList: payload.showPriceInList,
       itemSortOrder: payload.itemSortOrder,
       insertPosition: payload.insertPosition,
+      maxUncheckedItems: payload.maxUncheckedItems,
     })
 
     logger.debug({ userId: user.id, listId: list.id }, 'list created')

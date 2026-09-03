@@ -1286,3 +1286,160 @@ test.group('Alexa skill endpoint', (group) => {
     assert.isUndefined(response.body().response.directives)
   })
 })
+
+test.group('Alexa open item limit', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  group.each.setup(() => {
+    const original = alexaSignatureVerifier.verify
+    alexaSignatureVerifier.verify = async () => {}
+    return () => {
+      alexaSignatureVerifier.verify = original
+    }
+  })
+
+  test('AddItemIntent refuses to add onto a full list, but re-speaking a checked item still unchecks it', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Today', maxUncheckedItems: 1 })
+    const listId = bodyData<ListDto>(create).id
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const first = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Milk' },
+      })
+    )
+    first.assertStatus(200)
+    assert.include(first.body().response.outputSpeech.text, 'Added Milk to Today')
+
+    const second = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Eggs' },
+      })
+    )
+    second.assertStatus(200)
+    assert.include(
+      second.body().response.outputSpeech.text,
+      'allows only 1 open item',
+      'a full list speaks the limit refusal'
+    )
+
+    const itemsAfterRefusal = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const milkItem = bodyData<{ id: number; name: string }[]>(itemsAfterRefusal).find(
+      (row) => row.name === 'Milk'
+    )!
+
+    // Fill the list's only slot via REST with the checked Milk plus a new open
+    // item, then re-speak Milk: the reactivate branch (unchecking, not intake)
+    // is never gated, even while the list is full.
+    await client
+      .patch(`/api/v1/lists/${listId}/items/${milkItem.id}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ checked: true })
+    const eggs = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Eggs' })
+    eggs.assertStatus(200)
+
+    const uncheck = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Milk' },
+      })
+    )
+    uncheck.assertStatus(200)
+    assert.include(uncheck.body().response.outputSpeech.text, 'already on Today')
+
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const milkRow = bodyData<{ id: number; checked: boolean }[]>(items).find(
+      (row) => row.id === milkItem.id
+    )!
+    assert.isFalse(milkRow.checked, 're-speaking a checked item unchecks it even on a full list')
+  })
+
+  test('AddItemIntent refuses to restore a deleted item onto a full list', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Today', maxUncheckedItems: 1 })
+    const listId = bodyData<ListDto>(create).id
+    const pat = await mintPat(client, owner.token, [listId])
+
+    // Milk on (open 1), checked off, Eggs on via voice (open 1, full), then
+    // Milk deleted. Re-speaking Milk hits the restore-deleted branch — intake,
+    // so it is refused like every other full-list path.
+    await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Milk' },
+      })
+    )
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const milkItem = bodyData<{ id: number }[]>(items)[0]!
+    await client
+      .patch(`/api/v1/lists/${listId}/items/${milkItem.id}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ checked: true })
+    const eggs = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Eggs' },
+      })
+    )
+    assert.include(eggs.body().response.outputSpeech.text, 'Added Eggs to Today')
+    await client
+      .delete(`/api/v1/lists/${listId}/items/${milkItem.id}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+
+    const restore = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Milk' },
+      })
+    )
+    restore.assertStatus(200)
+    assert.include(restore.body().response.outputSpeech.text, 'allows only 1 open item')
+
+    const after = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    assert.lengthOf(bodyData<unknown[]>(after), 1, 'only Eggs remains active')
+  })
+})

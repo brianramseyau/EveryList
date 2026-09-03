@@ -75,6 +75,7 @@ export interface CreateOwnedListInput {
   showPriceInList?: boolean
   itemSortOrder?: 'ranked' | 'alphabetical'
   insertPosition?: 'top' | 'bottom'
+  maxUncheckedItems?: number | null
   /** Only for a brand-new user's very first list — see #controllers/new_account_controller. */
   seedStarterCategories?: boolean
   /** Only for a brand-new user's "Todos" starter list — see #controllers/new_account_controller. */
@@ -110,6 +111,7 @@ export async function createOwnedList(input: CreateOwnedListInput) {
       showPriceInList: input.showPriceInList ?? true,
       itemSortOrder: input.itemSortOrder ?? 'ranked',
       insertPosition: input.insertPosition ?? 'bottom',
+      maxUncheckedItems: input.maxUncheckedItems ?? null,
       version: 1,
     },
     { client }

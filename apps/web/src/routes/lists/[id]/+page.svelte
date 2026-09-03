@@ -26,7 +26,7 @@
 	import { isSelfMutation } from '$lib/offline/self-mutations';
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
-	import { onConflict, onFlushOutcome } from '$lib/offline/flush';
+	import { onConflict, onCreateRejected, onFlushOutcome } from '$lib/offline/flush';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import { markListOrigin, rememberListScroll, consumeListScroll } from '$lib/nav-direction';
 	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
@@ -35,6 +35,7 @@
 	import { longPress } from '$lib/actions/long-press';
 	import { anchorPanel } from '$lib/actions/anchor-panel';
 	import { computeMidpointSortOrder } from '$lib/item-sort-order';
+	import { isAtLimit, uncheckedCount } from '$lib/unchecked-limit';
 	import { swipeReveal } from '$lib/actions/swipe-reveal';
 	import { splitTextWithLinks } from '$lib/linkify';
 	import Icon from '$lib/components/Icon.svelte';
@@ -147,6 +148,11 @@
 	let unsubscribeRealtime: (() => void) | null = null;
 	let unsubscribeConflict: (() => void) | null = null;
 	let unsubscribeFlushOutcome: (() => void) | null = null;
+	let unsubscribeCreateRejected: (() => void) | null = null;
+	// Shown when the flush loop severs a queued offline add this list rejected (the
+	// open-item limit being the routine case) — keyed + auto-dismissed like the undo toast.
+	let rejectionToast = $state<{ id: number; message: string } | null>(null);
+	let rejectionToastId = 0;
 
 	// Coarse (touch) pointers get the swipe-to-delete gesture; fine pointers
 	// (mouse/trackpad) get a static "×" fallback instead (PLAN_09_PHASE_REFINEMENTS.md #9)
@@ -332,6 +338,15 @@
 
 	const totalText = $derived(`Total: ${formatPrice(totalCents)}`);
 
+	// Open-item limit (PLAN_25_PHASE_OPEN_ITEM_LIMIT.md): the Dexie-backed in-memory
+	// `items` already includes this device's own optimistic offline rows, so the
+	// bottom-bar counter and the add gate are exact for everything this client has
+	// done; the server-side check (`apps/api`'s unchecked_limit.ts) backstops stale
+	// counts against other devices' edits.
+	const openLimit = $derived(list?.maxUncheckedItems ?? null);
+	const openCount = $derived(uncheckedCount(items));
+	const limitReached = $derived(isAtLimit(list, items));
+
 	const progressText = $derived.by(() => {
 		if (progressDisplay === 'remaining') {
 			const remaining = visibleItems.length - checkedItems.length;
@@ -476,6 +491,20 @@
 		unsubscribeFlushOutcome = onFlushOutcome(({ ok }) => {
 			if (ok) void loadAll();
 		});
+		// A queued offline create the server terminally rejected at flush time (e.g. the
+		// open-item limit — the local count was stale against another device's edits) has
+		// had its optimistic row severed by the flush loop; say so here rather than letting
+		// the item silently vanish on the next reload. Other lists' rejections are ignored.
+		unsubscribeCreateRejected = onCreateRejected((event) => {
+			if (event.entityType !== 'item' || event.listId !== listId) return;
+			rejectionToastId += 1;
+			rejectionToast = {
+				id: rejectionToastId,
+				message: event.name
+					? `${event.name} wasn't added — ${event.message}`
+					: `Item wasn't added — ${event.message}`
+			};
+		});
 	});
 
 	onDestroy(() => {
@@ -483,6 +512,7 @@
 		unsubscribeRealtime?.();
 		unsubscribeConflict?.();
 		unsubscribeFlushOutcome?.();
+		unsubscribeCreateRejected?.();
 		if (highlightTimeout) clearTimeout(highlightTimeout);
 		// Leaving the page forfeits its undo window — a shake on some other page later shouldn't
 		// reach back into a callback closed over this now-destroyed component's state.
@@ -496,6 +526,15 @@
 		// in case a future call site (e.g. ItemAutocomplete's onselect, reused elsewhere) forgets.
 		/* v8 ignore next */
 		if (isViewer) return;
+		// Hard block at the open-item limit (PLAN_25_PHASE_OPEN_ITEM_LIMIT.md) — the
+		// add input is disabled at the limit, so — like the viewer guard above — this
+		// can't be reached from the UI; kept for defense-in-depth (the server's own
+		// 400 backstops stale counts regardless).
+		/* v8 ignore next */
+		if (limitReached) {
+			error = `This list allows at most ${openLimit} open items — check one off to add more.`;
+			return;
+		}
 		const name = rawName.trim();
 		if (!name) return;
 
@@ -1092,6 +1131,7 @@
 						{listId}
 						bind:value={newItemName}
 						existingNames={items.map((item) => item.name)}
+						disabled={limitReached}
 						onselect={(name) => void addItem(name)}
 						onfocuschange={(focused) => (itemInputFocused = focused)}
 						right={pasteIcon}
@@ -1381,9 +1421,21 @@
 						<span class="text-gray-600 dark:text-gray-400">
 							{progressText}
 						</span>
-						{#if totalCents > 0 && showPriceInList}
-							<span class="font-mono font-semibold tabular-nums">{totalText}</span>
-						{/if}
+						<span class="flex items-center gap-3">
+							{#if totalCents > 0 && showPriceInList}
+								<span class="font-mono font-semibold tabular-nums">{totalText}</span>
+							{/if}
+							{#if openLimit !== null}
+								<span
+									class="font-mono font-semibold tabular-nums {limitReached
+										? 'text-amber-600 dark:text-amber-400'
+										: 'text-gray-600 dark:text-gray-400'}"
+									aria-label="{openCount} of {openLimit} open items allowed"
+								>
+									{openCount}/{openLimit}
+								</span>
+							{/if}
+						</span>
 					</div>
 				{/if}
 			{/if}
@@ -1397,6 +1449,15 @@
 	{#if pendingUndo}
 		{#key pendingUndo.id}
 			<UndoToast message={pendingUndo.message} onAction={() => runUndo()} onDismiss={dismissUndo} />
+		{/key}
+	{:else if rejectionToast}
+		{#key rejectionToast.id}
+			<UndoToast
+				message={rejectionToast.message}
+				actionLabel="Dismiss"
+				onAction={() => (rejectionToast = null)}
+				onDismiss={() => (rejectionToast = null)}
+			/>
 		{/key}
 	{/if}
 </main>
