@@ -19,16 +19,22 @@ import { consumeListOrigin, rememberListScroll } from '$lib/nav-direction';
 // rather than re-proving SortableJS works.
 vi.mock('$lib/actions/sortable-reorder', () => ({
 	sortableReorder: (
-		node: HTMLElement & { __onDrop?: SortableReorderParams['onDrop'] },
+		node: HTMLElement & {
+			__onDrop?: SortableReorderParams['onDrop'];
+			__onDragStateChange?: SortableReorderParams['onDragStateChange'];
+		},
 		params: SortableReorderParams
 	) => {
 		node.__onDrop = params.onDrop;
+		node.__onDragStateChange = params.onDragStateChange;
 		return {
 			update(next: SortableReorderParams) {
 				node.__onDrop = next.onDrop;
+				node.__onDragStateChange = next.onDragStateChange;
 			},
 			destroy() {
 				delete node.__onDrop;
+				delete node.__onDragStateChange;
 			}
 		};
 	}
@@ -2750,6 +2756,54 @@ describe('List detail +page.svelte', () => {
 		expect(deleteItem).not.toHaveBeenCalled();
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 		expect(goto).toHaveBeenCalledWith('/lists/1/items/100');
+
+		matchMediaSpy.mockRestore();
+	});
+
+	it('suppresses the swipe-to-delete/edit gesture for the whole duration of a long-press drag', async () => {
+		const matchMediaSpy = mockCoarsePointer();
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })
+		]);
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		const li = page.getByText('Bananas').element().closest('li')!;
+		const ul = li.parentElement as HTMLElement & {
+			__onDragStateChange?: (active: boolean) => void;
+		};
+		const row = li.querySelector(':scope > div:last-of-type') as HTMLElement;
+		const swipeRight = () => {
+			row.dispatchEvent(
+				new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+			);
+			row.dispatchEvent(
+				new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 60, clientY: 0 })
+			);
+			row.dispatchEvent(
+				new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 60, clientY: 0 })
+			);
+		};
+
+		// The 400ms press-and-hold drag arms → sortableReorder's
+		// onDragStateChange flips the page's dragActive state, which disables
+		// the swipe. Let Svelte flush the reactive update before gesturing.
+		ul.__onDragStateChange!(true);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		// A swipe made after the drag has armed must reveal nothing and
+		// commit nothing, even though the drag's release is what ends it.
+		swipeRight();
+		expect(row.style.transform).toBe('');
+		expect(deleteItem).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
+
+		// Once the drag ends, the swipe gesture works again.
+		ul.__onDragStateChange!(false);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		swipeRight();
+		await expect.poll(() => vi.mocked(deleteItem).mock.calls.length).toBe(1);
 
 		matchMediaSpy.mockRestore();
 	});

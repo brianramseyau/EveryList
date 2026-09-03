@@ -21,6 +21,12 @@ export interface SortableReorderParams {
 	 * drifting horizontally while reordering a vertical list). SortableJS
 	 * itself has no such option, so this is applied by the axis-lock plugin. */
 	fallbackAxis?: FallbackAxis;
+	/** Fired when a press-and-hold drag actually starts (true) and ends
+	 * (false). Lets a caller suppress competing gestures on the same rows —
+	 * e.g. the item-row swipe-to-delete — for the duration of a drag, so a
+	 * horizontal move made after the drag has armed can't reveal or commit
+	 * them. */
+	onDragStateChange?: (active: boolean) => void;
 	/** Fired once on drop, only if the item actually moved (container or
 	 * position). Everything is read off `data-item-id` / `data-container-id`
 	 * attributes rather than array indices. `beforeItemId`/`afterItemId` are
@@ -84,7 +90,11 @@ export function sortableReorder(node: HTMLElement, params: SortableReorderParams
 		ghostClass: 'sortable-ghost',
 		chosenClass: 'sortable-chosen',
 		dragClass: 'sortable-drag',
+		onStart() {
+			current.onDragStateChange?.(true);
+		},
 		onEnd(evt) {
+			current.onDragStateChange?.(false);
 			const unchanged = evt.to === evt.from && evt.newIndex === evt.oldIndex;
 			const itemId = Number(evt.item.dataset.itemId);
 			const toContainerId = parseContainerId(evt.to.dataset.containerId);

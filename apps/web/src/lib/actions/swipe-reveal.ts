@@ -35,10 +35,21 @@ export function swipeReveal(node: HTMLElement, params: SwipeRevealParams) {
 	let dragging = false;
 
 	function reset() {
+		pointerId = null;
 		dragging = false;
 		directionLocked = false;
 		dx = 0;
 		node.style.transform = '';
+	}
+
+	/** Stands the gesture down completely — used when the row gets disabled
+	 * mid-hold (a sortable long-press drag arming), so the horizontal
+	 * movement that follows the drag's activation can't reveal or commit the
+	 * delete/edit panels. Only ever called with an active pointer (see
+	 * update()), which reset() then clears. */
+	function cancelTracking(pid: number) {
+		if (node.hasPointerCapture(pid)) node.releasePointerCapture(pid);
+		reset();
 	}
 
 	function handlePointerDown(event: PointerEvent) {
@@ -117,6 +128,11 @@ export function swipeReveal(node: HTMLElement, params: SwipeRevealParams) {
 	return {
 		update(next: SwipeRevealParams) {
 			current = next;
+			// A long-press drag arming mid-hold (see sortable-reorder's
+			// onDragStateChange) flips this action disabled while the pointer
+			// is still down — cancel the tracking outright so the drag's own
+			// horizontal movement can't reveal or commit the swipe panels.
+			if (next.disabled && pointerId !== null) cancelTracking(pointerId);
 		},
 		destroy() {
 			node.removeEventListener('pointerdown', handlePointerDown);
