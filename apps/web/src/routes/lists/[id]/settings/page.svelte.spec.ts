@@ -511,6 +511,9 @@ describe('List settings +page.svelte', () => {
 		render(SettingsPage);
 
 		const sortSelect = page.getByRole('combobox', { name: 'Item Sort Order' });
+		// .element() is a synchronous read — the settings content only renders
+		// once fetchList resolves, so wait for the select to exist first.
+		await expect.element(sortSelect).toBeInTheDocument();
 		const hasDeadlineOption = () =>
 			[...sortSelect.element().querySelectorAll('option')].some(
 				(option) => option.value === 'deadline'
