@@ -9,7 +9,11 @@ import { broadcastSync } from '#services/sync_broadcaster'
 import { closestMatch } from '#services/alexa/fuzzy_match'
 import { resolveList, roleFor, setDefaultList } from '#services/alexa/list_resolution'
 import { say, type AlexaResponse } from '#services/alexa/response_builder'
-import { hasCapacityFor, limitReachedMessage } from '#services/unchecked_limit'
+import {
+  hasCapacityFor,
+  limitReachedMessage,
+  limitReachedMessageForUncheck,
+} from '#services/unchecked_limit'
 
 type AlexaSlots = Record<string, string | undefined>
 
@@ -21,6 +25,10 @@ type AlexaSlots = Record<string, string | undefined>
  * (e.g. no `ItemName` slot at all).
  */
 export type IntentResult = { response: AlexaResponse; list?: List }
+
+/** `uncheckItemRow`'s outcome — the touch handler speaks a refusal instead of the usual "marked
+ * not done" when the list has no room (mirrors the checkbox's own limit gate). */
+export type UncheckResult = { blocked: true; message: string } | { blocked: false }
 
 function respond(response: AlexaResponse, list?: List): IntentResult {
   return list ? { response, list } : { response }
@@ -95,7 +103,14 @@ export async function completeItemRow(list: List, item: Item): Promise<void> {
  * `handleAddItem`, which restores it as a side effect of its own dedup logic) — this only exists
  * for the tap gesture, so it lives here as its own function rather than folded into that.
  */
-export async function uncheckItemRow(list: List, item: Item): Promise<void> {
+export async function uncheckItemRow(list: List, item: Item): Promise<UncheckResult> {
+  // Gated the same as every other uncheck path (2026-09-03 revision, from manual
+  // testing): unchecking turns an invisible (checked) row back into an open one,
+  // so it's refused when the list has no room.
+  if (!(await hasCapacityFor(list))) {
+    return { blocked: true, message: limitReachedMessageForUncheck(list) }
+  }
+
   item.checked = false
   item.checkedAt = null
   item.version += 1
@@ -108,6 +123,7 @@ export async function uncheckItemRow(list: List, item: Item): Promise<void> {
     op: 'update',
     version: item.version,
   })
+  return { blocked: false }
 }
 
 /**
@@ -140,6 +156,11 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots): Prom
 
   if (existing) {
     if (existing.checked) {
+      // Re-speaking a checked item's name unchecks it — gated the same as the
+      // checkbox (2026-09-03 revision), so it can't bypass its limit.
+      if (!(await hasCapacityFor(list))) {
+        return respond(say(limitReachedMessageForUncheck(list)), list)
+      }
       existing.checked = false
       existing.checkedAt = null
       existing.version += 1
@@ -165,8 +186,7 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots): Prom
 
   if (deletedMatch) {
     // Restoring brings an invisible item back as unchecked — intake, so the
-    // open-item limit gates it here like every other path (the reactivate-
-    // checked branch above is not intake).
+    // open-item limit gates it here like every other path.
     if (!(await hasCapacityFor(list))) {
       return respond(say(limitReachedMessage(list)), list)
     }
@@ -185,8 +205,7 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots): Prom
     return respond(say(`Added ${deletedMatch.name} to ${list.name}.`), list)
   }
 
-  // The fresh-create branch is intake — the open-item limit gates it (the
-  // reactivate-checked branch above is not: unchecking isn't intake).
+  // The fresh-create branch is intake, so the open-item limit gates it here too.
   if (!(await hasCapacityFor(list))) {
     return respond(say(limitReachedMessage(list)), list)
   }

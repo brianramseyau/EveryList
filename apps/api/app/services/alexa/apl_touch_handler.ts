@@ -9,7 +9,7 @@ import { say } from '#services/alexa/response_builder'
 
 const ACTIONS = {
   complete: { mutate: completeItemRow, speak: (name: string) => `Marked ${name} as done.` },
-  uncheck: { mutate: uncheckItemRow, speak: (name: string) => `Marked ${name} as not done.` },
+  uncheck: { speak: (name: string) => `Marked ${name} as not done.` },
 } as const
 
 /**
@@ -93,7 +93,12 @@ export async function handleTouchEvent(token: AccessToken, args: unknown[]): Pro
     return { response: say("I couldn't find that item."), list }
   }
 
-  const { mutate, speak } = ACTIONS[action]
-  await mutate(list, item)
-  return { response: say(speak(item.name)), list }
+  if (action === 'uncheck') {
+    const result = await uncheckItemRow(list, item)
+    if (result.blocked) return { response: say(result.message), list }
+    return { response: say(ACTIONS.uncheck.speak(item.name)), list }
+  }
+
+  await ACTIONS.complete.mutate(list, item)
+  return { response: say(ACTIONS.complete.speak(item.name)), list }
 }

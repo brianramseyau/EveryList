@@ -3423,5 +3423,98 @@ describe('List detail +page.svelte', () => {
 
 			await expect.element(toast).not.toBeInTheDocument();
 		});
+
+		describe('unchecking is blocked at the limit (2026-09-03 revision)', () => {
+			it('blocks unchecking a checked item at the limit with a red toast, without calling the server', async () => {
+				mountWithLimit(1, [
+					makeItem({ id: 1, name: 'Bread' }),
+					makeItem({ id: 2, name: 'Eggs', checked: true, checkedAt: TS })
+				]);
+				render(ListDetailPage);
+
+				await page.getByRole('checkbox', { name: 'Eggs' }).click();
+
+				const toast = page.getByText(
+					'This list allows at most 1 open items — check one off or remove one before unchecking this.'
+				);
+				await expect.element(toast).toBeInTheDocument();
+				expect(updateItem).not.toHaveBeenCalled();
+				await expect.element(page.getByRole('checkbox', { name: 'Eggs' })).toBeChecked();
+
+				await page.getByRole('button', { name: 'Dismiss' }).click();
+				await expect.element(toast).not.toBeInTheDocument();
+			});
+
+			it('allows unchecking once room opens up', async () => {
+				mountWithLimit(2, [
+					makeItem({ id: 1, name: 'Bread' }),
+					makeItem({ id: 2, name: 'Eggs', checked: true, checkedAt: TS })
+				]);
+				render(ListDetailPage);
+
+				await page.getByRole('checkbox', { name: 'Eggs' }).click();
+
+				await expect
+					.element(
+						page.getByText(
+							'This list allows at most 2 open items — check one off or remove one before unchecking this.'
+						)
+					)
+					.not.toBeInTheDocument();
+				expect(updateItem).toHaveBeenCalledWith(list.id, 2, { checked: false });
+			});
+
+			it("shows the red toast (not the generic error banner) when the server backstops a stale local count", async () => {
+				mountWithLimit(null, [makeItem({ id: 100, name: 'Bananas', checked: true, checkedAt: TS })]);
+				vi.mocked(updateItem).mockRejectedValue(
+					new ApiError(
+						400,
+						'This list allows at most 1 open items — check one off or remove one before unchecking this.',
+						{ code: 'unchecked_limit_reached' }
+					)
+				);
+
+				render(ListDetailPage);
+				await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+				await page.getByRole('checkbox').click();
+
+				await expect
+					.element(
+						page.getByText(
+							'This list allows at most 1 open items — check one off or remove one before unchecking this.'
+						)
+					)
+					.toBeInTheDocument();
+				await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(2);
+			});
+
+			it('re-adding a checked item by name once the list is full shows the same red toast', async () => {
+				mountWithLimit(1, [makeItem({ id: 1, name: 'Milk', checked: true, checkedAt: TS })]);
+				vi.mocked(createItem).mockRejectedValue(
+					new ApiError(
+						400,
+						'This list allows at most 1 open items — check one off or remove one before unchecking this.',
+						{ code: 'unchecked_limit_reached' }
+					)
+				);
+
+				render(ListDetailPage);
+				await page.getByPlaceholder('Item name').fill('Milk');
+				page
+					.getByPlaceholder('Item name')
+					.element()
+					.closest('form')
+					?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+				await expect
+					.element(
+						page.getByText(
+							'This list allows at most 1 open items — check one off or remove one before unchecking this.'
+						)
+					)
+					.toBeInTheDocument();
+			});
+		});
 	});
 });

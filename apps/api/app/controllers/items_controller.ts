@@ -21,6 +21,7 @@ import {
   UNCHECKED_LIMIT_REACHED,
   hasCapacityFor,
   limitReachedMessage,
+  limitReachedMessageForUncheck,
   remainingCapacity,
 } from '#services/unchecked_limit'
 import {
@@ -186,6 +187,16 @@ export default class ItemsController {
 
     if (existing) {
       if (existing.checked) {
+        // Re-adding a checked item's name unchecks it — the same "make a checked
+        // row open again" transition as the checkbox, so it's gated the same way
+        // (2026-09-03 revision): otherwise typing the name back in would bypass the
+        // checkbox's own limit gate.
+        if (!(await hasCapacityFor(list))) {
+          return response.badRequest({
+            message: limitReachedMessageForUncheck(list),
+            code: UNCHECKED_LIMIT_REACHED,
+          })
+        }
         existing.checked = false
         existing.checkedAt = null
         existing.version += 1
@@ -220,8 +231,8 @@ export default class ItemsController {
 
     if (deletedMatch) {
       // Restoring a soft-deleted row brings an invisible item back as unchecked —
-      // intake, so the open-item limit gates it (the reactivate-*checked* branch
-      // above does not: unchecking is not intake).
+      // intake, so the open-item limit gates it too (same as the reactivate-checked
+      // branch above).
       if (!(await hasCapacityFor(list))) {
         return response.badRequest({
           message: limitReachedMessage(list),
@@ -419,6 +430,17 @@ export default class ItemsController {
       return response.conflict({
         ...(await serialize(ItemTransformer.transform(item))),
         conflict: true,
+      })
+    }
+
+    // Unchecking a previously-checked item is gated by the same open-item limit as
+    // every intake path (2026-09-03 revision, from manual testing): it turns an
+    // invisible (checked) row back into an open one, so it's blocked the same way
+    // when the list has no room — check something off or remove an item first.
+    if (checked === false && item.checked && !(await hasCapacityFor(list))) {
+      return response.badRequest({
+        message: limitReachedMessageForUncheck(list),
+        code: UNCHECKED_LIMIT_REACHED,
       })
     }
 

@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { ApiClient, ApiResponse } from '@japa/api-client'
-import type { ListDto } from '@everylist/shared'
+import type { ItemDto, ListDto } from '@everylist/shared'
 import { alexaSignatureVerifier } from '#services/alexa/signature_verifier'
 import { addMember, bodyData, signupAndGetUser } from './helpers.js'
 
@@ -1298,7 +1298,7 @@ test.group('Alexa open item limit', (group) => {
     }
   })
 
-  test('AddItemIntent refuses to add onto a full list, but re-speaking a checked item still unchecks it', async ({
+  test('AddItemIntent refuses to add onto a full list, and re-speaking a checked item is refused too (2026-09-03 revision)', async ({
     client,
     assert,
   }) => {
@@ -1346,8 +1346,8 @@ test.group('Alexa open item limit', (group) => {
     )!
 
     // Fill the list's only slot via REST with the checked Milk plus a new open
-    // item, then re-speak Milk: the reactivate branch (unchecking, not intake)
-    // is never gated, even while the list is full.
+    // item, then re-speak Milk: the reactivate branch is an uncheck, and the
+    // list has no room, so it's refused the same way (2026-09-03 revision).
     await client
       .patch(`/api/v1/lists/${listId}/items/${milkItem.id}`)
       .header('Authorization', `Bearer ${owner.token}`)
@@ -1368,7 +1368,11 @@ test.group('Alexa open item limit', (group) => {
       })
     )
     uncheck.assertStatus(200)
-    assert.include(uncheck.body().response.outputSpeech.text, 'already on Today')
+    assert.include(
+      uncheck.body().response.outputSpeech.text,
+      'before unchecking',
+      're-speaking a checked item on a full list speaks the limit refusal'
+    )
 
     const items = await client
       .get(`/api/v1/lists/${listId}/items`)
@@ -1376,7 +1380,7 @@ test.group('Alexa open item limit', (group) => {
     const milkRow = bodyData<{ id: number; checked: boolean }[]>(items).find(
       (row) => row.id === milkItem.id
     )!
-    assert.isFalse(milkRow.checked, 're-speaking a checked item unchecks it even on a full list')
+    assert.isTrue(milkRow.checked, 'Milk stays checked — the reactivate was refused')
   })
 
   test('AddItemIntent refuses to restore a deleted item onto a full list', async ({
@@ -1441,5 +1445,51 @@ test.group('Alexa open item limit', (group) => {
       .get(`/api/v1/lists/${listId}/items`)
       .header('Authorization', `Bearer ${owner.token}`)
     assert.lengthOf(bodyData<unknown[]>(after), 1, 'only Eggs remains active')
+  })
+
+  test('tapping an already-checked item on-screen refuses to uncheck it onto a full list (2026-09-03 revision)', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Today', maxUncheckedItems: 1 })
+    const listId = bodyData<ListDto>(create).id
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const milk = await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Milk' })
+    const milkId = bodyData<ItemDto>(milk).id
+    await client
+      .patch(`/api/v1/lists/${listId}/items/${milkId}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ checked: true })
+    await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Eggs' })
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['uncheck', milkId, listId],
+      })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'before unchecking')
+
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const milkRow = bodyData<{ id: number; checked: boolean }[]>(items).find(
+      (row) => row.id === milkId
+    )!
+    assert.isTrue(milkRow.checked, 'Milk stays checked — the tap was refused')
   })
 })

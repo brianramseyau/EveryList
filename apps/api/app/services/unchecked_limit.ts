@@ -35,12 +35,15 @@ export async function remainingCapacity(list: List): Promise<number | null> {
  * (or missing) `maxUncheckedItems` means unlimited — the default, and the shape
  * every pre-Phase-25 list row has.
  *
- * Deliberately NOT enforced as a maintained invariant: a list may sit over its
- * limit (the limit was lowered below the current count, or an item was unchecked
- * while full). Only *intake* — actions that make a new/invisible row appear as
- * an unchecked item — is gated; unchecking a checked item never is. Callers
- * decide which of their branches count as intake (e.g. `store()`'s
- * reactivate-checked branch does not).
+ * Also gates unchecking a previously-checked item (2026-09-03 revision, from
+ * manual testing): unchecking is intake from the limit's point of view too — it
+ * turns an invisible (checked) row back into an open one — so it's blocked the
+ * same way when the list has no room. A list can still legitimately sit *over*
+ * its limit (the limit was lowered below the current count), but only via
+ * lowering the cap, never via an uncheck; every path that flips `checked` to
+ * `false` must call this first. Callers decide which of their branches count as
+ * intake (e.g. `store()`'s reactivate-checked branch does not, since re-adding a
+ * checked item's name is itself an uncheck and goes through the same gate).
  */
 export async function hasCapacityFor(list: List, incomingCount = 1): Promise<boolean> {
   const remaining = await remainingCapacity(list)
@@ -61,4 +64,11 @@ export function limitReachedMessage(list: List): string {
   return list.maxUncheckedItems === 1
     ? 'This list allows only 1 open item — check it off to add more.'
     : `This list allows at most ${list.maxUncheckedItems} open items — check one off to add more.`
+}
+
+/** Human-facing copy for blocking an uncheck (or checked-name re-add) at a full list. */
+export function limitReachedMessageForUncheck(list: List): string {
+  return list.maxUncheckedItems === 1
+    ? 'This list allows only 1 open item — check it off or remove it before unchecking this one.'
+    : `This list allows at most ${list.maxUncheckedItems} open items — check one off or remove one before unchecking this one.`
 }

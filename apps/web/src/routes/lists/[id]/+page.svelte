@@ -154,6 +154,16 @@
 	// open-item limit being the routine case) — keyed + auto-dismissed like the undo toast.
 	let rejectionToast = $state<{ id: number; message: string } | null>(null);
 	let rejectionToastId = 0;
+	// Shown when unchecking an item is refused for pushing the list over its open-item
+	// limit (PLAN_25_PHASE_OPEN_ITEM_LIMIT.md's 2026-09-03 revision) — a red variant of
+	// the same toast shape, since this is a blocked action rather than an undoable one.
+	let uncheckBlockedToast = $state<{ id: number; message: string } | null>(null);
+	let uncheckBlockedToastId = 0;
+
+	function showUncheckBlocked(message: string) {
+		uncheckBlockedToastId += 1;
+		uncheckBlockedToast = { id: uncheckBlockedToastId, message };
+	}
 
 	// Coarse (touch) pointers get the swipe-to-delete gesture; fine pointers
 	// (mouse/trackpad) get a static "×" fallback instead (PLAN_09_PHASE_REFINEMENTS.md #9)
@@ -582,7 +592,13 @@
 				showUndo('Item added', () => undoToggleChecked(item, false));
 			}
 		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to add item.';
+			// A checked match with no room falls into this same rejection (re-adding its
+			// name is an uncheck) — route it to the same red toast as the checkbox gate.
+			if (err instanceof ApiError && isUncheckedLimitError(err)) {
+				showUncheckBlocked(err.message);
+			} else {
+				error = err instanceof ApiError ? err.message : 'Failed to add item.';
+			}
 		} finally {
 			adding = false;
 		}
@@ -593,9 +609,30 @@
 		await addItem(newItemName);
 	}
 
+	// The server's machine-readable code for a full-list rejection (apps/api's
+	// `unchecked_limit.ts`) — used to route a stale-count backstop rejection to the
+	// same red toast as the local pre-check, instead of the generic error banner.
+	function isUncheckedLimitError(err: ApiError): boolean {
+		return (
+			!!err.body &&
+			typeof err.body === 'object' &&
+			(err.body as { code?: unknown }).code === 'unchecked_limit_reached'
+		);
+	}
+
 	async function toggleChecked(item: ItemDto) {
 		if (isViewer) return;
 		const nextChecked = !item.checked;
+		// Hard block unchecking an item that would push the list over its open-item
+		// limit (PLAN_25_PHASE_OPEN_ITEM_LIMIT.md's 2026-09-03 revision, from manual
+		// testing) — mirrors the add-gate's local pre-check; the server's own 400
+		// backstops stale counts below.
+		if (!nextChecked && isAtLimit(list, items)) {
+			showUncheckBlocked(
+				`This list allows at most ${openLimit} open items — check one off or remove one before unchecking this.`
+			);
+			return;
+		}
 		items = items.map((current) =>
 			current.id === item.id ? { ...current, checked: nextChecked } : current
 		);
@@ -612,7 +649,13 @@
 			await updateItem(listId, item.id, { checked: nextChecked });
 			void refreshBadgeCount();
 		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to update item.';
+			if (err instanceof ApiError && isUncheckedLimitError(err)) {
+				pendingUndo = null;
+				clearUndo();
+				showUncheckBlocked(err.message);
+			} else {
+				error = err instanceof ApiError ? err.message : 'Failed to update item.';
+			}
 			void loadAll();
 		}
 	}
@@ -1481,6 +1524,16 @@
 	{#if pendingUndo}
 		{#key pendingUndo.id}
 			<UndoToast message={pendingUndo.message} onAction={() => runUndo()} onDismiss={dismissUndo} />
+		{/key}
+	{:else if uncheckBlockedToast}
+		{#key uncheckBlockedToast.id}
+			<UndoToast
+				message={uncheckBlockedToast.message}
+				actionLabel="Dismiss"
+				variant="error"
+				onAction={() => (uncheckBlockedToast = null)}
+				onDismiss={() => (uncheckBlockedToast = null)}
+			/>
 		{/key}
 	{:else if rejectionToast}
 		{#key rejectionToast.id}

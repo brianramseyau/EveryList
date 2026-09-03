@@ -1,5 +1,37 @@
 # Phase 25 — Per-list open-item limit (unchecked-item cap)
 
+## 2026-09-03 revision — uncheck is gated too
+
+Manual testing surfaced a hole in the original design: unchecking a previously-checked
+item was explicitly exempted from the limit (see "Never gated" below, as shipped), so a
+list could be silently overloaded past its cap by unchecking items one at a time — no
+error, no feedback, just a list quietly sitting over its limit. That's now a hard block,
+matching every other intake path:
+
+- **Every path that flips `checked` from `true` to `false`** — the checkbox
+  (`items_controller.ts#update`), re-adding a checked item's name (the reactivate
+  branches in `items_controller.ts#store`, `favorite_items_controller.ts#addToList`,
+  and the Alexa `AddItemIntent` handler), and the on-screen Alexa tap gesture
+  (`uncheckItemRow`) — now calls `hasCapacityFor` first and refuses with the same `400
+  { message, code: 'unchecked_limit_reached' }` shape (Alexa: a spoken refusal) when the
+  list has no room. A list can still legitimately end up over its cap (the limit was
+  lowered below the current count), just never via an uncheck anymore.
+- **New copy** (`limitReachedMessageForUncheck` in `unchecked_limit.ts`): *"This list
+  allows at most N open items — check one off or remove one before unchecking this
+  one."*
+- **Frontend**: the list page's checkbox tap (`toggleChecked`) pre-checks
+  `isAtLimit(list, items)` before unchecking and, when blocked, shows a **red** toast
+  (`UndoToast`'s new `variant="error"`) instead of performing the optimistic update or
+  calling the server — no undo needed, since nothing happened. The add-item path's
+  catch block routes a server-side `unchecked_limit_reached` rejection (the reactivate-
+  checked branch, hit when a checked item's name is re-typed on a full list) to the
+  same red toast rather than the generic inline error banner used for other add
+  failures.
+- Superseded below: every "unchecking is never gated" statement in the original design
+  (Semantics' second bullet under "Never gated", the concurrency/coverage notes that
+  assumed it) — left in place as history of the original decision, not the current
+  behavior.
+
 ## Context
 
 EveryList lists grow without bound: a "todo" list ends up holding tens-to-hundreds of
@@ -191,13 +223,17 @@ rather than adding a parallel store:
   representative parent/child rows → run migration → child rows intact).
 - Backend tests (100% coverage enforced): `items.spec.ts` (limit blocks create /
   restore-on-name-match / explicit restore / import / move-in of an unchecked item;
-  checked-item move-in allowed; reactivate-checked allowed; uncheck while at limit
-  allowed; lowering below the current count allowed with adds blocked), `lists.spec.ts`
-  (set/clear/bounds via create + update), `favorites.spec.ts` (add blocked), `alexa.spec.ts`
-  (spoken refusal).
+  checked-item move-in allowed; lowering below the current count allowed with adds
+  blocked; **2026-09-03**: unchecking at the limit blocked, allowed once room opens,
+  reactivate-by-name blocked when full), `lists.spec.ts` (set/clear/bounds via create +
+  update), `favorites.spec.ts` (add blocked; **2026-09-03**: reactivate-checked blocked
+  when full), `alexa.spec.ts` (spoken refusal; **2026-09-03**: re-speaking a checked
+  item and the on-screen tap-to-uncheck gesture both refused when full).
 - Frontend tests (100% coverage enforced): `lib/unchecked-limit.spec.ts`;
-  settings page (control save/clear); list page (counter, gating, toast);
-  `flush.spec.ts` (sever + listener + restore exclusion); `sync/page.svelte.spec.ts`
-  (retry/discard); blocked-state tests for the favorites/import/recently-deleted/
-  item-edit specs.
+  settings page (control save/clear); list page (counter, gating, toast;
+  **2026-09-03**: red toast on a blocked uncheck, both the local pre-check and the
+  server backstop, and on a blocked reactivate-by-name add); `UndoToast.svelte.spec.ts`
+  (**2026-09-03**: `variant="error"` styling); `flush.spec.ts` (sever + listener +
+  restore exclusion); `sync/page.svelte.spec.ts` (retry/discard); blocked-state tests
+  for the favorites/import/recently-deleted/item-edit specs.
 - `pnpm check --skip-e2e`, then the E2E suite.

@@ -374,7 +374,7 @@ test.group('Favorites', (group) => {
 test.group('Favorites open item limit', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
 
-  test('addToList is gated by the open-item limit but re-adding a checked item is not', async ({
+  test('addToList is gated by the open-item limit on its create branch', async ({
     client,
     assert,
   }) => {
@@ -429,5 +429,47 @@ test.group('Favorites open item limit', (group) => {
       .header('Authorization', `Bearer ${token}`)
     retried.assertStatus(200)
     assert.equal(bodyData<ItemDto>(retried).name, 'Bananas')
+  })
+
+  test('addToList also gates its reactivate-checked branch once the list is full (2026-09-03 revision)', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    listCounter += 1
+    const createListResponse = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: `Limited ${listCounter}`, maxUncheckedItems: 1 })
+    const listId = bodyData<ListDto>(createListResponse).id
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bananas' })
+    const favoriteId = bodyData<FavoriteItemDto>(create).id
+
+    const added = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+    const item = bodyData<ItemDto>(added)
+
+    await client
+      .patch(`/api/v1/lists/${listId}/items/${item.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ checked: true })
+
+    // Fill the freed slot with something else — re-adding the favorite now
+    // hits the reactivate-checked branch with no room, so it's blocked.
+    await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Eggs' })
+
+    const blocked = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+    blocked.assertStatus(400)
+    assert.equal(blocked.body().code, 'unchecked_limit_reached')
   })
 })
