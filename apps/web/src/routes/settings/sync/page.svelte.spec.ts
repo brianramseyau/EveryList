@@ -11,12 +11,15 @@ import {
 vi.mock('$lib/offline/sync-queue', () => ({
 	queueCounts: vi.fn(),
 	pendingMutations: vi.fn(),
-	failedMutations: vi.fn()
+	failedMutations: vi.fn(),
+	retryMutation: vi.fn(),
+	dequeueMutation: vi.fn()
 }));
 vi.mock('$lib/offline/flush', () => ({ flushQueue: vi.fn(), onFlushOutcome: vi.fn() }));
 vi.mock('$lib/reload', () => ({ refreshApp: vi.fn() }));
 
-const { queueCounts, pendingMutations, failedMutations } = await import('$lib/offline/sync-queue');
+const { queueCounts, pendingMutations, failedMutations, retryMutation, dequeueMutation } =
+	await import('$lib/offline/sync-queue');
 const { flushQueue } = await import('$lib/offline/flush');
 const { refreshApp } = await import('$lib/reload');
 const SyncStatusPage = (await import('./+page.svelte')).default;
@@ -191,5 +194,71 @@ describe('Sync status +page.svelte', () => {
 
 		await vi.advanceTimersByTimeAsync(3000);
 		expect(queueCounts).toHaveBeenCalledTimes(2);
+	});
+
+	describe('failed-mutation DLQ actions (PLAN_25)', () => {
+		it('shows Retry and Discard on failed mutations only', async () => {
+			vi.mocked(queueCounts).mockResolvedValue({ pending: 1, failed: 1, conflict: 0 });
+			vi.mocked(pendingMutations).mockResolvedValue([
+				mutation({ id: 1, op: 'create', payload: { name: 'Milk' } })
+			]);
+			vi.mocked(failedMutations).mockResolvedValue([
+				mutation({
+					id: 2,
+					op: 'create',
+					payload: { name: 'Eggs' },
+					status: 'failed',
+					attempts: 1,
+					lastError: 'This list allows at most 5 open items — check one off to add more.'
+				})
+			]);
+
+			render(SyncStatusPage);
+
+			await expect.element(page.getByText('Create item "Eggs"')).toBeInTheDocument();
+			await expect
+				.element(
+					page.getByText('This list allows at most 5 open items — check one off to add more.')
+				)
+				.toBeInTheDocument();
+
+			// The pending row has no per-entry actions; the failed one does.
+			expect(page.getByRole('button', { name: 'Retry', exact: true }).elements()).toHaveLength(1);
+			await expect
+				.element(page.getByRole('button', { name: 'Discard', exact: true }))
+				.toBeInTheDocument();
+		});
+
+		it('Retry returns the mutation to the queue and drains', async () => {
+			vi.mocked(queueCounts).mockResolvedValue({ pending: 0, failed: 1, conflict: 0 });
+			vi.mocked(pendingMutations).mockResolvedValue([]);
+			vi.mocked(failedMutations).mockResolvedValue([
+				mutation({ id: 7, op: 'create', status: 'failed', lastError: 'full' })
+			]);
+			vi.mocked(retryMutation).mockResolvedValue(undefined);
+			vi.mocked(flushQueue).mockResolvedValue(undefined);
+
+			render(SyncStatusPage);
+
+			await page.getByRole('button', { name: 'Retry', exact: true }).click();
+
+			expect(retryMutation).toHaveBeenCalledWith(7);
+			expect(flushQueue).toHaveBeenCalled();
+		});
+
+		it('Discard drops the mutation for good', async () => {
+			vi.mocked(queueCounts).mockResolvedValue({ pending: 0, failed: 1, conflict: 0 });
+			vi.mocked(pendingMutations).mockResolvedValue([]);
+			vi.mocked(failedMutations).mockResolvedValue([
+				mutation({ id: 9, op: 'create', status: 'failed', lastError: 'full' })
+			]);
+			vi.mocked(dequeueMutation).mockResolvedValue(undefined);
+
+			render(SyncStatusPage);
+
+			await page.getByRole('button', { name: 'Discard', exact: true }).click();
+
+			expect(dequeueMutation).toHaveBeenCalledWith(9);
+		});
 	});
 });

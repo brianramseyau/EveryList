@@ -48,6 +48,33 @@ export function onFlushOutcome(listener: FlushOutcomeListener | null): () => voi
 	return () => flushOutcomeListeners.delete(listener);
 }
 
+export interface CreateRejectedEvent {
+	entityType: QueuedMutation['entityType'];
+	/** The item's own name when the payload carried one (item/category creates do). */
+	name: string | null;
+	/** The list the mutation targeted, when the payload carried one (item creates do) —
+	 * lets a mounted list page ignore rejections belonging to other lists. */
+	listId: number | null;
+	/** The server's human-facing rejection message (e.g. the open-item limit's copy). */
+	message: string;
+}
+export type CreateRejectedListener = (event: CreateRejectedEvent) => void;
+const createRejectedListeners = new Set<CreateRejectedListener>();
+
+/** Notifies subscribers when the flush loop terminally rejects a queued create/attach — the
+ * moment the optimistic row is severed from the list view (below) and its mutation lands in
+ * the DLQ. Backs the list page's "wasn't added" toast for, e.g., a full list (PLAN_25).
+ * Returns an unsubscribe function; passing `null` clears every subscriber (test-only reset,
+ * mirroring `onConflict`). */
+export function onCreateRejected(listener: CreateRejectedListener | null): () => void {
+	if (listener === null) {
+		createRejectedListeners.clear();
+		return () => {};
+	}
+	createRejectedListeners.add(listener);
+	return () => createRejectedListeners.delete(listener);
+}
+
 async function replay(mutation: QueuedMutation): Promise<void> {
 	if (mutation.op === 'create' || mutation.op === 'attach') {
 		await apiPost(mutation.url, mutation.payload);
@@ -245,6 +272,27 @@ export async function flushQueue(): Promise<void> {
 					// rather than retried up to MAX_ATTEMPTS, which otherwise left a permanently
 					// rejected mutation looking "stuck" (and, since the connectivity indicator
 					// mirrors flush outcomes, misread as a connectivity problem) for no reason.
+					// For a rejected create/attach, also sever the optimistic temp row: left in
+					// place it masquerades as a synced item forever (fetchItems' _dirty merge
+					// keeps resurrecting it across reloads), disagreeing with the DLQ entry
+					// below that preserves the payload. Deleting it here makes the list view
+					// match server truth with nothing silently lost — the failed mutation IS
+					// the record (and Retry re-creates from it). Restores are excluded: their
+					// Dexie row is the real soft-deleted item, which correctly stays deleted.
+					if (mutation.op === 'create' || mutation.op === 'attach') {
+						await tableForEntity(mutation.entityType as QueueableEntityType).delete(
+							mutation.targetId
+						);
+						createRejectedListeners.forEach((listener) =>
+							listener({
+								entityType: mutation.entityType,
+								name: typeof mutation.payload?.name === 'string' ? mutation.payload.name : null,
+								listId:
+									typeof mutation.payload?.listId === 'number' ? mutation.payload.listId : null,
+								message: err.message
+							})
+						);
+					}
 					await updateMutation(id, {
 						status: 'failed',
 						attempts: mutation.attempts + 1,

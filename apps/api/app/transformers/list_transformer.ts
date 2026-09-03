@@ -24,6 +24,7 @@ export default class ListTransformer extends BaseTransformer<List> {
         'showPriceInList',
         'itemSortOrder',
         'insertPosition',
+        'maxUncheckedItems',
         'passcodeHash',
         'createdAt',
         'updatedAt',

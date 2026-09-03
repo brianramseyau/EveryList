@@ -31,6 +31,10 @@ export interface ListDto {
   itemSortOrder?: 'ranked' | 'alphabetical'
   /** Only meaningful when itemSortOrder is 'ranked'. Missing = server default `'bottom'`. */
   insertPosition?: 'top' | 'bottom'
+  /** Cap on unchecked ("open") items — checking one off frees a slot. Missing/null = no
+   *  limit (the default). Intake only: unchecking is never blocked, so a list may sit
+   *  over its limit until enough items are checked off. See PLAN_25_PHASE_OPEN_ITEM_LIMIT.md. */
+  maxUncheckedItems?: number | null
   /** Client-computed `"<saltHex>:<sha256Hex>"` — the server never sees the raw PIN. See PLAN_07_PHASE_POLISH.md §2. */
   passcodeHash: string | null
   itemCount: number

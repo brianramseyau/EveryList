@@ -3,7 +3,13 @@
 	import { Button } from 'flowbite-svelte';
 	import { resolve } from '$app/paths';
 	import type { QueuedMutation } from '$lib/offline/db';
-	import { failedMutations, pendingMutations, queueCounts } from '$lib/offline/sync-queue';
+	import {
+		failedMutations,
+		pendingMutations,
+		queueCounts,
+		retryMutation,
+		dequeueMutation
+	} from '$lib/offline/sync-queue';
 	import { flushQueue } from '$lib/offline/flush';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
 	import { refreshApp } from '$lib/reload';
@@ -38,6 +44,20 @@
 			retrying = false;
 			await refresh();
 		}
+	}
+
+	// Per-entry DLQ actions (PLAN_25_PHASE_OPEN_ITEM_LIMIT.md): `flushQueue` only replays
+	// `pending` rows, so a failed mutation was otherwise unreachable — visible but
+	// unactionable. Retry returns it to the pending queue (fresh attempt budget) and drains;
+	// Discard drops the mutation and its payload for good.
+	async function retryOne(mutation: QueuedMutation) {
+		await retryMutation(mutation.id!);
+		await retryNow();
+	}
+
+	async function discardOne(mutation: QueuedMutation) {
+		await dequeueMutation(mutation.id!);
+		await refresh();
 	}
 
 	function refreshNow() {
@@ -156,6 +176,27 @@
 							<p class="text-xs text-red-600 dark:text-red-400">
 								{`${mutation.lastError}${mutation.attempts > 0 ? ` (${mutation.attempts} attempt${mutation.attempts === 1 ? '' : 's'})` : ''}`}
 							</p>
+						{/if}
+						{#if mutation.status === 'failed'}
+							<div class="flex gap-2">
+								<Button
+									type="button"
+									size="xs"
+									disabled={retrying}
+									onclick={() => void retryOne(mutation)}
+								>
+									Retry
+								</Button>
+								<Button
+									type="button"
+									size="xs"
+									color="red"
+									outline
+									onclick={() => void discardOne(mutation)}
+								>
+									Discard
+								</Button>
+							</div>
 						{/if}
 					</li>
 				{/each}

@@ -370,3 +370,64 @@ test.group('Favorites', (group) => {
     destroy.assertStatus(403)
   })
 })
+
+test.group('Favorites open item limit', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('addToList is gated by the open-item limit but re-adding a checked item is not', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    listCounter += 1
+    const createListResponse = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: `Limited ${listCounter}`, maxUncheckedItems: 1 })
+    const listId = bodyData<ListDto>(createListResponse).id
+
+    const create = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bananas' })
+    const favoriteId = bodyData<FavoriteItemDto>(create).id
+
+    const first = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+    first.assertStatus(200)
+    const item = bodyData<ItemDto>(first)
+
+    // Delete the Bananas row (freeing the slot), fill it with a different item,
+    // then re-add the favorite: with no active Bananas match, the create branch
+    // is intake and must be blocked.
+    await client
+      .delete(`/api/v1/lists/${listId}/items/${item.id}`)
+      .header('Authorization', `Bearer ${token}`)
+    await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Eggs' })
+
+    const blocked = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+    blocked.assertStatus(400)
+    assert.equal(blocked.body().code, 'unchecked_limit_reached')
+
+    // Free the slot and re-add: the gate is capacity-based, not favorite-specific.
+    const eggs = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+    const eggsItem = bodyData<{ id: number }[]>(eggs)[0]!
+    await client
+      .delete(`/api/v1/lists/${listId}/items/${eggsItem.id}`)
+      .header('Authorization', `Bearer ${token}`)
+
+    const retried = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favoriteId}/add-to-list`)
+      .header('Authorization', `Bearer ${token}`)
+    retried.assertStatus(200)
+    assert.equal(bodyData<ItemDto>(retried).name, 'Bananas')
+  })
+})

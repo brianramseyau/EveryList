@@ -9,13 +9,14 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 const { apiPost, apiPatch, apiDelete, ApiError } = await import('$lib/api/client');
 const { getDb, resetDbForTesting } = await import('./db');
 const { enqueueMutation, pendingMutations, failedMutations } = await import('./sync-queue');
-const { flushQueue, onConflict, onFlushOutcome } = await import('./flush');
+const { flushQueue, onConflict, onCreateRejected, onFlushOutcome } = await import('./flush');
 
 afterEach(async () => {
 	vi.resetAllMocks();
 	// Also exercises the no-op unsubscribe this "clear everything" call returns.
 	onConflict(null)();
 	onFlushOutcome(null)();
+	onCreateRejected(null)();
 	await resetDbForTesting();
 });
 
@@ -818,5 +819,209 @@ describe('flushQueue', () => {
 		expect(await pendingMutations()).toHaveLength(0);
 		expect(await db.storeCategoryOrders.where('storeId').equals(20).count()).toBe(0);
 		expect(await db.storeCategoryOrders.get([21, 5])).toBeDefined();
+	});
+});
+
+describe('terminal create rejections (DLQ seam, PLAN_25)', () => {
+	it('stops notifying a listener once its onCreateRejected subscription is unsubscribed', async () => {
+		const events: unknown[] = [];
+		const unsubscribe = onCreateRejected((event) => events.push(event));
+		unsubscribe();
+		onCreateRejected(null)();
+
+		vi.mocked(apiPost).mockRejectedValue(new ApiError(400, 'nope'));
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'create',
+			targetId: -1,
+			expectedVersion: null,
+			payload: { name: 'Milk' },
+			url: '/api/v1/lists/1/items'
+		});
+
+		await flushQueue();
+
+		expect(events).toEqual([]);
+	});
+
+	it('severs the optimistic row and notifies when a queued item create is terminally rejected', async () => {
+		vi.mocked(apiPost).mockRejectedValue(
+			new ApiError(400, 'This list allows at most 5 open items — check one off to add more.')
+		);
+		const rejected: unknown[] = [];
+		onCreateRejected((event) => rejected.push(event));
+		const db = getDb()!;
+		await db.items.put({
+			id: -1,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 0,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_localId: '-1',
+			_dirty: true
+		});
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'create',
+			targetId: -1,
+			expectedVersion: null,
+			payload: { name: 'Milk', listId: 1 },
+			url: '/api/v1/lists/1/items'
+		});
+
+		await flushQueue();
+
+		// The phantom optimistic row is gone from the list view...
+		expect(await db.items.get(-1)).toBeUndefined();
+		// ...and the failed mutation is the DLQ record with the server's message.
+		const [failed] = await failedMutations();
+		expect(failed).toMatchObject({
+			status: 'failed',
+			op: 'create',
+			lastError: 'This list allows at most 5 open items — check one off to add more.'
+		});
+		expect(rejected).toEqual([
+			{
+				entityType: 'item',
+				name: 'Milk',
+				listId: 1,
+				message: 'This list allows at most 5 open items — check one off to add more.'
+			}
+		]);
+	});
+
+	it('does not sever or notify on a 5xx create — the row is retryable, not rejected', async () => {
+		vi.mocked(apiPost).mockRejectedValue(new ApiError(500, 'Internal Server Error'));
+		const rejected: unknown[] = [];
+		onCreateRejected((event) => rejected.push(event));
+		const db = getDb()!;
+		await db.items.put({
+			id: -1,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 0,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_localId: '-1',
+			_dirty: true
+		});
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'create',
+			targetId: -1,
+			expectedVersion: null,
+			payload: { name: 'Milk', listId: 1 },
+			url: '/api/v1/lists/1/items'
+		});
+
+		await flushQueue();
+
+		expect(await db.items.get(-1)).toBeDefined();
+		expect(rejected).toEqual([]);
+		const [stalled] = await pendingMutations();
+		expect(stalled).toMatchObject({ status: 'pending' });
+	});
+
+	it('severs an optimistic attach row too, carrying no name/listId when the payload lacks them', async () => {
+		vi.mocked(apiPost).mockRejectedValue(new ApiError(403, 'Forbidden'));
+		const rejected: unknown[] = [];
+		onCreateRejected((event) => rejected.push(event));
+		const db = getDb()!;
+		await db.favoriteItems.put({
+			id: -2,
+			listId: 1,
+			name: 'Bananas',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_dirty: true
+		} as never);
+		await enqueueMutation({
+			entityType: 'favorite_item',
+			op: 'attach',
+			targetId: -2,
+			expectedVersion: null,
+			payload: {},
+			url: '/api/v1/lists/1/favorites/7/attach'
+		});
+
+		await flushQueue();
+
+		expect(await db.favoriteItems.get(-2)).toBeUndefined();
+		expect(rejected).toEqual([
+			{ entityType: 'favorite_item', name: null, listId: null, message: 'Forbidden' }
+		]);
+	});
+
+	it("leaves a failed restore's real soft-deleted row alone", async () => {
+		vi.mocked(apiPost).mockRejectedValue(
+			new ApiError(400, 'This list allows only 1 open item — check it off to add more.')
+		);
+		const rejected: unknown[] = [];
+		onCreateRejected((event) => rejected.push(event));
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Bananas',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 0,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: '2026-08-20T00:00:00.000Z',
+			version: 1,
+			_dirty: true
+		});
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'restore',
+			targetId: 5,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5/restore'
+		});
+
+		await flushQueue();
+
+		// The soft-deleted row is the real item — it correctly stays deleted, not severed.
+		const cached = await db.items.get(5);
+		expect(cached?.deletedAt).toBe('2026-08-20T00:00:00.000Z');
+		const [failed] = await failedMutations();
+		expect(failed).toMatchObject({ status: 'failed', op: 'restore' });
+		expect(rejected).toEqual([]);
 	});
 });

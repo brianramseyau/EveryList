@@ -9,6 +9,7 @@ import {
 	findPendingMutation,
 	pendingMutations,
 	queueCounts,
+	retryMutation,
 	updateMutation
 } from './sync-queue';
 
@@ -330,5 +331,31 @@ describe('queueCounts', () => {
 		await updateMutation(c!, { status: 'conflict' });
 
 		expect(await queueCounts()).toEqual({ pending: 1, failed: 1, conflict: 1 });
+	});
+});
+
+describe('retryMutation', () => {
+	it('returns a failed mutation to the pending queue with a fresh attempt budget', async () => {
+		const id = await enqueueMutation({
+			entityType: 'item',
+			op: 'create',
+			targetId: -1,
+			expectedVersion: null,
+			payload: { name: 'Bananas' },
+			url: '/api/v1/lists/1/items'
+		});
+		await updateMutation(id!, {
+			status: 'failed',
+			attempts: 3,
+			lastError: 'This list allows at most 5 open items — check one off to add more.'
+		});
+		expect(await pendingMutations()).toHaveLength(0);
+
+		await retryMutation(id!);
+
+		const [retried] = await pendingMutations();
+		expect(retried).toMatchObject({ id, status: 'pending', attempts: 0 });
+		expect(retried!.lastError).toBeUndefined();
+		expect(await failedMutations()).toHaveLength(0);
 	});
 });

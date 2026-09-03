@@ -609,4 +609,95 @@ describe('List settings +page.svelte', () => {
 		await expect.element(page.getByRole('button', { name: 'Delete list' })).toBeInTheDocument();
 		expect(deleteList).not.toHaveBeenCalled();
 	});
+
+	describe('open item limit (PLAN_25)', () => {
+		it('renders the current limit with helper text, and the no-cap text when unlimited', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, maxUncheckedItems: 5, itemCount: 2 });
+			render(SettingsPage);
+
+			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
+			await expect.element(input).toHaveValue(5);
+			await expect
+				.element(page.getByText('At most 5 unchecked items at a time — 2 open now.'))
+				.toBeInTheDocument();
+		});
+
+		it('shows the no-cap helper text for a list without a limit, singularized for one item', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, itemCount: 1 });
+			render(SettingsPage);
+
+			await expect.element(page.getByText('No cap — 1 unchecked item now.')).toBeInTheDocument();
+		});
+
+		it('singularizes the helper text for a limit of 1', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, maxUncheckedItems: 1, itemCount: 1 });
+			render(SettingsPage);
+
+			await expect
+				.element(page.getByText('At most 1 unchecked item at a time — 1 open now.'))
+				.toBeInTheDocument();
+		});
+
+		it('reverts an out-of-range draft back to empty when the list has no limit', async () => {
+			render(SettingsPage);
+
+			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
+			await expect.element(input).toHaveValue(null);
+			await input.fill('0');
+			(input.element() as HTMLInputElement).blur();
+
+			expect(updateList).not.toHaveBeenCalled();
+			await expect.element(input).toHaveValue(null);
+		});
+
+		it('applies a valid limit on blur', async () => {
+			vi.mocked(updateList).mockResolvedValue({ ...list, maxUncheckedItems: 3 });
+			render(SettingsPage);
+
+			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
+			await expect.element(input).toHaveValue(null);
+			await input.fill('3');
+			(input.element() as HTMLInputElement).blur();
+
+			expect(updateList).toHaveBeenCalledWith(1, { maxUncheckedItems: 3 });
+		});
+
+		it('clearing the input removes the limit (null)', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, maxUncheckedItems: 5 });
+			vi.mocked(updateList).mockResolvedValue({ ...list, maxUncheckedItems: null });
+			render(SettingsPage);
+
+			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
+			await expect.element(input).toHaveValue(5);
+			await input.fill('');
+			(input.element() as HTMLInputElement).blur();
+
+			expect(updateList).toHaveBeenCalledWith(1, { maxUncheckedItems: null });
+		});
+
+		it('reverts an out-of-range draft without saving', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, maxUncheckedItems: 5 });
+			render(SettingsPage);
+
+			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
+			await expect.element(input).toHaveValue(5);
+			await input.fill('1000');
+			(input.element() as HTMLInputElement).blur();
+
+			expect(updateList).not.toHaveBeenCalled();
+			await expect.element(input).toHaveValue(5);
+		});
+
+		it('does not re-save an unchanged value', async () => {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, maxUncheckedItems: 5 });
+			render(SettingsPage);
+
+			const input = page.getByRole('spinbutton', { name: 'Open item limit' });
+			await expect.element(input).toHaveValue(5);
+			await input.fill('5');
+			(input.element() as HTMLInputElement).blur();
+
+			expect(updateList).not.toHaveBeenCalled();
+		});
+	});
 });

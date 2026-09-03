@@ -86,7 +86,8 @@ vi.mock('$lib/api/selected-store', () => ({
 vi.mock('$lib/realtime', () => ({ subscribeToList: vi.fn(() => vi.fn()) }));
 vi.mock('$lib/offline/flush', () => ({
 	onConflict: vi.fn(() => vi.fn()),
-	onFlushOutcome: vi.fn(() => vi.fn())
+	onFlushOutcome: vi.fn(() => vi.fn()),
+	onCreateRejected: vi.fn(() => vi.fn())
 }));
 vi.mock('$lib/pwa/badge', () => ({ refreshBadgeCount: vi.fn() }));
 vi.mock('$lib/open-external-link', () => ({ openExternalLink: vi.fn() }));
@@ -111,7 +112,7 @@ const { subscribeToList } = await import('$lib/realtime');
 const { refreshBadgeCount } = await import('$lib/pwa/badge');
 const { openExternalLink } = await import('$lib/open-external-link');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { onConflict, onFlushOutcome } = await import('$lib/offline/flush');
+const { onConflict, onFlushOutcome, onCreateRejected } = await import('$lib/offline/flush');
 const { goto } = await import('$app/navigation');
 const ListDetailPage = (await import('./+page.svelte')).default;
 
@@ -3100,6 +3101,189 @@ describe('List detail +page.svelte', () => {
 
 			expect(deleteItem).not.toHaveBeenCalled();
 			expect(updateItem).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('open item limit (PLAN_25)', () => {
+		function mountWithLimit(maxUncheckedItems: number | null, items?: ItemDto[]) {
+			vi.mocked(fetchList).mockResolvedValue({ ...list, maxUncheckedItems, role: 'owner' });
+			vi.mocked(fetchItems).mockResolvedValue(
+				items ?? [
+					makeItem({ id: 1, name: 'Bread' }),
+					makeItem({ id: 2, name: 'Eggs', checked: true, checkedAt: TS })
+				]
+			);
+		}
+
+		it('shows the open/limit counter in the bottom bar when the list has a limit, and no counter when it does not', async () => {
+			mountWithLimit(5);
+			render(ListDetailPage);
+
+			// One unchecked item (Bread) out of 5 allowed — under the limit, so the
+			// counter renders in its muted (gray) style.
+			const counter = page.getByLabelText('1 of 5 open items allowed');
+			await expect.element(counter).toBeInTheDocument();
+			await expect.element(counter).toHaveTextContent('1/5');
+			await expect.element(counter).toHaveClass('text-gray-600');
+		});
+
+		it('renders the counter alongside the price total when both apply', async () => {
+			mountWithLimit(5, [
+				makeItem({ id: 1, name: 'Bread', price: 250 }),
+				makeItem({ id: 2, name: 'Eggs', checked: true, checkedAt: TS })
+			]);
+			render(ListDetailPage);
+
+			// list.usePrice/showPriceInList are absent → treated as on (the standard
+			// "missing = default true" read), so the total shows next to the counter.
+			await expect.element(page.getByLabelText('1 of 5 open items allowed')).toBeInTheDocument();
+			await expect.element(page.getByText('Total: $2.50')).toBeInTheDocument();
+		});
+
+		it('omits the counter entirely when the list has no limit', async () => {
+			mountWithLimit(null);
+			render(ListDetailPage);
+
+			await expect.element(page.getByText('1 of 2 remaining')).toBeInTheDocument();
+			await expect.element(page.getByLabelText(/open items allowed/)).not.toBeInTheDocument();
+		});
+
+		it('styles the counter amber and disables the add input once the list is at its limit', async () => {
+			mountWithLimit(2, [makeItem({ id: 1, name: 'Bread' }), makeItem({ id: 2, name: 'Eggs' })]);
+			render(ListDetailPage);
+
+			// Two unchecked items against a limit of 2: the counter reads 2/2 in its
+			// amber "full" style, and the input is disabled so no further add can
+			// even be attempted from the UI.
+			const counter = page.getByLabelText('2 of 2 open items allowed');
+			await expect.element(counter).toBeInTheDocument();
+			await expect.element(counter).toHaveClass('text-amber-600');
+			await expect.element(page.getByPlaceholder('Item name')).toBeDisabled();
+			expect(createItem).not.toHaveBeenCalled();
+		});
+
+		it('blocks a submit that slips past the disabled input with the limit message (defense-in-depth)', async () => {
+			mountWithLimit(2, [makeItem({ id: 1, name: 'Bread' }), makeItem({ id: 2, name: 'Eggs' })]);
+			render(ListDetailPage);
+			await expect.element(page.getByPlaceholder('Item name')).toBeDisabled();
+
+			// At the limit the input is disabled, so a real submit can't be typed —
+			// drive the form event directly to reach the guard (mirrors the isViewer
+			// guard's own unreachable-branch rationale).
+			const input = page.getByPlaceholder('Item name').element() as HTMLInputElement;
+			const form = input.closest('form')!;
+			form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+			await expect
+				.element(
+					page.getByText('This list allows at most 2 open items — check one off to add more.')
+				)
+				.toBeInTheDocument();
+			expect(createItem).not.toHaveBeenCalled();
+		});
+
+		it("shows a toast when the flush loop severs one of this list's queued adds, and stays quiet for other lists", async () => {
+			let rejectedListener: ((event: unknown) => void) | undefined;
+			vi.mocked(onCreateRejected).mockImplementation((listener) => {
+				rejectedListener = listener as (event: unknown) => void;
+				return vi.fn();
+			});
+			mountWithLimit(null);
+			render(ListDetailPage);
+			await expect.element(page.getByText('1 of 2 remaining')).toBeInTheDocument();
+
+			// Another list's rejection is ignored.
+			rejectedListener!({
+				entityType: 'item',
+				name: 'Milk',
+				listId: 999,
+				message: 'This list allows only 1 open item — check it off to add more.'
+			});
+			await expect.element(page.getByText(/wasn't added/)).not.toBeInTheDocument();
+
+			rejectedListener!({
+				entityType: 'item',
+				name: 'Milk',
+				listId: 1,
+				message: 'This list allows only 1 open item — check it off to add more.'
+			});
+			await expect
+				.element(
+					page.getByText(
+						"Milk wasn't added — This list allows only 1 open item — check it off to add more."
+					)
+				)
+				.toBeInTheDocument();
+
+			// A rejection whose payload carried no name (e.g. a category-less attach)
+			// falls back to the generic "Item wasn't added" copy.
+			rejectedListener!({
+				entityType: 'item',
+				name: null,
+				listId: 1,
+				message: 'Forbidden'
+			});
+			await expect.element(page.getByText("Item wasn't added — Forbidden")).toBeInTheDocument();
+
+			// A non-item event never produces the toast either.
+			rejectedListener!({
+				entityType: 'category',
+				name: null,
+				listId: 1,
+				message: 'Forbidden'
+			});
+		});
+
+		it('lets the rejection toast be dismissed by its button', async () => {
+			let rejectedListener: ((event: unknown) => void) | undefined;
+			vi.mocked(onCreateRejected).mockImplementation((listener) => {
+				rejectedListener = listener as (event: unknown) => void;
+				return vi.fn();
+			});
+			mountWithLimit(null);
+			render(ListDetailPage);
+			await expect.element(page.getByText('1 of 2 remaining')).toBeInTheDocument();
+
+			rejectedListener!({
+				entityType: 'item',
+				name: 'Milk',
+				listId: 1,
+				message: 'This list allows only 1 open item — check it off to add more.'
+			});
+			const toast = page.getByText(
+				"Milk wasn't added — This list allows only 1 open item — check it off to add more."
+			);
+			await expect.element(toast).toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Dismiss' }).click();
+			await expect.element(toast).not.toBeInTheDocument();
+		});
+
+		it('lets the rejection toast time out on its own', async () => {
+			vi.useFakeTimers();
+			let rejectedListener: ((event: unknown) => void) | undefined;
+			vi.mocked(onCreateRejected).mockImplementation((listener) => {
+				rejectedListener = listener as (event: unknown) => void;
+				return vi.fn();
+			});
+			mountWithLimit(null);
+			render(ListDetailPage);
+			await expect.element(page.getByText('1 of 2 remaining')).toBeInTheDocument();
+
+			rejectedListener!({
+				entityType: 'item',
+				name: 'Milk',
+				listId: 1,
+				message: 'This list allows only 1 open item — check it off to add more.'
+			});
+			const toast = page.getByText(
+				"Milk wasn't added — This list allows only 1 open item — check it off to add more."
+			);
+			await expect.element(toast).toBeInTheDocument();
+
+			await vi.advanceTimersByTimeAsync(5000);
+
+			await expect.element(toast).not.toBeInTheDocument();
 		});
 	});
 });

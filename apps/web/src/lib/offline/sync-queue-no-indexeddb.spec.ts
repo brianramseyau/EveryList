@@ -7,6 +7,7 @@ import {
 	findPendingMutation,
 	pendingMutations,
 	queueCounts,
+	retryMutation,
 	updateMutation
 } from './sync-queue';
 
@@ -62,5 +63,9 @@ describe('without an IndexedDB implementation', () => {
 
 	it('queueCounts returns all zeros', async () => {
 		await expect(queueCounts()).resolves.toEqual({ pending: 0, failed: 0, conflict: 0 });
+	});
+
+	it('retryMutation resolves without a database', async () => {
+		await expect(retryMutation(1)).resolves.toBeUndefined();
 	});
 });
