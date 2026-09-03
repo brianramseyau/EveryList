@@ -3215,6 +3215,16 @@ describe('List detail +page.svelte', () => {
 				)
 				.toBeInTheDocument();
 
+			// A rejection whose payload carried no name (e.g. a category-less attach)
+			// falls back to the generic "Item wasn't added" copy.
+			rejectedListener!({
+				entityType: 'item',
+				name: null,
+				listId: 1,
+				message: 'Forbidden'
+			});
+			await expect.element(page.getByText("Item wasn't added — Forbidden")).toBeInTheDocument();
+
 			// A non-item event never produces the toast either.
 			rejectedListener!({
 				entityType: 'category',
