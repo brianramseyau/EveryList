@@ -1204,7 +1204,7 @@ test.group('Open item limit', (group) => {
     response.assertStatus(200)
   }
 
-  test('blocks adding past the limit, frees a slot on check-off, and allows unchecking while over', async ({
+  test('blocks adding past the limit, frees a slot on check-off, and allows unchecking once room opens', async ({
     client,
     assert,
   }) => {
@@ -1228,10 +1228,24 @@ test.group('Open item limit', (group) => {
     const thirdRetry = await addItem(client, token, listId, 'Third')
     thirdRetry.assertStatus(200)
 
-    // Unchecking while at the limit is never blocked, even though it pushes the
-    // list over its own cap (3 open > 2) — the limit gates intake, it isn't a
-    // maintained invariant. Adds stay blocked until the count drops back.
-    await setChecked(client, token, listId, firstItem.id, false)
+    // Unchecking at the limit (2 open already) is blocked (2026-09-03 revision,
+    // from manual testing): it would push the list over its own cap, so it's
+    // gated the same as every intake path — check something off first.
+    const uncheckBlocked = await client
+      .patch(`/api/v1/lists/${listId}/items/${firstItem.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ checked: false })
+    uncheckBlocked.assertStatus(400)
+    assert.equal(uncheckBlocked.body().code, 'unchecked_limit_reached')
+    assert.include(uncheckBlocked.body().message, 'before unchecking')
+
+    await setChecked(client, token, listId, secondItem.id, true)
+    const uncheckRetry = await client
+      .patch(`/api/v1/lists/${listId}/items/${firstItem.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ checked: false })
+    uncheckRetry.assertStatus(200)
+
     const fourth = await addItem(client, token, listId, 'Fourth')
     fourth.assertStatus(400)
     assert.equal(fourth.body().code, 'unchecked_limit_reached')
@@ -1242,7 +1256,7 @@ test.group('Open item limit', (group) => {
     fourthRetry.assertStatus(200)
   })
 
-  test('gates restore-on-name-match but allows re-adding a checked item by name', async ({
+  test('gates restore-on-name-match and re-adding a checked item by name once the list is full', async ({
     client,
     assert,
   }) => {
@@ -1254,7 +1268,8 @@ test.group('Open item limit', (group) => {
     milk.assertStatus(200)
     const milkItem = bodyData<ItemDto>(milk)
 
-    // Re-adding a checked item's name is the reactivate branch — unchecking, not intake.
+    // Re-adding a checked item's name is the reactivate branch — an uncheck, so it's
+    // allowed here (there's room: the only slot is empty once Milk is checked off).
     await setChecked(client, token, listId, milkItem.id, true)
     const reactivate = await addItem(client, token, listId, 'Milk')
     reactivate.assertStatus(200)
@@ -1275,6 +1290,34 @@ test.group('Open item limit', (group) => {
 
     const index = await auth(client.get(`/api/v1/lists/${listId}/items`))
     assert.lengthOf(bodyData<unknown[]>(index), 1, 'only Eggs remains active')
+  })
+
+  test('gates re-adding a checked item by name once the list is full (2026-09-03 revision)', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createLimitedList(client, token, 'Today', 1)
+
+    const milk = await addItem(client, token, listId, 'Milk')
+    const milkItem = bodyData<ItemDto>(milk)
+    await setChecked(client, token, listId, milkItem.id, true)
+
+    // Eggs now fills the list's only slot.
+    const eggs = await addItem(client, token, listId, 'Eggs')
+    eggs.assertStatus(200)
+
+    // Re-adding checked Milk's name unchecks it — gated the same as the checkbox
+    // now that the list has no room.
+    const reactivateBlocked = await addItem(client, token, listId, 'Milk')
+    reactivateBlocked.assertStatus(400)
+    assert.equal(reactivateBlocked.body().code, 'unchecked_limit_reached')
+    assert.include(reactivateBlocked.body().message, 'before unchecking')
+
+    await setChecked(client, token, listId, bodyData<ItemDto>(eggs).id, true)
+    const reactivateRetry = await addItem(client, token, listId, 'Milk')
+    reactivateRetry.assertStatus(200)
+    assert.isFalse(bodyData<ItemDto>(reactivateRetry).checked)
   })
 
   test('gates the explicit restore endpoint', async ({ client, assert }) => {

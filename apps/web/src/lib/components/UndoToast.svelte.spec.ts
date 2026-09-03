@@ -65,4 +65,17 @@ describe('UndoToast.svelte', () => {
 		expect(onAction).toHaveBeenCalledOnce();
 		expect(onDismiss).not.toHaveBeenCalled();
 	});
+
+	it('renders the red error variant instead of the default amber styling', async () => {
+		render(UndoToast, {
+			message: 'Blocked',
+			actionLabel: 'Dismiss',
+			variant: 'error',
+			onAction: vi.fn(),
+			onDismiss: vi.fn()
+		});
+
+		await expect.element(page.getByRole('status')).toHaveClass(/border-red-300/);
+		await expect.element(page.getByRole('status')).not.toHaveClass(/border-amber-300/);
+	});
 });

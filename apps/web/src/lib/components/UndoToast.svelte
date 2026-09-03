@@ -5,17 +5,21 @@
 	// Small, generic undo toast (PLAN_20_PHASE_UNDO_DELETE_TOAST.md) — a fixed bottom banner with
 	// a single action, auto-dismissing after `durationMs`. `onDismiss` fires only when the timer
 	// elapses without the action being taken; it does not fire on `onAction` or on unmount, since
-	// both of those are the caller's own doing, not a timeout to react to.
+	// both of those are the caller's own doing, not a timeout to react to. `variant: 'error'` (red,
+	// PLAN_25_PHASE_OPEN_ITEM_LIMIT.md's 2026-09-03 revision) reuses this same shape for a blocking
+	// error rather than an undoable action — callers just pass a dismiss-only `onAction`.
 	let {
 		message,
 		actionLabel = 'Undo',
 		durationMs = 5000,
+		variant = 'warning',
 		onAction,
 		onDismiss
 	}: {
 		message: string;
 		actionLabel?: string;
 		durationMs?: number;
+		variant?: 'warning' | 'error';
 		onAction: () => void;
 		onDismiss?: () => void;
 	} = $props();
@@ -52,13 +56,22 @@
 <div
 	role="status"
 	use:swipeDismiss={{ onDismiss: dismiss }}
-	class="fixed inset-x-4 z-20 mx-auto flex app-max-w touch-pan-x items-center justify-between gap-3 rounded-t-xl border border-b-0 border-amber-300 bg-amber-50 px-4 py-2 text-sm shadow-sm dark:border-amber-700 dark:bg-amber-900 print:hidden"
+	class="fixed inset-x-4 z-20 mx-auto flex app-max-w touch-pan-x items-center justify-between gap-3 rounded-t-xl border border-b-0 px-4 py-2 text-sm shadow-sm print:hidden {variant ===
+	'error'
+		? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-900'
+		: 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900'}"
 	style="bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));"
 >
-	<span class="text-amber-900 dark:text-amber-200">{message}</span>
+	<span
+		class={variant === 'error'
+			? 'text-red-900 dark:text-red-200'
+			: 'text-amber-900 dark:text-amber-200'}>{message}</span
+	>
 	<button
 		type="button"
-		class="shrink-0 font-semibold text-amber-900 underline hover:no-underline dark:text-amber-200"
+		class="shrink-0 font-semibold underline hover:no-underline {variant === 'error'
+			? 'text-red-900 dark:text-red-200'
+			: 'text-amber-900 dark:text-amber-200'}"
 		onclick={handleAction}
 	>
 		{actionLabel}

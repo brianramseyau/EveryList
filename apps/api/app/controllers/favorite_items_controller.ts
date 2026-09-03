@@ -11,6 +11,7 @@ import {
   UNCHECKED_LIMIT_REACHED,
   hasCapacityFor,
   limitReachedMessage,
+  limitReachedMessageForUncheck,
 } from '#services/unchecked_limit'
 import {
   hasVersionConflict,
@@ -207,6 +208,14 @@ export default class FavoriteItemsController {
 
     if (existing) {
       if (existing.checked) {
+        // Reactivating a checked item unchecks it — gated the same as the checkbox
+        // (2026-09-03 revision), so this can't bypass its limit.
+        if (!(await hasCapacityFor(list))) {
+          return response.badRequest({
+            message: limitReachedMessageForUncheck(list),
+            code: UNCHECKED_LIMIT_REACHED,
+          })
+        }
         existing.checked = false
         existing.checkedAt = null
         existing.version += 1
@@ -235,8 +244,7 @@ export default class FavoriteItemsController {
       .max('sort_order as maxSortOrder')
       .first()
 
-    // The create branch is intake (the reactivate-checked branch above is not —
-    // unchecking isn't intake), so the open-item limit gates it here.
+    // The create branch is intake, so the open-item limit gates it here too.
     if (!(await hasCapacityFor(list))) {
       return response.badRequest({
         message: limitReachedMessage(list),
