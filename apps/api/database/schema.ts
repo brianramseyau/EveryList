@@ -114,6 +114,19 @@ export class CategoryLearningSchema extends BaseModel {
   declare updatedAt: DateTime
 }
 
+export class DeadlineNotificationSendSchema extends BaseModel {
+  static $columns = ['id', 'itemId', 'pushSubscriptionId', 'sentAt'] as const
+  $columns = DeadlineNotificationSendSchema.$columns
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare itemId: number
+  @column()
+  declare pushSubscriptionId: number
+  @column.dateTime()
+  declare sentAt: DateTime
+}
+
 export class FavoriteItemSchema extends BaseModel {
   static $columns = ['createdAt', 'defaultCategoryId', 'defaultQuantity', 'deletedAt', 'id', 'listId', 'name', 'notes', 'price', 'storeId', 'updatedAt', 'userId', 'version'] as const
   $columns = FavoriteItemSchema.$columns
@@ -338,6 +351,38 @@ export class PasswordResetTokenSchema extends BaseModel {
   declare tokenHash: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+  @column()
+  declare userId: number
+}
+
+export class PushSettingSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'updatedAt', 'vapidPrivateKey', 'vapidPublicKey'] as const
+  $columns = PushSettingSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare vapidPrivateKey: string
+  @column()
+  declare vapidPublicKey: string
+}
+
+export class PushSubscriptionSchema extends BaseModel {
+  static $columns = ['auth', 'createdAt', 'endpoint', 'id', 'p256Dh', 'userId'] as const
+  $columns = PushSubscriptionSchema.$columns
+  @column()
+  declare auth: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare endpoint: string
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare p256Dh: string
   @column()
   declare userId: number
 }

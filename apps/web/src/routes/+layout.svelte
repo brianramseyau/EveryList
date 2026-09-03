@@ -22,6 +22,10 @@
 	import { startBackgroundSync } from '$lib/offline/background-sync';
 	import { initInstallPrompt } from '$lib/pwa/install-prompt';
 	import { clearBadge, refreshBadgeCount } from '$lib/pwa/badge';
+	import {
+		getDeadlineNotificationsPreference,
+		resyncDeadlineNotifications
+	} from '$lib/notifications/sync';
 	import { setUpdateRegistration } from '$lib/pwa/update';
 	import BottomNav from '$lib/components/BottomNav.svelte';
 	import SyncStatusIcon from '$lib/components/SyncStatusIcon.svelte';
@@ -40,6 +44,13 @@
 		else clearBadge();
 	}
 
+	/** Reschedules native/Electron local deadline notifications on app launch —
+	 * a no-op on web (server-driven Web Push instead) or when the user hasn't
+	 * turned the feature on. See PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md. */
+	function syncDeadlineNotifications() {
+		if (loggedIn && getDeadlineNotificationsPreference()) void resyncDeadlineNotifications();
+	}
+
 	onMount(() => {
 		// Native/desktop builds have no baked-in server address (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1,
 		// PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §1/§4) — gate here rather than on /login itself, since a
@@ -56,6 +67,7 @@
 		disablePinchZoom();
 		refreshAuth();
 		syncBadge();
+		syncDeadlineNotifications();
 		// Native deep links (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md): the Android widget's "open item" tap hands us
 		// `everylist://lists/<id>/items/<itemId>`, which the native shell funnels back into the
 		// WebView as this event. Route it to the item editor. Gated to the native build — the

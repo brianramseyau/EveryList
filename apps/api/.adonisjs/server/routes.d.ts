@@ -85,6 +85,9 @@ export type ScannedRoutes = {
     'backupSettings.backup_settings.show': { paramsTuple?: []; params?: {} }
     'backupSettings.backup_settings.update': { paramsTuple?: []; params?: {} }
     'backupSettings.backup_settings.run': { paramsTuple?: []; params?: {} }
+    'push.push_subscriptions.public_key': { paramsTuple?: []; params?: {} }
+    'push.push_subscriptions.store': { paramsTuple?: []; params?: {} }
+    'push.push_subscriptions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
   GET: {
     'event_stream': { paramsTuple?: []; params?: {} }
@@ -113,6 +116,7 @@ export type ScannedRoutes = {
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'backupSettings.backup_settings.show': { paramsTuple?: []; params?: {} }
+    'push.push_subscriptions.public_key': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
     'event_stream': { paramsTuple?: []; params?: {} }
@@ -141,6 +145,7 @@ export type ScannedRoutes = {
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'backupSettings.backup_settings.show': { paramsTuple?: []; params?: {} }
+    'push.push_subscriptions.public_key': { paramsTuple?: []; params?: {} }
   }
   POST: {
     'subscribe': { paramsTuple?: []; params?: {} }
@@ -171,6 +176,7 @@ export type ScannedRoutes = {
     'alexa.alexa_oauth.token': { paramsTuple?: []; params?: {} }
     'invite_accept.accept': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
     'backupSettings.backup_settings.run': { paramsTuple?: []; params?: {} }
+    'push.push_subscriptions.store': { paramsTuple?: []; params?: {} }
   }
   PATCH: {
     'profile.profile.update': { paramsTuple?: []; params?: {} }
@@ -202,6 +208,7 @@ export type ScannedRoutes = {
     'lists.list_invites.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'inviteId': ParamValue} }
     'tokens.personal_access_tokens.destroy': { paramsTuple: [ParamValue]; params: {'tokenId': ParamValue} }
     'stores.stores.reset_categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'push.push_subscriptions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {

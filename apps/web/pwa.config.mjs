@@ -33,6 +33,11 @@ export const workboxOptions = {
 	// aren't navigation requests and were never affected, which is why this
 	// only surfaces when manually poking a URL rather than through regular use.
 	navigateFallbackDenylist: [/^\/docs/, /^\/openapi/, /^\/api\//],
+	// Deadline notifications' push/notificationclick handlers — a plain,
+	// unbundled script (apps/web/static/push-sw.js) importScripts()'d into the
+	// generated sw.js, instead of switching this whole build to injectManifest
+	// (see PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md for why).
+	importScripts: ['/push-sw.js'],
 	// `@vite-pwa/sveltekit` globs `.svelte-kit/output/` (client build + SvelteKit's
 	// own prerendered output), not the final flat `build/` directory adapter-static
 	// produces later — hence the `client/`/`prerendered/` prefixes. It auto-adds its

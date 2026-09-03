@@ -76,6 +76,7 @@ export default defineConfig({
     () => import('#start/routes'),
     () => import('#start/backup_scheduler'),
     () => import('#start/pruner_scheduler'),
+    () => import('#start/deadline_notification_scheduler'),
   ],
 
   /*

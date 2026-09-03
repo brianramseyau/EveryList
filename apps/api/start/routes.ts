@@ -227,6 +227,19 @@ router
       .prefix('backup-settings')
       .as('backupSettings')
       .use(middleware.auth())
+
+    router
+      .group(() => {
+        router.get('public-key', [controllers.PushSubscriptions, 'publicKey'])
+        router
+          .post('subscriptions', [controllers.PushSubscriptions, 'store'])
+          .use(middleware.auth())
+        router
+          .delete('subscriptions/:id', [controllers.PushSubscriptions, 'destroy'])
+          .use(middleware.auth())
+      })
+      .prefix('push')
+      .as('push')
   })
   .prefix('/api/v1')
 
