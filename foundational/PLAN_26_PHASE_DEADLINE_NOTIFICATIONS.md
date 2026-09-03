@@ -193,6 +193,23 @@ scheduler needs.
   preference is only persisted after the platform mechanism is confirmed
   working — a failed attempt now correctly leaves the toggle off instead of
   showing "on" with nothing scheduled.
+- Second review pass, on the fix commit itself:
+  - The Electron branch of `enableDeadlineNotifications` called
+    `setBackgroundRun(true)` *before* `resyncDeadlineNotifications()` — a
+    resync failure (now caught) still left background-run silently enabled
+    even though the toggle correctly showed off. Reordered: resync first,
+    `setBackgroundRun(true)` (and the preference) only after it succeeds.
+  - `push_subscriptions_controller.ts#store`'s find → delete → create
+    sequence wasn't atomic — a failure between the delete and the create
+    could orphan the endpoint, and two truly concurrent subscribes of the
+    same endpoint could race past both reading "no existing row." Wrapped
+    the whole sequence in `db.transaction()`: a partial failure now rolls
+    back instead of orphaning, and — since this app's storage is SQLite,
+    single-writer at the engine level — a concurrent transaction's write
+    serializes behind the first rather than racing at the JS layer. (A
+    true multi-writer database would need this expressed as a single
+    atomic upsert instead to fully close the read race; doesn't apply
+    here.)
 
 ## Test strategy
 

@@ -79,8 +79,12 @@ export async function enableDeadlineNotifications(): Promise<boolean> {
 		if (platform === 'electron') {
 			const granted = await requestElectronNotificationPermission();
 			if (!granted) return false;
-			await window.everylistDesktop?.setBackgroundRun(true);
+			// Resynced *before* turning on background-run: if this throws (a network failure
+			// fetching lists/items), the catch below returns false with background-run never
+			// having been enabled — no inconsistent state where the desktop app is quietly
+			// running in the tray with nothing actually scheduled and the toggle showing off.
 			await resyncDeadlineNotifications();
+			await window.everylistDesktop?.setBackgroundRun(true);
 			setDeadlineNotificationsPreference(true);
 			return true;
 		}
