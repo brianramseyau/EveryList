@@ -261,6 +261,34 @@ describe('New List +page.svelte', () => {
 		expect(call).not.toHaveProperty('maxUncheckedItems');
 	});
 
+	it('rejects a non-whole open item limit without submitting', async () => {
+		render(NewListPage);
+
+		await page.getByRole('button', { name: /Todo \/ Chores/ }).click();
+		await page.getByRole('spinbutton', { name: 'Open item limit (optional)' }).fill('2.5');
+		await page.getByPlaceholder('List name').fill('Chores');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect
+			.element(page.getByText('Open item limit must be a whole number between 1 and 999.'))
+			.toBeInTheDocument();
+		expect(createList).not.toHaveBeenCalled();
+	});
+
+	it('rejects an out-of-range open item limit without submitting', async () => {
+		render(NewListPage);
+
+		await page.getByRole('button', { name: /Todo \/ Chores/ }).click();
+		await page.getByRole('spinbutton', { name: 'Open item limit (optional)' }).fill('1000');
+		await page.getByPlaceholder('List name').fill('Chores');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect
+			.element(page.getByText('Open item limit must be a whole number between 1 and 999.'))
+			.toBeInTheDocument();
+		expect(createList).not.toHaveBeenCalled();
+	});
+
 	it('selects Custom, showing every toggle and creating the list with only the chosen ones', async () => {
 		vi.mocked(createList).mockResolvedValue({
 			id: 9,

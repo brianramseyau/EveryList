@@ -48,18 +48,7 @@ export const LIST_PREFABS: ListPrefab[] = [
 		id: 'shopping',
 		label: 'Shopping',
 		description: 'Categories, stores, favorites, and prices',
-		values: {
-			useCategories: true,
-			useCategoryLearning: true,
-			useShops: true,
-			showStoreInList: true,
-			useFavorites: true,
-			useRecent: true,
-			useQuantity: true,
-			usePrice: true,
-			showPriceInList: true,
-			useDeadline: false
-		}
+		values: { ...DEFAULT_FEATURE_VALUES }
 	},
 	{
 		id: 'todo',

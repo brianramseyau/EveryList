@@ -46,10 +46,26 @@
 
 	async function save() {
 		if (!name.trim() || saving) return;
+
+		// Mirrors the settings page's applyLimitDraft validation — the Save button is
+		// type="button" outside the form, and handleSubmit's preventDefault skips native
+		// number-input validation, so an out-of-range or non-whole value would otherwise
+		// reach the backend's `vine.number().range([1, 999]).withoutDecimals()` validator
+		// as a 422, or (if Number() maps a malformed value to NaN) get silently dropped by
+		// JSON.stringify turning NaN into null.
+		const trimmedLimit = String(openItemLimitText ?? '').trim();
+		let maxUncheckedItems: number | undefined;
+		if (trimmedLimit !== '') {
+			const parsed = Number(trimmedLimit);
+			if (!Number.isInteger(parsed) || parsed < 1 || parsed > 999) {
+				error = 'Open item limit must be a whole number between 1 and 999.';
+				return;
+			}
+			maxUncheckedItems = parsed;
+		}
+
 		saving = true;
 		try {
-			const trimmedLimit = String(openItemLimitText ?? '').trim();
-			const maxUncheckedItems = trimmedLimit === '' ? undefined : Number(trimmedLimit);
 			await createList({
 				name: name.trim(),
 				color,
