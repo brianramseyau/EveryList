@@ -67,6 +67,11 @@
 	let isAndroid = $state(false);
 	let isDesktopApp = $state(false);
 	let isRemote = $state(false);
+	let isCoarsePointer = $state(false);
+	// Screen orientation and shake-to-undo depend on hardware (an accelerometer, a lockable
+	// screen) that desktop browsers and the Electron app don't have — gate both on this rather
+	// than showing controls that can never do anything there.
+	let showMobileHardwareSettings = $derived(!isDesktopApp && (isNative || isCoarsePointer));
 	let desktopVersionInfo = $state<{ version: string; platform: string } | null>(null);
 	let orientationFeedback = $state<string | null>(null);
 	let shakeToUndoEnabled = $state(true);
@@ -286,6 +291,7 @@
 		isNative = Capacitor.isNativePlatform();
 		isAndroid = isNative && Capacitor.getPlatform() === 'android';
 		isDesktopApp = isDesktop();
+		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		// Composed locally rather than via $lib/platform/desktop's isRemoteClient() — this
 		// component already tracks isNative and isDesktopApp separately (for nativeInfo vs.
 		// desktopVersionInfo), so this is the same check without a second, independently-mocked
@@ -455,7 +461,7 @@
 				{/each}
 			</div>
 		</div>
-		{#if !isDesktopApp}
+		{#if showMobileHardwareSettings}
 			<div class="flex items-center justify-between px-4 py-3">
 				<span class="text-sm font-medium">Screen Orientation</span>
 				<div
@@ -494,41 +500,43 @@
 				<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">{orientationFeedback}</p>
 			{/if}
 		{/if}
-		<div
-			class="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700"
-		>
-			<span class="text-sm font-medium">Shake to undo</span>
+		{#if showMobileHardwareSettings}
 			<div
-				role="radiogroup"
-				aria-label="Shake to undo"
-				class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
+				class="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700"
 			>
-				<button
-					type="button"
-					role="radio"
-					aria-checked={shakeToUndoEnabled}
-					onclick={() => chooseShakeToUndo(true)}
-					class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {shakeToUndoEnabled
-						? 'bg-primary-600 text-white'
-						: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+				<span class="text-sm font-medium">Shake to undo</span>
+				<div
+					role="radiogroup"
+					aria-label="Shake to undo"
+					class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
 				>
-					On
-				</button>
-				<button
-					type="button"
-					role="radio"
-					aria-checked={!shakeToUndoEnabled}
-					onclick={() => chooseShakeToUndo(false)}
-					class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {!shakeToUndoEnabled
-						? 'bg-primary-600 text-white'
-						: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
-				>
-					Off
-				</button>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={shakeToUndoEnabled}
+						onclick={() => chooseShakeToUndo(true)}
+						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {shakeToUndoEnabled
+							? 'bg-primary-600 text-white'
+							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+					>
+						On
+					</button>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={!shakeToUndoEnabled}
+						onclick={() => chooseShakeToUndo(false)}
+						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {!shakeToUndoEnabled
+							? 'bg-primary-600 text-white'
+							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+					>
+						Off
+					</button>
+				</div>
 			</div>
-		</div>
-		{#if shakeFeedback}
-			<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">{shakeFeedback}</p>
+			{#if shakeFeedback}
+				<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">{shakeFeedback}</p>
+			{/if}
 		{/if}
 		{#if deadlineNotificationsSupported}
 			<div
