@@ -48,6 +48,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -60,6 +61,7 @@ jobs:
   build-shared:
     name: Build packages/shared
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -74,6 +76,7 @@ jobs:
     name: Typecheck
     needs: build-shared
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -87,6 +90,7 @@ jobs:
     name: Test (${{ matrix.workspace }})
     needs: build-shared
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

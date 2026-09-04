@@ -27,6 +27,7 @@ jobs:
     name: Playwright E2E (offline sync, accessibility)
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       HOST: 127.0.0.1
       PORT: '3333'
@@ -62,6 +63,7 @@ jobs:
     name: Build image and smoke test
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       # See test.yml's env block — this job doesn't build apps/desktop either.
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
