@@ -915,6 +915,32 @@ describe('Settings +page.svelte', () => {
 		await expect.element(page.getByText('Shake to undo')).not.toBeInTheDocument();
 	});
 
+	it('shows the Features section for Deadline notifications alone in a desktop browser (no Shake to undo)', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(notificationPlatform).mockReturnValue('web');
+		// Same desktop-browser override as above — Shake to undo/Screen Orientation stay hidden,
+		// but Deadline notifications doesn't depend on touch/native, so Features still renders
+		// with just that one row (and without the leading border-t it wears when Shake to undo
+		// is the row above it).
+		vi.spyOn(window, 'matchMedia').mockImplementation(
+			(query) =>
+				({
+					matches: false,
+					media: query,
+					addEventListener: vi.fn(),
+					removeEventListener: vi.fn()
+				}) as unknown as MediaQueryList
+		);
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Features')).toBeInTheDocument();
+		await expect.element(page.getByText('Shake to undo')).not.toBeInTheDocument();
+		await expect
+			.element(page.getByRole('radiogroup', { name: 'Deadline notifications' }))
+			.toBeInTheDocument();
+	});
+
 	it('shows the Server section on the desktop build', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(isDesktop).mockReturnValue(true);
