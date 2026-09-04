@@ -39,17 +39,18 @@ jobs:
       # See test.yml's env block — this job doesn't build apps/desktop either.
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: 24
-          cache: pnpm
+          name: shared-dist
+          path: packages/shared/dist
 
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @everylist/shared build
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright Chromium
         run: pnpm --filter @everylist/web exec playwright install --with-deps chromium
@@ -64,16 +65,7 @@ jobs:
       # See test.yml's env block — this job doesn't build apps/desktop either.
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - uses: docker/setup-buildx-action@v3
 
