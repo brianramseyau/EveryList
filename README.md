@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/brianramseyau/EveryList/pkgs/container/everylist"><img alt="GHCR" src="https://img.shields.io/badge/ghcr.io-brianramseyau%2Feverylist-blue?logo=docker"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
-  <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D24-brightgreen?logo=node.js">
+  <img alt="Node" src="https://img.shields.io/badge/node-24.20.0-brightgreen?logo=node.js">
 </p>
 
 ---
@@ -101,7 +101,7 @@ The Home Assistant HACS integration lives in its own repo, [`everylist-hass`](ht
 
 ### Requirements
 
-- Node.js **24+** (see `.nvmrc`)
+- Node.js **24.20.0** (see `.nvmrc`)
 - [pnpm](https://pnpm.io) 10.x (`corepack enable` will pick up the pinned version)
 
 ### Local development

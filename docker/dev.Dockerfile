@@ -1,6 +1,6 @@
 # Local-dev-only image used by docker-compose.yml. Not published; the
 # production image is docker/Dockerfile.
-FROM node:24-bookworm-slim
+FROM node:24.20.0-bookworm-slim
 
 # build-essential + python3: required to compile better-sqlite3's native
 # addon (node-gyp) inside the container.

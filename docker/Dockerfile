@@ -12,7 +12,7 @@
 # deps: full monorepo install (dev deps included) — shared by every build
 # stage below so pnpm's content-addressable store is only populated once.
 # ---------------------------------------------------------------------------
-FROM node:24-bookworm-slim AS deps
+FROM node:24.20.0-bookworm-slim AS deps
 
 # build-essential + python3: required to compile better-sqlite3's native
 # addon (node-gyp) for the workspace install below.
@@ -66,7 +66,7 @@ RUN pnpm --filter @everylist/api build
 # ancestor so pnpm treats it as the standalone project it actually is
 # (AdonisJS's own documented deploy step — see `node ace build`'s summary).
 # ---------------------------------------------------------------------------
-FROM node:24-bookworm-slim AS prod-deps
+FROM node:24.20.0-bookworm-slim AS prod-deps
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -96,7 +96,7 @@ COPY --from=build-api /app/packages/shared/dist node_modules/@everylist/shared/d
 # release: minimal runtime image — no build toolchain, no pnpm workspace,
 # just Node, s6-overlay, and the self-contained apps/api/build output.
 # ---------------------------------------------------------------------------
-FROM node:24-bookworm-slim AS release
+FROM node:24.20.0-bookworm-slim AS release
 
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG APP_VERSION=nightly
@@ -127,7 +127,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Baked-in default account, remapped to PUID/PGID at container start by
 # docker/root/etc/cont-init.d/10-remap-user (see that script), so the
 # exact ID baked in here doesn't matter — no -u/-g pin, since
-# node:24-bookworm-slim already ships a "node" user/group at GID/UID 1000.
+# node:24.20.0-bookworm-slim already ships a "node" user/group at GID/UID 1000.
 RUN groupadd appuser && useradd -g appuser -M -s /usr/sbin/nologin appuser
 
 WORKDIR /app
