@@ -353,6 +353,47 @@ test.group('Alexa skill endpoint', (group) => {
     assert.lengthOf(bodyData<unknown[]>(after), 1)
   })
 
+  test('AddItemIntent restores an item that was deleted while still checked, as unchecked', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+    await addItem(client, owner.token, listId, 'Eggs')
+
+    const items = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const eggs = bodyData<{ id: number }[]>(items)[0]!
+
+    // Check it off, then delete it while still checked (no unchecking in between).
+    await client
+      .patch(`/api/v1/lists/${listId}/items/${eggs.id}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ checked: true })
+    await client
+      .delete(`/api/v1/lists/${listId}/items/${eggs.id}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+
+    const restore = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Eggs' },
+      })
+    )
+    assert.include(restore.body().response.outputSpeech.text, 'Added Eggs to Groceries')
+
+    const after = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    const restored = bodyData<{ checked: boolean }[]>(after)[0]!
+    assert.isFalse(restored.checked)
+  })
+
   test('AddItemIntent with no ItemName slot asks for clarification', async ({ client, assert }) => {
     const owner = await signupAndGetUser(client)
     const listId = await createList(client, owner.token, 'Groceries')

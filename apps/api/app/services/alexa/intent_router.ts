@@ -191,6 +191,8 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots): Prom
       return respond(say(limitReachedMessage(list)), list)
     }
     deletedMatch.deletedAt = null
+    deletedMatch.checked = false
+    deletedMatch.checkedAt = null
     deletedMatch.sortOrder = await nextSortOrder(list.id)
     deletedMatch.version += 1
     await deletedMatch.save()
