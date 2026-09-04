@@ -1,5 +1,6 @@
 package au.brianramsey.everylist;
 
+import android.app.Activity;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -22,7 +23,19 @@ public class PullToRefreshControlPlugin extends Plugin {
             call.reject("enabled is required");
             return;
         }
-        ((MainActivity) getActivity()).setPullToRefreshEnabled(enabled);
+        // getActivity() can be null (the bridge clears it once the activity stops) and, in
+        // principle, isn't guaranteed to be a MainActivity — guard both rather than assuming.
+        Activity activity = getActivity();
+        if (!(activity instanceof MainActivity)) {
+            call.reject("no active MainActivity to control pull-to-refresh on");
+            return;
+        }
+        MainActivity mainActivity = (MainActivity) activity;
+        // Plugin methods run on Capacitor's own "CapacitorPlugins" handler thread, not the main
+        // thread — MainActivity#setPullToRefreshEnabled touches the SwipeRefreshLayout view
+        // hierarchy (setEnabled -> reset -> bringToFront), which throws
+        // ViewRootImpl$CalledFromWrongThreadException off the main thread.
+        activity.runOnUiThread(() -> mainActivity.setPullToRefreshEnabled(enabled));
         call.resolve();
     }
 }
