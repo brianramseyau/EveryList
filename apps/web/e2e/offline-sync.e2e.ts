@@ -40,8 +40,11 @@ test('adds an item while offline and syncs it once back online', async ({ page }
 	await page.getByPlaceholder('Item name').press('Enter');
 
 	// Optimistic render happens immediately, entirely from the Dexie-backed write path —
-	// no network request has succeeded yet.
-	await expect(page.getByText('Milk')).toBeVisible();
+	// no network request has succeeded yet. The default 5s timeout has shown occasional
+	// CI-runner flakiness unrelated to this path (see the offline-sync CI flake report,
+	// 2026-09-04) — generously bumped rather than left tight, since a real regression
+	// here would fail this assertion no matter the timeout.
+	await expect(page.getByText('Milk')).toBeVisible({ timeout: 10_000 });
 
 	await page.context().setOffline(false);
 
