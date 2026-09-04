@@ -22,6 +22,10 @@
 	import { startBackgroundSync } from '$lib/offline/background-sync';
 	import { initInstallPrompt } from '$lib/pwa/install-prompt';
 	import { clearBadge, refreshBadgeCount } from '$lib/pwa/badge';
+	import {
+		getDeadlineNotificationsPreference,
+		resyncDeadlineNotifications
+	} from '$lib/notifications/sync';
 	import { setUpdateRegistration } from '$lib/pwa/update';
 	import BottomNav from '$lib/components/BottomNav.svelte';
 	import SyncStatusIcon from '$lib/components/SyncStatusIcon.svelte';
@@ -40,6 +44,23 @@
 		else clearBadge();
 	}
 
+	/** Reschedules native/Electron local deadline notifications — a no-op on web
+	 * (server-driven Web Push instead) or when the user hasn't turned the
+	 * feature on. Called on launch, on native app resume, and periodically
+	 * while the app stays open, since native/Electron's local schedule is
+	 * otherwise frozen from whenever it was last computed: an item added,
+	 * edited, or checked off (or a list's useDeadline toggled) after that
+	 * point wouldn't be reflected until the next of these triggers. See
+	 * PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md. */
+	function syncDeadlineNotifications() {
+		if (loggedIn && getDeadlineNotificationsPreference()) void resyncDeadlineNotifications();
+	}
+
+	// Matches the server scheduler's own minute-ish granularity closely enough that a change
+	// made while the app is open is reflected well within its deadline's precision, without
+	// resyncing (a full lists+items refetch) on every single item mutation across the app.
+	const DEADLINE_NOTIFICATIONS_RESYNC_INTERVAL_MS = 5 * 60 * 1000;
+
 	onMount(() => {
 		// Native/desktop builds have no baked-in server address (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1,
 		// PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §1/§4) — gate here rather than on /login itself, since a
@@ -56,6 +77,7 @@
 		disablePinchZoom();
 		refreshAuth();
 		syncBadge();
+		syncDeadlineNotifications();
 		// Native deep links (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md): the Android widget's "open item" tap hands us
 		// `everylist://lists/<id>/items/<itemId>`, which the native shell funnels back into the
 		// WebView as this event. Route it to the item editor. Gated to the native build — the
@@ -63,7 +85,9 @@
 		// Skipped while logged out: the item editor (and this whole app) needs a session, and the
 		// login redirect flow is what a normal app launch already handles.
 		let deepLinkHandle: ReturnType<typeof App.addListener> | null = null;
+		let resumeHandle: ReturnType<typeof App.addListener> | null = null;
 		if (Capacitor.isNativePlatform()) {
+			resumeHandle = App.addListener('resume', () => syncDeadlineNotifications());
 			deepLinkHandle = App.addListener('appUrlOpen', ({ url }) => {
 				if (!loggedIn) return;
 				// `everylist://lists/<id>/items/<itemId>` — the Android widget's "open item" tap.
@@ -126,11 +150,18 @@
 				})
 			);
 		}
-		// Remove the native deep-link listener on unmount — the layout singleton only mounts
-		// once for the app's lifetime, but a clean handle avoids leaks if it ever remounts
-		// (e.g. in tests).
+		const deadlineNotificationsInterval = setInterval(
+			syncDeadlineNotifications,
+			DEADLINE_NOTIFICATIONS_RESYNC_INTERVAL_MS
+		);
+
+		// Remove the native deep-link/resume listeners and the resync interval on unmount — the
+		// layout singleton only mounts once for the app's lifetime, but clean handles avoid
+		// leaks if it ever remounts (e.g. in tests).
 		return () => {
 			void deepLinkHandle?.then((handle) => handle.remove());
+			void resumeHandle?.then((handle) => handle.remove());
+			clearInterval(deadlineNotificationsInterval);
 			stopShakeListening();
 		};
 	});

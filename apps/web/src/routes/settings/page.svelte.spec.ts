@@ -40,6 +40,12 @@ vi.mock('$lib/platform/desktop', () => ({
 vi.mock('$lib/platform/desktop-update', () => ({
 	checkForDesktopUpdate: vi.fn()
 }));
+vi.mock('$lib/notifications/sync', () => ({
+	notificationPlatform: vi.fn().mockReturnValue('unsupported'),
+	getDeadlineNotificationsPreference: vi.fn().mockReturnValue(false),
+	enableDeadlineNotifications: vi.fn(),
+	disableDeadlineNotifications: vi.fn()
+}));
 
 const { goto } = await import('$app/navigation');
 const { logout, fetchProfile, updateProfile } = await import('$lib/api/auth');
@@ -52,6 +58,12 @@ const { getServerUrl, clearServerUrl } = await import('$lib/api/server-url');
 const { getToken, setToken } = await import('$lib/api/token');
 const { isDesktop, desktopInfo } = await import('$lib/platform/desktop');
 const { checkForDesktopUpdate } = await import('$lib/platform/desktop-update');
+const {
+	notificationPlatform,
+	getDeadlineNotificationsPreference,
+	enableDeadlineNotifications,
+	disableDeadlineNotifications
+} = await import('$lib/notifications/sync');
 const SettingsPage = (await import('./+page.svelte')).default;
 
 const profile = {
@@ -73,6 +85,8 @@ describe('Settings +page.svelte', () => {
 		vi.mocked(getServerUrl).mockReturnValue('');
 		vi.mocked(isDesktop).mockReturnValue(false);
 		vi.mocked(desktopInfo).mockReturnValue(null);
+		vi.mocked(notificationPlatform).mockReturnValue('unsupported');
+		vi.mocked(getDeadlineNotificationsPreference).mockReturnValue(false);
 		// Orientation radio clicks persist the choice to localStorage (see the
 		// auto-rotate/not-supported tests) — clear it so it can't leak into a
 		// later spec file sharing this worker's browser context.
@@ -455,6 +469,99 @@ describe('Settings +page.svelte', () => {
 			);
 
 			await expect.poll(() => undo.mock.calls.length).toBe(1);
+		});
+	});
+
+	describe('deadline notifications (PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md)', () => {
+		it('is hidden entirely on an unsupported platform', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+			render(SettingsPage);
+
+			await expect
+				.element(page.getByRole('radiogroup', { name: 'Deadline notifications' }))
+				.not.toBeInTheDocument();
+		});
+
+		it('reflects the persisted preference on a supported platform', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+			vi.mocked(notificationPlatform).mockReturnValue('web');
+			vi.mocked(getDeadlineNotificationsPreference).mockReturnValue(true);
+
+			render(SettingsPage);
+
+			await expect
+				.element(
+					page
+						.getByRole('radiogroup', { name: 'Deadline notifications' })
+						.getByRole('radio', { name: 'On' })
+				)
+				.toBeChecked();
+		});
+
+		it('turning it on calls enableDeadlineNotifications and reflects success', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+			vi.mocked(notificationPlatform).mockReturnValue('web');
+			vi.mocked(enableDeadlineNotifications).mockResolvedValue(true);
+
+			render(SettingsPage);
+			await page
+				.getByRole('radiogroup', { name: 'Deadline notifications' })
+				.getByRole('radio', { name: 'On' })
+				.click();
+
+			expect(enableDeadlineNotifications).toHaveBeenCalledOnce();
+			await expect
+				.element(
+					page
+						.getByRole('radiogroup', { name: 'Deadline notifications' })
+						.getByRole('radio', { name: 'On' })
+				)
+				.toBeChecked();
+		});
+
+		it('shows a note and stays off when permission is denied', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+			vi.mocked(notificationPlatform).mockReturnValue('web');
+			vi.mocked(enableDeadlineNotifications).mockResolvedValue(false);
+
+			render(SettingsPage);
+			await page
+				.getByRole('radiogroup', { name: 'Deadline notifications' })
+				.getByRole('radio', { name: 'On' })
+				.click();
+
+			await expect
+				.element(page.getByText("Couldn't turn on notifications", { exact: false }))
+				.toBeInTheDocument();
+			await expect
+				.element(
+					page
+						.getByRole('radiogroup', { name: 'Deadline notifications' })
+						.getByRole('radio', { name: 'Off' })
+				)
+				.toBeChecked();
+		});
+
+		it('turning it off calls disableDeadlineNotifications', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+			vi.mocked(notificationPlatform).mockReturnValue('web');
+			vi.mocked(getDeadlineNotificationsPreference).mockReturnValue(true);
+			vi.mocked(disableDeadlineNotifications).mockResolvedValue(undefined);
+
+			render(SettingsPage);
+			await page
+				.getByRole('radiogroup', { name: 'Deadline notifications' })
+				.getByRole('radio', { name: 'Off' })
+				.click();
+
+			expect(disableDeadlineNotifications).toHaveBeenCalledOnce();
+			await expect
+				.element(
+					page
+						.getByRole('radiogroup', { name: 'Deadline notifications' })
+						.getByRole('radio', { name: 'Off' })
+				)
+				.toBeChecked();
 		});
 	});
 

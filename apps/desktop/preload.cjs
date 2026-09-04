@@ -24,5 +24,10 @@ const version = versionArg ? versionArg.slice('--everylist-version='.length) : '
 contextBridge.exposeInMainWorld('everylistDesktop', {
   version,
   platform: process.platform,
-  checkForUpdate: () => ipcRenderer.invoke('everylist:check-for-update')
+  checkForUpdate: () => ipcRenderer.invoke('everylist:check-for-update'),
+  // Deadline notifications (PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md): closing the window hides
+  // to a tray icon instead of quitting only while this is enabled, so local notification timers
+  // (apps/web's $lib/notifications/electron.ts) keep running in the background.
+  /** @param {boolean} enabled */
+  setBackgroundRun: (enabled) => ipcRenderer.invoke('everylist:set-background-run', enabled)
 })

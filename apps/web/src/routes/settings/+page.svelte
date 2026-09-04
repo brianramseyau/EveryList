@@ -36,6 +36,12 @@
 	import { ApiError } from '$lib/api/client';
 	import { resetApp } from '$lib/pwa/reset';
 	import { checkForUpdate } from '$lib/pwa/update';
+	import {
+		disableDeadlineNotifications,
+		enableDeadlineNotifications,
+		getDeadlineNotificationsPreference,
+		notificationPlatform
+	} from '$lib/notifications/sync';
 	import { desktopInfo, isDesktop } from '$lib/platform/desktop';
 	import { checkForDesktopUpdate } from '$lib/platform/desktop-update';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
@@ -65,6 +71,9 @@
 	let orientationFeedback = $state<string | null>(null);
 	let shakeToUndoEnabled = $state(true);
 	let shakeFeedback = $state<string | null>(null);
+	let deadlineNotificationsEnabled = $state(false);
+	let deadlineNotificationsFeedback = $state<string | null>(null);
+	let deadlineNotificationsSupported = $state(false);
 	let serverUrl = $state('');
 	let nativeInfo = $state<{ version: string; build: string } | null>(null);
 
@@ -154,6 +163,25 @@
 		}
 		shakeToUndoEnabled = enabled;
 		setShakeToUndoPreference(enabled);
+	}
+
+	/** Mirrors chooseShakeToUndo's shape: enabling has to (re-)request permission from this click
+	 * (a user gesture, same requirement as Notification.requestPermission/LocalNotifications on
+	 * iOS); disabling just cancels whatever's currently scheduled. See
+	 * PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md. */
+	async function chooseDeadlineNotifications(enabled: boolean) {
+		deadlineNotificationsFeedback = null;
+		if (enabled) {
+			const granted = await enableDeadlineNotifications();
+			if (!granted) {
+				deadlineNotificationsFeedback =
+					"Couldn't turn on notifications — either this device didn't allow the permission, or something went wrong while setting it up. Check your browser/system notification permission for EveryList and try again.";
+				return;
+			}
+		} else {
+			await disableDeadlineNotifications();
+		}
+		deadlineNotificationsEnabled = enabled;
 	}
 
 	async function handleLogout() {
@@ -251,6 +279,8 @@
 		accentPreference = getAccentPreference();
 		orientationPreference = getOrientationPreference();
 		shakeToUndoEnabled = getShakeToUndoPreference();
+		deadlineNotificationsEnabled = getDeadlineNotificationsPreference();
+		deadlineNotificationsSupported = notificationPlatform() !== 'unsupported';
 		canLockOrientationNow = canLockOrientation();
 		supportsOrientationLock = supportsScreenOrientationLock();
 		isNative = Capacitor.isNativePlatform();
@@ -499,6 +529,46 @@
 		</div>
 		{#if shakeFeedback}
 			<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">{shakeFeedback}</p>
+		{/if}
+		{#if deadlineNotificationsSupported}
+			<div
+				class="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700"
+			>
+				<span class="text-sm font-medium">Deadline notifications</span>
+				<div
+					role="radiogroup"
+					aria-label="Deadline notifications"
+					class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
+				>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={deadlineNotificationsEnabled}
+						onclick={() => chooseDeadlineNotifications(true)}
+						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {deadlineNotificationsEnabled
+							? 'bg-primary-600 text-white'
+							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+					>
+						On
+					</button>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={!deadlineNotificationsEnabled}
+						onclick={() => chooseDeadlineNotifications(false)}
+						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {!deadlineNotificationsEnabled
+							? 'bg-primary-600 text-white'
+							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+					>
+						Off
+					</button>
+				</div>
+			</div>
+			{#if deadlineNotificationsFeedback}
+				<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">
+					{deadlineNotificationsFeedback}
+				</p>
+			{/if}
 		{/if}
 	</section>
 

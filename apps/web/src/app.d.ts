@@ -22,6 +22,10 @@ declare global {
 				| { status: 'up-to-date' }
 				| { status: 'error'; message: string }
 			>;
+			// Deadline notifications (PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md): closing the window
+			// hides to a tray icon instead of quitting only while this is enabled, so
+			// $lib/notifications/electron.ts's timers keep running in the background.
+			setBackgroundRun: (enabled: boolean) => Promise<void>;
 		};
 	}
 }

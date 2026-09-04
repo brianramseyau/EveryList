@@ -14,13 +14,15 @@
 
 const path = require('node:path')
 const fs = require('node:fs')
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, shell } = require('electron')
 
 const { readConfig } = require('./lib/config.cjs')
 const { createStaticServer, listen } = require('./lib/static-server.cjs')
 const { readWindowState, writeWindowState, clampWindowState } = require('./lib/window-state.cjs')
 const { shouldOpenExternally, isAppOrigin } = require('./lib/navigation.cjs')
 const { checkForUpdate } = require('./lib/update-check.cjs')
+const { readBackgroundRunEnabled, writeBackgroundRunEnabled } = require('./lib/background-run.cjs')
+const { buildTrayMenuTemplate, shouldHideInsteadOfClose } = require('./lib/tray.cjs')
 const packageJson = require('./package.json')
 
 // The renderer is the exact same `apps/web/build` output that serves Docker/PWA/Capacitor — see
@@ -34,6 +36,10 @@ const RENDERER_ROOT = path.join(__dirname, 'renderer')
 let mainWindow = null
 /** @type {number} */
 let appPort = 0
+/** @type {Tray | null} */
+let tray = null
+let backgroundRunEnabled = false
+let isQuitting = false
 
 /** @param {Error} error */
 function logStartupError(error) {
@@ -105,6 +111,36 @@ function buildMenu() {
   })
 
   return Menu.buildFromTemplate(template)
+}
+
+/** Creates or destroys the tray icon to match `backgroundRunEnabled` — see
+ * PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md §"Electron". Idempotent. */
+function syncTray() {
+  if (backgroundRunEnabled && !tray) {
+    tray = new Tray(path.join(__dirname, 'resources', 'icon.png'))
+    tray.setToolTip('EveryList')
+    tray.setContextMenu(
+      Menu.buildFromTemplate(
+        buildTrayMenuTemplate({
+          onShow: () => {
+            mainWindow?.show()
+            mainWindow?.focus()
+          },
+          onQuit: () => {
+            isQuitting = true
+            app.quit()
+          }
+        })
+      )
+    )
+    tray.on('click', () => {
+      mainWindow?.show()
+      mainWindow?.focus()
+    })
+  } else if (!backgroundRunEnabled && tray) {
+    tray.destroy()
+    tray = null
+  }
 }
 
 async function createWindow() {
@@ -187,7 +223,13 @@ async function createWindow() {
   }
   mainWindow.on('resize', persistState)
   mainWindow.on('move', persistState)
-  mainWindow.on('close', persistState)
+  mainWindow.on('close', (event) => {
+    persistState()
+    if (!isQuitting && shouldHideInsteadOfClose(backgroundRunEnabled)) {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
+  })
 
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -237,7 +279,19 @@ async function boot() {
 
   Menu.setApplicationMenu(buildMenu())
 
+  backgroundRunEnabled = readBackgroundRunEnabled(app.getPath('userData'))
+  syncTray()
+
   ipcMain.handle('everylist:check-for-update', () => checkForUpdate(packageJson.version))
+  ipcMain.handle('everylist:set-background-run', (_event, enabled) => {
+    backgroundRunEnabled = Boolean(enabled)
+    writeBackgroundRunEnabled(app.getPath('userData'), backgroundRunEnabled)
+    syncTray()
+  })
+
+  app.on('before-quit', () => {
+    isQuitting = true
+  })
 
   await createWindow()
 

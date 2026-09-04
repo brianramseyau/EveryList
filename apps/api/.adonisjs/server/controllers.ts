@@ -26,5 +26,6 @@ export const controllers = {
   PasswordReset: () => import('#controllers/password_reset_controller'),
   PersonalAccessTokens: () => import('#controllers/personal_access_tokens_controller'),
   Profile: () => import('#controllers/profile_controller'),
+  PushSubscriptions: () => import('#controllers/push_subscriptions_controller'),
   Stores: () => import('#controllers/stores_controller'),
 }

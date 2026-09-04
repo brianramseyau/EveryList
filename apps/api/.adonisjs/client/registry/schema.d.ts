@@ -979,4 +979,40 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['run']>>>
     }
   }
+  'push.push_subscriptions.public_key': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/push/public-key'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/push_subscriptions_controller').default['publicKey']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/push_subscriptions_controller').default['publicKey']>>>
+    }
+  }
+  'push.push_subscriptions.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/push/subscriptions'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/push_subscription').subscribePushValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/push_subscription').subscribePushValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/push_subscriptions_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/push_subscriptions_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'push.push_subscriptions.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/push/subscriptions/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/push_subscriptions_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/push_subscriptions_controller').default['destroy']>>>
+    }
+  }
 }

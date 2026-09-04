@@ -1,6 +1,7 @@
 import type List from '#models/list'
 import Item from '#models/item'
 import Category from '#models/category'
+import DeadlineNotificationSend from '#models/deadline_notification_send'
 import ListPolicy from '#policies/list_policy'
 import {
   createItemValidator,
@@ -445,6 +446,7 @@ export default class ItemsController {
     }
 
     const previousCategoryId = item.categoryId
+    const previousDeadline = item.deadline
     item.merge(rest)
     if (checked !== undefined) {
       item.checked = checked
@@ -452,6 +454,12 @@ export default class ItemsController {
     }
     item.version += 1
     await item.save()
+
+    // A changed deadline can re-fire a notification that already sent for the
+    // old one — see PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md.
+    if (item.deadline !== previousDeadline) {
+      await DeadlineNotificationSend.query().where('itemId', item.id).delete()
+    }
 
     // Covers the dropdown and drag-to-category paths: re-assigning an item to
     // a *different* non-null category is an explicit choice, so it teaches the

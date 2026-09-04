@@ -492,6 +492,24 @@ const routes = {
     tokens: [{"old":"/api/v1/backup-settings/run","type":0,"val":"api","end":""},{"old":"/api/v1/backup-settings/run","type":0,"val":"v1","end":""},{"old":"/api/v1/backup-settings/run","type":0,"val":"backup-settings","end":""},{"old":"/api/v1/backup-settings/run","type":0,"val":"run","end":""}],
     types: placeholder as Registry['backupSettings.backup_settings.run']['types'],
   },
+  'push.push_subscriptions.public_key': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/push/public-key',
+    tokens: [{"old":"/api/v1/push/public-key","type":0,"val":"api","end":""},{"old":"/api/v1/push/public-key","type":0,"val":"v1","end":""},{"old":"/api/v1/push/public-key","type":0,"val":"push","end":""},{"old":"/api/v1/push/public-key","type":0,"val":"public-key","end":""}],
+    types: placeholder as Registry['push.push_subscriptions.public_key']['types'],
+  },
+  'push.push_subscriptions.store': {
+    methods: ["POST"],
+    pattern: '/api/v1/push/subscriptions',
+    tokens: [{"old":"/api/v1/push/subscriptions","type":0,"val":"api","end":""},{"old":"/api/v1/push/subscriptions","type":0,"val":"v1","end":""},{"old":"/api/v1/push/subscriptions","type":0,"val":"push","end":""},{"old":"/api/v1/push/subscriptions","type":0,"val":"subscriptions","end":""}],
+    types: placeholder as Registry['push.push_subscriptions.store']['types'],
+  },
+  'push.push_subscriptions.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/push/subscriptions/:id',
+    tokens: [{"old":"/api/v1/push/subscriptions/:id","type":0,"val":"api","end":""},{"old":"/api/v1/push/subscriptions/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/push/subscriptions/:id","type":0,"val":"push","end":""},{"old":"/api/v1/push/subscriptions/:id","type":0,"val":"subscriptions","end":""},{"old":"/api/v1/push/subscriptions/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['push.push_subscriptions.destroy']['types'],
+  },
 } as const satisfies Record<string, AdonisEndpoint>
 
 export { routes }

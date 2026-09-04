@@ -6,7 +6,12 @@ const { Capacitor } = await import('@capacitor/core');
 const { desktopInfo, isDesktop, isRemoteClient } = await import('./desktop');
 
 function fakeBridge(): Window['everylistDesktop'] {
-	return { version: '1.2.3', platform: 'darwin', checkForUpdate: vi.fn() };
+	return {
+		version: '1.2.3',
+		platform: 'darwin',
+		checkForUpdate: vi.fn(),
+		setBackgroundRun: vi.fn()
+	};
 }
 
 // Runs in the "client" (real Chromium) project, so `window` is genuine — see desktop.spec.ts

@@ -133,7 +133,8 @@ export default defineConfig({
 				? {
 						globPatterns: [],
 						navigateFallback: undefined,
-						runtimeCaching: workboxOptions.runtimeCaching
+						runtimeCaching: workboxOptions.runtimeCaching,
+						importScripts: workboxOptions.importScripts
 					}
 				: workboxOptions,
 			devOptions: {

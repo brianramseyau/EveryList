@@ -151,4 +151,11 @@ export interface ApiDefinition {
       run: typeof routes['backupSettings.backup_settings.run']
     }
   }
+  push: {
+    pushSubscriptions: {
+      publicKey: typeof routes['push.push_subscriptions.public_key']
+      store: typeof routes['push.push_subscriptions.store']
+      destroy: typeof routes['push.push_subscriptions.destroy']
+    }
+  }
 }
