@@ -1,6 +1,6 @@
 name: Test
 
-# Reusable lint/typecheck/test job called by ci.yml — the single source of
+# Reusable lint/typecheck/test jobs called by ci.yml — the single source of
 # truth for "does this commit pass the PR gate" (branch protection on main
 # requires it). docker-publish.yml does NOT call this: it only runs after a
 # commit is already on main, where this has already passed. See
@@ -10,57 +10,110 @@ name: Test
 # each package's own test config: packages/shared (vitest --coverage) and
 # apps/api (c8, scoped to app/**, see apps/api/.c8rc.json) both do; apps/web
 # still needs its Vitest coverage config wired up (see PLAN_00_FOUNDATIONAL_PLAN.md's Phase 2
-# status note). A plain `pnpm -r test` is already the gate once a workspace
-# opts in, no separate coverage step needed here.
+# status note). A plain `test` script per workspace is already the gate once
+# a workspace opts in, no separate coverage step needed here.
+#
+# lint / build-shared / typecheck / test are split into separate jobs (rather
+# than one job's sequential steps) so independent work runs in parallel —
+# lint doesn't depend on the shared build, and the api/web/desktop/shared
+# test suites don't depend on each other. typecheck and the test matrix both
+# need packages/shared built first (apps/api and apps/web import its types
+# via package.json "exports" -> dist/), so build-shared runs once and hands
+# its output to both via an artifact instead of every job rebuilding it.
 
 on:
   workflow_call:
 
+env:
+  # Dummy, non-secret values so `node ace test` can boot apps/api (see
+  # apps/api/start/env.ts) — CI's SQLite database is an ephemeral tmp file
+  # thrown away at the end of the run. Harmless on jobs that don't touch
+  # apps/api.
+  HOST: 127.0.0.1
+  PORT: '3333'
+  NODE_ENV: test
+  LOG_LEVEL: info
+  APP_KEY: ci-3B65vVbNzQY6nqACpAxWnZUX2ZPfL5pI
+  APP_URL: http://127.0.0.1:3333
+  SESSION_DRIVER: cookie
+  LIMITER_STORE: database
+  # No job here builds apps/desktop, so none of them have use for Electron's
+  # ~150 MB runtime binary — pnpm-workspace.yaml's onlyBuiltDependencies
+  # allows electron's postinstall to run (for apps/desktop's own dev/CI use),
+  # so without this every job here would pay for that download too. See
+  # PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §6.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
 jobs:
-  test:
-    name: Lint, typecheck, test
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-    env:
-      # Dummy, non-secret values so `node ace test` can boot apps/api (see
-      # apps/api/start/env.ts) — CI's SQLite database is an ephemeral tmp
-      # file thrown away at the end of the run.
-      HOST: 127.0.0.1
-      PORT: '3333'
-      NODE_ENV: test
-      LOG_LEVEL: info
-      APP_KEY: ci-3B65vVbNzQY6nqACpAxWnZUX2ZPfL5pI
-      APP_URL: http://127.0.0.1:3333
-      SESSION_DRIVER: cookie
-      LIMITER_STORE: database
-      # This job never builds apps/desktop, so it has no use for Electron's ~150 MB runtime
-      # binary — pnpm-workspace.yaml's onlyBuiltDependencies allows electron's postinstall to
-      # run (for apps/desktop's own dev/CI use), so without this every job here would pay for
-      # that download too. See PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §6.
-      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        # version comes from the root package.json's "packageManager" field
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      # apps/api and apps/web both import types from @everylist/shared via
-      # its package.json "exports" (dist/), so it must be built before
-      # typecheck/test can resolve it — lint doesn't need this.
-      - run: pnpm --filter @everylist/shared build
-
+      - uses: ./.github/actions/setup
+      # Deliberately doesn't depend on build-shared: today's ESLint configs enable no
+      # type-aware rules, so a missing packages/shared/dist doesn't surface as a lint
+      # error. If a type-aware rule (e.g. typescript-eslint's recommended-type-checked)
+      # is ever turned on, this job will need build-shared as a dependency.
       - run: pnpm -r lint
+
+  build-shared:
+    name: Build packages/shared
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm --filter @everylist/shared build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shared-dist
+          path: packages/shared/dist
+          retention-days: 1
+
+  typecheck:
+    name: Typecheck
+    needs: build-shared
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-dist
+          path: packages/shared/dist
       - run: pnpm -r typecheck
 
+  test:
+    name: Test (${{ matrix.workspace }})
+    needs: build-shared
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [api, web, desktop, shared]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-dist
+          path: packages/shared/dist
+
+      - name: Cache Playwright browsers
+        if: matrix.workspace == 'web'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
       - name: Install Playwright Chromium
+        if: matrix.workspace == 'web'
         # apps/web's component tests run in a real headless browser
-        # (vitest-browser-svelte), so `pnpm -r test` below needs it present.
+        # (vitest-browser-svelte), so its test script below needs it present.
         run: pnpm --filter @everylist/web exec playwright install --with-deps chromium
 
-      - run: pnpm -r test
+      - run: pnpm --filter @everylist/${{ matrix.workspace }} test
