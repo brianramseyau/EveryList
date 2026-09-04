@@ -54,25 +54,38 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
   // just make()) is what actually closes that race — make() alone only
   // constructs the Kernel instance and returns before any scan happens.
   //
-  // This is a warm-up, not a load-bearing step: if it throws (seen in CI —
-  // the same "Invalid command exported... Invalid URL" validation error,
-  // now surfacing deterministically instead of intermittently, for reasons
-  // that look environment-specific rather than related to this file), don't
-  // let it take the whole run down. Swallowing it here just means the
-  // original race this hook exists to close is back on the table for that
-  // run, not that anything is broken outright — migration:run's own loader
-  // registers ahead of the commands/ FsLoader that's actually throwing, so
-  // exec() below still finds it. Letting an uncaught rejection from this
-  // hook propagate instead hangs the whole process indefinitely rather than
-  // failing fast (Japa's global setup doesn't turn that into a clean exit),
-  // which is strictly worse than the race it's meant to prevent.
+  // Root cause of that same "Invalid URL" error recurring deterministically in
+  // CI (confirmed by bisecting Node versions locally, same OS: clean on
+  // 24.18.1, reproduces 100% on 24.20.0): Node 24.20.0's loader changes
+  // (nodejs/node#63917 "enforce path normalization before lookup", alongside
+  // #62239's package-maps work) break the .ts-to-.js specifier rewrite
+  // FsLoader's command scan relies on to dynamically import each
+  // apps/api/commands/*.ts file. CI is now pinned off 24.20.0 (see
+  // .github/actions/setup/action.yml) specifically to avoid this. Production
+  // isn't at risk regardless of Node patch — docker/root/etc/cont-init.d's
+  // migrate/demo-seed scripts run the pre-compiled build/ace.js output, so
+  // there's no .ts file for this loader trick to resolve.
+  //
+  // The catch below is defense-in-depth on top of that pin, not the fix
+  // itself: this warm-up boot only exists to close the race described
+  // above, so if the *same known* error slips through again (e.g. someone
+  // bumps the pin before ace/Node actually fix it), don't let it take the
+  // whole run down — migration:run's own loader registers ahead of the
+  // commands/ FsLoader that's throwing, so exec() below still finds it, and
+  // the original (rare) race is a better failure mode than a 15-minute
+  // hang. Any *other* error is rethrown — this isn't a general-purpose
+  // "ignore boot failures" catch.
   setup: [
     async () => {
+      const ace = await app.container.make('ace')
       try {
-        const ace = await app.container.make('ace')
         await ace.boot()
       } catch (error) {
-        console.warn('ace kernel warm-up boot failed, continuing without it:', error)
+        const message = error instanceof Error ? error.message : String(error)
+        if (!message.includes('Invalid command exported') || !message.includes('Invalid URL')) {
+          throw error
+        }
+        console.warn('ace kernel warm-up boot hit the known demo_seed.js loader issue:', message)
       }
     },
   ],

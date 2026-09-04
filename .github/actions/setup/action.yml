@@ -9,7 +9,20 @@ runs:
 
     - uses: actions/setup-node@v4
       with:
-        node-version: 24
+        # Pinned, not floating on 24 — 24.20.0 shipped a loader change
+        # (nodejs/node#63917, "enforce path normalization before lookup",
+        # alongside #62239's package-maps work) that breaks
+        # @adonisjs/ace's FsLoader: its command scanner dynamically
+        # imports each apps/api/commands/*.ts file by rewriting the
+        # specifier's .ts extension to .js (relying on Node's TS
+        # type-stripping to resolve it back), and that rewritten
+        # specifier no longer resolves under 24.20.0 — surfacing as
+        # "RuntimeException: Invalid command exported from demo_seed.js
+        # file. Invalid URL" from deep inside ace's command-metadata
+        # validator. Confirmed by bisecting Node versions locally: clean
+        # on 24.18.1, reproduces 100% on 24.20.0, same OS. Bump this
+        # once @adonisjs/ace (or Node) has a fix, not before.
+        node-version: 24.18.1
         cache: pnpm
 
     - run: pnpm install --frozen-lockfile

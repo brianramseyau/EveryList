@@ -78,7 +78,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # Pinned — see .github/actions/setup/action.yml for why 24.20.0 is avoided.
+          node-version: 24.18.1
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -131,7 +132,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # Pinned — see .github/actions/setup/action.yml for why 24.20.0 is avoided.
+          node-version: 24.18.1
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -211,7 +213,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # Pinned — see .github/actions/setup/action.yml for why 24.20.0 is avoided.
+          node-version: 24.18.1
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -265,7 +268,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # Pinned — see .github/actions/setup/action.yml for why 24.20.0 is avoided.
+          node-version: 24.18.1
           cache: pnpm
 
       # Unlike test.yml/ci.yml, this job actually needs Electron's runtime binary — leave
