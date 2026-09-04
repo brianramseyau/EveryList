@@ -214,6 +214,16 @@
 		event.preventDefault();
 		void save();
 	}
+
+	// Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux, incl. the Electron shell
+	// there) saves from anywhere in the form, including the notes textarea
+	// where a plain Enter inserts a newline instead of submitting.
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+			event.preventDefault();
+			void save();
+		}
+	}
 </script>
 
 <main
@@ -255,7 +265,8 @@
 			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
 		{/if}
 
-		<form class="flex flex-col gap-4" onsubmit={handleSubmit}>
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<form class="flex flex-col gap-4" onsubmit={handleSubmit} onkeydown={handleKeydown}>
 			<ItemFields
 				bind:name={draftName}
 				bind:quantity={draftQuantity}

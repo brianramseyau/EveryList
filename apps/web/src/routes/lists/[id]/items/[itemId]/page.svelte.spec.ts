@@ -421,6 +421,65 @@ describe('Item detail +page.svelte', () => {
 		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
 	});
 
+	it('saves on Cmd+Enter from within the notes textarea', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		const notesField = page.getByLabelText('Notes (optional)');
+		await expect.element(notesField).toBeInTheDocument();
+
+		notesField.element().dispatchEvent(
+			new KeyboardEvent('keydown', {
+				key: 'Enter',
+				metaKey: true,
+				bubbles: true,
+				cancelable: true
+			})
+		);
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+	});
+
+	it('saves on Ctrl+Enter from within the notes textarea', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		const notesField = page.getByLabelText('Notes (optional)');
+		await expect.element(notesField).toBeInTheDocument();
+
+		notesField.element().dispatchEvent(
+			new KeyboardEvent('keydown', {
+				key: 'Enter',
+				ctrlKey: true,
+				bubbles: true,
+				cancelable: true
+			})
+		);
+
+		await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+	});
+
+	it('ignores a plain Enter keydown without the Cmd/Ctrl modifier', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+
+		render(ItemDetailPage);
+		const notesField = page.getByLabelText('Notes (optional)');
+		await expect.element(notesField).toBeInTheDocument();
+
+		notesField
+			.element()
+			.dispatchEvent(
+				new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+			);
+
+		expect(updateItem).not.toHaveBeenCalled();
+	});
+
 	it('does not save when the name is cleared to only whitespace', async () => {
 		const db = getDb()!;
 		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
