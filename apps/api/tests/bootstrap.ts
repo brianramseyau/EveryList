@@ -41,7 +41,20 @@ export const plugins: Config['plugins'] = [
  * The teardown functions are executed after all the tests
  */
 export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
-  setup: [],
+  // Resolves (and thus fully boots, including the one-time FsLoader scan of
+  // apps/api/commands/) the shared ace kernel exactly once, before any suite
+  // starts. Both the "unit" and "functional" suites below call
+  // testUtils.db().migrate() in their own suite.setup(), which resolves the
+  // same 'ace' container singleton to run migration commands — without this,
+  // two suites' setups could race to resolve that singleton for the first
+  // time concurrently, intermittently tripping ace's command-metadata
+  // validation (see the "Invalid command exported... Invalid URL" flake on
+  // demo_seed.js investigated in PR history).
+  setup: [
+    async () => {
+      await app.container.make('ace')
+    },
+  ],
   teardown: [],
 }
 
