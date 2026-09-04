@@ -51,12 +51,32 @@ export function fetchList(id: number): Promise<ListDto> {
 	);
 }
 
-export function createList(input: {
-	name: string;
-	color?: string;
-	icon?: string | null;
-	useCategories?: boolean;
-}) {
+/** The feature-flag fields shared by create and update — see ListDto's field
+ *  comments for each one's server-side default. */
+type ListFeatureFields = Partial<{
+	useCategories: boolean;
+	useCategoryLearning: boolean;
+	useShops: boolean;
+	useFavorites: boolean;
+	useRecent: boolean;
+	useQuantity: boolean;
+	usePrice: boolean;
+	/** Defaults off server-side — see ListDto's doc comment. */
+	useDeadline: boolean;
+	showStoreInList: boolean;
+	showPriceInList: boolean;
+	itemSortOrder: 'ranked' | 'alphabetical' | 'deadline';
+	insertPosition: 'top' | 'bottom';
+	maxUncheckedItems: number | null;
+}>;
+
+export function createList(
+	input: {
+		name: string;
+		color?: string;
+		icon?: string | null;
+	} & ListFeatureFields
+) {
 	return apiPost<ListDto>('/api/v1/lists', input);
 }
 
@@ -68,22 +88,10 @@ export function updateList(
 		icon: string | null;
 		archived: boolean;
 		badgeExcluded: boolean;
-		useCategories: boolean;
-		useCategoryLearning: boolean;
-		useShops: boolean;
-		useFavorites: boolean;
-		useRecent: boolean;
-		useQuantity: boolean;
-		usePrice: boolean;
-		/** Defaults off server-side — see ListDto's doc comment. */
-		useDeadline: boolean;
-		showStoreInList: boolean;
-		showPriceInList: boolean;
-		itemSortOrder: 'ranked' | 'alphabetical' | 'deadline';
-		insertPosition: 'top' | 'bottom';
 		folderId: number | null;
 		passcodeHash: string | null;
-	}>
+	}> &
+		ListFeatureFields
 ) {
 	return apiPatch<ListDto>(`/api/v1/lists/${id}`, input);
 }

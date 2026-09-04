@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { Button, Input, Select, Toggle } from 'flowbite-svelte';
+	import { Button, Input, Select } from 'flowbite-svelte';
 	import type { FolderDto, ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { deleteList, fetchList, updateList } from '$lib/api/lists';
@@ -16,6 +16,8 @@
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Loader from '$lib/components/Loader.svelte';
+	import ListFeatureToggles from '$lib/components/ListFeatureToggles.svelte';
+	import type { BooleanFeatureField } from '$lib/list-prefabs';
 
 	const listId = $derived(Number(page.params.id));
 
@@ -188,21 +190,12 @@
 	);
 	/* v8 ignore stop */
 
-	type BooleanFeatureField =
-		| 'useCategories'
-		| 'useCategoryLearning'
-		| 'useShops'
-		| 'useFavorites'
-		| 'useRecent'
-		| 'useQuantity'
-		| 'usePrice'
-		| 'showStoreInList'
-		| 'showPriceInList';
+	type ToggleFeatureField = Exclude<BooleanFeatureField, 'useDeadline'>;
 
 	// Every feature toggle above defaults to `true` server-side — `!== false` is
 	// the standard "missing/undefined means on" read used across this page (see
 	// ListDto's field comments).
-	async function toggleFeature(field: BooleanFeatureField, current: ListDto) {
+	async function toggleFeature(field: ToggleFeatureField, current: ListDto) {
 		await onupdate({ [field]: current[field] === false });
 	}
 
@@ -228,6 +221,14 @@
 	// learned for this list (see lists_controller.ts), so unlike the other
 	// feature toggles above, turning it off goes through a confirm step;
 	// turning it back on is harmless and applies immediately.
+	function handleToggle(field: BooleanFeatureField) {
+		if (field === 'useDeadline') {
+			void toggleDeadline(list!);
+		} else {
+			void toggleFeature(field, list!);
+		}
+	}
+
 	function handleCategoryLearningToggle(current: ListDto) {
 		if (current.useCategoryLearning !== false) {
 			confirmingCategoryLearningOff = true;
@@ -376,116 +377,25 @@
 				Features
 			</h2>
 
-			<Toggle
-				checked={list.useCategories !== false}
-				onchange={() => toggleFeature('useCategories', list!)}
-				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
-			>
-				Categories
-			</Toggle>
-
-			{#if list.useCategories !== false}
-				{#if confirmingCategoryLearningOff}
-					<div
-						class="ml-4 flex flex-col gap-2 rounded-lg border border-red-200 p-3 dark:border-red-900"
-					>
-						<p class="text-sm text-red-600 dark:text-red-400">
-							Turning this off deletes everything this list has learned about item categories. This
-							can't be undone.
-						</p>
-						<div class="flex gap-2">
-							<Button size="sm" color="red" onclick={confirmCategoryLearningOff}>
-								Confirm turn off
-							</Button>
-							<Button
-								size="sm"
-								color="alternative"
-								onclick={() => (confirmingCategoryLearningOff = false)}
-							>
-								Cancel
-							</Button>
-						</div>
-					</div>
-				{:else}
-					<Toggle
-						checked={list.useCategoryLearning !== false}
-						onchange={() => handleCategoryLearningToggle(list!)}
-						class="ml-4 w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
-					>
-						Learn item categories
-					</Toggle>
-				{/if}
-			{/if}
-
-			<Toggle
-				checked={list.useShops !== false}
-				onchange={() => toggleFeature('useShops', list!)}
-				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
-			>
-				Stores
-			</Toggle>
-
-			{#if list.useShops !== false}
-				<Toggle
-					checked={list.showStoreInList !== false}
-					onchange={() => toggleFeature('showStoreInList', list!)}
-					class="ml-4 w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
-				>
-					Show store name in list
-				</Toggle>
-			{/if}
-
-			<Toggle
-				checked={list.useFavorites !== false}
-				onchange={() => toggleFeature('useFavorites', list!)}
-				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
-			>
-				Favorites
-			</Toggle>
-
-			<Toggle
-				checked={list.useRecent !== false}
-				onchange={() => toggleFeature('useRecent', list!)}
-				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
-			>
-				Recently deleted
-			</Toggle>
-
-			<Toggle
-				checked={list.useQuantity !== false}
-				onchange={() => toggleFeature('useQuantity', list!)}
-				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
-			>
-				Quantity
-			</Toggle>
-
-			<Toggle
-				checked={list.usePrice !== false}
-				onchange={() => toggleFeature('usePrice', list!)}
-				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
-			>
-				Price
-			</Toggle>
-
-			{#if list.usePrice !== false}
-				<Toggle
-					checked={list.showPriceInList !== false}
-					onchange={() => toggleFeature('showPriceInList', list!)}
-					class="ml-4 w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
-				>
-					Show price in list
-				</Toggle>
-			{/if}
-
-			<!-- The one default-off feature flag (PLAN_24_PHASE_ITEM_DEADLINES.md) — a
-				todos-style feature; hidden fields only, stored deadlines are kept. -->
-			<Toggle
-				checked={list.useDeadline === true}
-				onchange={() => toggleDeadline(list!)}
-				class="w-full flex-row-reverse items-center justify-between rounded-lg border border-gray-200 px-3 py-3 text-gray-700 dark:border-gray-700 dark:text-gray-200"
-			>
-				Deadlines
-			</Toggle>
+			<ListFeatureToggles
+				values={{
+					useCategories: list.useCategories !== false,
+					useCategoryLearning: list.useCategoryLearning !== false,
+					useShops: list.useShops !== false,
+					showStoreInList: list.showStoreInList !== false,
+					useFavorites: list.useFavorites !== false,
+					useRecent: list.useRecent !== false,
+					useQuantity: list.useQuantity !== false,
+					usePrice: list.usePrice !== false,
+					showPriceInList: list.showPriceInList !== false,
+					useDeadline: list.useDeadline === true
+				}}
+				onToggle={handleToggle}
+				{confirmingCategoryLearningOff}
+				onCategoryLearningToggleClick={() => handleCategoryLearningToggle(list!)}
+				onConfirmCategoryLearningOff={confirmCategoryLearningOff}
+				onCancelCategoryLearningOff={() => (confirmingCategoryLearningOff = false)}
+			/>
 		</div>
 
 		<div class="flex flex-col gap-1">

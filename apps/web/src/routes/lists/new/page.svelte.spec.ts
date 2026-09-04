@@ -13,6 +13,19 @@ const NewListPage = (await import('./+page.svelte')).default;
 
 const TS = '2026-08-01T00:00:00.000Z';
 
+const SHOPPING_FEATURES = {
+	useCategories: true,
+	useCategoryLearning: true,
+	useShops: true,
+	showStoreInList: true,
+	useFavorites: true,
+	useRecent: true,
+	useQuantity: true,
+	usePrice: true,
+	showPriceInList: true,
+	useDeadline: false
+};
+
 describe('New List +page.svelte', () => {
 	beforeEach(() => {
 		setToken('test-token');
@@ -61,7 +74,7 @@ describe('New List +page.svelte', () => {
 		await expect.poll(() => vi.mocked(createList).mock.calls.length).toBe(0);
 	});
 
-	it('creates a list with the default icon and color, then navigates back to the list', async () => {
+	it('defaults to the Shopping prefab, creating a list with its full feature set', async () => {
 		vi.mocked(createList).mockResolvedValue({
 			id: 9,
 			name: 'Camping',
@@ -80,6 +93,10 @@ describe('New List +page.svelte', () => {
 
 		render(NewListPage);
 
+		await expect
+			.element(page.getByRole('button', { name: /Shopping/ }))
+			.toHaveAttribute('aria-pressed', 'true');
+
 		await page.getByPlaceholder('List name').fill('Camping');
 		await page.getByRole('button', { name: 'Save' }).click();
 
@@ -87,7 +104,7 @@ describe('New List +page.svelte', () => {
 			name: 'Camping',
 			color: '#3b82f6',
 			icon: 'formatListChecks',
-			useCategories: true
+			...SHOPPING_FEATURES
 		});
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 		expect(vi.mocked(goto).mock.calls[0]?.[0]).toBe('/lists');
@@ -123,7 +140,7 @@ describe('New List +page.svelte', () => {
 			name: 'Camping',
 			color: '#3b82f6',
 			icon: 'formatListChecks',
-			useCategories: true
+			...SHOPPING_FEATURES
 		});
 	});
 
@@ -160,14 +177,94 @@ describe('New List +page.svelte', () => {
 			name: 'Camping',
 			color: '#22c55e',
 			icon: 'tag',
-			useCategories: true
+			...SHOPPING_FEATURES
 		});
 	});
 
-	it('toggles categories off before creating the list', async () => {
+	it('selects the Todo/Chores prefab, sorting by deadline and offering an open item limit', async () => {
 		vi.mocked(createList).mockResolvedValue({
 			id: 9,
-			name: 'Camping',
+			name: 'Chores',
+			archived: false,
+			color: '#3b82f6',
+			icon: 'formatListChecks',
+			itemCount: 0,
+			ownerId: 1,
+			folderId: null,
+			badgeExcluded: false,
+			passcodeHash: null,
+			createdAt: TS,
+			updatedAt: null,
+			version: 1
+		});
+
+		render(NewListPage);
+
+		await page.getByRole('button', { name: /Todo \/ Chores/ }).click();
+		await expect
+			.element(page.getByRole('spinbutton', { name: 'Open item limit (optional)' }))
+			.toBeInTheDocument();
+
+		await page.getByRole('spinbutton', { name: 'Open item limit (optional)' }).fill('5');
+		await page.getByPlaceholder('List name').fill('Chores');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(createList).toHaveBeenCalledWith({
+			name: 'Chores',
+			color: '#3b82f6',
+			icon: 'formatListChecks',
+			useCategories: false,
+			useCategoryLearning: false,
+			useShops: false,
+			showStoreInList: false,
+			useFavorites: false,
+			useRecent: true,
+			useQuantity: false,
+			usePrice: false,
+			showPriceInList: false,
+			useDeadline: true,
+			itemSortOrder: 'deadline',
+			maxUncheckedItems: 5
+		});
+	});
+
+	it('leaves out the open item limit when left blank on the Todo/Chores prefab', async () => {
+		vi.mocked(createList).mockResolvedValue({
+			id: 9,
+			name: 'Chores',
+			archived: false,
+			color: '#3b82f6',
+			icon: 'formatListChecks',
+			itemCount: 0,
+			ownerId: 1,
+			folderId: null,
+			badgeExcluded: false,
+			passcodeHash: null,
+			createdAt: TS,
+			updatedAt: null,
+			version: 1
+		});
+
+		render(NewListPage);
+
+		await page.getByRole('button', { name: /Todo \/ Chores/ }).click();
+		// Fill then clear — a Flowbite number input hands back `null` (not '') once
+		// emptied, exercising the same nullish-coalescing fallback as the settings
+		// page's open-item-limit draft.
+		const limitInput = page.getByRole('spinbutton', { name: 'Open item limit (optional)' });
+		await limitInput.fill('5');
+		await limitInput.fill('');
+		await page.getByPlaceholder('List name').fill('Chores');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		const call = vi.mocked(createList).mock.calls[0]?.[0];
+		expect(call).not.toHaveProperty('maxUncheckedItems');
+	});
+
+	it('selects Custom, showing every toggle and creating the list with only the chosen ones', async () => {
+		vi.mocked(createList).mockResolvedValue({
+			id: 9,
+			name: 'Mixed',
 			archived: false,
 			color: '#3b82f6',
 			icon: 'formatListChecks',
@@ -184,17 +281,21 @@ describe('New List +page.svelte', () => {
 
 		render(NewListPage);
 
-		await expect.element(page.getByText('Use categories')).toBeInTheDocument();
-		await page.getByRole('checkbox', { name: 'Use categories' }).click();
-		await expect.element(page.getByText('Keep it simple')).toBeInTheDocument();
+		await page.getByRole('button', { name: 'Custom' }).click();
+		await expect
+			.element(page.getByRole('checkbox', { name: 'Categories', exact: true }))
+			.toBeChecked();
+		await expect.element(page.getByRole('checkbox', { name: 'Deadlines' })).not.toBeChecked();
 
-		await page.getByPlaceholder('List name').fill('Camping');
+		await page.getByRole('checkbox', { name: 'Categories', exact: true }).click();
+		await page.getByPlaceholder('List name').fill('Mixed');
 		await page.getByRole('button', { name: 'Save' }).click();
 
 		expect(createList).toHaveBeenCalledWith({
-			name: 'Camping',
+			name: 'Mixed',
 			color: '#3b82f6',
 			icon: 'formatListChecks',
+			...SHOPPING_FEATURES,
 			useCategories: false
 		});
 	});
