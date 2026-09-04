@@ -76,15 +76,17 @@ const profile = {
 };
 
 describe('Settings +page.svelte', () => {
+	let matchMediaSpy: ReturnType<typeof vi.spyOn>;
+
 	beforeEach(() => {
 		// Screen Orientation and Shake to undo are gated on a coarse (touch) pointer, matching a
 		// phone/tablet — default the test environment (a real, mouse-driven headless browser) to
 		// report one so existing specs keep exercising these sections without each opting in
 		// individually. Tests for the "plain desktop browser" case override this to false.
-		vi.spyOn(window, 'matchMedia').mockImplementation(
+		matchMediaSpy = vi.spyOn(window, 'matchMedia').mockImplementation(
 			(query) =>
 				({
-					matches: query.includes('pointer: coarse'),
+					matches: query.includes('pointer: coarse') || query.includes('any-pointer: coarse'),
 					media: query,
 					addEventListener: vi.fn(),
 					removeEventListener: vi.fn()
@@ -93,6 +95,7 @@ describe('Settings +page.svelte', () => {
 	});
 
 	afterEach(() => {
+		matchMediaSpy.mockRestore();
 		vi.unstubAllGlobals();
 		vi.clearAllMocks();
 		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);

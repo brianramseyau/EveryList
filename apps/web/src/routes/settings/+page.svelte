@@ -67,7 +67,13 @@
 	let isAndroid = $state(false);
 	let isDesktopApp = $state(false);
 	let isRemote = $state(false);
-	let isCoarsePointer = $state(false);
+	// `any-pointer` (not `pointer`) so a touchscreen tablet paired with a trackpad/keyboard — a
+	// fine primary pointer, but still a device with a screen to lock and an accelerometer to
+	// shake — still counts. Read synchronously (not in onMount) so this is correct on first
+	// client render instead of flashing in after hydration on the touch devices most users have.
+	let isCoarsePointer = $state(
+		typeof window !== 'undefined' && window.matchMedia('(any-pointer: coarse)').matches
+	);
 	// Screen orientation and shake-to-undo depend on hardware (an accelerometer, a lockable
 	// screen) that desktop browsers and the Electron app don't have — gate both on this rather
 	// than showing controls that can never do anything there.
@@ -291,7 +297,6 @@
 		isNative = Capacitor.isNativePlatform();
 		isAndroid = isNative && Capacitor.getPlatform() === 'android';
 		isDesktopApp = isDesktop();
-		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		// Composed locally rather than via $lib/platform/desktop's isRemoteClient() — this
 		// component already tracks isNative and isDesktopApp separately (for nativeInfo vs.
 		// desktopVersionInfo), so this is the same check without a second, independently-mocked
