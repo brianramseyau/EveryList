@@ -41,18 +41,22 @@ export const plugins: Config['plugins'] = [
  * The teardown functions are executed after all the tests
  */
 export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
-  // Resolves (and thus fully boots, including the one-time FsLoader scan of
-  // apps/api/commands/) the shared ace kernel exactly once, before any suite
-  // starts. Both the "unit" and "functional" suites below call
-  // testUtils.db().migrate() in their own suite.setup(), which resolves the
-  // same 'ace' container singleton to run migration commands — without this,
-  // two suites' setups could race to resolve that singleton for the first
-  // time concurrently, intermittently tripping ace's command-metadata
-  // validation (see the "Invalid command exported... Invalid URL" flake on
-  // demo_seed.js investigated in PR history).
+  // Resolves the shared ace kernel singleton and explicitly boots it (the
+  // one-time FsLoader scan of apps/api/commands/) exactly once, before any
+  // suite starts. Both the "unit" and "functional" suites below call
+  // testUtils.db().migrate() in their own suite.setup(), which runs
+  // kernel.exec('migration:run') against that same singleton — exec() lazily
+  // triggers boot() on first use, so without forcing it here up front, two
+  // suites' setups could race to boot the kernel for the first time
+  // concurrently, intermittently tripping ace's command-metadata validation
+  // (see the "Invalid command exported... Invalid URL" flake on
+  // demo_seed.js investigated in PR history). Calling boot() directly (not
+  // just make()) is what actually closes that race — make() alone only
+  // constructs the Kernel instance and returns before any scan happens.
   setup: [
     async () => {
-      await app.container.make('ace')
+      const ace = await app.container.make('ace')
+      await ace.boot()
     },
   ],
   teardown: [],
