@@ -364,14 +364,6 @@
 			</Button>
 		</form>
 
-		<button
-			type="button"
-			class="rounded-lg border border-gray-200 px-3 py-3 text-left text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-			onclick={() => toggleBadgeExcluded(list!)}
-		>
-			{list.badgeExcluded ? 'Include in badge count' : 'Exclude from badge count'}
-		</button>
-
 		<div class="flex flex-col gap-2">
 			<h2 class="text-sm font-semibold tracking-wide text-gray-600 uppercase dark:text-gray-400">
 				Features
@@ -405,7 +397,7 @@
 				type="number"
 				min={1}
 				max={999}
-				size="sm"
+				class="w-full"
 				placeholder="No limit"
 				bind:value={draftLimitText}
 				onblur={applyLimitDraft}
@@ -456,6 +448,14 @@
 				/>
 			</div>
 		{/if}
+
+		<button
+			type="button"
+			class="rounded-lg border border-gray-200 px-3 py-3 text-left text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+			onclick={() => toggleBadgeExcluded(list!)}
+		>
+			{list.badgeExcluded ? 'Include in badge count' : 'Exclude from badge count'}
+		</button>
 
 		{#if settingPasscode}
 			<form class="flex flex-col gap-2" onsubmit={savePasscode}>
