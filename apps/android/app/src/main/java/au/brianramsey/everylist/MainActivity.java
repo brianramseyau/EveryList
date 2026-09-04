@@ -13,6 +13,8 @@ import com.getcapacitor.RouteProcessor;
 import com.getcapacitor.WebViewListener;
 
 public class MainActivity extends BridgeActivity {
+    private RefreshGestureAwareLayout swipeRefreshLayout;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         // Must be set before super.onCreate() builds the Bridge (which is what actually reads
@@ -24,6 +26,7 @@ public class MainActivity extends BridgeActivity {
         // freezes its plugin list — registering after it runs used to silently no-op every call,
         // surfacing on the JS side as `"EveryListWidget" plugin is not implemented on android`.
         registerPlugin(EveryListWidgetPlugin.class);
+        registerPlugin(PullToRefreshControlPlugin.class);
         super.onCreate(savedInstanceState);
         if (BuildConfig.DEBUG) {
             // Capacitor serves the app itself over https://localhost, and Chromium's Mixed
@@ -87,7 +90,7 @@ public class MainActivity extends BridgeActivity {
 
         parent.removeView(webView);
 
-        SwipeRefreshLayout swipeRefreshLayout = new RefreshGestureAwareLayout(this);
+        swipeRefreshLayout = new RefreshGestureAwareLayout(this);
         swipeRefreshLayout.setLayoutParams(webViewParams);
         swipeRefreshLayout.addView(
             webView,
@@ -119,6 +122,21 @@ public class MainActivity extends BridgeActivity {
                     }
                 }
             );
+    }
+
+    /**
+     * JS-driven escape hatch for {@link RefreshGestureAwareLayout}'s own gesture disambiguation
+     * (see its class doc) — used by {@link PullToRefreshControlPlugin} on behalf of the undo
+     * toast's swipe-to-dismiss gesture (UndoToast.svelte / pull-to-refresh.ts), which the native
+     * heuristics below can't disambiguate from a real pull: it's a plain vertical drag that starts
+     * moving immediately, the same signature SwipeRefreshLayout itself watches for, with neither
+     * the hold-time nor the horizontal-direction signal the reorder-drag and swipe-reveal cases
+     * rely on.
+     */
+    void setPullToRefreshEnabled(boolean enabled) {
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setExternallyEnabled(enabled);
+        }
     }
 
     /**
@@ -159,8 +177,28 @@ public class MainActivity extends BridgeActivity {
         private long downTimeMs;
         private boolean moved;
 
+        // Set false for as long as a caller (currently just PullToRefreshControlPlugin, on
+        // behalf of the undo toast's swipe-to-dismiss gesture) has claimed a vertical drag can't
+        // be a refresh — see setExternallyEnabled's doc. While false, dispatchTouchEvent's own
+        // ACTION_DOWN/ACTION_UP/ACTION_CANCEL branches must not re-enable the layout out from
+        // under it.
+        private boolean externallyEnabled = true;
+
         RefreshGestureAwareLayout(Context context) {
             super(context);
+        }
+
+        /**
+         * Overrides this layout's own gesture heuristics for the duration of a caller-declared
+         * suppression window, rather than contesting each touch stream. See
+         * MainActivity#setPullToRefreshEnabled and pull-to-refresh.ts's doc comment for why: the
+         * undo toast's swipe-to-dismiss is a plain vertical drag with no hold delay, the same
+         * shape as a real pull, so there's no timing/direction signal left for
+         * dispatchTouchEvent's own checks to key off — the caller has to say so directly.
+         */
+        void setExternallyEnabled(boolean enabled) {
+            externallyEnabled = enabled;
+            setEnabled(enabled);
         }
 
         @Override
@@ -171,7 +209,7 @@ public class MainActivity extends BridgeActivity {
                     downY = event.getRawY();
                     downTimeMs = System.currentTimeMillis();
                     moved = false;
-                    setEnabled(true);
+                    if (externallyEnabled) setEnabled(true);
                     break;
                 case MotionEvent.ACTION_MOVE:
                     if (!moved) {
@@ -192,7 +230,7 @@ public class MainActivity extends BridgeActivity {
                     break;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
-                    setEnabled(true);
+                    if (externallyEnabled) setEnabled(true);
                     break;
                 default:
                     break;

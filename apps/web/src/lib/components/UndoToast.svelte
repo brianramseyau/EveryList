@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { swipeDismiss } from '$lib/actions/swipe-dismiss';
+	import { suppressPullToRefresh } from '$lib/pull-to-refresh';
 
 	// Small, generic undo toast (PLAN_20_PHASE_UNDO_DELETE_TOAST.md) — a fixed bottom banner with
 	// a single action, auto-dismissing after `durationMs`. `onDismiss` fires only when the timer
@@ -39,9 +40,13 @@
 
 	onMount(() => {
 		timeoutId = setTimeout(dismiss, durationMs);
+		// See pull-to-refresh.ts: while this toast is up, its own swipe-down-to-dismiss
+		// gesture would otherwise race Android's native pull-to-refresh for the same drag.
+		const releasePullToRefresh = suppressPullToRefresh();
 
 		return () => {
 			if (timeoutId !== undefined) clearTimeout(timeoutId);
+			releasePullToRefresh();
 		};
 	});
 
