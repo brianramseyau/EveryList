@@ -38,8 +38,12 @@ public class PullToRefreshControlPlugin extends Plugin {
         // the runnable (rather than right after posting it) makes the promise reflect the
         // mutation actually completing, not just being scheduled.
         activity.runOnUiThread(() -> {
-            mainActivity.setPullToRefreshEnabled(enabled);
-            call.resolve();
+            try {
+                mainActivity.setPullToRefreshEnabled(enabled);
+                call.resolve();
+            } catch (RuntimeException e) {
+                call.reject("failed to update pull-to-refresh state", e);
+            }
         });
     }
 }
