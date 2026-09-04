@@ -289,6 +289,40 @@ describe('New List +page.svelte', () => {
 		expect(createList).not.toHaveBeenCalled();
 	});
 
+	it('ignores a stale invalid open item limit after switching away from Todo/Chores', async () => {
+		vi.mocked(createList).mockResolvedValue({
+			id: 9,
+			name: 'Camping',
+			archived: false,
+			color: '#3b82f6',
+			icon: 'formatListChecks',
+			itemCount: 0,
+			ownerId: 1,
+			folderId: null,
+			badgeExcluded: false,
+			passcodeHash: null,
+			createdAt: TS,
+			updatedAt: null,
+			version: 1
+		});
+
+		render(NewListPage);
+
+		await page.getByRole('button', { name: /Todo \/ Chores/ }).click();
+		await page.getByRole('spinbutton', { name: 'Open item limit (optional)' }).fill('1000');
+		await page.getByRole('button', { name: /Shopping/ }).click();
+
+		await page.getByPlaceholder('List name').fill('Camping');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(createList).toHaveBeenCalledWith({
+			name: 'Camping',
+			color: '#3b82f6',
+			icon: 'formatListChecks',
+			...SHOPPING_FEATURES
+		});
+	});
+
 	it('selects Custom, showing every toggle and creating the list with only the chosen ones', async () => {
 		vi.mocked(createList).mockResolvedValue({
 			id: 9,

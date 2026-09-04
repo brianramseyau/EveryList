@@ -52,16 +52,20 @@
 		// number-input validation, so an out-of-range or non-whole value would otherwise
 		// reach the backend's `vine.number().range([1, 999]).withoutDecimals()` validator
 		// as a 422, or (if Number() maps a malformed value to NaN) get silently dropped by
-		// JSON.stringify turning NaN into null.
-		const trimmedLimit = String(openItemLimitText ?? '').trim();
+		// JSON.stringify turning NaN into null. Only runs while the field is actually shown —
+		// otherwise a stale draft left over from a previous prefab selection could block
+		// saving Shopping or Custom, which never read it.
 		let maxUncheckedItems: number | undefined;
-		if (trimmedLimit !== '') {
-			const parsed = Number(trimmedLimit);
-			if (!Number.isInteger(parsed) || parsed < 1 || parsed > 999) {
-				error = 'Open item limit must be a whole number between 1 and 999.';
-				return;
+		if (selectedPrefab.showOpenItemLimit) {
+			const trimmedLimit = String(openItemLimitText ?? '').trim();
+			if (trimmedLimit !== '') {
+				const parsed = Number(trimmedLimit);
+				if (!Number.isInteger(parsed) || parsed < 1 || parsed > 999) {
+					error = 'Open item limit must be a whole number between 1 and 999.';
+					return;
+				}
+				maxUncheckedItems = parsed;
 			}
-			maxUncheckedItems = parsed;
 		}
 
 		saving = true;
@@ -72,9 +76,7 @@
 				icon,
 				...(selectedPrefab.values ?? customValues),
 				...(selectedPrefab.itemSortOrder ? { itemSortOrder: selectedPrefab.itemSortOrder } : {}),
-				...(selectedPrefab.showOpenItemLimit && maxUncheckedItems !== undefined
-					? { maxUncheckedItems }
-					: {})
+				...(maxUncheckedItems !== undefined ? { maxUncheckedItems } : {})
 			});
 			await goto(resolve('/lists'));
 		} catch (err) {
