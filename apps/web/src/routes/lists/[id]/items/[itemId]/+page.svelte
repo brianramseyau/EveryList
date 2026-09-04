@@ -215,10 +215,11 @@
 		void save();
 	}
 
-	// Cmd+Enter (Mac) saves from anywhere in the form, including the notes
-	// textarea where a plain Enter inserts a newline instead of submitting.
+	// Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux, incl. the Electron shell
+	// there) saves from anywhere in the form, including the notes textarea
+	// where a plain Enter inserts a newline instead of submitting.
 	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === 'Enter' && event.metaKey) {
+		if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
 			event.preventDefault();
 			void save();
 		}
