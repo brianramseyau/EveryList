@@ -34,8 +34,12 @@ public class PullToRefreshControlPlugin extends Plugin {
         // Plugin methods run on Capacitor's own "CapacitorPlugins" handler thread, not the main
         // thread — MainActivity#setPullToRefreshEnabled touches the SwipeRefreshLayout view
         // hierarchy (setEnabled -> reset -> bringToFront), which throws
-        // ViewRootImpl$CalledFromWrongThreadException off the main thread.
-        activity.runOnUiThread(() -> mainActivity.setPullToRefreshEnabled(enabled));
-        call.resolve();
+        // ViewRootImpl$CalledFromWrongThreadException off the main thread. Resolving from inside
+        // the runnable (rather than right after posting it) makes the promise reflect the
+        // mutation actually completing, not just being scheduled.
+        activity.runOnUiThread(() -> {
+            mainActivity.setPullToRefreshEnabled(enabled);
+            call.resolve();
+        });
     }
 }

@@ -67,4 +67,25 @@ describe('pull-to-refresh', () => {
 		release();
 		expect(setEnabled).toHaveBeenCalledTimes(2);
 	});
+
+	it('swallows a rejected suppress call — no plugin (e.g. iOS/Electron) is not a caller-visible failure', async () => {
+		isNativePlatform.mockReturnValue(true);
+		const setEnabled = vi.fn().mockRejectedValue(new Error('not implemented'));
+		mockNativeClient(setEnabled);
+
+		let release: () => void;
+		expect(() => (release = suppressPullToRefresh())).not.toThrow();
+		await vi.waitFor(() => expect(setEnabled).toHaveBeenCalledOnce());
+		release!();
+	});
+
+	it('swallows a rejected release call the same way', async () => {
+		isNativePlatform.mockReturnValue(true);
+		const setEnabled = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('not implemented'));
+		mockNativeClient(setEnabled);
+
+		const release = suppressPullToRefresh();
+		expect(() => release()).not.toThrow();
+		await vi.waitFor(() => expect(setEnabled).toHaveBeenCalledTimes(2));
+	});
 });
