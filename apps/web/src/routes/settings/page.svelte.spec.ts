@@ -1,5 +1,5 @@
 import { page } from 'vitest/browser';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import {
 	resetConnectivityForTesting,
@@ -76,7 +76,26 @@ const profile = {
 };
 
 describe('Settings +page.svelte', () => {
+	let matchMediaSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		// Screen Orientation and Shake to undo are gated on a coarse (touch) pointer, matching a
+		// phone/tablet — default the test environment (a real, mouse-driven headless browser) to
+		// report one so existing specs keep exercising these sections without each opting in
+		// individually. Tests for the "plain desktop browser" case override this to false.
+		matchMediaSpy = vi.spyOn(window, 'matchMedia').mockImplementation(
+			(query) =>
+				({
+					matches: query.includes('pointer: coarse') || query.includes('any-pointer: coarse'),
+					media: query,
+					addEventListener: vi.fn(),
+					removeEventListener: vi.fn()
+				}) as unknown as MediaQueryList
+		);
+	});
+
 	afterEach(() => {
+		matchMediaSpy.mockRestore();
 		vi.unstubAllGlobals();
 		vi.clearAllMocks();
 		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
@@ -866,13 +885,60 @@ describe('Settings +page.svelte', () => {
 		await expect.element(page.getByText('Home-screen widget')).toBeInTheDocument();
 	});
 
-	it('hides Screen Orientation on the desktop build', async () => {
+	it('hides Screen Orientation and Shake to undo on the desktop build', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(isDesktop).mockReturnValue(true);
 
 		render(SettingsPage);
 
 		await expect.element(page.getByText('Screen Orientation')).not.toBeInTheDocument();
+		await expect.element(page.getByText('Shake to undo')).not.toBeInTheDocument();
+	});
+
+	it('hides Screen Orientation and Shake to undo in a plain (mouse-driven) desktop browser', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		// Override the suite's default coarse-pointer stub — neither native nor touch, the
+		// baseline "someone opened this in a desktop browser tab" case.
+		vi.spyOn(window, 'matchMedia').mockImplementation(
+			(query) =>
+				({
+					matches: false,
+					media: query,
+					addEventListener: vi.fn(),
+					removeEventListener: vi.fn()
+				}) as unknown as MediaQueryList
+		);
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Screen Orientation')).not.toBeInTheDocument();
+		await expect.element(page.getByText('Shake to undo')).not.toBeInTheDocument();
+	});
+
+	it('shows the Features section for Deadline notifications alone in a desktop browser (no Shake to undo)', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(notificationPlatform).mockReturnValue('web');
+		// Same desktop-browser override as above — Shake to undo/Screen Orientation stay hidden,
+		// but Deadline notifications doesn't depend on touch/native, so Features still renders
+		// with just that one row (and without the leading border-t it wears when Shake to undo
+		// is the row above it).
+		vi.spyOn(window, 'matchMedia').mockImplementation(
+			(query) =>
+				({
+					matches: false,
+					media: query,
+					addEventListener: vi.fn(),
+					removeEventListener: vi.fn()
+				}) as unknown as MediaQueryList
+		);
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Features')).toBeInTheDocument();
+		await expect.element(page.getByText('Shake to undo')).not.toBeInTheDocument();
+		await expect
+			.element(page.getByRole('radiogroup', { name: 'Deadline notifications' }))
+			.toBeInTheDocument();
 	});
 
 	it('shows the Server section on the desktop build', async () => {
