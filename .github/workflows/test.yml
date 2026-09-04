@@ -51,6 +51,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
+      # Deliberately doesn't depend on build-shared: today's ESLint configs enable no
+      # type-aware rules, so a missing packages/shared/dist doesn't surface as a lint
+      # error. If a type-aware rule (e.g. typescript-eslint's recommended-type-checked)
+      # is ever turned on, this job will need build-shared as a dependency.
       - run: pnpm -r lint
 
   build-shared:
