@@ -53,10 +53,27 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
   // demo_seed.js investigated in PR history). Calling boot() directly (not
   // just make()) is what actually closes that race — make() alone only
   // constructs the Kernel instance and returns before any scan happens.
+  //
+  // This is a warm-up, not a load-bearing step: if it throws (seen in CI —
+  // the same "Invalid command exported... Invalid URL" validation error,
+  // now surfacing deterministically instead of intermittently, for reasons
+  // that look environment-specific rather than related to this file), don't
+  // let it take the whole run down. Swallowing it here just means the
+  // original race this hook exists to close is back on the table for that
+  // run, not that anything is broken outright — migration:run's own loader
+  // registers ahead of the commands/ FsLoader that's actually throwing, so
+  // exec() below still finds it. Letting an uncaught rejection from this
+  // hook propagate instead hangs the whole process indefinitely rather than
+  // failing fast (Japa's global setup doesn't turn that into a clean exit),
+  // which is strictly worse than the race it's meant to prevent.
   setup: [
     async () => {
-      const ace = await app.container.make('ace')
-      await ace.boot()
+      try {
+        const ace = await app.container.make('ace')
+        await ace.boot()
+      } catch (error) {
+        console.warn('ace kernel warm-up boot failed, continuing without it:', error)
+      }
     },
   ],
   teardown: [],

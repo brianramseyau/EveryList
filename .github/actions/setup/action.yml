@@ -1,0 +1,16 @@
+name: Setup pnpm workspace
+description: Install pnpm + Node, and install workspace dependencies with the pnpm store cache. Shared by every CI job that needs the repo installed. Callers must `actions/checkout` first — a local composite action's own definition can't be read off disk until the repo is checked out, so checkout can't live inside this action.
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+      # version comes from the root package.json's "packageManager" field
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: pnpm
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash
