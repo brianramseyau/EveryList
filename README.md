@@ -36,6 +36,12 @@ EveryList is feature-complete and self-hostable today.
   <img src="branding/screenshots/sharing.png" width="200" alt="List sharing / members screen">
   <img src="branding/screenshots/settings.png" width="200" alt="Settings screen">
 </p>
+<p align="center">
+  <img src="branding/screenshots/lists-dark.png" width="200" alt="Lists screen, dark mode">
+  <img src="branding/screenshots/list-detail-dark.png" width="200" alt="List detail screen, dark mode">
+  <img src="branding/screenshots/sharing-dark.png" width="200" alt="List sharing / members screen, dark mode">
+  <img src="branding/screenshots/settings-dark.png" width="200" alt="Settings screen, dark mode">
+</p>
 
 ## Features
 
