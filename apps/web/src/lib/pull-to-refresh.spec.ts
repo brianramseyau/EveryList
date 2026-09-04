@@ -81,7 +81,10 @@ describe('pull-to-refresh', () => {
 
 	it('swallows a rejected release call the same way', async () => {
 		isNativePlatform.mockReturnValue(true);
-		const setEnabled = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('not implemented'));
+		const setEnabled = vi
+			.fn()
+			.mockResolvedValueOnce(undefined)
+			.mockRejectedValueOnce(new Error('not implemented'));
 		mockNativeClient(setEnabled);
 
 		const release = suppressPullToRefresh();
