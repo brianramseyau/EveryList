@@ -54,27 +54,31 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
   // just make()) is what actually closes that race — make() alone only
   // constructs the Kernel instance and returns before any scan happens.
   //
-  // Root cause of that same "Invalid URL" error recurring deterministically in
-  // CI (confirmed by bisecting Node versions locally, same OS: clean on
+  // Root cause of that same "Invalid URL" error recurring deterministically
+  // in CI (confirmed by bisecting Node versions locally, same OS: clean on
   // 24.18.1, reproduces 100% on 24.20.0): Node 24.20.0's loader changes
   // (nodejs/node#63917 "enforce path normalization before lookup", alongside
-  // #62239's package-maps work) break the .ts-to-.js specifier rewrite
-  // FsLoader's command scan relies on to dynamically import each
-  // apps/api/commands/*.ts file. CI is now pinned off 24.20.0 (see
-  // .github/actions/setup/action.yml) specifically to avoid this. Production
-  // isn't at risk regardless of Node patch — docker/root/etc/cont-init.d's
-  // migrate/demo-seed scripts run the pre-compiled build/ace.js output, so
-  // there's no .ts file for this loader trick to resolve.
+  // #62239's package-maps work) broke @adonisjs/ace's command-metadata
+  // validator (adonisjs/ace#169) — its jsonschema-based validator resolved
+  // schema $refs against an implicit base URL that 24.20.0's stricter URL
+  // parsing rejects. Fixed upstream in ace 14.1.1 (adonisjs/ace#170, which
+  // gives the schema a real $id); pnpm-workspace.yaml overrides
+  // @adonisjs/ace to that version project-wide since @adonisjs/core@7.4.0's
+  // own dependency floor (^14.1.0) still resolves to the broken 14.1.0.
+  // Verified locally on 24.20.0 with that override: 531/531 passing, no
+  // warm-up warning.
   //
-  // The catch below is defense-in-depth on top of that pin, not the fix
-  // itself: this warm-up boot only exists to close the race described
-  // above, so if the *same known* error slips through again (e.g. someone
-  // bumps the pin before ace/Node actually fix it), don't let it take the
-  // whole run down — migration:run's own loader registers ahead of the
-  // commands/ FsLoader that's throwing, so exec() below still finds it, and
-  // the original (rare) race is a better failure mode than a 15-minute
-  // hang. Any *other* error is rethrown — this isn't a general-purpose
-  // "ignore boot failures" catch.
+  // The catch below is defense-in-depth on top of that override, not the
+  // fix itself — with 14.1.1 in place it shouldn't ever trigger. It exists
+  // in case the override is ever dropped (e.g. once @adonisjs/core's own
+  // floor moves past 14.1.1) before confirming ace/Node have actually
+  // resolved this: this warm-up boot only exists to close the race
+  // described above, so a known recurrence of the *same* error shouldn't
+  // take the whole run down — migration:run's own loader registers ahead
+  // of the commands/ FsLoader that's throwing, so exec() below still finds
+  // it, and the original (rare) race is a better failure mode than a
+  // 15-minute hang. Any *other* error is rethrown — this isn't a
+  // general-purpose "ignore boot failures" catch.
   setup: [
     async () => {
       const ace = await app.container.make('ace')
