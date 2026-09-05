@@ -146,10 +146,18 @@ export function listenForNativeDeadlineActions(): ReturnType<
 		if (!isOwnNotification(performed.notification)) return;
 		const extra = performed.notification.extra as { listId: number; itemId: number };
 
+		// Fire-and-forget by necessity (this listener callback isn't awaited by the plugin), but
+		// still caught: an uncaught rejection here (a network failure, `LocalNotifications.cancel`/
+		// `schedule` throwing) would otherwise surface as nothing more than a silently no-op'd
+		// action, with no trace of why.
 		if (performed.actionId === COMPLETE_ACTION_ID) {
-			void completeFromNotification(extra.listId, extra.itemId);
+			void completeFromNotification(extra.listId, extra.itemId).catch((error: unknown) => {
+				console.error('Failed to complete item from notification action', error);
+			});
 		} else if (performed.actionId === SNOOZE_ACTION_ID) {
-			void snoozeFromNotification(extra.listId, extra.itemId);
+			void snoozeFromNotification(extra.listId, extra.itemId).catch((error: unknown) => {
+				console.error('Failed to snooze item from notification action', error);
+			});
 		}
 	});
 }

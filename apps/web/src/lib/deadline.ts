@@ -84,16 +84,33 @@ export function formatDeadline(deadline: string, locale?: string): string {
 /**
  * The notification "Snooze" action's target deadline — the given deadline's effective time (a
  * date-only deadline has no time of its own, so it's based off 9am, matching
- * `scheduled-deadlines.ts#triggerDate`'s local-notification trigger) plus `hours`. Always returns
- * a datetime deadline, even from a date-only input, since snoozing inherently pins it to a time.
+ * `scheduled-deadlines.ts#triggerDate`'s local-notification trigger) plus `hours`, or `now` plus
+ * `hours` if that's later. That fallback matters because a notification can sit unread for a
+ * while before Snooze is tapped: without it, "+1hr" off an already-passed deadline (or a
+ * date-only one whose Web Push notification fires near midnight) would still land in the past,
+ * so the item would immediately re-show as overdue instead of actually being deferred. Always
+ * returns a datetime deadline, even from a date-only input, since snoozing inherently pins it to
+ * a time.
+ *
+ * Duplicated verbatim (never bundled/imported) in `static/push-sw.js`'s own `addHoursToDeadline`
+ * for the Web Push notification-action path — keep both in sync, see
+ * `deadline-sw-parity.spec.ts`, which pins them to the same outputs.
  */
-export function addHoursToDeadline(deadline: string, hours: number): string {
+export function addHoursToDeadline(
+	deadline: string,
+	hours: number,
+	now: Date = new Date()
+): string {
 	const { date, time } = splitDeadline(deadline);
 	const [year, month, day] = date.split('-').map(Number);
 	const [hour, minute] = hasTime(deadline) ? time.split(':').map(Number) : [9, 0];
 	const at = new Date(year, month - 1, day, hour, minute);
 	at.setHours(at.getHours() + hours);
-	return formatLocalMinuteIso(at);
+
+	const earliest = new Date(now);
+	earliest.setHours(earliest.getHours() + hours);
+
+	return formatLocalMinuteIso(at > earliest ? at : earliest);
 }
 
 export interface DeadlineChip {

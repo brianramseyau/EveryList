@@ -33,16 +33,42 @@ describe('todayLocalIso / nowLocalMinuteIso', () => {
 
 describe('addHoursToDeadline', () => {
 	it('adds hours to a datetime deadline', () => {
-		expect(addHoursToDeadline('2026-09-05T14:30', 1)).toBe('2026-09-05T15:30');
+		expect(addHoursToDeadline('2026-09-05T14:30', 1, new Date(2026, 8, 5, 10, 0))).toBe(
+			'2026-09-05T15:30'
+		);
 	});
 
 	it('rolls over into the next day/month/year', () => {
-		expect(addHoursToDeadline('2026-09-05T23:30', 1)).toBe('2026-09-06T00:30');
-		expect(addHoursToDeadline('2026-12-31T23:30', 1)).toBe('2027-01-01T00:30');
+		expect(addHoursToDeadline('2026-09-05T23:30', 1, new Date(2026, 8, 5, 12, 0))).toBe(
+			'2026-09-06T00:30'
+		);
+		expect(addHoursToDeadline('2026-12-31T23:30', 1, new Date(2026, 11, 31, 12, 0))).toBe(
+			'2027-01-01T00:30'
+		);
 	});
 
 	it('bases a date-only deadline off 9am, matching the notification trigger time', () => {
-		expect(addHoursToDeadline('2026-09-05', 1)).toBe('2026-09-05T10:00');
+		expect(addHoursToDeadline('2026-09-05', 1, new Date(2026, 8, 5, 6, 0))).toBe(
+			'2026-09-05T10:00'
+		);
+	});
+
+	// The bug this fallback fixes: a notification sitting unread for a while before Snooze is
+	// tapped shouldn't produce a target that's already passed by the time it's set.
+	it('falls back to now + hours when the deadline (plus hours) has already passed', () => {
+		expect(addHoursToDeadline('2026-09-05T09:00', 1, new Date(2026, 8, 5, 15, 0))).toBe(
+			'2026-09-05T16:00'
+		);
+		// A long-overdue deadline snoozed today still lands an hour from now, not in 2020.
+		expect(addHoursToDeadline('2020-01-01T09:00', 1, new Date(2026, 8, 5, 15, 0))).toBe(
+			'2026-09-05T16:00'
+		);
+	});
+
+	it("still uses the deadline's own +hours when that's later than now + hours", () => {
+		expect(addHoursToDeadline('2026-09-06T09:00', 1, new Date(2026, 8, 5, 15, 0))).toBe(
+			'2026-09-06T10:00'
+		);
 	});
 });
 

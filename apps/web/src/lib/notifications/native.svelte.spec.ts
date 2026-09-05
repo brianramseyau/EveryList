@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ItemDto, ListDto } from '@everylist/shared';
 
 vi.mock('@capacitor/local-notifications', () => ({
@@ -203,6 +203,18 @@ describe('registerNativeDeadlineActionTypes', () => {
 });
 
 describe('listenForNativeDeadlineActions', () => {
+	// snoozeFromNotification calls addHoursToDeadline with no explicit `now`, i.e. the real clock —
+	// pinned here so its now-vs-deadline fallback (see deadline.spec.ts) doesn't make these
+	// assertions dependent on the actual wall-clock time a CI run happens to execute at.
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date(2026, 8, 5, 12, 0));
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	function performedNotification(overrides: { source?: string } = {}) {
 		return {
 			id: 1,
@@ -261,6 +273,34 @@ describe('listenForNativeDeadlineActions', () => {
 
 		expect(updateItem).not.toHaveBeenCalled();
 		expect(LocalNotifications.schedule).not.toHaveBeenCalled();
+	});
+
+	it('logs rather than throwing when "complete" fails (e.g. a network error)', async () => {
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const failure = new Error('network error');
+		vi.mocked(updateItem).mockRejectedValue(failure);
+
+		await fireAction('complete');
+
+		expect(consoleError).toHaveBeenCalledWith(
+			'Failed to complete item from notification action',
+			failure
+		);
+		consoleError.mockRestore();
+	});
+
+	it('logs rather than throwing when "snooze" fails (e.g. a network error)', async () => {
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const failure = new Error('network error');
+		vi.mocked(fetchItems).mockRejectedValue(failure);
+
+		await fireAction('snooze');
+
+		expect(consoleError).toHaveBeenCalledWith(
+			'Failed to snooze item from notification action',
+			failure
+		);
+		consoleError.mockRestore();
 	});
 
 	it('ignores an action on a notification from some other feature', async () => {

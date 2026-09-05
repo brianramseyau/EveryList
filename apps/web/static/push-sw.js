@@ -48,22 +48,38 @@ function getAuthToken() {
 	});
 }
 
+// On any failure — no token (mirror never populated / stale), offline, the item having been
+// deleted, an expired session, a server error — falls back to a plain notification telling the
+// user to retry from the app, rather than failing silently: the triggering notification is
+// already closed (see notificationclick below) by the time this runs, so without this the user
+// would have no sign "Complete"/"Snooze" didn't actually happen.
 async function patchItem(listId, itemId, body) {
-	const token = await getAuthToken();
-	if (!token) return;
-	// Same-origin relative path: the web/PWA build (the only build that registers this service
-	// worker — see +layout.svelte) always talks to its own origin, unlike the native/Electron
-	// builds' configurable remote server.
-	await fetch(`/api/v1/lists/${listId}/items/${itemId}`, {
-		method: 'PATCH',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify(body)
-	});
+	try {
+		const token = await getAuthToken();
+		if (!token) throw new Error('no auth token available');
+
+		// Same-origin relative path: the web/PWA build (the only build that registers this
+		// service worker — see +layout.svelte) always talks to its own origin, unlike the
+		// native/Electron builds' configurable remote server.
+		const response = await fetch(`/api/v1/lists/${listId}/items/${itemId}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+			body: JSON.stringify(body)
+		});
+		if (!response.ok) throw new Error(`PATCH failed with status ${response.status}`);
+	} catch {
+		await self.registration.showNotification('EveryList', {
+			body: "Couldn't update the item — open the app and try again.",
+			icon: '/icon-192.png',
+			badge: '/icon-192.png'
+		});
+	}
 }
 
 // Mirrors apps/web/src/lib/deadline.ts's addHoursToDeadline — duplicated here in plain JS since
-// this file is copied verbatim, never bundled, so it can't import that module.
-function addHoursToDeadline(deadline, hours) {
+// this file is copied verbatim, never bundled, so it can't import that module. Keep both in sync;
+// deadline-sw-parity.spec.ts pins them to the same outputs so a drift here fails CI.
+function addHoursToDeadline(deadline, hours, now) {
 	const hasTime = deadline.length > 10;
 	const date = deadline.slice(0, 10);
 	const time = deadline.slice(11);
@@ -71,10 +87,15 @@ function addHoursToDeadline(deadline, hours) {
 	const [hour, minute] = hasTime ? time.split(':').map(Number) : [9, 0];
 	const at = new Date(year, month - 1, day, hour, minute);
 	at.setHours(at.getHours() + hours);
+
+	const earliest = new Date(now || new Date());
+	earliest.setHours(earliest.getHours() + hours);
+	const target = at > earliest ? at : earliest;
+
 	const pad = (value) => (value < 10 ? `0${value}` : String(value));
 	return (
-		`${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}` +
-		`T${pad(at.getHours())}:${pad(at.getMinutes())}`
+		`${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}` +
+		`T${pad(target.getHours())}:${pad(target.getMinutes())}`
 	);
 }
 
