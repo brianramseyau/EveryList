@@ -273,6 +273,144 @@ test.group('Alexa skill endpoint', (group) => {
     assert.lengthOf(bodyData<unknown[]>(items), 1)
   })
 
+  test('LaunchRequest with no accessible lists attaches no dynamic entities directive', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+    await client.delete(`/api/v1/lists/${listId}`).header('Authorization', `Bearer ${owner.token}`)
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'Welcome to EveryList')
+    assert.isUndefined(response.body().response.directives)
+  })
+
+  async function createManyLists(client: ApiClient, token: string, count: number) {
+    const listIds: number[] = []
+    for (let i = 0; i < count; i++) {
+      listIds.push(await createList(client, token, `List ${i}`))
+    }
+    return listIds
+  }
+
+  test('LaunchRequest truncates dynamic entity values at the 100-per-directive cap, prioritizing the default list', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listIds = await createManyLists(client, owner.token, 101)
+    const pat = await mintPat(client, owner.token, listIds)
+
+    // The default list is the very last one created (so plain id order would drop it) — it
+    // should still survive truncation ahead of every non-default list.
+    await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'SetDefaultListIntent',
+        slots: { ListName: 'List 100' },
+      })
+    )
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
+    )
+    const directive = response.body().response.directives[0]
+    const values = directive.types[0].values as { id: string; name: { value: string } }[]
+    assert.lengthOf(values, 100)
+    assert.isTrue(values.some((v) => v.name.value === 'List 100'))
+    assert.equal(values[0]!.name.value, 'List 100')
+  })
+
+  test('LaunchRequest truncation with no default list set falls back to id order', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listIds = await createManyLists(client, owner.token, 101)
+    const pat = await mintPat(client, owner.token, listIds)
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
+    )
+    const directive = response.body().response.directives[0]
+    const values = directive.types[0].values as { id: string; name: { value: string } }[]
+    assert.lengthOf(values, 100)
+    assert.equal(values[0]!.name.value, 'List 0')
+    assert.isFalse(values.some((v) => v.name.value === 'List 100'))
+  })
+
+  test('LaunchRequest truncation falls back to id order when the default list is no longer accessible', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    // 102 lists so that deleting the (former) default still leaves 101 accessible — enough to
+    // stay over the truncation cap and actually exercise the "default no longer found" branch.
+    const listIds = await createManyLists(client, owner.token, 102)
+    const pat = await mintPat(client, owner.token, listIds)
+
+    await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'SetDefaultListIntent',
+        slots: { ListName: 'List 101' },
+      })
+    )
+    await client
+      .delete(`/api/v1/lists/${listIds[101]}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
+    )
+    const directive = response.body().response.directives[0]
+    const values = directive.types[0].values as { id: string; name: { value: string } }[]
+    assert.lengthOf(values, 100)
+    assert.equal(values[0]!.name.value, 'List 0')
+  })
+
+  test('LaunchRequest registers a non-screen device with a list name outside the static ListNameType catalog', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Costco')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const launch = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
+    )
+    const directive = launch.body().response.directives[0]
+    assert.equal(directive.type, 'Dialog.UpdateDynamicEntities')
+    assert.equal(directive.updateBehavior, 'REPLACE')
+    assert.equal(directive.types[0].name, 'ListNameType')
+    assert.deepEqual(directive.types[0].values, [{ id: String(listId), name: { value: 'Costco' } }])
+
+    const addItemResponse = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Tortillas', ListName: 'Costco' },
+      })
+    )
+    assert.include(addItemResponse.body().response.outputSpeech.text, 'Added Tortillas to Costco')
+  })
+
   test('AddItemIntent title-cases a lower-case, multi-word spoken item name', async ({
     client,
     assert,
@@ -907,7 +1045,10 @@ test.group('Alexa skill endpoint', (group) => {
     assert.include(response.body().response.outputSpeech.text, "didn't understand that")
   })
 
-  test('a non-screen device never gets a display directive', async ({ client, assert }) => {
+  test('a non-screen device never gets a display directive, but does get its list names registered', async ({
+    client,
+    assert,
+  }) => {
     const owner = await signupAndGetUser(client)
     const listId = await createList(client, owner.token, 'Groceries')
     const pat = await mintPat(client, owner.token, [listId])
@@ -917,7 +1058,13 @@ test.group('Alexa skill endpoint', (group) => {
       buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
     )
     assert.include(response.body().response.outputSpeech.text, 'Welcome to EveryList')
-    assert.isUndefined(response.body().response.directives)
+    const directives = response.body().response.directives
+    assert.lengthOf(directives, 1)
+    assert.equal(directives[0].type, 'Dialog.UpdateDynamicEntities')
+    assert.deepEqual(
+      directives[0].types[0].values.map((v: { name: { value: string } }) => v.name.value),
+      ['Groceries']
+    )
   })
 
   test('LaunchRequest on a screen device with one accessible list shows it immediately', async ({
@@ -934,13 +1081,14 @@ test.group('Alexa skill endpoint', (group) => {
     )
     assert.include(response.body().response.outputSpeech.text, "Here's Groceries")
     const directives = response.body().response.directives
-    assert.lengthOf(directives, 1)
+    assert.lengthOf(directives, 2)
     assert.equal(directives[0].type, 'Alexa.Presentation.APL.RenderDocument')
     assert.isTrue(directives[0].token.startsWith(`list-${listId}-`))
     assert.equal(directives[0].datasources.listData.properties.listName, 'Groceries')
+    assert.equal(directives[1].type, 'Dialog.UpdateDynamicEntities')
   })
 
-  test('LaunchRequest on a screen device with several lists asks to disambiguate and shows nothing', async ({
+  test('LaunchRequest on a screen device with several lists asks to disambiguate, shows nothing, but registers both list names', async ({
     client,
     assert,
   }) => {
@@ -954,7 +1102,9 @@ test.group('Alexa skill endpoint', (group) => {
       buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: true })
     )
     assert.include(response.body().response.outputSpeech.text, 'Which list did you mean')
-    assert.isUndefined(response.body().response.directives)
+    const directives = response.body().response.directives
+    assert.lengthOf(directives, 1)
+    assert.equal(directives[0].type, 'Dialog.UpdateDynamicEntities')
   })
 
   test('LaunchRequest on a screen device with no accessible list shows nothing', async ({
@@ -1003,7 +1153,7 @@ test.group('Alexa skill endpoint', (group) => {
     assert.isTrue(rows.some((row: { name?: string }) => row.name === 'Milk'))
   })
 
-  test('an ambiguous or not-found list outcome on a screen device attaches no directive', async ({
+  test('an ambiguous or not-found list outcome on a screen device attaches no display directive, but still registers list names', async ({
     client,
     assert,
   }) => {
@@ -1022,7 +1172,9 @@ test.group('Alexa skill endpoint', (group) => {
       })
     )
     assert.include(response.body().response.outputSpeech.text, 'Which list did you mean')
-    assert.isUndefined(response.body().response.directives)
+    const directives = response.body().response.directives
+    assert.lengthOf(directives, 1)
+    assert.equal(directives[0].type, 'Dialog.UpdateDynamicEntities')
   })
 
   test('tapping an item on-screen (a UserEvent) marks it done and refreshes the display', async ({

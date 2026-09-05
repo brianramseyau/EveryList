@@ -14,6 +14,7 @@ import {
 } from '#services/alexa/intent_router'
 import { buildListDisplay } from '#services/alexa/apl_view'
 import { handleTouchEvent } from '#services/alexa/apl_touch_handler'
+import { buildDynamicListEntitiesDirective } from '#services/alexa/dynamic_entities'
 
 type AlexaRequestBody = {
   context?: {
@@ -66,6 +67,30 @@ async function withDisplay(
   }
 }
 
+/**
+ * Registers the token's list names as `ListNameType` dynamic entities (`dynamic_entities.ts`) so
+ * later turns in the same session can resolve a real list like "Costco" that the static
+ * interaction model was never authored with. Skipped once the session is ending — there's no
+ * later turn in this session for the registration to help.
+ */
+async function withDynamicListEntities(
+  response: AlexaResponse,
+  token: AccessToken
+): Promise<AlexaResponse> {
+  if (response.response.shouldEndSession) return response
+
+  const directive = await buildDynamicListEntitiesDirective(token)
+  if (!directive) return response
+
+  return {
+    ...response,
+    response: {
+      ...response.response,
+      directives: [...(response.response.directives ?? []), directive],
+    },
+  }
+}
+
 /** Handles the Alexa custom skill's `LaunchRequest`/`IntentRequest`/`SessionEndedRequest`
  * (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2) and, for screen devices, `Alexa.Presentation.APL.UserEvent` touch
  * events (Stage 3). Reached only after `AlexaSignatureMiddleware` has confirmed the request
@@ -115,16 +140,22 @@ export default class AlexaController {
       case 'LaunchRequest': {
         if (!hasDisplay) {
           return response.ok(
-            say(
-              "Welcome to EveryList. You can say things like 'add milk' or 'what's on my list'.",
-              {
-                reprompt: 'What would you like to do?',
-              }
+            await withDynamicListEntities(
+              say(
+                "Welcome to EveryList. You can say things like 'add milk' or 'what's on my list'.",
+                {
+                  reprompt: 'What would you like to do?',
+                }
+              ),
+              token
             )
           )
         }
         return response.ok(
-          await withDisplay(await handleLaunchWithDisplay(token), hasDisplay, token)
+          await withDynamicListEntities(
+            await withDisplay(await handleLaunchWithDisplay(token), hasDisplay, token),
+            token
+          )
         )
       }
 
@@ -133,10 +164,21 @@ export default class AlexaController {
 
       case 'IntentRequest':
         return response.ok(
-          await withDisplay(await this.#routeIntent(token, body.request, logger), hasDisplay, token)
+          await withDynamicListEntities(
+            await withDisplay(
+              await this.#routeIntent(token, body.request, logger),
+              hasDisplay,
+              token
+            ),
+            token
+          )
         )
 
       case 'Alexa.Presentation.APL.UserEvent':
+        // No `withDynamicListEntities` here: a tap carries no spoken utterance for the
+        // registration to affect, so it'd only add a DB query per tap with nothing to show
+        // for it — unlike `LaunchRequest`/`IntentRequest`, which precede the next thing the
+        // user says.
         return response.ok(
           await withDisplay(
             await handleTouchEvent(token, body.request.arguments ?? []),

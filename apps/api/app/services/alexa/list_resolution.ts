@@ -18,6 +18,14 @@ function grantedListIds(token: AccessToken): number[] {
 export type ListResolution =
   { kind: 'found'; list: List } | { kind: 'ambiguous'; options: List[] } | { kind: 'not-found' }
 
+/** The token's own lists, used both by `resolveList` below and by `dynamic_entities.ts` to
+ * register them as `ListNameType` slot values for the rest of the session. */
+export async function accessibleLists(token: AccessToken): Promise<List[]> {
+  const listIds = grantedListIds(token)
+  if (listIds.length === 0) return []
+  return List.query().whereIn('id', listIds).whereNull('deletedAt')
+}
+
 /**
  * Resolves which list an Alexa request should act on (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2's "Which list"
  * section) — this logic is Alexa-specific and exists nowhere else in the app. An explicit
@@ -29,10 +37,7 @@ export async function resolveList(
   token: AccessToken,
   listNameSlot: string | undefined
 ): Promise<ListResolution> {
-  const listIds = grantedListIds(token)
-  if (listIds.length === 0) return { kind: 'not-found' }
-
-  const accessible = await List.query().whereIn('id', listIds).whereNull('deletedAt')
+  const accessible = await accessibleLists(token)
   if (accessible.length === 0) return { kind: 'not-found' }
 
   if (listNameSlot) {
