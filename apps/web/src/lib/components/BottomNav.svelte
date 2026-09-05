@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { getBadgeCount, isBadgingSupported, onBadgeCountChange } from '$lib/pwa/badge';
-	import { markSkipTransition } from '$lib/nav-direction';
+	import { markSkipTransition, rememberListScroll } from '$lib/nav-direction';
 
 	type NavKey = 'lists' | 'settings';
 
@@ -14,6 +14,16 @@
 
 	function isActive(match: string): boolean {
 		return page.url.pathname === match || page.url.pathname.startsWith(`${match}/`);
+	}
+
+	// Tapping "Lists" from a list-detail screen (.../lists/<id>, exactly — not a sub-page like
+	// stores/favorites, whose own scroll position isn't the list's) bypasses that screen's own
+	// header back arrow, so it needs the same scroll-remembering as
+	// `+page.svelte`'s `returnToLists` — see nav-direction.ts's `rememberListScroll`.
+	function handleNavClick() {
+		markSkipTransition();
+		const match = /^\/lists\/(\d+)$/.exec(page.url.pathname);
+		if (match) rememberListScroll(Number(match[1]), window.scrollY);
 	}
 
 	// The OS-level app icon badge (Web Badging API) already shows this count where
@@ -38,7 +48,7 @@
 			{@const active = isActive(item.match)}
 			<a
 				href={item.key === 'lists' ? resolve('/lists') : resolve('/settings')}
-				onclick={markSkipTransition}
+				onclick={handleNavClick}
 				aria-current={active ? 'page' : undefined}
 				class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium {active
 					? 'text-primary-700 dark:text-primary-400'

@@ -458,6 +458,17 @@
 		rememberListScroll(listId, window.scrollY);
 	}
 
+	// The header's own back arrow (to the lists overview) doesn't need
+	// `markListOrigin` — there's no "come back with a real history.back()"
+	// screen on the other end of it, just the ordinary lists list — but it
+	// still needs to remember the scroll position so tapping back into this
+	// same list later (a fresh forward navigation, not a history traversal)
+	// can restore it the same way `rememberedScroll` does above.
+	async function returnToLists() {
+		rememberListScroll(listId, window.scrollY);
+		await goto(resolve('/lists'));
+	}
+
 	onMount(() => {
 		if (!getToken()) {
 			void goto(resolve('/login'));
@@ -992,6 +1003,7 @@
 		htmlTitle={list ? list.name : 'List'}
 		backHref={resolve('/lists')}
 		backLabel="My Lists"
+		onBack={returnToLists}
 		fixed
 		bind:height={stickyHeaderHeight}
 	>

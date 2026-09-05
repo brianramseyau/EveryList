@@ -1,7 +1,7 @@
 import { tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import { consumeSkipTransition } from '$lib/nav-direction';
+import { consumeListScroll, consumeSkipTransition } from '$lib/nav-direction';
 
 // $app/state's `page` is read-only application state normally supplied by
 // SvelteKit's router; stub it with a mutable pathname so each test can
@@ -65,6 +65,34 @@ describe('BottomNav.svelte', () => {
 		document.removeEventListener('click', preventNav, { capture: true });
 
 		expect(consumeSkipTransition()).toBe(true);
+	});
+
+	it('remembers the list scroll position when the Lists tab is tapped from a list-detail screen', () => {
+		state.pathname = '/lists/5';
+		vi.spyOn(window, 'scrollY', 'get').mockReturnValue(250);
+		const { container } = render(BottomNav);
+
+		const link = container.querySelector('a')!;
+		const preventNav = (event: Event) => event.preventDefault();
+		document.addEventListener('click', preventNav, { capture: true });
+		link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		document.removeEventListener('click', preventNav, { capture: true });
+
+		expect(consumeListScroll(5)).toBe(250);
+	});
+
+	it('does not remember a scroll position from a sub-page, or the lists index itself', () => {
+		state.pathname = '/lists/5/stores';
+		vi.spyOn(window, 'scrollY', 'get').mockReturnValue(250);
+		const { container } = render(BottomNav);
+
+		const link = container.querySelector('a')!;
+		const preventNav = (event: Event) => event.preventDefault();
+		document.addEventListener('click', preventNav, { capture: true });
+		link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		document.removeEventListener('click', preventNav, { capture: true });
+
+		expect(consumeListScroll(5)).toBeNull();
 	});
 
 	it('marks the Lists link active on the list index', () => {
