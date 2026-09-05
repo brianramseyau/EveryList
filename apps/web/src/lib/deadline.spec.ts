@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+	addHoursToDeadline,
 	deadlineChip,
 	formatDeadline,
 	formatDeadlineTime,
@@ -27,6 +28,21 @@ describe('todayLocalIso / nowLocalMinuteIso', () => {
 
 	it('zero-pads single-digit months, days, hours and minutes', () => {
 		expect(nowLocalMinuteIso(new Date(2026, 0, 3, 7, 5))).toBe('2026-01-03T07:05');
+	});
+});
+
+describe('addHoursToDeadline', () => {
+	it('adds hours to a datetime deadline', () => {
+		expect(addHoursToDeadline('2026-09-05T14:30', 1)).toBe('2026-09-05T15:30');
+	});
+
+	it('rolls over into the next day/month/year', () => {
+		expect(addHoursToDeadline('2026-09-05T23:30', 1)).toBe('2026-09-06T00:30');
+		expect(addHoursToDeadline('2026-12-31T23:30', 1)).toBe('2027-01-01T00:30');
+	});
+
+	it('bases a date-only deadline off 9am, matching the notification trigger time', () => {
+		expect(addHoursToDeadline('2026-09-05', 1)).toBe('2026-09-05T10:00');
 	});
 });
 

@@ -37,7 +37,13 @@ test.group('sendPush', (group) => {
       return { statusCode: 201, headers: {}, body: '' }
     }) as typeof webpush.sendNotification
 
-    await sendPush(subscription, { title: 'Required by', body: 'Milk', itemId: 1, listId: 1 })
+    await sendPush(subscription, {
+      title: 'Required by',
+      body: 'Milk',
+      itemId: 1,
+      listId: 1,
+      deadline: '2026-01-01T09:00',
+    })
 
     assert.isNotNull(received)
     assert.equal(received!.endpoint, subscription.endpoint)
@@ -46,6 +52,7 @@ test.group('sendPush', (group) => {
       body: 'Milk',
       itemId: 1,
       listId: 1,
+      deadline: '2026-01-01T09:00',
     })
   })
 
@@ -66,7 +73,13 @@ test.group('sendPush', (group) => {
       throw error
     }) as typeof webpush.sendNotification
 
-    await sendPush(subscription, { title: 't', body: 'b', itemId: 1, listId: 1 })
+    await sendPush(subscription, {
+      title: 't',
+      body: 'b',
+      itemId: 1,
+      listId: 1,
+      deadline: '2026-01-01T09:00',
+    })
 
     const remaining = await PushSubscription.find(subscription.id)
     assert.isNull(remaining)
@@ -90,7 +103,13 @@ test.group('sendPush', (group) => {
     }) as typeof webpush.sendNotification
 
     await assert.rejects(() =>
-      sendPush(subscription, { title: 't', body: 'b', itemId: 1, listId: 1 })
+      sendPush(subscription, {
+        title: 't',
+        body: 'b',
+        itemId: 1,
+        listId: 1,
+        deadline: '2026-01-01T09:00',
+      })
     )
 
     const remaining = await PushSubscription.find(subscription.id)

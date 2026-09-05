@@ -7,15 +7,25 @@ vi.mock('@capacitor/local-notifications', () => ({
 		requestPermissions: vi.fn(),
 		getPending: vi.fn(),
 		schedule: vi.fn(),
-		cancel: vi.fn()
+		cancel: vi.fn(),
+		registerActionTypes: vi.fn(),
+		addListener: vi.fn()
 	}
 }));
 
+vi.mock('$lib/api/items', () => ({
+	fetchItems: vi.fn(),
+	updateItem: vi.fn()
+}));
+
 const { LocalNotifications } = await import('@capacitor/local-notifications');
+const { fetchItems, updateItem } = await import('$lib/api/items');
 const {
 	requestNativeNotificationPermission,
 	syncNativeDeadlineNotifications,
-	cancelAllNativeDeadlineNotifications
+	cancelAllNativeDeadlineNotifications,
+	registerNativeDeadlineActionTypes,
+	listenForNativeDeadlineActions
 } = await import('./native');
 
 function makeList(overrides: Partial<ListDto> = {}): ListDto {
@@ -103,6 +113,7 @@ describe('syncNativeDeadlineNotifications', () => {
 					title: 'Required by',
 					body: 'Return library book',
 					schedule: { at: new Date(2026, 8, 6, 9, 0) },
+					actionTypeId: 'deadline',
 					extra: { listId: 1, itemId: 1, source: 'deadline' }
 				}
 			]
@@ -170,5 +181,89 @@ describe('cancelAllNativeDeadlineNotifications', () => {
 		await cancelAllNativeDeadlineNotifications();
 
 		expect(LocalNotifications.cancel).not.toHaveBeenCalled();
+	});
+});
+
+describe('registerNativeDeadlineActionTypes', () => {
+	it('registers the Complete/Snooze action type', async () => {
+		await registerNativeDeadlineActionTypes();
+
+		expect(LocalNotifications.registerActionTypes).toHaveBeenCalledWith({
+			types: [
+				{
+					id: 'deadline',
+					actions: [
+						{ id: 'complete', title: 'Complete' },
+						{ id: 'snooze', title: 'Snooze 1 hr' }
+					]
+				}
+			]
+		});
+	});
+});
+
+describe('listenForNativeDeadlineActions', () => {
+	function performedNotification(overrides: { source?: string } = {}) {
+		return {
+			id: 1,
+			title: '',
+			body: '',
+			extra: { listId: 1, itemId: 1, source: 'deadline', ...overrides }
+		};
+	}
+
+	async function fireAction(actionId: string, notification = performedNotification()) {
+		listenForNativeDeadlineActions();
+		const handler = vi.mocked(LocalNotifications.addListener).mock.calls[0][1] as (
+			action: unknown
+		) => void;
+		handler({ actionId, notification });
+		// The handler's own work is async but fire-and-forget (void) — flush microtasks.
+		await Promise.resolve();
+		await Promise.resolve();
+	}
+
+	it('checks off the item and cancels its notification on "complete"', async () => {
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		await fireAction('complete');
+
+		expect(updateItem).toHaveBeenCalledWith(1, 1, { checked: true });
+		expect(LocalNotifications.cancel).toHaveBeenCalledWith({ notifications: [{ id: 1 }] });
+	});
+
+	it('pushes the deadline forward an hour and reschedules on "snooze"', async () => {
+		const item = makeItem({ id: 1, deadline: '2026-09-06T09:00' });
+		vi.mocked(fetchItems).mockResolvedValue([item]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		await fireAction('snooze');
+
+		expect(updateItem).toHaveBeenCalledWith(1, 1, { deadline: '2026-09-06T10:00' });
+		expect(LocalNotifications.schedule).toHaveBeenCalledWith({
+			notifications: [
+				{
+					id: 1,
+					title: 'Required by',
+					body: 'Return library book',
+					schedule: { at: new Date(2026, 8, 6, 10, 0) },
+					actionTypeId: 'deadline',
+					extra: { listId: 1, itemId: 1, source: 'deadline' }
+				}
+			]
+		});
+	});
+
+	it('ignores an action on a notification from some other feature', async () => {
+		await fireAction('complete', performedNotification({ source: 'something-else' }));
+
+		expect(updateItem).not.toHaveBeenCalled();
+	});
+
+	it('ignores the plain tap-to-open action', async () => {
+		await fireAction('tap');
+
+		expect(updateItem).not.toHaveBeenCalled();
+		expect(fetchItems).not.toHaveBeenCalled();
 	});
 });

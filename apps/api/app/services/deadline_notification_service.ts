@@ -92,6 +92,7 @@ export async function sendDueDeadlineNotifications(now: DateTime = DateTime.now(
           body: item.name,
           itemId: item.id,
           listId: item.listId,
+          deadline: item.deadline!,
         })
         await DeadlineNotificationSend.create({
           itemId: item.id,

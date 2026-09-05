@@ -15,8 +15,13 @@ export function todayLocalIso(now: Date = new Date()): string {
 }
 
 /** 'YYYY-MM-DDTHH:mm' for the given instant's local clock, minute precision. */
+export function formatLocalMinuteIso(instant: Date): string {
+	return `${todayLocalIso(instant)}T${pad(instant.getHours())}:${pad(instant.getMinutes())}`;
+}
+
+/** 'YYYY-MM-DDTHH:mm' for the given instant's local clock, minute precision. */
 export function nowLocalMinuteIso(now: Date = new Date()): string {
-	return `${todayLocalIso(now)}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+	return formatLocalMinuteIso(now);
 }
 
 /** True when the deadline carries a time part (i.e. it's 'YYYY-MM-DDTHH:mm'). */
@@ -74,6 +79,21 @@ export function formatDeadline(deadline: string, locale?: string): string {
 	);
 	const timeText = formatDeadlineTime(deadline, locale);
 	return timeText ? `${dateText}, ${timeText}` : dateText;
+}
+
+/**
+ * The notification "Snooze" action's target deadline — the given deadline's effective time (a
+ * date-only deadline has no time of its own, so it's based off 9am, matching
+ * `scheduled-deadlines.ts#triggerDate`'s local-notification trigger) plus `hours`. Always returns
+ * a datetime deadline, even from a date-only input, since snoozing inherently pins it to a time.
+ */
+export function addHoursToDeadline(deadline: string, hours: number): string {
+	const { date, time } = splitDeadline(deadline);
+	const [year, month, day] = date.split('-').map(Number);
+	const [hour, minute] = hasTime(deadline) ? time.split(':').map(Number) : [9, 0];
+	const at = new Date(year, month - 1, day, hour, minute);
+	at.setHours(at.getHours() + hours);
+	return formatLocalMinuteIso(at);
 }
 
 export interface DeadlineChip {
