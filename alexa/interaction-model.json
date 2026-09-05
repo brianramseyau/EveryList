@@ -113,14 +113,18 @@
             "what's on the {ListName} list",
             "what do i need to buy",
             "read my list",
+            "read {ListName}",
             "read the {ListName} list",
             "what's left on my list",
             "show me my list",
             "show my list",
+            "show {ListName}",
             "show the {ListName} list",
             "open my list",
+            "open {ListName}",
             "open the {ListName} list",
             "display my list",
+            "display {ListName}",
             "display the {ListName} list"
           ]
         }

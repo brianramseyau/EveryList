@@ -273,6 +273,36 @@ test.group('Alexa skill endpoint', (group) => {
     assert.lengthOf(bodyData<unknown[]>(items), 1)
   })
 
+  test('LaunchRequest registers a non-screen device with a list name outside the static ListNameType catalog', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Costco')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const launch = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
+    )
+    const directive = launch.body().response.directives[0]
+    assert.equal(directive.type, 'Dialog.UpdateDynamicEntities')
+    assert.equal(directive.updateBehavior, 'REPLACE')
+    assert.equal(directive.types[0].name, 'ListNameType')
+    assert.deepEqual(directive.types[0].values, [{ id: String(listId), name: { value: 'Costco' } }])
+
+    const addItem = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Tortillas', ListName: 'Costco' },
+      })
+    )
+    assert.include(addItem.body().response.outputSpeech.text, 'Added Tortillas to Costco')
+  })
+
   test('AddItemIntent title-cases a lower-case, multi-word spoken item name', async ({
     client,
     assert,
@@ -907,7 +937,10 @@ test.group('Alexa skill endpoint', (group) => {
     assert.include(response.body().response.outputSpeech.text, "didn't understand that")
   })
 
-  test('a non-screen device never gets a display directive', async ({ client, assert }) => {
+  test('a non-screen device never gets a display directive, but does get its list names registered', async ({
+    client,
+    assert,
+  }) => {
     const owner = await signupAndGetUser(client)
     const listId = await createList(client, owner.token, 'Groceries')
     const pat = await mintPat(client, owner.token, [listId])
@@ -917,7 +950,12 @@ test.group('Alexa skill endpoint', (group) => {
       buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
     )
     assert.include(response.body().response.outputSpeech.text, 'Welcome to EveryList')
-    assert.isUndefined(response.body().response.directives)
+    const directives = response.body().response.directives
+    assert.lengthOf(directives, 1)
+    assert.equal(directives[0].type, 'Dialog.UpdateDynamicEntities')
+    assert.deepEqual(directives[0].types[0].values.map((v: { name: { value: string } }) => v.name.value), [
+      'Groceries',
+    ])
   })
 
   test('LaunchRequest on a screen device with one accessible list shows it immediately', async ({
@@ -934,13 +972,14 @@ test.group('Alexa skill endpoint', (group) => {
     )
     assert.include(response.body().response.outputSpeech.text, "Here's Groceries")
     const directives = response.body().response.directives
-    assert.lengthOf(directives, 1)
+    assert.lengthOf(directives, 2)
     assert.equal(directives[0].type, 'Alexa.Presentation.APL.RenderDocument')
     assert.isTrue(directives[0].token.startsWith(`list-${listId}-`))
     assert.equal(directives[0].datasources.listData.properties.listName, 'Groceries')
+    assert.equal(directives[1].type, 'Dialog.UpdateDynamicEntities')
   })
 
-  test('LaunchRequest on a screen device with several lists asks to disambiguate and shows nothing', async ({
+  test('LaunchRequest on a screen device with several lists asks to disambiguate, shows nothing, but registers both list names', async ({
     client,
     assert,
   }) => {
@@ -954,7 +993,9 @@ test.group('Alexa skill endpoint', (group) => {
       buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: true })
     )
     assert.include(response.body().response.outputSpeech.text, 'Which list did you mean')
-    assert.isUndefined(response.body().response.directives)
+    const directives = response.body().response.directives
+    assert.lengthOf(directives, 1)
+    assert.equal(directives[0].type, 'Dialog.UpdateDynamicEntities')
   })
 
   test('LaunchRequest on a screen device with no accessible list shows nothing', async ({
@@ -1003,7 +1044,7 @@ test.group('Alexa skill endpoint', (group) => {
     assert.isTrue(rows.some((row: { name?: string }) => row.name === 'Milk'))
   })
 
-  test('an ambiguous or not-found list outcome on a screen device attaches no directive', async ({
+  test('an ambiguous or not-found list outcome on a screen device attaches no display directive, but still registers list names', async ({
     client,
     assert,
   }) => {
@@ -1022,7 +1063,9 @@ test.group('Alexa skill endpoint', (group) => {
       })
     )
     assert.include(response.body().response.outputSpeech.text, 'Which list did you mean')
-    assert.isUndefined(response.body().response.directives)
+    const directives = response.body().response.directives
+    assert.lengthOf(directives, 1)
+    assert.equal(directives[0].type, 'Dialog.UpdateDynamicEntities')
   })
 
   test('tapping an item on-screen (a UserEvent) marks it done and refreshes the display', async ({
@@ -1302,7 +1345,7 @@ test.group('Alexa skill endpoint', (group) => {
       })
     )
     assert.include(response.body().response.outputSpeech.text, "couldn't find that item")
-    assert.lengthOf(response.body().response.directives, 1)
+    assert.lengthOf(response.body().response.directives, 2)
   })
 
   test('a UserEvent for a list that no longer exists attaches no directive', async ({

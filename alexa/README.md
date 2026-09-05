@@ -201,7 +201,7 @@ instance, run by whoever set it up.
 | "add milk", "add milk to the groceries list"    | `AddItemIntent`        |
 | "remove milk", "take milk off my list"          | `RemoveItemIntent`     |
 | "I got milk", "mark milk as done"               | `CompleteItemIntent`   |
-| "what's on my list", "what's on the groceries list" | `ReadListIntent`   |
+| "what's on my list", "what's on the groceries list", "open Costco" | `ReadListIntent`   |
 | "set groceries as my default list"              | `SetDefaultListIntent` |
 | "show checked items"                            | `ShowCheckedItemsIntent` |
 | "hide checked items"                            | `HideCheckedItemsIntent` |
@@ -277,3 +277,14 @@ This is automatic; there's nothing extra to configure per device.
 - There is no staging environment for the skill endpoint itself: since Alexa must reach a real
   public HTTPS endpoint, some verification is unavoidably against your real instance. Keep the
   skill private/personal-account-only and use a narrowly-scoped test account while validating.
+- **A one-shot command naming a list Alexa doesn't already know (e.g. "Alexa, ask every list to
+  add tortillas to Costco") adds the whole phrase as one item instead of splitting item and
+  list**: `interaction-model.json`'s `ListNameType` only ships with a handful of example values
+  ("groceries", "hardware", etc.) — it can't be authored with every self-hoster's actual list
+  names. The skill registers your real list names as `ListNameType` values via a
+  `Dialog.UpdateDynamicEntities` directive (`dynamic_entities.ts`) on every response where the
+  session stays open, so this resolves correctly from the *second* utterance in a session onward
+  (e.g. say "Alexa, open every list" first, then "add tortillas to Costco"). A one-shot phrasing
+  is Amazon's NLU resolving the whole utterance before your skill is ever invoked, so no directive
+  from a prior turn can fix that specific request — there's no session to have registered
+  anything into yet.
