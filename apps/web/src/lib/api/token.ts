@@ -15,6 +15,11 @@ const SW_AUTH_DB = 'everylist-sw-auth';
 const SW_AUTH_STORE = 'kv';
 
 function mirrorTokenToServiceWorker(token: string | null): void {
+	// Every environment this actually runs in has IndexedDB (any browser new enough for the
+	// service worker/push APIs this exists to support) — this guard only matters for a test
+	// environment with `window` but no `indexedDB` (jsdom), which none of this repo's Vitest
+	// projects are (real Chromium or plain Node, see token.spec.ts/token.svelte.spec.ts).
+	/* v8 ignore next */
 	if (typeof indexedDB === 'undefined') return;
 	const request = indexedDB.open(SW_AUTH_DB, 1);
 	request.onupgradeneeded = () => request.result.createObjectStore(SW_AUTH_STORE);

@@ -254,6 +254,15 @@ describe('listenForNativeDeadlineActions', () => {
 		});
 	});
 
+	it('does nothing on "snooze" when the item has since lost its deadline (or was deleted)', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([makeItem({ id: 1, deadline: null })]);
+
+		await fireAction('snooze');
+
+		expect(updateItem).not.toHaveBeenCalled();
+		expect(LocalNotifications.schedule).not.toHaveBeenCalled();
+	});
+
 	it('ignores an action on a notification from some other feature', async () => {
 		await fireAction('complete', performedNotification({ source: 'something-else' }));
 
