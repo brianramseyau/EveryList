@@ -1335,13 +1335,13 @@
 											out:slide={{ duration: prefersReducedMotion ? 0 : 200 }}
 										>
 											<div
-												class="absolute top-px bottom-px left-px flex w-20 items-center justify-center rounded-l-lg bg-red-600 text-white print:hidden"
+												class="absolute top-px bottom-px left-px flex w-24 items-center justify-center rounded-l-lg bg-red-600 text-white print:hidden"
 												aria-hidden="true"
 											>
 												<Icon name="trashCanOutline" class="h-5 w-5" />
 											</div>
 											<div
-												class="absolute top-px right-px bottom-px flex w-20 items-center justify-center rounded-r-lg bg-blue-600 text-white print:hidden"
+												class="absolute top-px right-px bottom-px flex w-24 items-center justify-center rounded-r-lg bg-blue-600 text-white print:hidden"
 												aria-hidden="true"
 											>
 												<Icon name="pencil" class="h-5 w-5" />
