@@ -11,10 +11,11 @@ import { accessibleLists } from '#services/alexa/list_resolution'
  * Alexa quietly drops. */
 const MAX_DYNAMIC_LIST_VALUES = 100
 
-/** Puts the token's Alexa default list first (falling back to id order otherwise) so that if a
- * token has more than `MAX_DYNAMIC_LIST_VALUES` accessible lists, truncation drops the least-used
- * ones rather than an arbitrary, DB-order-dependent set that could just as easily cut the one
- * list the user actually asks for by name most often. */
+/** Puts the token's Alexa default list first, then sorts the rest by id (creation order) so that
+ * if a token has more than `MAX_DYNAMIC_LIST_VALUES` accessible lists, truncation deterministically
+ * drops the most-recently-created ones instead of an arbitrary, DB-order-dependent set — and never
+ * drops the one list the user has told Alexa it asks for by name most often. There's no per-list
+ * usage signal beyond that preference, so this is the best ordering available short of adding one. */
 async function prioritized(token: AccessToken, lists: List[]): Promise<List[]> {
   if (lists.length <= MAX_DYNAMIC_LIST_VALUES) return lists
 
