@@ -1,5 +1,13 @@
 import type { AccessToken } from '@adonisjs/auth/access_tokens'
+import logger from '@adonisjs/core/services/logger'
 import { accessibleLists } from '#services/alexa/list_resolution'
+
+/** Alexa caps a dynamic entity type at 100 values per `Dialog.UpdateDynamicEntities` directive
+ * — sending more is rejected outright, silently undoing list-name recognition for everyone on
+ * the token rather than just the lists past the cap. No real household has anywhere near this
+ * many lists; this exists so that ever happening fails loud (a log line) instead of a directive
+ * Alexa quietly drops. */
+const MAX_DYNAMIC_LIST_VALUES = 100
 
 /**
  * Registers the token's actual list names as `ListNameType` slot values for the rest of the
@@ -21,13 +29,20 @@ export async function buildDynamicListEntitiesDirective(
   const lists = await accessibleLists(token)
   if (lists.length === 0) return undefined
 
+  if (lists.length > MAX_DYNAMIC_LIST_VALUES) {
+    logger.warn(
+      { accessibleListCount: lists.length, cap: MAX_DYNAMIC_LIST_VALUES },
+      'Alexa token has more accessible lists than the dynamic entities cap; truncating'
+    )
+  }
+
   return {
     type: 'Dialog.UpdateDynamicEntities',
     updateBehavior: 'REPLACE',
     types: [
       {
         name: 'ListNameType',
-        values: lists.map((list) => ({
+        values: lists.slice(0, MAX_DYNAMIC_LIST_VALUES).map((list) => ({
           id: String(list.id),
           name: { value: list.name },
         })),

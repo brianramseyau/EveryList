@@ -273,6 +273,42 @@ test.group('Alexa skill endpoint', (group) => {
     assert.lengthOf(bodyData<unknown[]>(items), 1)
   })
 
+  test('LaunchRequest with no accessible lists attaches no dynamic entities directive', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+    await client.delete(`/api/v1/lists/${listId}`).header('Authorization', `Bearer ${owner.token}`)
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
+    )
+    assert.include(response.body().response.outputSpeech.text, 'Welcome to EveryList')
+    assert.isUndefined(response.body().response.directives)
+  })
+
+  test('LaunchRequest truncates dynamic entity values at the 100-per-directive cap', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listIds: number[] = []
+    for (let i = 0; i < 101; i++) {
+      listIds.push(await createList(client, owner.token, `List ${i}`))
+    }
+    const pat = await mintPat(client, owner.token, listIds)
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
+    )
+    const directive = response.body().response.directives[0]
+    assert.lengthOf(directive.types[0].values, 100)
+  })
+
   test('LaunchRequest registers a non-screen device with a list name outside the static ListNameType catalog', async ({
     client,
     assert,
@@ -291,7 +327,7 @@ test.group('Alexa skill endpoint', (group) => {
     assert.equal(directive.types[0].name, 'ListNameType')
     assert.deepEqual(directive.types[0].values, [{ id: String(listId), name: { value: 'Costco' } }])
 
-    const addItem = await postAlexa(
+    const addItemResponse = await postAlexa(
       client,
       buildEnvelope({
         type: 'IntentRequest',
@@ -300,7 +336,7 @@ test.group('Alexa skill endpoint', (group) => {
         slots: { ItemName: 'Tortillas', ListName: 'Costco' },
       })
     )
-    assert.include(addItem.body().response.outputSpeech.text, 'Added Tortillas to Costco')
+    assert.include(addItemResponse.body().response.outputSpeech.text, 'Added Tortillas to Costco')
   })
 
   test('AddItemIntent title-cases a lower-case, multi-word spoken item name', async ({
@@ -953,9 +989,10 @@ test.group('Alexa skill endpoint', (group) => {
     const directives = response.body().response.directives
     assert.lengthOf(directives, 1)
     assert.equal(directives[0].type, 'Dialog.UpdateDynamicEntities')
-    assert.deepEqual(directives[0].types[0].values.map((v: { name: { value: string } }) => v.name.value), [
-      'Groceries',
-    ])
+    assert.deepEqual(
+      directives[0].types[0].values.map((v: { name: { value: string } }) => v.name.value),
+      ['Groceries']
+    )
   })
 
   test('LaunchRequest on a screen device with one accessible list shows it immediately', async ({
@@ -1345,7 +1382,7 @@ test.group('Alexa skill endpoint', (group) => {
       })
     )
     assert.include(response.body().response.outputSpeech.text, "couldn't find that item")
-    assert.lengthOf(response.body().response.directives, 2)
+    assert.lengthOf(response.body().response.directives, 1)
   })
 
   test('a UserEvent for a list that no longer exists attaches no directive', async ({

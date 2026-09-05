@@ -165,19 +165,24 @@ export default class AlexaController {
       case 'IntentRequest':
         return response.ok(
           await withDynamicListEntities(
-            await withDisplay(await this.#routeIntent(token, body.request, logger), hasDisplay, token),
+            await withDisplay(
+              await this.#routeIntent(token, body.request, logger),
+              hasDisplay,
+              token
+            ),
             token
           )
         )
 
       case 'Alexa.Presentation.APL.UserEvent':
+        // No `withDynamicListEntities` here: a tap carries no spoken utterance for the
+        // registration to affect, so it'd only add a DB query per tap with nothing to show
+        // for it — unlike `LaunchRequest`/`IntentRequest`, which precede the next thing the
+        // user says.
         return response.ok(
-          await withDynamicListEntities(
-            await withDisplay(
-              await handleTouchEvent(token, body.request.arguments ?? []),
-              hasDisplay,
-              token
-            ),
+          await withDisplay(
+            await handleTouchEvent(token, body.request.arguments ?? []),
+            hasDisplay,
             token
           )
         )
