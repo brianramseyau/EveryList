@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ItemDto, ListDto } from '@everylist/shared';
 
 vi.mock('@capacitor/local-notifications', () => ({
@@ -7,15 +7,25 @@ vi.mock('@capacitor/local-notifications', () => ({
 		requestPermissions: vi.fn(),
 		getPending: vi.fn(),
 		schedule: vi.fn(),
-		cancel: vi.fn()
+		cancel: vi.fn(),
+		registerActionTypes: vi.fn(),
+		addListener: vi.fn()
 	}
 }));
 
+vi.mock('$lib/api/items', () => ({
+	fetchItems: vi.fn(),
+	updateItem: vi.fn()
+}));
+
 const { LocalNotifications } = await import('@capacitor/local-notifications');
+const { fetchItems, updateItem } = await import('$lib/api/items');
 const {
 	requestNativeNotificationPermission,
 	syncNativeDeadlineNotifications,
-	cancelAllNativeDeadlineNotifications
+	cancelAllNativeDeadlineNotifications,
+	registerNativeDeadlineActionTypes,
+	listenForNativeDeadlineActions
 } = await import('./native');
 
 function makeList(overrides: Partial<ListDto> = {}): ListDto {
@@ -103,6 +113,7 @@ describe('syncNativeDeadlineNotifications', () => {
 					title: 'Required by',
 					body: 'Return library book',
 					schedule: { at: new Date(2026, 8, 6, 9, 0) },
+					actionTypeId: 'deadline',
 					extra: { listId: 1, itemId: 1, source: 'deadline' }
 				}
 			]
@@ -170,5 +181,138 @@ describe('cancelAllNativeDeadlineNotifications', () => {
 		await cancelAllNativeDeadlineNotifications();
 
 		expect(LocalNotifications.cancel).not.toHaveBeenCalled();
+	});
+});
+
+describe('registerNativeDeadlineActionTypes', () => {
+	it('registers the Complete/Snooze action type', async () => {
+		await registerNativeDeadlineActionTypes();
+
+		expect(LocalNotifications.registerActionTypes).toHaveBeenCalledWith({
+			types: [
+				{
+					id: 'deadline',
+					actions: [
+						{ id: 'complete', title: 'Complete' },
+						{ id: 'snooze', title: 'Snooze 1 hr' }
+					]
+				}
+			]
+		});
+	});
+});
+
+describe('listenForNativeDeadlineActions', () => {
+	// snoozeFromNotification calls addHoursToDeadline with no explicit `now`, i.e. the real clock —
+	// pinned here so its now-vs-deadline fallback (see deadline.spec.ts) doesn't make these
+	// assertions dependent on the actual wall-clock time a CI run happens to execute at.
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date(2026, 8, 5, 12, 0));
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	function performedNotification(overrides: { source?: string } = {}) {
+		return {
+			id: 1,
+			title: '',
+			body: '',
+			extra: { listId: 1, itemId: 1, source: 'deadline', ...overrides }
+		};
+	}
+
+	async function fireAction(actionId: string, notification = performedNotification()) {
+		listenForNativeDeadlineActions();
+		const handler = vi.mocked(LocalNotifications.addListener).mock.calls[0][1] as (
+			action: unknown
+		) => void;
+		handler({ actionId, notification });
+		// The handler's own work is async but fire-and-forget (void) — flush microtasks.
+		await Promise.resolve();
+		await Promise.resolve();
+	}
+
+	it('checks off the item and cancels its notification on "complete"', async () => {
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		await fireAction('complete');
+
+		expect(updateItem).toHaveBeenCalledWith(1, 1, { checked: true });
+		expect(LocalNotifications.cancel).toHaveBeenCalledWith({ notifications: [{ id: 1 }] });
+	});
+
+	it('pushes the deadline forward an hour and reschedules on "snooze"', async () => {
+		const item = makeItem({ id: 1, deadline: '2026-09-06T09:00' });
+		vi.mocked(fetchItems).mockResolvedValue([item]);
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		await fireAction('snooze');
+
+		expect(updateItem).toHaveBeenCalledWith(1, 1, { deadline: '2026-09-06T10:00' });
+		expect(LocalNotifications.schedule).toHaveBeenCalledWith({
+			notifications: [
+				{
+					id: 1,
+					title: 'Required by',
+					body: 'Return library book',
+					schedule: { at: new Date(2026, 8, 6, 10, 0) },
+					actionTypeId: 'deadline',
+					extra: { listId: 1, itemId: 1, source: 'deadline' }
+				}
+			]
+		});
+	});
+
+	it('does nothing on "snooze" when the item has since lost its deadline (or was deleted)', async () => {
+		vi.mocked(fetchItems).mockResolvedValue([makeItem({ id: 1, deadline: null })]);
+
+		await fireAction('snooze');
+
+		expect(updateItem).not.toHaveBeenCalled();
+		expect(LocalNotifications.schedule).not.toHaveBeenCalled();
+	});
+
+	it('logs rather than throwing when "complete" fails (e.g. a network error)', async () => {
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const failure = new Error('network error');
+		vi.mocked(updateItem).mockRejectedValue(failure);
+
+		await fireAction('complete');
+
+		expect(consoleError).toHaveBeenCalledWith(
+			'Failed to complete item from notification action',
+			failure
+		);
+		consoleError.mockRestore();
+	});
+
+	it('logs rather than throwing when "snooze" fails (e.g. a network error)', async () => {
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const failure = new Error('network error');
+		vi.mocked(fetchItems).mockRejectedValue(failure);
+
+		await fireAction('snooze');
+
+		expect(consoleError).toHaveBeenCalledWith(
+			'Failed to snooze item from notification action',
+			failure
+		);
+		consoleError.mockRestore();
+	});
+
+	it('ignores an action on a notification from some other feature', async () => {
+		await fireAction('complete', performedNotification({ source: 'something-else' }));
+
+		expect(updateItem).not.toHaveBeenCalled();
+	});
+
+	it('ignores the plain tap-to-open action', async () => {
+		await fireAction('tap');
+
+		expect(updateItem).not.toHaveBeenCalled();
+		expect(fetchItems).not.toHaveBeenCalled();
 	});
 });

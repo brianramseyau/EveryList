@@ -9,6 +9,10 @@ export interface DeadlinePushPayload {
   body: string
   itemId: number
   listId: number
+  /** The item's raw deadline string ('YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm') — carried through so the
+   * service worker's "Snooze" notification action can compute the new (+1hr) deadline itself,
+   * without a round trip back to the server first. */
+  deadline: string
 }
 
 /**

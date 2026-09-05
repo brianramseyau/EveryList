@@ -7,7 +7,7 @@
 	import { resolve } from '$app/paths';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
-	import { getToken } from '$lib/api/token';
+	import { getToken, syncTokenToServiceWorker } from '$lib/api/token';
 	import { getServerUrl } from '$lib/api/server-url';
 	import { isRemoteClient } from '$lib/platform/desktop';
 	import { initTheme } from '$lib/theme';
@@ -26,6 +26,10 @@
 		getDeadlineNotificationsPreference,
 		resyncDeadlineNotifications
 	} from '$lib/notifications/sync';
+	import {
+		listenForNativeDeadlineActions,
+		registerNativeDeadlineActionTypes
+	} from '$lib/notifications/native';
 	import { setUpdateRegistration } from '$lib/pwa/update';
 	import BottomNav from '$lib/components/BottomNav.svelte';
 	import SyncStatusIcon from '$lib/components/SyncStatusIcon.svelte';
@@ -86,7 +90,12 @@
 		// login redirect flow is what a normal app launch already handles.
 		let deepLinkHandle: ReturnType<typeof App.addListener> | null = null;
 		let resumeHandle: ReturnType<typeof App.addListener> | null = null;
+		let notificationActionHandle: ReturnType<typeof listenForNativeDeadlineActions> | null = null;
 		if (Capacitor.isNativePlatform()) {
+			// Must run every launch (not just once) since iOS discards the action-type registration
+			// between sessions — see registerNativeDeadlineActionTypes's own note.
+			void registerNativeDeadlineActionTypes();
+			notificationActionHandle = listenForNativeDeadlineActions();
 			resumeHandle = App.addListener('resume', () => syncDeadlineNotifications());
 			deepLinkHandle = App.addListener('appUrlOpen', ({ url }) => {
 				if (!loggedIn) return;
@@ -125,6 +134,10 @@
 		// nothing and reintroduces the same stale-asset bug class. Skip it entirely on either
 		// rather than relying on it merely no-oping harmlessly.
 		if (!isRemoteClient()) {
+			// Belt-and-suspenders for a device that logged in before the service worker's
+			// "Complete"/"Snooze" notification actions shipped: setToken/clearToken keep the mirror
+			// current from here on, but a token set before that point never went through them.
+			syncTokenToServiceWorker();
 			// vite-plugin-pwa's virtual module only exists in a built/dev-served app, never under
 			// Vitest — dynamic-imported so test runs never need to resolve it.
 			void import('virtual:pwa-register').then(({ registerSW }) =>
@@ -161,6 +174,7 @@
 		return () => {
 			void deepLinkHandle?.then((handle) => handle.remove());
 			void resumeHandle?.then((handle) => handle.remove());
+			void notificationActionHandle?.then((handle) => handle.remove());
 			clearInterval(deadlineNotificationsInterval);
 			stopShakeListening();
 		};

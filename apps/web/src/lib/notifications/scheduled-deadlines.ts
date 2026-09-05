@@ -17,7 +17,7 @@ export interface ScheduledDeadlineNotification {
 /** Local calendar-date deadline → 9am that day, since a date-only deadline
  * has no time component to schedule against. Mirrors `deadline.ts`'s naive
  * local-time handling — no timezone math. */
-function triggerDate(deadline: string): Date {
+export function triggerDate(deadline: string): Date {
 	if (hasTime(deadline)) {
 		const { date, time } = splitDeadline(deadline);
 		const [year, month, day] = date.split('-').map(Number);
