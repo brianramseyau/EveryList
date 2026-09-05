@@ -1003,6 +1003,7 @@
 						aria-label="Stores"
 						bind:this={storeMenuAnchor}
 						oncontextmenu={(event) => event.preventDefault()}
+						onclick={markListOriginAndScroll}
 						class="store-trigger text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
 						use:longPress={{
 							disabled: stores.length === 0,
@@ -1145,6 +1146,7 @@
 				<a
 					href={resolve('/lists/[id]/import', { id: String(listId) })}
 					aria-label="Paste in a list"
+					onclick={markListOriginAndScroll}
 					class="pointer-events-auto flex h-6 w-6 items-center justify-center transition-opacity {itemInputFocused
 						? 'opacity-100'
 						: 'pointer-events-none opacity-0'}"
@@ -1164,6 +1166,7 @@
 							<a
 								href={resolve('/lists/[id]/favorites', { id: String(listId) })}
 								aria-label="Favorites"
+								onclick={markListOriginAndScroll}
 								class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
 							>
 								<Icon name="heart" class="h-5 w-5" />
@@ -1173,6 +1176,7 @@
 							<a
 								href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
 								aria-label="Recently deleted"
+								onclick={markListOriginAndScroll}
 								class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
 							>
 								<Icon name="history" class="h-5 w-5" />

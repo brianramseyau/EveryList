@@ -11,6 +11,7 @@
 	import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
 	import type { StoreFilter } from '$lib/offline/db';
 	import { ApiError } from '$lib/api/client';
+	import { consumeListOrigin } from '$lib/nav-direction';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -36,6 +37,9 @@
 	let editName = $state('');
 	let editColor = $state(DEFAULT_COLOR);
 	let savingStoreId = $state<number | null>(null);
+	// See items/[itemId]/+page.svelte's `cameFromList` — same rationale, used
+	// by the header back arrow below to prefer a real `history.back()`.
+	let cameFromList = false;
 
 	async function loadAll() {
 		loading = true;
@@ -57,8 +61,17 @@
 			void goto(resolve('/login'));
 			return;
 		}
+		cameFromList = consumeListOrigin();
 		void loadAll();
 	});
+
+	async function returnToList() {
+		if (cameFromList) {
+			window.history.back();
+			return;
+		}
+		await goto(resolve('/lists/[id]', { id: String(listId) }));
+	}
 
 	function startEdit(store: StoreDto) {
 		editingStoreId = store.id;
@@ -120,6 +133,7 @@
 		htmlTitle={list ? `${list.name} stores` : 'Stores'}
 		backHref={resolve('/lists/[id]', { id: String(listId) })}
 		backLabel="Back to list"
+		onBack={returnToList}
 	>
 		{#snippet actions()}
 			<a

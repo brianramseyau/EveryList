@@ -32,6 +32,10 @@
 		stopShakeListening
 	} from '$lib/shake';
 	import { runUndo } from '$lib/undo';
+	import {
+		getRememberListScrollPreference,
+		setRememberListScrollPreference
+	} from '$lib/nav-direction';
 	import { fetchProfile, logout, updateProfile } from '$lib/api/auth';
 	import { ApiError } from '$lib/api/client';
 	import { resetApp } from '$lib/pwa/reset';
@@ -85,6 +89,7 @@
 	let deadlineNotificationsEnabled = $state(false);
 	let deadlineNotificationsFeedback = $state<string | null>(null);
 	let deadlineNotificationsSupported = $state(false);
+	let rememberListScrollEnabled = $state(true);
 	let serverUrl = $state('');
 	let nativeInfo = $state<{ version: string; build: string } | null>(null);
 
@@ -195,6 +200,11 @@
 		deadlineNotificationsEnabled = enabled;
 	}
 
+	function chooseRememberListScroll(enabled: boolean) {
+		rememberListScrollEnabled = enabled;
+		setRememberListScrollPreference(enabled);
+	}
+
 	async function handleLogout() {
 		await logout();
 		await goto(resolve('/login'));
@@ -291,6 +301,7 @@
 		orientationPreference = getOrientationPreference();
 		shakeToUndoEnabled = getShakeToUndoPreference();
 		deadlineNotificationsEnabled = getDeadlineNotificationsPreference();
+		rememberListScrollEnabled = getRememberListScrollPreference();
 		deadlineNotificationsSupported = notificationPlatform() !== 'unsupported';
 		canLockOrientationNow = canLockOrientation();
 		supportsOrientationLock = supportsScreenOrientationLock();
@@ -507,93 +518,122 @@
 		{/if}
 	</section>
 
-	{#if showMobileHardwareSettings || deadlineNotificationsSupported}
-		<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-			<h2
-				class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
+	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+		<h2
+			class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
+		>
+			Features
+		</h2>
+		<div class="flex items-center justify-between px-4 py-3">
+			<span class="text-sm font-medium">Remember list scroll position</span>
+			<div
+				role="radiogroup"
+				aria-label="Remember list scroll position"
+				class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
 			>
-				Features
-			</h2>
-			{#if showMobileHardwareSettings}
-				<div class="flex items-center justify-between px-4 py-3">
-					<span class="text-sm font-medium">Shake to undo</span>
-					<div
-						role="radiogroup"
-						aria-label="Shake to undo"
-						class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
-					>
-						<button
-							type="button"
-							role="radio"
-							aria-checked={shakeToUndoEnabled}
-							onclick={() => chooseShakeToUndo(true)}
-							class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {shakeToUndoEnabled
-								? 'bg-primary-600 text-white'
-								: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
-						>
-							On
-						</button>
-						<button
-							type="button"
-							role="radio"
-							aria-checked={!shakeToUndoEnabled}
-							onclick={() => chooseShakeToUndo(false)}
-							class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {!shakeToUndoEnabled
-								? 'bg-primary-600 text-white'
-								: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
-						>
-							Off
-						</button>
-					</div>
-				</div>
-				{#if shakeFeedback}
-					<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">{shakeFeedback}</p>
-				{/if}
-			{/if}
-			{#if deadlineNotificationsSupported}
-				<div
-					class="flex items-center justify-between px-4 py-3 {showMobileHardwareSettings
-						? 'border-t border-gray-200 dark:border-gray-700'
-						: ''}"
+				<button
+					type="button"
+					role="radio"
+					aria-checked={rememberListScrollEnabled}
+					onclick={() => chooseRememberListScroll(true)}
+					class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {rememberListScrollEnabled
+						? 'bg-primary-600 text-white'
+						: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
 				>
-					<span class="text-sm font-medium">Deadline notifications</span>
-					<div
-						role="radiogroup"
-						aria-label="Deadline notifications"
-						class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
+					On
+				</button>
+				<button
+					type="button"
+					role="radio"
+					aria-checked={!rememberListScrollEnabled}
+					onclick={() => chooseRememberListScroll(false)}
+					class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {!rememberListScrollEnabled
+						? 'bg-primary-600 text-white'
+						: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+				>
+					Off
+				</button>
+			</div>
+		</div>
+		{#if showMobileHardwareSettings}
+			<div
+				class="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700"
+			>
+				<span class="text-sm font-medium">Shake to undo</span>
+				<div
+					role="radiogroup"
+					aria-label="Shake to undo"
+					class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
+				>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={shakeToUndoEnabled}
+						onclick={() => chooseShakeToUndo(true)}
+						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {shakeToUndoEnabled
+							? 'bg-primary-600 text-white'
+							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
 					>
-						<button
-							type="button"
-							role="radio"
-							aria-checked={deadlineNotificationsEnabled}
-							onclick={() => chooseDeadlineNotifications(true)}
-							class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {deadlineNotificationsEnabled
-								? 'bg-primary-600 text-white'
-								: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
-						>
-							On
-						</button>
-						<button
-							type="button"
-							role="radio"
-							aria-checked={!deadlineNotificationsEnabled}
-							onclick={() => chooseDeadlineNotifications(false)}
-							class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {!deadlineNotificationsEnabled
-								? 'bg-primary-600 text-white'
-								: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
-						>
-							Off
-						</button>
-					</div>
+						On
+					</button>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={!shakeToUndoEnabled}
+						onclick={() => chooseShakeToUndo(false)}
+						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {!shakeToUndoEnabled
+							? 'bg-primary-600 text-white'
+							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+					>
+						Off
+					</button>
 				</div>
-				{#if deadlineNotificationsFeedback}
-					<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">
-						{deadlineNotificationsFeedback}
-					</p>
-				{/if}
+			</div>
+			{#if shakeFeedback}
+				<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">{shakeFeedback}</p>
 			{/if}
-		</section>
-	{/if}
+		{/if}
+		{#if deadlineNotificationsSupported}
+			<div
+				class="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700"
+			>
+				<span class="text-sm font-medium">Deadline notifications</span>
+				<div
+					role="radiogroup"
+					aria-label="Deadline notifications"
+					class="flex overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
+				>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={deadlineNotificationsEnabled}
+						onclick={() => chooseDeadlineNotifications(true)}
+						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {deadlineNotificationsEnabled
+							? 'bg-primary-600 text-white'
+							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+					>
+						On
+					</button>
+					<button
+						type="button"
+						role="radio"
+						aria-checked={!deadlineNotificationsEnabled}
+						onclick={() => chooseDeadlineNotifications(false)}
+						class="border-l border-gray-200 px-3 py-1.5 text-sm font-medium first:border-l-0 dark:border-gray-700 {!deadlineNotificationsEnabled
+							? 'bg-primary-600 text-white'
+							: 'bg-transparent text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'}"
+					>
+						Off
+					</button>
+				</div>
+			</div>
+			{#if deadlineNotificationsFeedback}
+				<p class="px-4 pb-3 text-xs text-amber-600 dark:text-amber-400">
+					{deadlineNotificationsFeedback}
+				</p>
+			{/if}
+		{/if}
+	</section>
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 		<h2
