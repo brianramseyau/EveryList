@@ -73,7 +73,29 @@ export function consumeListOrigin(): boolean {
 // list — `consumeListScroll` returns null for a mismatched id instead.
 let pendingListScroll: { listId: number; scrollY: number } | null = null;
 
+const SCROLL_MEMORY_STORAGE_KEY = 'everylist:rememberListScroll';
+
+/** Guards every browser API access, like $lib/shake.ts and $lib/theme.ts — this module runs during
+ * prerendering (Node, no `window`) as well as in the browser. */
+function hasWindow(): boolean {
+	return typeof window !== 'undefined';
+}
+
+/** Settings toggle for the scroll-remembering behavior below — on by default, session-only (the
+ * remembered position itself is never written to a database, just this in-memory variable). */
+export function getRememberListScrollPreference(): boolean {
+	if (!hasWindow()) return true;
+	return window.localStorage.getItem(SCROLL_MEMORY_STORAGE_KEY) !== 'off';
+}
+
+export function setRememberListScrollPreference(enabled: boolean): void {
+	if (!hasWindow()) return;
+	window.localStorage.setItem(SCROLL_MEMORY_STORAGE_KEY, enabled ? 'on' : 'off');
+	if (!enabled) pendingListScroll = null;
+}
+
 export function rememberListScroll(listId: number, scrollY: number): void {
+	if (!getRememberListScrollPreference()) return;
 	pendingListScroll = { listId, scrollY };
 }
 

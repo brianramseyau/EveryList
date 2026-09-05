@@ -3,9 +3,11 @@ import {
 	consumeListScroll,
 	consumeNavDirection,
 	consumeSkipTransition,
+	getRememberListScrollPreference,
 	markBackNavigation,
 	markSkipTransition,
-	rememberListScroll
+	rememberListScroll,
+	setRememberListScrollPreference
 } from './nav-direction';
 
 describe('nav-direction', () => {
@@ -47,5 +49,18 @@ describe('nav-direction', () => {
 
 	it('returns null when nothing was remembered', () => {
 		expect(consumeListScroll(1)).toBeNull();
+	});
+
+	// Runs in the "server" (node) project, which has no `window` — getRememberListScrollPreference
+	// defaults to enabled there and setRememberListScrollPreference is a no-op, same rationale as
+	// $lib/shake.ts's own no-window guard. See nav-direction.svelte.spec.ts for the real
+	// localStorage-backed toggle.
+	it('getRememberListScrollPreference defaults to enabled without a window', () => {
+		expect(getRememberListScrollPreference()).toBe(true);
+	});
+
+	it('setRememberListScrollPreference is a no-op without a window', () => {
+		expect(() => setRememberListScrollPreference(false)).not.toThrow();
+		expect(getRememberListScrollPreference()).toBe(true);
 	});
 });

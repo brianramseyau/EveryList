@@ -276,6 +276,7 @@
 				bind:notes={draftNotes}
 				bind:deadlineDate={draftDeadlineDate}
 				bind:deadlineTime={draftDeadlineTime}
+				autofocusName={false}
 				{categories}
 				{stores}
 				showCategory={list?.useCategories !== false}

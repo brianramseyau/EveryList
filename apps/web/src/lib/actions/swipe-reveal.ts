@@ -4,8 +4,11 @@
 // Swipe right commits onCommitRight (delete); swipe left commits
 // onCommitLeft (edit).
 
-export const REVEAL_PX = 80;
-export const COMMIT_RATIO = 0.5;
+export const REVEAL_PX = 96;
+// Committing requires dragging all the way to REVEAL_PX (a full swipe past
+// where the panel is fully revealed), not just partway into it — a partial
+// reveal was too easy to trigger by accident.
+export const COMMIT_RATIO = 1;
 const DIRECTION_DEAD_ZONE_PX = 10;
 // Matches sortable-reorder's own `delay: 400` — a release inside this window
 // without ever moving past the dead zone is a tap (toggle); holding past it

@@ -5,6 +5,7 @@ import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
 import { resetDbForTesting } from '$lib/offline/db';
+import { markListOrigin } from '$lib/nav-direction';
 
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -68,6 +69,31 @@ describe('Stores +page.svelte', () => {
 		vi.clearAllMocks();
 		clearToken();
 		await resetDbForTesting();
+	});
+
+	it('pushes a fresh navigation back to the list when the header back arrow is used normally', async () => {
+		render(StoresPage);
+		await expect.element(page.getByRole('link', { name: 'Back to list' })).toBeInTheDocument();
+
+		await page.getByRole('link', { name: 'Back to list' }).click();
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(goto).toHaveBeenCalledWith('/lists/1');
+	});
+
+	it('goes back in history instead when this page was reached from the list', async () => {
+		const historyBackSpy = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+		markListOrigin();
+
+		render(StoresPage);
+		await expect.element(page.getByRole('link', { name: 'Back to list' })).toBeInTheDocument();
+
+		await page.getByRole('link', { name: 'Back to list' }).click();
+
+		await expect.poll(() => historyBackSpy.mock.calls.length).toBe(1);
+		expect(goto).not.toHaveBeenCalled();
+
+		historyBackSpy.mockRestore();
 	});
 
 	it('sets the document title to the loading fallback before the list resolves, then to the list stores title', async () => {

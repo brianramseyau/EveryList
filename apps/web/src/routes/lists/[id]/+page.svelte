@@ -458,6 +458,17 @@
 		rememberListScroll(listId, window.scrollY);
 	}
 
+	// The header's own back arrow (to the lists overview) doesn't need
+	// `markListOrigin` — there's no "come back with a real history.back()"
+	// screen on the other end of it, just the ordinary lists list — but it
+	// still needs to remember the scroll position so tapping back into this
+	// same list later (a fresh forward navigation, not a history traversal)
+	// can restore it the same way `rememberedScroll` does above.
+	async function returnToLists() {
+		rememberListScroll(listId, window.scrollY);
+		await goto(resolve('/lists'));
+	}
+
 	onMount(() => {
 		if (!getToken()) {
 			void goto(resolve('/login'));
@@ -992,6 +1003,7 @@
 		htmlTitle={list ? list.name : 'List'}
 		backHref={resolve('/lists')}
 		backLabel="My Lists"
+		onBack={returnToLists}
 		fixed
 		bind:height={stickyHeaderHeight}
 	>
@@ -1003,6 +1015,7 @@
 						aria-label="Stores"
 						bind:this={storeMenuAnchor}
 						oncontextmenu={(event) => event.preventDefault()}
+						onclick={markListOriginAndScroll}
 						class="store-trigger text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
 						use:longPress={{
 							disabled: stores.length === 0,
@@ -1145,6 +1158,7 @@
 				<a
 					href={resolve('/lists/[id]/import', { id: String(listId) })}
 					aria-label="Paste in a list"
+					onclick={markListOriginAndScroll}
 					class="pointer-events-auto flex h-6 w-6 items-center justify-center transition-opacity {itemInputFocused
 						? 'opacity-100'
 						: 'pointer-events-none opacity-0'}"
@@ -1164,6 +1178,7 @@
 							<a
 								href={resolve('/lists/[id]/favorites', { id: String(listId) })}
 								aria-label="Favorites"
+								onclick={markListOriginAndScroll}
 								class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
 							>
 								<Icon name="heart" class="h-5 w-5" />
@@ -1173,6 +1188,7 @@
 							<a
 								href={resolve('/lists/[id]/recently-deleted', { id: String(listId) })}
 								aria-label="Recently deleted"
+								onclick={markListOriginAndScroll}
 								class="flex h-11 w-11 shrink-0 items-center justify-center text-gray-600 dark:text-gray-400"
 							>
 								<Icon name="history" class="h-5 w-5" />
@@ -1335,13 +1351,13 @@
 											out:slide={{ duration: prefersReducedMotion ? 0 : 200 }}
 										>
 											<div
-												class="absolute top-px bottom-px left-px flex w-20 items-center justify-center rounded-l-lg bg-red-600 text-white print:hidden"
+												class="absolute top-px bottom-px left-px flex w-24 items-center justify-center rounded-l-lg bg-red-600 text-white print:hidden"
 												aria-hidden="true"
 											>
 												<Icon name="trashCanOutline" class="h-5 w-5" />
 											</div>
 											<div
-												class="absolute top-px right-px bottom-px flex w-20 items-center justify-center rounded-r-lg bg-blue-600 text-white print:hidden"
+												class="absolute top-px right-px bottom-px flex w-24 items-center justify-center rounded-r-lg bg-blue-600 text-white print:hidden"
 												aria-hidden="true"
 											>
 												<Icon name="pencil" class="h-5 w-5" />

@@ -37,7 +37,9 @@ export interface ShakeDetectorOptions {
 	cooldownMs?: number;
 }
 
-const DEFAULT_THRESHOLD_G = 1.8;
+// 1.8 was crossed by an ordinary quick reposition-in-hand, not just a deliberate shake — raised so
+// only a genuinely forceful motion registers.
+const DEFAULT_THRESHOLD_G = 2.7;
 const DEFAULT_COOLDOWN_MS = 1000;
 
 /** Pure, sensor-agnostic shake detector: feed it acceleration-including-gravity readings in units

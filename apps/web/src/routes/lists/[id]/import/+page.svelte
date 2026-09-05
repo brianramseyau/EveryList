@@ -7,6 +7,7 @@
 	import { getToken } from '$lib/api/token';
 	import { importItems } from '$lib/api/items';
 	import { ApiError } from '$lib/api/client';
+	import { consumeListOrigin } from '$lib/nav-direction';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	const listId = $derived(Number(page.params.id));
@@ -14,12 +15,25 @@
 	let importText = $state('');
 	let importing = $state(false);
 	let error = $state<string | null>(null);
+	// See items/[itemId]/+page.svelte's `cameFromList` — same rationale, used
+	// by the header back arrow below to prefer a real `history.back()`.
+	let cameFromList = false;
 
 	onMount(() => {
 		if (!getToken()) {
 			void goto(resolve('/login'));
+			return;
 		}
+		cameFromList = consumeListOrigin();
 	});
+
+	async function returnToList() {
+		if (cameFromList) {
+			window.history.back();
+			return;
+		}
+		await goto(resolve('/lists/[id]', { id: String(listId) }));
+	}
 
 	async function save() {
 		// Unlike lists/new's form-wrapped Save (tested via a raw 'submit' event
@@ -48,6 +62,7 @@
 		title="Paste Items"
 		backHref={resolve('/lists/[id]', { id: String(listId) })}
 		backLabel="Cancel"
+		onBack={returnToList}
 	>
 		{#snippet actions()}
 			<Button type="button" size="sm" disabled={importing || !importText.trim()} onclick={save}>

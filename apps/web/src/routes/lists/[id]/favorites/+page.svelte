@@ -10,6 +10,7 @@
 	import { fetchItems, updateItem } from '$lib/api/items';
 	import { fetchStores } from '$lib/api/stores';
 	import { ApiError } from '$lib/api/client';
+	import { consumeListOrigin } from '$lib/nav-direction';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Loader from '$lib/components/Loader.svelte';
@@ -25,6 +26,9 @@
 
 	let addingToList = $state<number | null>(null);
 	let addedMessage = $state<string | null>(null);
+	// See items/[itemId]/+page.svelte's `cameFromList` — same rationale, used
+	// by the header back arrow below to prefer a real `history.back()`.
+	let cameFromList = false;
 
 	// An item blocks re-adding only while it's unchecked — a checked-off item
 	// has already been "used up", so tapping the favorite again to add a
@@ -55,8 +59,17 @@
 			void goto(resolve('/login'));
 			return;
 		}
+		cameFromList = consumeListOrigin();
 		void loadAll();
 	});
+
+	async function returnToList() {
+		if (cameFromList) {
+			window.history.back();
+			return;
+		}
+		await goto(resolve('/lists/[id]', { id: String(listId) }));
+	}
 
 	async function removeFavorite(favorite: FavoriteItemDto) {
 		favorites = favorites.filter((current) => current.id !== favorite.id);
@@ -109,6 +122,7 @@
 		htmlTitle={list ? `${list.name} favorites` : 'Favorites'}
 		backHref={resolve('/lists/[id]', { id: String(listId) })}
 		backLabel="Back to list"
+		onBack={returnToList}
 	>
 		{#snippet actions()}
 			<a

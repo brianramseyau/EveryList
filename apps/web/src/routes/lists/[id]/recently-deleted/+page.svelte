@@ -8,6 +8,7 @@
 	import { fetchList } from '$lib/api/lists';
 	import { fetchRecentItems, purgeItem, restoreItem } from '$lib/api/items';
 	import { ApiError } from '$lib/api/client';
+	import { consumeListOrigin } from '$lib/nav-direction';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import Loader from '$lib/components/Loader.svelte';
@@ -20,6 +21,9 @@
 	let error = $state<string | null>(null);
 	let confirmingPurgeId = $state<number | null>(null);
 	let purging = $state(false);
+	// See items/[itemId]/+page.svelte's `cameFromList` — same rationale, used
+	// by the header back arrow below to prefer a real `history.back()`.
+	let cameFromList = false;
 
 	async function loadAll() {
 		loading = true;
@@ -38,8 +42,17 @@
 			void goto(resolve('/login'));
 			return;
 		}
+		cameFromList = consumeListOrigin();
 		void loadAll();
 	});
+
+	async function returnToList() {
+		if (cameFromList) {
+			window.history.back();
+			return;
+		}
+		await goto(resolve('/lists/[id]', { id: String(listId) }));
+	}
 
 	async function restoreRecentItem(item: ItemDto) {
 		recentItems = recentItems.filter((current) => current.id !== item.id);
@@ -81,6 +94,7 @@
 		htmlTitle={list ? `${list.name} recently deleted` : 'Recently Deleted'}
 		backHref={resolve('/lists/[id]', { id: String(listId) })}
 		backLabel="Back to list"
+		onBack={returnToList}
 	/>
 
 	{#if error}

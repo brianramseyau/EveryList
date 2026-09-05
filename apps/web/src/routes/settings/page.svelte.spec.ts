@@ -111,6 +111,7 @@ describe('Settings +page.svelte', () => {
 		// later spec file sharing this worker's browser context.
 		window.localStorage.removeItem('everylist:orientation');
 		window.localStorage.removeItem('everylist:shakeToUndo');
+		window.localStorage.removeItem('everylist:rememberListScroll');
 		delete (window.DeviceMotionEvent as unknown as { requestPermission?: unknown })
 			.requestPermission;
 		stopShakeListening();
@@ -414,17 +415,36 @@ describe('Settings +page.svelte', () => {
 
 			render(SettingsPage);
 
-			await expect.element(page.getByRole('radio', { name: 'On' })).toBeChecked();
-			await expect.element(page.getByRole('radio', { name: 'Off' })).not.toBeChecked();
+			await expect
+				.element(
+					page.getByRole('radiogroup', { name: 'Shake to undo' }).getByRole('radio', { name: 'On' })
+				)
+				.toBeChecked();
+			await expect
+				.element(
+					page
+						.getByRole('radiogroup', { name: 'Shake to undo' })
+						.getByRole('radio', { name: 'Off' })
+				)
+				.not.toBeChecked();
 		});
 
 		it('turning it off persists the preference and reflects the choice in the radio group', async () => {
 			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
 			render(SettingsPage);
-			await page.getByRole('radio', { name: 'Off' }).click();
+			await page
+				.getByRole('radiogroup', { name: 'Shake to undo' })
+				.getByRole('radio', { name: 'Off' })
+				.click();
 
-			await expect.element(page.getByRole('radio', { name: 'Off' })).toBeChecked();
+			await expect
+				.element(
+					page
+						.getByRole('radiogroup', { name: 'Shake to undo' })
+						.getByRole('radio', { name: 'Off' })
+				)
+				.toBeChecked();
 			expect(window.localStorage.getItem('everylist:shakeToUndo')).toBe('off');
 		});
 
@@ -432,10 +452,20 @@ describe('Settings +page.svelte', () => {
 			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
 			render(SettingsPage);
-			await page.getByRole('radio', { name: 'Off' }).click();
-			await page.getByRole('radio', { name: 'On' }).click();
+			await page
+				.getByRole('radiogroup', { name: 'Shake to undo' })
+				.getByRole('radio', { name: 'Off' })
+				.click();
+			await page
+				.getByRole('radiogroup', { name: 'Shake to undo' })
+				.getByRole('radio', { name: 'On' })
+				.click();
 
-			await expect.element(page.getByRole('radio', { name: 'On' })).toBeChecked();
+			await expect
+				.element(
+					page.getByRole('radiogroup', { name: 'Shake to undo' }).getByRole('radio', { name: 'On' })
+				)
+				.toBeChecked();
 			expect(window.localStorage.getItem('everylist:shakeToUndo')).toBe('on');
 		});
 
@@ -443,17 +473,29 @@ describe('Settings +page.svelte', () => {
 			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
 			render(SettingsPage);
-			await page.getByRole('radio', { name: 'Off' }).click();
+			await page
+				.getByRole('radiogroup', { name: 'Shake to undo' })
+				.getByRole('radio', { name: 'Off' })
+				.click();
 
 			(
 				window.DeviceMotionEvent as unknown as { requestPermission: () => Promise<string> }
 			).requestPermission = vi.fn().mockResolvedValue('denied');
-			await page.getByRole('radio', { name: 'On' }).click();
+			await page
+				.getByRole('radiogroup', { name: 'Shake to undo' })
+				.getByRole('radio', { name: 'On' })
+				.click();
 
 			await expect
 				.element(page.getByText("This browser didn't allow motion access", { exact: false }))
 				.toBeInTheDocument();
-			await expect.element(page.getByRole('radio', { name: 'Off' })).toBeChecked();
+			await expect
+				.element(
+					page
+						.getByRole('radiogroup', { name: 'Shake to undo' })
+						.getByRole('radio', { name: 'Off' })
+				)
+				.toBeChecked();
 			expect(window.localStorage.getItem('everylist:shakeToUndo')).toBe('off');
 		});
 
@@ -465,10 +507,17 @@ describe('Settings +page.svelte', () => {
 			).requestPermission = requestPermission;
 
 			render(SettingsPage);
-			await page.getByRole('radio', { name: 'On' }).click();
+			await page
+				.getByRole('radiogroup', { name: 'Shake to undo' })
+				.getByRole('radio', { name: 'On' })
+				.click();
 
 			expect(requestPermission).toHaveBeenCalledOnce();
-			await expect.element(page.getByRole('radio', { name: 'On' })).toBeChecked();
+			await expect
+				.element(
+					page.getByRole('radiogroup', { name: 'Shake to undo' }).getByRole('radio', { name: 'On' })
+				)
+				.toBeChecked();
 			expect(window.localStorage.getItem('everylist:shakeToUndo')).toBe('on');
 		});
 
@@ -477,8 +526,14 @@ describe('Settings +page.svelte', () => {
 			const undo = vi.fn(async () => {});
 
 			render(SettingsPage);
-			await page.getByRole('radio', { name: 'Off' }).click();
-			await page.getByRole('radio', { name: 'On' }).click();
+			await page
+				.getByRole('radiogroup', { name: 'Shake to undo' })
+				.getByRole('radio', { name: 'Off' })
+				.click();
+			await page
+				.getByRole('radiogroup', { name: 'Shake to undo' })
+				.getByRole('radio', { name: 'On' })
+				.click();
 			registerUndo(undo);
 
 			window.dispatchEvent(
@@ -488,6 +543,41 @@ describe('Settings +page.svelte', () => {
 			);
 
 			await expect.poll(() => undo.mock.calls.length).toBe(1);
+		});
+	});
+
+	describe('remember list scroll position', () => {
+		it('is on by default, reflected in the radio group', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+			render(SettingsPage);
+
+			const group = page.getByRole('radiogroup', { name: 'Remember list scroll position' });
+			await expect.element(group.getByRole('radio', { name: 'On' })).toBeChecked();
+			await expect.element(group.getByRole('radio', { name: 'Off' })).not.toBeChecked();
+		});
+
+		it('turning it off persists the preference and reflects the choice', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+			render(SettingsPage);
+			const group = page.getByRole('radiogroup', { name: 'Remember list scroll position' });
+			await group.getByRole('radio', { name: 'Off' }).click();
+
+			await expect.element(group.getByRole('radio', { name: 'Off' })).toBeChecked();
+			expect(window.localStorage.getItem('everylist:rememberListScroll')).toBe('off');
+		});
+
+		it('turning it back on persists the preference', async () => {
+			vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+			render(SettingsPage);
+			const group = page.getByRole('radiogroup', { name: 'Remember list scroll position' });
+			await group.getByRole('radio', { name: 'Off' }).click();
+			await group.getByRole('radio', { name: 'On' }).click();
+
+			await expect.element(group.getByRole('radio', { name: 'On' })).toBeChecked();
+			expect(window.localStorage.getItem('everylist:rememberListScroll')).toBe('on');
 		});
 	});
 
