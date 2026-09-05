@@ -290,15 +290,51 @@ test.group('Alexa skill endpoint', (group) => {
     assert.isUndefined(response.body().response.directives)
   })
 
-  test('LaunchRequest truncates dynamic entity values at the 100-per-directive cap', async ({
+  async function createManyLists(client: ApiClient, token: string, count: number) {
+    const listIds: number[] = []
+    for (let i = 0; i < count; i++) {
+      listIds.push(await createList(client, token, `List ${i}`))
+    }
+    return listIds
+  }
+
+  test('LaunchRequest truncates dynamic entity values at the 100-per-directive cap, prioritizing the default list', async ({
     client,
     assert,
   }) => {
     const owner = await signupAndGetUser(client)
-    const listIds: number[] = []
-    for (let i = 0; i < 101; i++) {
-      listIds.push(await createList(client, owner.token, `List ${i}`))
-    }
+    const listIds = await createManyLists(client, owner.token, 101)
+    const pat = await mintPat(client, owner.token, listIds)
+
+    // The default list is the very last one created (so plain id order would drop it) — it
+    // should still survive truncation ahead of every non-default list.
+    await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'SetDefaultListIntent',
+        slots: { ListName: 'List 100' },
+      })
+    )
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
+    )
+    const directive = response.body().response.directives[0]
+    const values = directive.types[0].values as { id: string; name: { value: string } }[]
+    assert.lengthOf(values, 100)
+    assert.isTrue(values.some((v) => v.name.value === 'List 100'))
+    assert.equal(values[0]!.name.value, 'List 100')
+  })
+
+  test('LaunchRequest truncation with no default list set falls back to id order', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listIds = await createManyLists(client, owner.token, 101)
     const pat = await mintPat(client, owner.token, listIds)
 
     const response = await postAlexa(
@@ -306,7 +342,43 @@ test.group('Alexa skill endpoint', (group) => {
       buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
     )
     const directive = response.body().response.directives[0]
-    assert.lengthOf(directive.types[0].values, 100)
+    const values = directive.types[0].values as { id: string; name: { value: string } }[]
+    assert.lengthOf(values, 100)
+    assert.equal(values[0]!.name.value, 'List 0')
+    assert.isFalse(values.some((v) => v.name.value === 'List 100'))
+  })
+
+  test('LaunchRequest truncation falls back to id order when the default list is no longer accessible', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    // 102 lists so that deleting the (former) default still leaves 101 accessible — enough to
+    // stay over the truncation cap and actually exercise the "default no longer found" branch.
+    const listIds = await createManyLists(client, owner.token, 102)
+    const pat = await mintPat(client, owner.token, listIds)
+
+    await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'SetDefaultListIntent',
+        slots: { ListName: 'List 101' },
+      })
+    )
+    await client
+      .delete(`/api/v1/lists/${listIds[101]}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({ type: 'LaunchRequest', accessToken: pat, hasDisplay: false })
+    )
+    const directive = response.body().response.directives[0]
+    const values = directive.types[0].values as { id: string; name: { value: string } }[]
+    assert.lengthOf(values, 100)
+    assert.equal(values[0]!.name.value, 'List 0')
   })
 
   test('LaunchRequest registers a non-screen device with a list name outside the static ListNameType catalog', async ({

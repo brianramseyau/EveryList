@@ -1,5 +1,7 @@
 import type { AccessToken } from '@adonisjs/auth/access_tokens'
 import logger from '@adonisjs/core/services/logger'
+import type List from '#models/list'
+import AlexaPreference from '#models/alexa_preference'
 import { accessibleLists } from '#services/alexa/list_resolution'
 
 /** Alexa caps a dynamic entity type at 100 values per `Dialog.UpdateDynamicEntities` directive
@@ -8,6 +10,24 @@ import { accessibleLists } from '#services/alexa/list_resolution'
  * many lists; this exists so that ever happening fails loud (a log line) instead of a directive
  * Alexa quietly drops. */
 const MAX_DYNAMIC_LIST_VALUES = 100
+
+/** Puts the token's Alexa default list first (falling back to id order otherwise) so that if a
+ * token has more than `MAX_DYNAMIC_LIST_VALUES` accessible lists, truncation drops the least-used
+ * ones rather than an arbitrary, DB-order-dependent set that could just as easily cut the one
+ * list the user actually asks for by name most often. */
+async function prioritized(token: AccessToken, lists: List[]): Promise<List[]> {
+  if (lists.length <= MAX_DYNAMIC_LIST_VALUES) return lists
+
+  const preference = await AlexaPreference.findBy('userId', Number(token.tokenableId))
+  const sorted = [...lists].sort((a, b) => a.id - b.id)
+  if (!preference) return sorted
+
+  const defaultIndex = sorted.findIndex((list) => list.id === preference.defaultListId)
+  if (defaultIndex === -1) return sorted
+
+  const [defaultList] = sorted.splice(defaultIndex, 1)
+  return [defaultList!, ...sorted]
+}
 
 /**
  * Registers the token's actual list names as `ListNameType` slot values for the rest of the
@@ -36,13 +56,15 @@ export async function buildDynamicListEntitiesDirective(
     )
   }
 
+  const values = await prioritized(token, lists)
+
   return {
     type: 'Dialog.UpdateDynamicEntities',
     updateBehavior: 'REPLACE',
     types: [
       {
         name: 'ListNameType',
-        values: lists.slice(0, MAX_DYNAMIC_LIST_VALUES).map((list) => ({
+        values: values.slice(0, MAX_DYNAMIC_LIST_VALUES).map((list) => ({
           id: String(list.id),
           name: { value: list.name },
         })),
