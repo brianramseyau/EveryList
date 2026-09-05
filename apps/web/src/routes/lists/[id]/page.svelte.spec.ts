@@ -9,6 +9,11 @@ import type { ConflictListener, FlushOutcomeListener } from '$lib/offline/flush'
 import { markSelfMutation, resetSelfMutationsForTesting } from '$lib/offline/self-mutations';
 import { resetUndoForTesting } from '$lib/undo';
 import { consumeListOrigin, rememberListScroll } from '$lib/nav-direction';
+import { REVEAL_PX } from '$lib/actions/swipe-reveal';
+
+// A full swipe now requires reaching REVEAL_PX (see swipe-reveal.ts's COMMIT_RATIO), not just
+// halfway into it — go a little past it so these gestures reliably commit.
+const SWIPE_COMMIT_PX = REVEAL_PX + 5;
 
 // SortableJS drives real mouse/touch gestures against real layout, neither of
 // which a component test can reliably reproduce — its own behavior (does it
@@ -2717,10 +2722,20 @@ describe('List detail +page.svelte', () => {
 			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
 		);
 		row.dispatchEvent(
-			new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 60, clientY: 0 })
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: SWIPE_COMMIT_PX,
+				clientY: 0
+			})
 		);
 		row.dispatchEvent(
-			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 60, clientY: 0 })
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: SWIPE_COMMIT_PX,
+				clientY: 0
+			})
 		);
 
 		await expect.poll(() => vi.mocked(deleteItem).mock.calls.length).toBe(1);
@@ -2747,10 +2762,20 @@ describe('List detail +page.svelte', () => {
 			new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
 		);
 		row.dispatchEvent(
-			new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: -60, clientY: 0 })
+			new PointerEvent('pointermove', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: -SWIPE_COMMIT_PX,
+				clientY: 0
+			})
 		);
 		row.dispatchEvent(
-			new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: -60, clientY: 0 })
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: -SWIPE_COMMIT_PX,
+				clientY: 0
+			})
 		);
 
 		expect(deleteItem).not.toHaveBeenCalled();
@@ -2779,10 +2804,20 @@ describe('List detail +page.svelte', () => {
 				new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
 			);
 			row.dispatchEvent(
-				new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 60, clientY: 0 })
+				new PointerEvent('pointermove', {
+					bubbles: true,
+					pointerId: 1,
+					clientX: SWIPE_COMMIT_PX,
+					clientY: 0
+				})
 			);
 			row.dispatchEvent(
-				new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 60, clientY: 0 })
+				new PointerEvent('pointerup', {
+					bubbles: true,
+					pointerId: 1,
+					clientX: SWIPE_COMMIT_PX,
+					clientY: 0
+				})
 			);
 		};
 
