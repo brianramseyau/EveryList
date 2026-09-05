@@ -9,27 +9,17 @@ import { addHoursToDeadline } from './deadline';
 // deadline.spec.ts's addHoursToDeadline suite, so the two silently drifting apart (a real
 // correctness bug for the Web Push "Snooze" action specifically, since native goes through the
 // real TS function) fails CI instead of only showing up on-device.
+// push-sw.js carries a `// end addHoursToDeadline` sentinel comment right after the function's
+// closing brace specifically so this extraction can slice on a fixed marker rather than parse
+// source by brace-depth (which a stray `{`/`}` inside a future string/regex/template literal
+// edit could throw off) — see that file's own comment next to the marker.
 function extractSwAddHoursToDeadline(): (deadline: string, hours: number, now?: Date) => string {
 	const source = readFileSync(path.join(__dirname, '../../static/push-sw.js'), 'utf-8');
 	const start = source.indexOf('function addHoursToDeadline');
 	if (start === -1) throw new Error('addHoursToDeadline not found in push-sw.js');
 
-	let depth = 0;
-	let bodyStart = -1;
-	let end = -1;
-	for (let i = start; i < source.length; i += 1) {
-		if (source[i] === '{') {
-			if (depth === 0) bodyStart = i;
-			depth += 1;
-		} else if (source[i] === '}') {
-			depth -= 1;
-			if (depth === 0) {
-				end = i + 1;
-				break;
-			}
-		}
-	}
-	if (bodyStart === -1 || end === -1) throw new Error('could not isolate addHoursToDeadline body');
+	const end = source.indexOf('// end addHoursToDeadline', start);
+	if (end === -1) throw new Error('// end addHoursToDeadline marker not found in push-sw.js');
 
 	// Deliberately evaluating push-sw.js's own source (not arbitrary/untrusted input), to prove
 	// it behaves identically to the TS original above.

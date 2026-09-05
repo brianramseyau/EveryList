@@ -67,7 +67,10 @@ async function patchItem(listId, itemId, body) {
 			body: JSON.stringify(body)
 		});
 		if (!response.ok) throw new Error(`PATCH failed with status ${response.status}`);
-	} catch {
+	} catch (error) {
+		// Logged (matching native.ts's equivalent handlers) so a "Complete/Snooze didn't work"
+		// report has more to go on than just the generic fallback notification below.
+		console.error('Failed to update item from notification action', error);
 		await self.registration.showNotification('EveryList', {
 			body: "Couldn't update the item — open the app and try again.",
 			icon: '/icon-192.png',
@@ -98,6 +101,8 @@ function addHoursToDeadline(deadline, hours, now) {
 		`T${pad(target.getHours())}:${pad(target.getMinutes())}`
 	);
 }
+// end addHoursToDeadline — deadline-sw-parity.spec.ts extracts up to this exact marker; keep it
+// immediately after the function's closing brace if either moves.
 
 self.addEventListener('notificationclick', (event) => {
 	const data = event.notification.data || {};
