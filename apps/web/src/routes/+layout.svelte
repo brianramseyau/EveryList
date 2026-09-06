@@ -96,6 +96,10 @@
 			// between sessions — see registerNativeDeadlineActionTypes's own note.
 			void registerNativeDeadlineActionTypes();
 			notificationActionHandle = listenForNativeDeadlineActions((listId, itemId) => {
+				// A stale notification tapped after logout/session expiry would otherwise navigate
+				// straight into the item editor, which redirects to /login without preserving the
+				// destination — same reasoning as the appUrlOpen deep-link guard below.
+				if (!loggedIn) return;
 				void goto(
 					resolve('/lists/[id]/items/[itemId]', { id: String(listId), itemId: String(itemId) })
 				);
