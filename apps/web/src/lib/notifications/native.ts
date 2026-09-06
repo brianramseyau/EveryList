@@ -21,6 +21,9 @@ const SOURCE = 'deadline';
 const ACTION_TYPE_ID = 'deadline';
 const COMPLETE_ACTION_ID = 'complete';
 const SNOOZE_ACTION_ID = 'snooze';
+/** Capacitor's built-in identifier for a plain tap on the notification body (as opposed to one
+ * of the actions declared below) — not something this module defines itself. */
+const TAP_ACTION_ID = 'tap';
 
 function isOwnNotification(notification: { extra?: unknown }): boolean {
 	const extra = notification.extra as { source?: string } | undefined;
@@ -89,15 +92,20 @@ export async function cancelAllNativeDeadlineNotifications(): Promise<void> {
 /** Declares the "Complete"/"Snooze" buttons a deadline notification's expanded actions area
  * offers (iOS's `UNNotificationCategory`, Android's `NotificationCompat.Action`) — must run on
  * every app launch, not just once, since iOS discards the registration between sessions. Safe to
- * call before permission is granted or before any notification is scheduled. */
+ * call before permission is granted or before any notification is scheduled.
+ *
+ * `foreground: false` on both actions keeps them handled entirely in the background (iOS's
+ * `UNNotificationAction` launches the app to the foreground unless told otherwise) — the plain
+ * tap-to-open action has no such flag and always opens the app, which is the behavior wanted for
+ * it (see `listenForNativeDeadlineActions`'s `onTap`). */
 export async function registerNativeDeadlineActionTypes(): Promise<void> {
 	await LocalNotifications.registerActionTypes({
 		types: [
 			{
 				id: ACTION_TYPE_ID,
 				actions: [
-					{ id: COMPLETE_ACTION_ID, title: 'Complete' },
-					{ id: SNOOZE_ACTION_ID, title: 'Snooze 1 hr' }
+					{ id: COMPLETE_ACTION_ID, title: 'Complete', foreground: false },
+					{ id: SNOOZE_ACTION_ID, title: 'Snooze 1 hr', foreground: false }
 				]
 			}
 		]
@@ -135,13 +143,14 @@ async function snoozeFromNotification(listId: number, itemId: number): Promise<v
 	});
 }
 
-/** Wires the "Complete"/"Snooze" notification actions to their effect — call once at app launch
- * (native platforms only). Ignores taps on notifications from some other, unrelated
- * `@capacitor/local-notifications` consumer (see `isOwnNotification`) and the plain tap-to-open
- * action, which the OS already handles by launching the app. */
-export function listenForNativeDeadlineActions(): ReturnType<
-	typeof LocalNotifications.addListener
-> {
+/** Wires the "Complete"/"Snooze" notification actions to their effect, and a plain tap on the
+ * notification body to `onTap`, so the caller can navigate to the specific list/item the
+ * notification was about (the OS opens the app either way — this only decides where inside it
+ * to go). Call once at app launch (native platforms only). Ignores notifications from some
+ * other, unrelated `@capacitor/local-notifications` consumer (see `isOwnNotification`). */
+export function listenForNativeDeadlineActions(
+	onTap: (listId: number, itemId: number) => void
+): ReturnType<typeof LocalNotifications.addListener> {
 	return LocalNotifications.addListener('localNotificationActionPerformed', (performed) => {
 		if (!isOwnNotification(performed.notification)) return;
 		const extra = performed.notification.extra as { listId: number; itemId: number };
@@ -158,6 +167,8 @@ export function listenForNativeDeadlineActions(): ReturnType<
 			void snoozeFromNotification(extra.listId, extra.itemId).catch((error: unknown) => {
 				console.error('Failed to snooze item from notification action', error);
 			});
+		} else if (performed.actionId === TAP_ACTION_ID) {
+			onTap(extra.listId, extra.itemId);
 		}
 	});
 }

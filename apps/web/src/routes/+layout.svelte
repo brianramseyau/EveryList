@@ -95,7 +95,11 @@
 			// Must run every launch (not just once) since iOS discards the action-type registration
 			// between sessions — see registerNativeDeadlineActionTypes's own note.
 			void registerNativeDeadlineActionTypes();
-			notificationActionHandle = listenForNativeDeadlineActions();
+			notificationActionHandle = listenForNativeDeadlineActions((listId, itemId) => {
+				void goto(
+					resolve('/lists/[id]/items/[itemId]', { id: String(listId), itemId: String(itemId) })
+				);
+			});
 			resumeHandle = App.addListener('resume', () => syncDeadlineNotifications());
 			deepLinkHandle = App.addListener('appUrlOpen', ({ url }) => {
 				if (!loggedIn) return;
