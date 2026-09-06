@@ -120,6 +120,24 @@ describe('syncNativeDeadlineNotifications', () => {
 		});
 	});
 
+	it('re-registers action types before scheduling, so a launch-time race with the once-per-launch registerActionTypes call in +layout.svelte can never drop the whole batch', async () => {
+		const callOrder: string[] = [];
+		vi.mocked(LocalNotifications.getPending).mockResolvedValue({ notifications: [] });
+		vi.mocked(LocalNotifications.registerActionTypes).mockImplementation(async () => {
+			callOrder.push('registerActionTypes');
+		});
+		vi.mocked(LocalNotifications.schedule).mockImplementation(async () => {
+			callOrder.push('schedule');
+			return { notifications: [] };
+		});
+
+		const list = makeList();
+		const item = makeItem({ id: 1 });
+		await syncNativeDeadlineNotifications([list], new Map([[1, [item]]]), now);
+
+		expect(callOrder).toEqual(['registerActionTypes', 'schedule']);
+	});
+
 	it('never cancels a pending notification scheduled by some other feature', async () => {
 		vi.mocked(LocalNotifications.getPending).mockResolvedValue({
 			notifications: [{ id: 99, title: '', body: '', extra: { source: 'something-else' } } as never]

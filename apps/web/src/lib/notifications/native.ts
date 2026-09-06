@@ -67,6 +67,15 @@ export async function syncNativeDeadlineNotifications(
 	}
 
 	if (due.length === 0) return;
+	// Android's plugin looks up this batch's `actionTypeId` synchronously while building each
+	// notification and, with no try/catch around its scheduling loop, an unregistered type
+	// throws and aborts the *entire* batch — not just one notification. registerActionTypes is
+	// otherwise called once at app launch (+layout.svelte), but that call races this one on cold
+	// start: the schedule call dispatched from the launch-time resync can reach the native side
+	// before the registration call does, silently dropping every deadline notification until the
+	// next resync. Awaiting it here — cheap and idempotent — makes every schedule call safe
+	// regardless of what the caller already did.
+	await registerNativeDeadlineActionTypes();
 	await LocalNotifications.schedule({
 		notifications: due.map((notification) => ({
 			id: notification.itemId,
