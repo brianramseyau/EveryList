@@ -327,7 +327,11 @@ jobs:
     # failed publish-play run leaves this job skipped rather than pruning test builds a real
     # release didn't actually finish replacing.
     needs: [meta, release, publish-play]
-    if: needs.meta.outputs.is_rc == 'false' && success()
+    # success() checks the whole transitive job graph, not just this job's direct needs — it
+    # sees build-android-debug's expected skip (real releases don't build the rc-only debug APK)
+    # several hops up via `release` and reports false, so this job never ran despite release and
+    # publish-play both succeeding. Check their results directly instead.
+    if: needs.meta.outputs.is_rc == 'false' && needs.release.result == 'success' && needs.publish-play.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
