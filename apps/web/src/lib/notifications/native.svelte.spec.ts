@@ -193,8 +193,8 @@ describe('registerNativeDeadlineActionTypes', () => {
 				{
 					id: 'deadline',
 					actions: [
-						{ id: 'complete', title: 'Complete' },
-						{ id: 'snooze', title: 'Snooze 1 hr' }
+						{ id: 'complete', title: 'Complete', foreground: false },
+						{ id: 'snooze', title: 'Snooze 1 hr', foreground: false }
 					]
 				}
 			]
@@ -224,8 +224,12 @@ describe('listenForNativeDeadlineActions', () => {
 		};
 	}
 
-	async function fireAction(actionId: string, notification = performedNotification()) {
-		listenForNativeDeadlineActions();
+	async function fireAction(
+		actionId: string,
+		notification = performedNotification(),
+		onTap: (listId: number, itemId: number) => void = () => {}
+	) {
+		listenForNativeDeadlineActions(onTap);
 		const handler = vi.mocked(LocalNotifications.addListener).mock.calls[0][1] as (
 			action: unknown
 		) => void;
@@ -309,9 +313,36 @@ describe('listenForNativeDeadlineActions', () => {
 		expect(updateItem).not.toHaveBeenCalled();
 	});
 
-	it('ignores the plain tap-to-open action', async () => {
+	it('ignores the plain tap-to-open action for item mutations', async () => {
 		await fireAction('tap');
 
+		expect(updateItem).not.toHaveBeenCalled();
+		expect(fetchItems).not.toHaveBeenCalled();
+	});
+
+	it("routes the plain tap-to-open action to the notification's list/item via onTap", async () => {
+		const onTap = vi.fn();
+
+		await fireAction('tap', performedNotification(), onTap);
+
+		expect(onTap).toHaveBeenCalledWith(1, 1);
+	});
+
+	it('does not call onTap for a "complete"/"snooze" action', async () => {
+		const onTap = vi.fn();
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		await fireAction('complete', performedNotification(), onTap);
+
+		expect(onTap).not.toHaveBeenCalled();
+	});
+
+	it('ignores an action id matching none of "complete"/"snooze"/"tap"', async () => {
+		const onTap = vi.fn();
+
+		await fireAction('something-unrecognized', performedNotification(), onTap);
+
+		expect(onTap).not.toHaveBeenCalled();
 		expect(updateItem).not.toHaveBeenCalled();
 		expect(fetchItems).not.toHaveBeenCalled();
 	});

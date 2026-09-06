@@ -118,7 +118,11 @@ self.addEventListener('notificationclick', (event) => {
 		return;
 	}
 
-	const url = data.listId ? `/lists/${data.listId}` : '/lists';
+	const url = data.listId
+		? data.itemId
+			? `/lists/${data.listId}/items/${data.itemId}`
+			: `/lists/${data.listId}`
+		: '/lists';
 	event.waitUntil(
 		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
 			for (const client of clientList) {
