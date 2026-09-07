@@ -113,7 +113,13 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
             } else if ("snooze".equals(actionId)) {
                 snooze(context, serverUrl, token, listId, itemId, notification);
             }
-        } catch (IOException | org.json.JSONException | java.text.ParseException e) {
+        } catch (IOException | org.json.JSONException | RuntimeException e) {
+            // RuntimeException here is deliberately broad: this runs on a background thread with
+            // no default UncaughtExceptionHandler installed, so anything that escapes uncaught
+            // (a malformed `deadline` from the API throwing NumberFormatException, or an
+            // unaudited corner of LocalNotificationManager's internals reacting badly to being
+            // driven outside its usual Activity-bound Plugin lifecycle) would otherwise crash the
+            // whole app process rather than just degrading to the fallback notification below.
             showFallbackNotification(context);
         }
     }
@@ -126,7 +132,7 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
      *  the JS version. */
     private void snooze(
         Context context, String serverUrl, String token, long listId, long itemId, JSObject originalNotification
-    ) throws IOException, org.json.JSONException, java.text.ParseException {
+    ) throws IOException, org.json.JSONException {
         String itemsBody = HttpJson.request("GET", serverUrl + "/api/v1/lists/" + listId + "/items", token, null);
         String liveDeadline = findItemDeadline(new JSONArray(itemsBody), itemId);
         if (liveDeadline == null) return;
@@ -139,7 +145,19 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
             "PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token, body.toString()
         );
 
-        rescheduleNotification(context, originalNotification, nextDeadline);
+        // Deliberately isolated from the PATCH above: the deadline update already succeeded by
+        // this point, so a failure only here shouldn't surface as "couldn't update the item" (the
+        // item *did* update — only the local follow-up reminder failed to reschedule). Matches
+        // native.ts's own snoozeFromNotification, where an equivalent LocalNotifications.schedule
+        // failure after a successful updateItem is likewise just logged, not reported to the user
+        // as an update failure.
+        try {
+            rescheduleNotification(context, originalNotification, nextDeadline);
+        } catch (org.json.JSONException | java.text.ParseException | RuntimeException e) {
+            android.util.Log.e(
+                "EveryList", "Snoozed item " + itemId + " but failed to reschedule its follow-up notification", e
+            );
+        }
     }
 
     private String findItemDeadline(JSONArray items, long itemId) throws org.json.JSONException {
