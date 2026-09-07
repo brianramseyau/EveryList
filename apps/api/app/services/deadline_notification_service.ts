@@ -1,26 +1,19 @@
 import { DateTime } from 'luxon'
 import logger from '@adonisjs/core/services/logger'
+import { notificationBody } from '@everylist/shared'
 import Item from '#models/item'
 import ListMember from '#models/list_member'
 import PushSubscription from '#models/push_subscription'
 import DeadlineNotificationSend from '#models/deadline_notification_send'
 import { sendPush } from '#services/push_service'
 
+export { notificationBody }
+
 /** How late a check is still allowed to fire a datetime deadline's
  * notification — absorbs a scheduler restart/downtime blip (matches
  * `backup_service`'s tolerance philosophy) without retroactively notifying
  * for deadlines that were missed long ago. */
 const GRACE_MINUTES = 15
-
-/** Mirrors apps/web's `notificationBody` — kept independent rather than shared across the
- * API/web package boundary, but the same conservative cut under any platform's own
- * notification-body limit. */
-const MAX_BODY_LENGTH = 150
-
-function notificationBody(notes: string | null): string {
-  if (!notes) return ''
-  return notes.length > MAX_BODY_LENGTH ? `${notes.slice(0, MAX_BODY_LENGTH - 1)}…` : notes
-}
 
 function pad(value: number): string {
   return value < 10 ? `0${value}` : String(value)

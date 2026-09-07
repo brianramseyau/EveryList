@@ -2,6 +2,7 @@ import { test } from '@japa/runner'
 import { DateTime } from 'luxon'
 import {
   isNotificationDue,
+  notificationBody,
   nowLocalMinuteIso,
   todayLocalIso,
 } from '#services/deadline_notification_service'
@@ -58,5 +59,24 @@ test.group('isNotificationDue', () => {
     const now = DateTime.fromISO('2026-09-05T12:00:00')
     assert.isFalse(isNotificationDue('2026-09-06', now))
     assert.isFalse(isNotificationDue('2026-09-04', now))
+  })
+})
+
+test.group('notificationBody', () => {
+  test('returns an empty string when there are no notes', ({ assert }) => {
+    assert.equal(notificationBody(null), '')
+  })
+
+  test('returns notes unchanged when within the length limit', ({ assert }) => {
+    assert.equal(notificationBody('Ask at the front desk'), 'Ask at the front desk')
+  })
+
+  test('truncates long notes with an ellipsis', ({ assert }) => {
+    const notes = 'a'.repeat(200)
+    const result = notificationBody(notes)
+
+    assert.equal(result.length, 150)
+    assert.isTrue(result.endsWith('…'))
+    assert.isTrue(result.startsWith('a'.repeat(149)))
   })
 })

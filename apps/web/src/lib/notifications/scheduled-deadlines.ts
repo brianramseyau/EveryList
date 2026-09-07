@@ -1,5 +1,7 @@
-import type { ItemDto, ListDto } from '@everylist/shared';
+import { notificationBody, type ItemDto, type ListDto } from '@everylist/shared';
 import { hasTime, splitDeadline } from '$lib/deadline';
+
+export { notificationBody };
 
 export interface ScheduledDeadlineNotification {
 	/** Stable per-item id, reused as the platform notification id so a
@@ -18,19 +20,6 @@ export interface ScheduledDeadlineNotification {
 	 * WebView/network round trip, the same way push-sw.js's `notificationclick` handler uses its
 	 * own `data.deadline`. */
 	deadline: string;
-}
-
-/** Longest a deadline notification's body (the item's notes) is shown before being
- * truncated with an ellipsis — a conservative cut well under any platform's own
- * notification-body limit, so the truncation is ours and consistent rather than an
- * OS-specific mid-word cutoff. */
-const MAX_BODY_LENGTH = 150;
-
-/** Truncates `notes` for use as a deadline notification's body, or '' when there are
- * none — an empty string collapses to no second line rather than a blank one. */
-export function notificationBody(notes: string | null): string {
-	if (!notes) return '';
-	return notes.length > MAX_BODY_LENGTH ? `${notes.slice(0, MAX_BODY_LENGTH - 1)}…` : notes;
 }
 
 /** Local calendar-date deadline → 9am that day, since a date-only deadline
