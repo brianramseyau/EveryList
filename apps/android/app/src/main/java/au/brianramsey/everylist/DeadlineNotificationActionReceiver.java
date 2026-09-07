@@ -13,12 +13,19 @@ import androidx.core.app.NotificationManagerCompat;
 import com.capacitorjs.plugins.localnotifications.LocalNotification;
 import com.capacitorjs.plugins.localnotifications.LocalNotificationManager;
 import com.capacitorjs.plugins.localnotifications.NotificationStorage;
+import com.getcapacitor.CapConfig;
 import com.getcapacitor.JSObject;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -29,10 +36,15 @@ import java.util.concurrent.Executors;
  *  instead of launching {@link MainActivity}, so the app is never foregrounded for these two
  *  actions. Mirrors what `push-sw.js`'s `notificationclick` handler already does for the PWA
  *  build (auth via a mirrored token, a direct PATCH, no window opened) — see {@link AuthPrefs} and
- *  {@link DeadlineMath}. */
+ *  {@link DeadlineMath}. Snooze specifically mirrors native.ts's own `snoozeFromNotification`
+ *  (re-fetching the item's live deadline rather than the notification's — possibly stale —
+ *  captured one, and rescheduling a follow-up local notification), not push-sw.js's simpler
+ *  stale-deadline version, since native.ts is the more-correct of the two existing precedents and
+ *  the local scheduling APIs needed to reschedule are available here regardless. */
 public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
 
     private static final String FALLBACK_CHANNEL_ID = "deadline_action_fallback";
+    private static final String JS_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
 
     @Override
@@ -47,6 +59,8 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
         // Dismiss the notification and forget its storage record up front, same as
         // NotificationDismissReceiver does for a swipe-away — the action is handled here either
         // way, so there's nothing left for the plugin's own Activity-launch path to do with it.
+        // A malformed payload past this point still surfaces to the user via
+        // showFallbackNotification below rather than silently vanishing along with it.
         NotificationManagerCompat.from(context).cancel(notificationId);
         NotificationStorage storage = new NotificationStorage(context);
         LocalNotification existing = storage.getSavedNotification(String.valueOf(notificationId));
@@ -66,17 +80,19 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
     }
 
     private void handleAction(Context context, String actionId, String notificationJson) {
+        JSObject notification;
         JSONObject extra;
         long listId;
         long itemId;
         try {
-            JSObject notification = new JSObject(notificationJson);
+            notification = new JSObject(notificationJson);
             extra = notification.getJSONObject("extra");
             listId = extra.getLong("listId");
             itemId = extra.getLong("itemId");
         } catch (Exception e) {
-            // Malformed/missing payload — nothing sensible to retry, and no listId/itemId to
-            // report a failure notification against.
+            // Malformed/missing payload — nothing sensible to retry, but the notification is
+            // already gone by this point (see onReceive), so say so rather than going silent.
+            showFallbackNotification(context);
             return;
         }
 
@@ -95,18 +111,69 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
                     "PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token, body.toString()
                 );
             } else if ("snooze".equals(actionId)) {
-                String deadline = extra.optString("deadline", null);
-                if (deadline == null) return;
-                String nextDeadline = DeadlineMath.addHoursToDeadline(deadline, 1, new Date());
-                JSONObject body = new JSONObject();
-                body.put("deadline", nextDeadline);
-                HttpJson.request(
-                    "PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token, body.toString()
-                );
+                snooze(context, serverUrl, token, listId, itemId, notification);
             }
-        } catch (IOException | org.json.JSONException e) {
+        } catch (IOException | org.json.JSONException | java.text.ParseException e) {
             showFallbackNotification(context);
         }
+    }
+
+    /** Mirrors native.ts's `snoozeFromNotification`: re-fetches the item's *live* deadline
+     *  (rather than trusting the notification's own, possibly-stale, captured one — the item may
+     *  have been edited since this notification was scheduled) before computing the new deadline,
+     *  then reschedules a follow-up local notification the same way `LocalNotifications.schedule`
+     *  does from JS. Does nothing if the item has since lost its deadline or been deleted, same as
+     *  the JS version. */
+    private void snooze(
+        Context context, String serverUrl, String token, long listId, long itemId, JSObject originalNotification
+    ) throws IOException, org.json.JSONException, java.text.ParseException {
+        String itemsBody = HttpJson.request("GET", serverUrl + "/api/v1/lists/" + listId + "/items", token, null);
+        String liveDeadline = findItemDeadline(new JSONArray(itemsBody), itemId);
+        if (liveDeadline == null) return;
+
+        String nextDeadline = DeadlineMath.addHoursToDeadline(liveDeadline, 1, new Date());
+
+        JSONObject body = new JSONObject();
+        body.put("deadline", nextDeadline);
+        HttpJson.request(
+            "PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token, body.toString()
+        );
+
+        rescheduleNotification(context, originalNotification, nextDeadline);
+    }
+
+    private String findItemDeadline(JSONArray items, long itemId) throws org.json.JSONException {
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject item = items.getJSONObject(i);
+            if (item.getLong("id") == itemId && !item.isNull("deadline")) {
+                return item.getString("deadline");
+            }
+        }
+        return null;
+    }
+
+    /** Rebuilds the same notification the plugin would from a fresh
+     *  `LocalNotifications.schedule` JS call — same id/title/body/actionTypeId, `extra.deadline`
+     *  updated to the new value, and a new trigger time — then hands it to a throwaway
+     *  {@link LocalNotificationManager} the same way the plugin's own schedule() call does. */
+    private void rescheduleNotification(Context context, JSObject originalNotification, String nextDeadline)
+        throws org.json.JSONException, java.text.ParseException {
+        JSONObject extra = originalNotification.getJSONObject("extra");
+        extra.put("deadline", nextDeadline);
+        originalNotification.put("extra", extra);
+
+        Calendar trigger = DeadlineMath.triggerDate(nextDeadline);
+        SimpleDateFormat sdf = new SimpleDateFormat(JS_DATE_FORMAT, Locale.US);
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+        JSONObject schedule = new JSONObject();
+        schedule.put("at", sdf.format(trigger.getTime()));
+        originalNotification.put("schedule", schedule);
+
+        LocalNotification updated = LocalNotification.Companion.buildNotificationFromJSObject(originalNotification);
+        LocalNotificationManager manager = new LocalNotificationManager(
+            new NotificationStorage(context), null, context, CapConfig.loadDefault(context)
+        );
+        manager.schedule(null, Collections.singletonList(updated));
     }
 
     /** Mirrors push-sw.js's `patchItem` catch branch — the triggering notification is already

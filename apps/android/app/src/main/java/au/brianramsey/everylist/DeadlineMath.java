@@ -4,16 +4,21 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 
-/** Mirrors apps/web/src/lib/deadline.ts's `addHoursToDeadline` — already duplicated once in
- *  apps/web/static/push-sw.js (pinned to the original by deadline-sw-parity.spec.ts) for the same
- *  reason this copy exists: {@link DeadlineNotificationActionReceiver} runs outside the WebView/JS
- *  bundle entirely, so it can't import the original. Keep all three in sync — naive local-time
- *  math, no timezone handling, matching the other two. */
+/** Mirrors two functions shared by apps/web/src/lib/deadline.ts (`addHoursToDeadline`) and
+ *  apps/web/src/lib/notifications/scheduled-deadlines.ts (`triggerDate`) — `addHoursToDeadline`
+ *  is already duplicated once in apps/web/static/push-sw.js (pinned to the original by
+ *  deadline-sw-parity.spec.ts) for the same reason this copy exists:
+ *  {@link DeadlineNotificationActionReceiver} runs outside the WebView/JS bundle entirely, so it
+ *  can't import either original. Keep all copies in sync — naive local-time math, no timezone
+ *  handling, matching the others. See DeadlineMathTest for parity test vectors pinned to the same
+ *  ones deadline.spec.ts/scheduled-deadlines.spec.ts use. */
 final class DeadlineMath {
 
     private DeadlineMath() {}
 
-    static String addHoursToDeadline(String deadline, int hours, Date now) {
+    /** date-only ("2026-09-06") → 9am that day; date+time ("2026-09-06T14:30") → that exact
+     *  local time. Mirrors scheduled-deadlines.ts's `triggerDate`. */
+    static Calendar triggerDate(String deadline) {
         boolean hasTime = deadline.length() > 10;
         String datePart = deadline.substring(0, 10);
         String[] dateFields = datePart.split("-");
@@ -33,6 +38,12 @@ final class DeadlineMath {
         Calendar at = Calendar.getInstance();
         at.clear();
         at.set(year, month - 1, day, hour, minute);
+        return at;
+    }
+
+    /** Mirrors deadline.ts's `addHoursToDeadline`. */
+    static String addHoursToDeadline(String deadline, int hours, Date now) {
+        Calendar at = triggerDate(deadline);
         at.add(Calendar.HOUR_OF_DAY, hours);
 
         Calendar earliest = Calendar.getInstance();
