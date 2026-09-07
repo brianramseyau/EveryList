@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -93,6 +95,16 @@
             android:excludeFromRecents="true"
             android:taskAffinity=""
             android:theme="@style/AppTheme.WidgetDialog" />
+
+        <!-- Handles the deadline notification's "Complete"/"Snooze 1 hr" actions entirely in the
+             background (the patched @capacitor/local-notifications — see patches/ — routes any
+             action registered with `foreground: false` here by explicit component name instead of
+             launching MainActivity). Not exported: only ever reached via that explicit
+             PendingIntent, never resolved by an external intent-filter match, same reasoning as
+             QuickAddActivity above. -->
+        <receiver
+            android:name=".DeadlineNotificationActionReceiver"
+            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

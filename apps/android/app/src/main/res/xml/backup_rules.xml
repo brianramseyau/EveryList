@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-Android-12 (API <31) equivalent of data_extraction_rules.xml — minSdkVersion is 24, so
+     both are needed. See that file's comment for why everylist_auth.xml is excluded. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="everylist_auth.xml" />
+</full-backup-content>

@@ -1,3 +1,6 @@
+import { mirrorAuthToNative } from '$lib/auth-mirror';
+import { getServerUrl } from './server-url';
+
 const STORAGE_KEY = 'everylist:token';
 
 /** Guards every localStorage access — this module runs during prerendering
@@ -48,12 +51,14 @@ export function setToken(token: string): void {
 	if (!hasStorage()) return;
 	window.localStorage.setItem(STORAGE_KEY, token);
 	mirrorTokenToServiceWorker(token);
+	mirrorAuthToNative(token, getServerUrl());
 }
 
 export function clearToken(): void {
 	if (!hasStorage()) return;
 	window.localStorage.removeItem(STORAGE_KEY);
 	mirrorTokenToServiceWorker(null);
+	mirrorAuthToNative(null, getServerUrl());
 }
 
 /** Re-mirrors the current token into IndexedDB — call once at app startup so a device that
@@ -64,4 +69,14 @@ export function clearToken(): void {
 export function syncTokenToServiceWorker(): void {
 	if (!hasStorage()) return;
 	mirrorTokenToServiceWorker(getToken());
+}
+
+/** Re-mirrors the current token (and server URL) into native storage — call once at app startup,
+ * same belt-and-suspenders reasoning as `syncTokenToServiceWorker` above, so a device that logged
+ * in before the Android "Complete"/"Snooze" background actions shipped doesn't have to log out
+ * and back in for them to start working. A no-op past that point (every subsequent change already
+ * goes through `setToken`/`clearToken`) and everywhere but the Android native build. */
+export function syncAuthToNative(): void {
+	if (!hasStorage()) return;
+	mirrorAuthToNative(getToken(), getServerUrl());
 }

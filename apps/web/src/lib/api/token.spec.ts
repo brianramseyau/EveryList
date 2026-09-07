@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { clearToken, getToken, setToken, syncTokenToServiceWorker } from './token';
+import {
+	clearToken,
+	getToken,
+	setToken,
+	syncAuthToNative,
+	syncTokenToServiceWorker
+} from './token';
 
 // This runs in the "server" (node) project, which has no `window` — it
 // exercises the SSR/prerendering guard. See token.svelte.spec.ts for the
@@ -16,5 +22,9 @@ describe('token (no window)', () => {
 
 	it('syncTokenToServiceWorker is a no-op without throwing', () => {
 		expect(() => syncTokenToServiceWorker()).not.toThrow();
+	});
+
+	it('syncAuthToNative is a no-op without throwing', () => {
+		expect(() => syncAuthToNative()).not.toThrow();
 	});
 });

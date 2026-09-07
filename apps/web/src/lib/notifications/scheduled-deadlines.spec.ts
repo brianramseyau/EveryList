@@ -51,7 +51,8 @@ describe('computeScheduledDeadlines', () => {
 				listId: 1,
 				title: 'Required by',
 				body: 'Return library book',
-				at: new Date(2026, 8, 5, 14, 30)
+				at: new Date(2026, 8, 5, 14, 30),
+				deadline: '2026-09-05T14:30'
 			}
 		]);
 	});
@@ -67,7 +68,8 @@ describe('computeScheduledDeadlines', () => {
 				listId: 1,
 				title: 'Required by',
 				body: 'Return library book',
-				at: new Date(2026, 8, 6, 9, 0)
+				at: new Date(2026, 8, 6, 9, 0),
+				deadline: '2026-09-06'
 			}
 		]);
 	});

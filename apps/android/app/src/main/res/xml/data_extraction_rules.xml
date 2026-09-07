@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ (API 31+) backup/transfer rules. The app otherwise relies on the OS default
+     (back up everything) via android:allowBackup="true" in the manifest — this carves out just
+     the one file that shouldn't leave the device unencrypted-at-rest in a cloud/device-transfer
+     backup: AuthPrefs' mirrored session token (see DeadlineNotificationActionReceiver's doc
+     comment), a full-access credential in plaintext SharedPreferences. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="everylist_auth.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="everylist_auth.xml" />
+    </device-transfer>
+</data-extraction-rules>

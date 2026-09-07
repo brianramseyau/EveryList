@@ -5,8 +5,13 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@poppinss/utils': ^7.0.1
   '@adonisjs/ace': 14.1.1
+  '@poppinss/utils': ^7.0.1
+
+patchedDependencies:
+  '@capacitor/local-notifications':
+    hash: 48b71108ce952b7307ffc885c3fb79f12c1bfb3d87d6920bbe7f673464c34d75
+    path: patches/@capacitor__local-notifications.patch
 
 importers:
 
@@ -219,7 +224,7 @@ importers:
         version: 8.5.0(@capacitor/core@8.5.0)
       '@capacitor/local-notifications':
         specifier: ^8.3.1
-        version: 8.3.1(@capacitor/core@8.5.0)
+        version: 8.3.1(patch_hash=48b71108ce952b7307ffc885c3fb79f12c1bfb3d87d6920bbe7f673464c34d75)(@capacitor/core@8.5.0)
       '@capacitor/motion':
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.5.0)
@@ -9729,7 +9734,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.5.0
 
-  '@capacitor/local-notifications@8.3.1(@capacitor/core@8.5.0)':
+  '@capacitor/local-notifications@8.3.1(patch_hash=48b71108ce952b7307ffc885c3fb79f12c1bfb3d87d6920bbe7f673464c34d75)(@capacitor/core@8.5.0)':
     dependencies:
       '@capacitor/core': 8.5.0
 

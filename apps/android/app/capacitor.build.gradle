@@ -12,6 +12,7 @@ dependencies {
     implementation project(':aparajita-capacitor-biometric-auth')
     implementation project(':capacitor-app')
     implementation project(':capacitor-browser')
+    implementation project(':capacitor-local-notifications')
     implementation project(':capacitor-screen-orientation')
     implementation project(':capawesome-capacitor-badge')
 

@@ -164,7 +164,7 @@ describe('syncNativeDeadlineNotifications', () => {
 					body: 'Return library book',
 					schedule: { at: new Date(2026, 8, 6, 9, 0) },
 					actionTypeId: 'deadline',
-					extra: { listId: 1, itemId: 1, source: 'deadline' }
+					extra: { listId: 1, itemId: 1, source: 'deadline', deadline: '2026-09-06T09:00' }
 				}
 			]
 		});
@@ -349,7 +349,7 @@ describe('listenForNativeDeadlineActions', () => {
 					body: 'Return library book',
 					schedule: { at: new Date(2026, 8, 6, 10, 0) },
 					actionTypeId: 'deadline',
-					extra: { listId: 1, itemId: 1, source: 'deadline' }
+					extra: { listId: 1, itemId: 1, source: 'deadline', deadline: '2026-09-06T10:00' }
 				}
 			]
 		});

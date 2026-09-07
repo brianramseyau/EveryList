@@ -28,6 +28,11 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
+# pnpm-workspace.yaml's patchedDependencies (@capacitor/local-notifications, needed only for the
+# Android build, but pnpm still resolves/verifies every workspace patch file during install
+# regardless of which app is being built here) points at this file — pnpm install fails outright
+# without it.
+COPY patches patches
 RUN pnpm install --frozen-lockfile
 
 # ---------------------------------------------------------------------------

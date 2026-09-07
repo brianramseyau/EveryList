@@ -12,6 +12,12 @@ export interface ScheduledDeadlineNotification {
 	 * already-due/overdue items are never (re)scheduled locally, matching
 	 * the server's no-retroactive-storm rule for Web Push. */
 	at: Date;
+	/** The item's raw deadline string (as stored, not `at`'s computed trigger instant) — carried
+	 * through into the native notification's `extra` payload so the Android background action
+	 * receiver (native.ts's `syncNativeDeadlineNotifications`) can compute a snooze without a
+	 * WebView/network round trip, the same way push-sw.js's `notificationclick` handler uses its
+	 * own `data.deadline`. */
+	deadline: string;
 }
 
 /** Local calendar-date deadline → 9am that day, since a date-only deadline
@@ -57,7 +63,8 @@ export function computeScheduledDeadlines(
 				listId: list.id,
 				title: 'Required by',
 				body: item.name,
-				at
+				at,
+				deadline: item.deadline
 			});
 		}
 	}

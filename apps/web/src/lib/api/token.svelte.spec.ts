@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { clearToken, getToken, setToken, syncTokenToServiceWorker } from './token';
+import {
+	clearToken,
+	getToken,
+	setToken,
+	syncAuthToNative,
+	syncTokenToServiceWorker
+} from './token';
 
 // Runs in the "client" (real Chromium) project so `window.localStorage` is
 // the genuine browser implementation, not a jsdom-less no-op — see
@@ -66,5 +72,17 @@ describe('token (browser)', () => {
 		syncTokenToServiceWorker();
 
 		await expect.poll(() => readMirroredToken()).toBeNull();
+	});
+
+	// mirrorAuthToNative (Android-only) itself no-ops on this run's web platform — these just
+	// confirm syncAuthToNative's own storage-read/call plumbing doesn't throw either way.
+	it('syncAuthToNative re-mirrors an already-stored token on demand without throwing', () => {
+		window.localStorage.setItem('everylist:token', 'pre-existing-token');
+
+		expect(() => syncAuthToNative()).not.toThrow();
+	});
+
+	it('syncAuthToNative is a harmless no-op when logged out', () => {
+		expect(() => syncAuthToNative()).not.toThrow();
 	});
 });
