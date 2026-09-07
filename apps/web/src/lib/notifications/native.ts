@@ -37,9 +37,23 @@ function isOwnNotification(notification: { extra?: unknown }): boolean {
 /* v8 ignore start */
 export async function requestNativeNotificationPermission(): Promise<boolean> {
 	const { display } = await LocalNotifications.checkPermissions();
-	if (display === 'granted') return true;
-	const requested = await LocalNotifications.requestPermissions();
-	return requested.display === 'granted';
+	if (display !== 'granted') {
+		const requested = await LocalNotifications.requestPermissions();
+		if (requested.display !== 'granted') return false;
+	}
+	// Android 12+ (API 31+) additionally gates *exact*-time delivery behind a separate
+	// "Alarms & reminders" system setting, off by default on API 34+ installs. Deadline
+	// notifications default to exact (see syncNativeDeadlineNotifications below), so without
+	// this a schedule() call would only discover the gap implicitly — surfacing as an OS
+	// settings screen popping up mid-schedule, or worse, a silent downgrade to inexact
+	// delivery that Doze/OEM battery management can defer well past a short reminder window.
+	// Asking up front, once, at enable-time makes the tradeoff visible to the user instead.
+	// No-op (resolves "granted") on iOS/web, where exact alarms aren't a distinct setting.
+	const exact = await LocalNotifications.checkExactNotificationSetting();
+	if (exact.exact_alarm !== 'granted') {
+		await LocalNotifications.changeExactNotificationSetting();
+	}
+	return true;
 }
 /* v8 ignore stop */
 
@@ -76,7 +90,7 @@ export async function syncNativeDeadlineNotifications(
 	// next resync. Awaiting it here — cheap and idempotent — makes every schedule call safe
 	// regardless of what the caller already did.
 	await registerNativeDeadlineActionTypes();
-	await LocalNotifications.schedule({
+	const result = await LocalNotifications.schedule({
 		notifications: due.map((notification) => ({
 			id: notification.itemId,
 			title: notification.title,
@@ -86,6 +100,13 @@ export async function syncNativeDeadlineNotifications(
 			extra: { listId: notification.listId, itemId: notification.itemId, source: SOURCE }
 		}))
 	});
+	// Android-only: the plugin silently downgrades an unavailable exact alarm to inexact
+	// delivery rather than failing the call (see requestNativeNotificationPermission's
+	// up-front prompt above) — logged here so a denied/revoked exact-alarm setting is at
+	// least traceable instead of surfacing only as "the reminder didn't fire on time".
+	if (result.warning) {
+		console.warn('Deadline notification scheduled inexactly:', result.warning.message);
+	}
 }
 
 /** Cancels every pending deadline notification (identified by the `source` tag
