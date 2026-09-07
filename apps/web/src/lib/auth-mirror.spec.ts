@@ -10,7 +10,10 @@ const registerPlugin = vi.mocked(Capacitor.registerPlugin);
 const { mirrorAuthToNative } = await import('./auth-mirror');
 
 function mockNativeClient() {
-	const client = { setToken: vi.fn().mockResolvedValue(undefined), clearToken: vi.fn().mockResolvedValue(undefined) };
+	const client = {
+		setToken: vi.fn().mockResolvedValue(undefined),
+		clearToken: vi.fn().mockResolvedValue(undefined)
+	};
 	vi.mocked(registerPlugin).mockReturnValue(client as never);
 	return client;
 }
