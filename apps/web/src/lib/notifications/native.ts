@@ -51,7 +51,15 @@ export async function requestNativeNotificationPermission(): Promise<boolean> {
 	// No-op (resolves "granted") on iOS/web, where exact alarms aren't a distinct setting.
 	const exact = await LocalNotifications.checkExactNotificationSetting();
 	if (exact.exact_alarm !== 'granted') {
-		await LocalNotifications.changeExactNotificationSetting();
+		// Not gating the return value on this: denying it only degrades a deadline notification
+		// to inexact delivery (see syncNativeDeadlineNotifications' warning log below), it doesn't
+		// prevent notifications from working at all — so it shouldn't block enabling them outright.
+		// Still logged here (in addition to that per-schedule warning) so a decline made right at
+		// enable-time — the moment it's most actionable — isn't silent.
+		const changed = await LocalNotifications.changeExactNotificationSetting();
+		if (changed.exact_alarm !== 'granted') {
+			console.warn('Exact-alarm permission was not granted; deadline reminders may fire late.');
+		}
 	}
 	return true;
 }
