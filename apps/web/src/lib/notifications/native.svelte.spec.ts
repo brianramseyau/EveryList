@@ -5,6 +5,8 @@ vi.mock('@capacitor/local-notifications', () => ({
 	LocalNotifications: {
 		checkPermissions: vi.fn(),
 		requestPermissions: vi.fn(),
+		checkExactNotificationSetting: vi.fn(),
+		changeExactNotificationSetting: vi.fn(),
 		getPending: vi.fn(),
 		schedule: vi.fn(),
 		cancel: vi.fn(),
@@ -68,6 +70,12 @@ afterEach(() => {
 });
 
 describe('requestNativeNotificationPermission', () => {
+	beforeEach(() => {
+		vi.mocked(LocalNotifications.checkExactNotificationSetting).mockResolvedValue({
+			exact_alarm: 'granted'
+		});
+	});
+
 	it('is true without prompting when already granted', async () => {
 		vi.mocked(LocalNotifications.checkPermissions).mockResolvedValue({ display: 'granted' });
 
@@ -87,11 +95,53 @@ describe('requestNativeNotificationPermission', () => {
 		vi.mocked(LocalNotifications.requestPermissions).mockResolvedValue({ display: 'denied' });
 
 		expect(await requestNativeNotificationPermission()).toBe(false);
+		expect(LocalNotifications.checkExactNotificationSetting).not.toHaveBeenCalled();
+	});
+
+	it('prompts for the exact-alarm setting when not yet granted, alongside display permission', async () => {
+		vi.mocked(LocalNotifications.checkPermissions).mockResolvedValue({ display: 'granted' });
+		vi.mocked(LocalNotifications.checkExactNotificationSetting).mockResolvedValue({
+			exact_alarm: 'prompt'
+		});
+		vi.mocked(LocalNotifications.changeExactNotificationSetting).mockResolvedValue({
+			exact_alarm: 'granted'
+		});
+
+		expect(await requestNativeNotificationPermission()).toBe(true);
+		expect(LocalNotifications.changeExactNotificationSetting).toHaveBeenCalled();
+	});
+
+	it('still returns true but logs a warning when the user declines the exact-alarm prompt', async () => {
+		vi.mocked(LocalNotifications.checkPermissions).mockResolvedValue({ display: 'granted' });
+		vi.mocked(LocalNotifications.checkExactNotificationSetting).mockResolvedValue({
+			exact_alarm: 'prompt'
+		});
+		vi.mocked(LocalNotifications.changeExactNotificationSetting).mockResolvedValue({
+			exact_alarm: 'denied'
+		});
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+		expect(await requestNativeNotificationPermission()).toBe(true);
+		expect(consoleWarn).toHaveBeenCalledWith(
+			'Exact-alarm permission was not granted; deadline reminders may fire late.'
+		);
+		consoleWarn.mockRestore();
+	});
+
+	it('does not re-prompt for the exact-alarm setting when already granted', async () => {
+		vi.mocked(LocalNotifications.checkPermissions).mockResolvedValue({ display: 'granted' });
+
+		expect(await requestNativeNotificationPermission()).toBe(true);
+		expect(LocalNotifications.changeExactNotificationSetting).not.toHaveBeenCalled();
 	});
 });
 
 describe('syncNativeDeadlineNotifications', () => {
 	const now = new Date(2026, 8, 5, 12, 0);
+
+	beforeEach(() => {
+		vi.mocked(LocalNotifications.schedule).mockResolvedValue({ notifications: [] });
+	});
 
 	it('schedules due items and cancels pending ones no longer due', async () => {
 		vi.mocked(LocalNotifications.getPending).mockResolvedValue({
@@ -164,6 +214,23 @@ describe('syncNativeDeadlineNotifications', () => {
 		await syncNativeDeadlineNotifications([list], new Map([[1, [item]]]), now);
 
 		expect(LocalNotifications.cancel).not.toHaveBeenCalled();
+	});
+
+	it('logs a warning when the plugin silently falls back to an inexact alarm', async () => {
+		vi.mocked(LocalNotifications.getPending).mockResolvedValue({ notifications: [] });
+		vi.mocked(LocalNotifications.schedule).mockResolvedValue({
+			notifications: [{ id: 1 }],
+			warning: { code: 'OS-PLUG-LNOT-0013', message: 'Scheduled inexactly' }
+		});
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+		await syncNativeDeadlineNotifications([makeList()], new Map([[1, [makeItem({ id: 1 })]]]), now);
+
+		expect(consoleWarn).toHaveBeenCalledWith(
+			'Deadline notification scheduled inexactly:',
+			'Scheduled inexactly'
+		);
+		consoleWarn.mockRestore();
 	});
 });
 
