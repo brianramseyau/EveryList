@@ -15,6 +15,10 @@
 	import { ApiError } from '$lib/api/client';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
 	import { splitDeadline } from '$lib/deadline';
+	import {
+		getDeadlineNotificationsPreference,
+		resyncDeadlineNotifications
+	} from '$lib/notifications/sync';
 	import { consumeListOrigin } from '$lib/nav-direction';
 	import Icon from '$lib/components/Icon.svelte';
 	import ItemFields from '$lib/components/ItemFields.svelte';
@@ -167,6 +171,11 @@
 						: draftDeadlineDate
 					: null
 			});
+			// A deadline set/changed/cleared here otherwise sits unreflected in the native/Electron
+			// local schedule until the app's next launch, resume, or 5-minute tick (+layout.svelte's
+			// syncDeadlineNotifications) — long enough that a near-term deadline can pass, and its
+			// notification silently never get scheduled at all, before any of those triggers fire.
+			if (getDeadlineNotificationsPreference()) void resyncDeadlineNotifications();
 			await returnToList();
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to save item.';

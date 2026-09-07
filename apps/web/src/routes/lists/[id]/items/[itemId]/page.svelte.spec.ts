@@ -25,6 +25,10 @@ vi.mock('$lib/offline/db', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/offline/db')>();
 	return { ...actual, getDb: vi.fn(actual.getDb) };
 });
+vi.mock('$lib/notifications/sync', () => ({
+	getDeadlineNotificationsPreference: vi.fn().mockReturnValue(false),
+	resyncDeadlineNotifications: vi.fn().mockResolvedValue(undefined)
+}));
 
 const { fetchList, fetchLists } = await import('$lib/api/lists');
 const { fetchCategories } = await import('$lib/api/categories');
@@ -33,6 +37,8 @@ const { fetchStores } = await import('$lib/api/stores');
 const { fetchFavorites, createFavorite, deleteFavorite } = await import('$lib/api/favorites');
 const { goto } = await import('$app/navigation');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
+const { getDeadlineNotificationsPreference, resyncDeadlineNotifications } =
+	await import('$lib/notifications/sync');
 const { setServerUnavailableForTesting, resetConnectivityForTesting } =
 	await import('$lib/offline/connectivity.svelte');
 const ItemDetailPage = (await import('./+page.svelte')).default;
@@ -132,6 +138,8 @@ describe('Item detail +page.svelte', () => {
 		vi.mocked(fetchItems).mockResolvedValue([]);
 		vi.mocked(fetchFavorites).mockResolvedValue([]);
 		vi.mocked(goto).mockResolvedValue(undefined);
+		vi.mocked(getDeadlineNotificationsPreference).mockReturnValue(false);
+		vi.mocked(resyncDeadlineNotifications).mockResolvedValue(undefined);
 	});
 
 	afterEach(async () => {
@@ -269,6 +277,33 @@ describe('Item detail +page.svelte', () => {
 		});
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 		expect(vi.mocked(goto).mock.calls[0]?.[0]).toBe('/lists/1');
+	});
+
+	it('does not resync native deadline notifications on save when the preference is off', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(resyncDeadlineNotifications).not.toHaveBeenCalled();
+	});
+
+	it('resyncs native deadline notifications after a successful save when the preference is on', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+		vi.mocked(getDeadlineNotificationsPreference).mockReturnValue(true);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(resyncDeadlineNotifications).toHaveBeenCalledTimes(1);
 	});
 
 	it('goes back in history instead of pushing a new navigation when this page was reached from the list', async () => {

@@ -92,6 +92,7 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
         } catch (Exception e) {
             // Malformed/missing payload — nothing sensible to retry, but the notification is
             // already gone by this point (see onReceive), so say so rather than going silent.
+            android.util.Log.e("EveryList", "Deadline action " + actionId + ": couldn't parse notification payload", e);
             showFallbackNotification(context);
             return;
         }
@@ -99,6 +100,12 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
         String token = AuthPrefs.getToken(context);
         String serverUrl = AuthPrefs.getServerUrl(context);
         if (token == null || serverUrl == null) {
+            android.util.Log.e(
+                "EveryList",
+                "Deadline action " + actionId + ": no mirrored auth (" + "token="
+                    + (token == null ? "missing" : "present") + ", serverUrl=" + (serverUrl == null ? "missing" : serverUrl)
+                    + ")"
+            );
             showFallbackNotification(context);
             return;
         }
@@ -120,6 +127,7 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
             // unaudited corner of LocalNotificationManager's internals reacting badly to being
             // driven outside its usual Activity-bound Plugin lifecycle) would otherwise crash the
             // whole app process rather than just degrading to the fallback notification below.
+            android.util.Log.e("EveryList", "Deadline action " + actionId + " failed for item " + itemId, e);
             showFallbackNotification(context);
         }
     }
@@ -134,7 +142,12 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
         Context context, String serverUrl, String token, long listId, long itemId, JSObject originalNotification
     ) throws IOException, org.json.JSONException {
         String itemsBody = HttpJson.request("GET", serverUrl + "/api/v1/lists/" + listId + "/items", token, null);
-        String liveDeadline = findItemDeadline(new JSONArray(itemsBody), itemId);
+        // Every API response is enveloped as `{"data": ...}` (WidgetJson.java parses the same
+        // shape for the widget's own API calls) — parsing itemsBody directly as a JSONArray here
+        // threw on every real request (`{"data":[...]} ... cannot be converted to JSONArray`),
+        // which is why every Snooze tap unconditionally hit the fallback notification.
+        JSONArray items = new JSONObject(itemsBody).getJSONArray("data");
+        String liveDeadline = findItemDeadline(items, itemId);
         if (liveDeadline == null) return;
 
         String nextDeadline = DeadlineMath.addHoursToDeadline(liveDeadline, 1, new Date());
