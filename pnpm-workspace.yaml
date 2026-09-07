@@ -34,3 +34,5 @@ onlyBuiltDependencies:
   - electron
   - electron-builder
 
+patchedDependencies:
+  '@capacitor/local-notifications': patches/@capacitor__local-notifications.patch

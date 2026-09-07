@@ -27,6 +27,10 @@ public class MainActivity extends BridgeActivity {
         // surfacing on the JS side as `"EveryListWidget" plugin is not implemented on android`.
         registerPlugin(EveryListWidgetPlugin.class);
         registerPlugin(PullToRefreshControlPlugin.class);
+        // Mirrors the session token + server URL to native storage so
+        // DeadlineNotificationActionReceiver can authenticate the deadline notification's
+        // "Complete"/"Snooze" actions without a WebView — see AuthMirrorPlugin's doc comment.
+        registerPlugin(AuthMirrorPlugin.class);
         super.onCreate(savedInstanceState);
         if (BuildConfig.DEBUG) {
             // Capacitor serves the app itself over https://localhost, and Chromium's Mixed

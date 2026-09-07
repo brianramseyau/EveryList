@@ -11,6 +11,9 @@ project(':capacitor-app').projectDir = new File('../../node_modules/.pnpm/@capac
 include ':capacitor-browser'
 project(':capacitor-browser').projectDir = new File('../../node_modules/.pnpm/@capacitor+browser@8.0.4_@capacitor+core@8.5.0/node_modules/@capacitor/browser/android')
 
+include ':capacitor-local-notifications'
+project(':capacitor-local-notifications').projectDir = new File('../../node_modules/.pnpm/@capacitor+local-notifications@8.3.1_patch_hash=48b71108ce952b7307ffc885c3fb79f12c1bfb3_9fe90bd6a960b74a3e49da3c51595019/node_modules/@capacitor/local-notifications/android')
+
 include ':capacitor-screen-orientation'
 project(':capacitor-screen-orientation').projectDir = new File('../../node_modules/.pnpm/@capacitor+screen-orientation@8.0.1_@capacitor+core@8.5.0/node_modules/@capacitor/screen-orientation/android')
 

@@ -1,0 +1,131 @@
+diff --git a/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/LocalNotificationManager.kt b/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/LocalNotificationManager.kt
+index 72c31a70c95449b9a8dafd754d4a34c89c4abc1e..4fb7be841bbf9067540edbeeece50e75ff2040a3 100644
+--- a/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/LocalNotificationManager.kt
++++ b/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/LocalNotificationManager.kt
+@@ -251,13 +251,37 @@ class LocalNotificationManager(
+         if (actionTypeId != null) {
+             val actionGroup = storage.getActionGroup(actionTypeId)
+             for (notificationAction in actionGroup) {
+-                val actionIntent = buildIntent(localNotification, notificationAction.id)
+-                val actionPendingIntent = PendingIntent.getActivity(
+-                    context,
+-                    id + (notificationAction.id?.hashCode() ?: 0),
+-                    actionIntent,
+-                    flags
+-                )
++                // EveryList patch: `foreground == false` (only ever set explicitly by the caller;
++                // the tap action never sets it, so it keeps launching the Activity as before) skips
++                // the host app's Activity entirely and hands the action to the app's own
++                // background receiver instead — the stock behavior here unconditionally used
++                // PendingIntent.getActivity for every action, silently ignoring `foreground` on
++                // Android even though it's honored on iOS.
++                val actionPendingIntent = if (notificationAction.foreground == false) {
++                    val backgroundIntent = Intent()
++                    backgroundIntent.setClassName(context, EVERYLIST_BACKGROUND_ACTION_RECEIVER)
++                    backgroundIntent.putExtra(NOTIFICATION_INTENT_KEY, id)
++                    backgroundIntent.putExtra(ACTION_INTENT_KEY, notificationAction.id)
++                    backgroundIntent.putExtra(NOTIFICATION_OBJ_INTENT_KEY, localNotification.source)
++                    var backgroundFlags = PendingIntent.FLAG_CANCEL_CURRENT
++                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
++                        backgroundFlags = backgroundFlags or PendingIntent.FLAG_MUTABLE
++                    }
++                    PendingIntent.getBroadcast(
++                        context,
++                        id + (notificationAction.id?.hashCode() ?: 0),
++                        backgroundIntent,
++                        backgroundFlags
++                    )
++                } else {
++                    val actionIntent = buildIntent(localNotification, notificationAction.id)
++                    PendingIntent.getActivity(
++                        context,
++                        id + (notificationAction.id?.hashCode() ?: 0),
++                        actionIntent,
++                        flags
++                    )
++                }
+                 val actionBuilder = NotificationCompat.Action.Builder(
+                     R.drawable.ic_transparent,
+                     notificationAction.title,
+@@ -510,6 +534,11 @@ class LocalNotificationManager(
+ 
+         private const val DEFAULT_PRESS_ACTION = "tap"
+ 
++        // EveryList patch: explicit component name (rather than a compile-time reference) so this
++        // patched copy of a third-party plugin doesn't need to depend on the app's own package.
++        private const val EVERYLIST_BACKGROUND_ACTION_RECEIVER =
++            "au.brianramsey.everylist.DeadlineNotificationActionReceiver"
++
+         private var defaultSoundID = AssetUtil.RESOURCE_ID_ZERO_VALUE
+         private var defaultSmallIconID = AssetUtil.RESOURCE_ID_ZERO_VALUE
+ 
+diff --git a/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/NotificationAction.kt b/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/NotificationAction.kt
+index 40ad1e096e54657f02668a6233d561429f8eddb2..52580d77e3bcef155005d7260bf7802928533cb9 100644
+--- a/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/NotificationAction.kt
++++ b/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/NotificationAction.kt
+@@ -13,13 +13,18 @@ class NotificationAction {
+     var id: String? = null
+     var title: String? = null
+     private var input: Boolean? = null
++    // EveryList patch: per-action `foreground` (already supported on iOS; stock Android build
++    // silently dropped it, unconditionally launching the host Activity for every action). See
++    // LocalNotificationManager.createActionIntents() for the other half of this patch.
++    var foreground: Boolean? = null
+ 
+     constructor()
+ 
+-    constructor(id: String?, title: String?, input: Boolean?) {
++    constructor(id: String?, title: String?, input: Boolean?, foreground: Boolean?) {
+         this.id = id
+         this.title = title
+         this.input = input
++        this.foreground = foreground
+     }
+ 
+     fun isInput(): Boolean = input == true
+@@ -40,7 +45,12 @@ class NotificationAction {
+                     if (actions != null) {
+                         val typesArray = Array(actions.length()) { i ->
+                             val action = JSObject.fromJSONObject(actions.getJSONObject(i))
+-                            NotificationAction(action.getString("id"), action.getString("title"), action.getBool("input"))
++                            NotificationAction(
++                                action.getString("id"),
++                                action.getString("title"),
++                                action.getBool("input"),
++                                action.getBool("foreground")
++                            )
+                         }
+                         actionTypeMap[actionGroupId] = typesArray
+                     }
+diff --git a/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/NotificationStorage.kt b/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/NotificationStorage.kt
+index b7ff07bba69cf4026c38096d1112309dde5962da..4274cc2f79acb5ede98b4c7d52bb6fa2cf8860e0 100644
+--- a/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/NotificationStorage.kt
++++ b/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/NotificationStorage.kt
+@@ -112,6 +112,13 @@ class NotificationStorage(private val context: Context) {
+                 editor.putString("id$i", notificationActions[i].id)
+                 editor.putString("title$i", notificationActions[i].title)
+                 editor.putBoolean("input$i", notificationActions[i].isInput())
++                // EveryList patch: persist `foreground` too — see NotificationAction.kt and
++                // LocalNotificationManager.createActionIntents() for the rest of this patch.
++                // Three-state (missing/true/false) via a separate "set" flag since
++                // SharedPreferences has no nullable-Boolean type.
++                val foreground = notificationActions[i].foreground
++                editor.putBoolean("foregroundSet$i", foreground != null)
++                editor.putBoolean("foreground$i", foreground == true)
+             }
+             editor.apply()
+         }
+@@ -127,7 +134,12 @@ class NotificationStorage(private val context: Context) {
+             val id = storage.getString("id$i", "")
+             val title = storage.getString("title$i", "")
+             val input = storage.getBoolean("input$i", false)
+-            NotificationAction(id, title, input)
++            val foreground = if (storage.getBoolean("foregroundSet$i", false)) {
++                storage.getBoolean("foreground$i", false)
++            } else {
++                null
++            }
++            NotificationAction(id, title, input, foreground)
+         }
+     }
+ 

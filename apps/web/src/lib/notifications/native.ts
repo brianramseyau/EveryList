@@ -105,7 +105,12 @@ export async function syncNativeDeadlineNotifications(
 			body: notification.body,
 			schedule: { at: notification.at },
 			actionTypeId: ACTION_TYPE_ID,
-			extra: { listId: notification.listId, itemId: notification.itemId, source: SOURCE }
+			extra: {
+				listId: notification.listId,
+				itemId: notification.itemId,
+				source: SOURCE,
+				deadline: notification.deadline
+			}
 		}))
 	});
 	// Android-only: the plugin silently downgrades an unavailable exact alarm to inexact
@@ -175,7 +180,7 @@ async function snoozeFromNotification(listId: number, itemId: number): Promise<v
 				body: item.name,
 				schedule: { at: triggerDate(deadline) },
 				actionTypeId: ACTION_TYPE_ID,
-				extra: { listId, itemId, source: SOURCE }
+				extra: { listId, itemId, source: SOURCE, deadline }
 			}
 		]
 	});

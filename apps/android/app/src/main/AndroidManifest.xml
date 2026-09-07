@@ -94,6 +94,16 @@
             android:taskAffinity=""
             android:theme="@style/AppTheme.WidgetDialog" />
 
+        <!-- Handles the deadline notification's "Complete"/"Snooze 1 hr" actions entirely in the
+             background (the patched @capacitor/local-notifications — see patches/ — routes any
+             action registered with `foreground: false` here by explicit component name instead of
+             launching MainActivity). Not exported: only ever reached via that explicit
+             PendingIntent, never resolved by an external intent-filter match, same reasoning as
+             QuickAddActivity above. -->
+        <receiver
+            android:name=".DeadlineNotificationActionReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

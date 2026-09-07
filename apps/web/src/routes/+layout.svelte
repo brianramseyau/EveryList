@@ -7,7 +7,7 @@
 	import { resolve } from '$app/paths';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
-	import { getToken, syncTokenToServiceWorker } from '$lib/api/token';
+	import { getToken, syncAuthToNative, syncTokenToServiceWorker } from '$lib/api/token';
 	import { getServerUrl } from '$lib/api/server-url';
 	import { isRemoteClient } from '$lib/platform/desktop';
 	import { initTheme } from '$lib/theme';
@@ -92,6 +92,10 @@
 		let resumeHandle: ReturnType<typeof App.addListener> | null = null;
 		let notificationActionHandle: ReturnType<typeof listenForNativeDeadlineActions> | null = null;
 		if (Capacitor.isNativePlatform()) {
+			// Belt-and-suspenders re-mirror for a device that logged in before the Android
+			// "Complete"/"Snooze" background actions shipped — see syncAuthToNative's own note.
+			// No-op on iOS/Electron (mirrorAuthToNative is Android-only).
+			syncAuthToNative();
 			// Must run every launch (not just once) since iOS discards the action-type registration
 			// between sessions — see registerNativeDeadlineActionTypes's own note.
 			void registerNativeDeadlineActionTypes();
