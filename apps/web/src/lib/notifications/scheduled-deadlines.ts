@@ -20,6 +20,19 @@ export interface ScheduledDeadlineNotification {
 	deadline: string;
 }
 
+/** Longest a deadline notification's body (the item's notes) is shown before being
+ * truncated with an ellipsis — a conservative cut well under any platform's own
+ * notification-body limit, so the truncation is ours and consistent rather than an
+ * OS-specific mid-word cutoff. */
+const MAX_BODY_LENGTH = 150;
+
+/** Truncates `notes` for use as a deadline notification's body, or '' when there are
+ * none — an empty string collapses to no second line rather than a blank one. */
+export function notificationBody(notes: string | null): string {
+	if (!notes) return '';
+	return notes.length > MAX_BODY_LENGTH ? `${notes.slice(0, MAX_BODY_LENGTH - 1)}…` : notes;
+}
+
 /** Local calendar-date deadline → 9am that day, since a date-only deadline
  * has no time component to schedule against. Mirrors `deadline.ts`'s naive
  * local-time handling — no timezone math. */
@@ -61,8 +74,8 @@ export function computeScheduledDeadlines(
 			notifications.push({
 				itemId: item.id,
 				listId: list.id,
-				title: 'Required by',
-				body: item.name,
+				title: item.name,
+				body: notificationBody(item.notes),
 				at,
 				deadline: item.deadline
 			});

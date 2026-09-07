@@ -85,8 +85,8 @@ describe('syncElectronDeadlineNotifications', () => {
 		expect(NotificationSpy).not.toHaveBeenCalled();
 
 		vi.advanceTimersByTime(60 * 1000);
-		expect(NotificationSpy).toHaveBeenCalledWith('Required by', {
-			body: 'Return library book'
+		expect(NotificationSpy).toHaveBeenCalledWith('Return library book', {
+			body: ''
 		});
 	});
 

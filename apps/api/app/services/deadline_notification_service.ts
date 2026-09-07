@@ -12,6 +12,16 @@ import { sendPush } from '#services/push_service'
  * for deadlines that were missed long ago. */
 const GRACE_MINUTES = 15
 
+/** Mirrors apps/web's `notificationBody` — kept independent rather than shared across the
+ * API/web package boundary, but the same conservative cut under any platform's own
+ * notification-body limit. */
+const MAX_BODY_LENGTH = 150
+
+function notificationBody(notes: string | null): string {
+  if (!notes) return ''
+  return notes.length > MAX_BODY_LENGTH ? `${notes.slice(0, MAX_BODY_LENGTH - 1)}…` : notes
+}
+
 function pad(value: number): string {
   return value < 10 ? `0${value}` : String(value)
 }
@@ -88,8 +98,8 @@ export async function sendDueDeadlineNotifications(now: DateTime = DateTime.now(
 
       try {
         await sendPush(subscription, {
-          title: 'Required by',
-          body: item.name,
+          title: item.name,
+          body: notificationBody(item.notes),
           itemId: item.id,
           listId: item.listId,
           deadline: item.deadline!,

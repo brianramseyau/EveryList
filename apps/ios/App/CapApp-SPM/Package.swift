@@ -15,6 +15,7 @@ let package = Package(
         .package(name: "AparajitaCapacitorBiometricAuth", path: "../../../../node_modules/.pnpm/@aparajita+capacitor-biometric-auth@10.0.0/node_modules/@aparajita/capacitor-biometric-auth"),
         .package(name: "CapacitorApp", path: "../../../../node_modules/.pnpm/@capacitor+app@8.1.1_@capacitor+core@8.5.0/node_modules/@capacitor/app"),
         .package(name: "CapacitorBrowser", path: "../../../../node_modules/.pnpm/@capacitor+browser@8.0.4_@capacitor+core@8.5.0/node_modules/@capacitor/browser"),
+        .package(name: "CapacitorLocalNotifications", path: "../../../../node_modules/.pnpm/@capacitor+local-notifications@8.3.1_patch_hash=48b71108ce952b7307ffc885c3fb79f12c1bfb3_9fe90bd6a960b74a3e49da3c51595019/node_modules/@capacitor/local-notifications"),
         .package(name: "CapacitorScreenOrientation", path: "../../../../node_modules/.pnpm/@capacitor+screen-orientation@8.0.1_@capacitor+core@8.5.0/node_modules/@capacitor/screen-orientation"),
         .package(name: "CapawesomeCapacitorBadge", path: "../../../../node_modules/.pnpm/@capawesome+capacitor-badge@8.0.2_@capacitor+core@8.5.0/node_modules/@capawesome/capacitor-badge")
     ],
@@ -27,6 +28,7 @@ let package = Package(
                 .product(name: "AparajitaCapacitorBiometricAuth", package: "AparajitaCapacitorBiometricAuth"),
                 .product(name: "CapacitorApp", package: "CapacitorApp"),
                 .product(name: "CapacitorBrowser", package: "CapacitorBrowser"),
+                .product(name: "CapacitorLocalNotifications", package: "CapacitorLocalNotifications"),
                 .product(name: "CapacitorScreenOrientation", package: "CapacitorScreenOrientation"),
                 .product(name: "CapawesomeCapacitorBadge", package: "CapawesomeCapacitorBadge")
             ]

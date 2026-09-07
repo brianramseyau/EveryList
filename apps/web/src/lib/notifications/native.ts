@@ -9,7 +9,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 /* v8 ignore stop */
 import { addHoursToDeadline } from '$lib/deadline';
 import { fetchItems, updateItem } from '$lib/api/items';
-import { computeScheduledDeadlines, triggerDate } from './scheduled-deadlines';
+import { computeScheduledDeadlines, notificationBody, triggerDate } from './scheduled-deadlines';
 
 /** Tags every notification this module schedules, so cancel logic below only ever touches
  * its own notifications — not some future feature's unrelated `@capacitor/local-notifications`
@@ -176,8 +176,8 @@ async function snoozeFromNotification(listId: number, itemId: number): Promise<v
 		notifications: [
 			{
 				id: itemId,
-				title: 'Required by',
-				body: item.name,
+				title: item.name,
+				body: notificationBody(item.notes),
 				schedule: { at: triggerDate(deadline) },
 				actionTypeId: ACTION_TYPE_ID,
 				extra: { listId, itemId, source: SOURCE, deadline }
