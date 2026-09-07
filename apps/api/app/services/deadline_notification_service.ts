@@ -1,10 +1,13 @@
 import { DateTime } from 'luxon'
 import logger from '@adonisjs/core/services/logger'
+import { notificationBody } from '@everylist/shared'
 import Item from '#models/item'
 import ListMember from '#models/list_member'
 import PushSubscription from '#models/push_subscription'
 import DeadlineNotificationSend from '#models/deadline_notification_send'
 import { sendPush } from '#services/push_service'
+
+export { notificationBody }
 
 /** How late a check is still allowed to fire a datetime deadline's
  * notification — absorbs a scheduler restart/downtime blip (matches
@@ -88,8 +91,8 @@ export async function sendDueDeadlineNotifications(now: DateTime = DateTime.now(
 
       try {
         await sendPush(subscription, {
-          title: 'Required by',
-          body: item.name,
+          title: item.name,
+          body: notificationBody(item.notes),
           itemId: item.id,
           listId: item.listId,
           deadline: item.deadline!,

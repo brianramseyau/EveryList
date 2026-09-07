@@ -160,8 +160,8 @@ describe('syncNativeDeadlineNotifications', () => {
 			notifications: [
 				{
 					id: 1,
-					title: 'Required by',
-					body: 'Return library book',
+					title: 'Return library book',
+					body: '',
 					schedule: { at: new Date(2026, 8, 6, 9, 0) },
 					actionTypeId: 'deadline',
 					extra: { listId: 1, itemId: 1, source: 'deadline', deadline: '2026-09-06T09:00' }
@@ -345,8 +345,8 @@ describe('listenForNativeDeadlineActions', () => {
 			notifications: [
 				{
 					id: 1,
-					title: 'Required by',
-					body: 'Return library book',
+					title: 'Return library book',
+					body: '',
 					schedule: { at: new Date(2026, 8, 6, 10, 0) },
 					actionTypeId: 'deadline',
 					extra: { listId: 1, itemId: 1, source: 'deadline', deadline: '2026-09-06T10:00' }

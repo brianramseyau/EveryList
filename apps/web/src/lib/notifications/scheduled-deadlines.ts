@@ -1,5 +1,7 @@
-import type { ItemDto, ListDto } from '@everylist/shared';
+import { notificationBody, type ItemDto, type ListDto } from '@everylist/shared';
 import { hasTime, splitDeadline } from '$lib/deadline';
+
+export { notificationBody };
 
 export interface ScheduledDeadlineNotification {
 	/** Stable per-item id, reused as the platform notification id so a
@@ -61,8 +63,8 @@ export function computeScheduledDeadlines(
 			notifications.push({
 				itemId: item.id,
 				listId: list.id,
-				title: 'Required by',
-				body: item.name,
+				title: item.name,
+				body: notificationBody(item.notes),
 				at,
 				deadline: item.deadline
 			});

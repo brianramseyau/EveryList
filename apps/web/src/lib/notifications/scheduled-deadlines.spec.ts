@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemDto, ListDto } from '@everylist/shared';
-import { computeScheduledDeadlines } from './scheduled-deadlines';
+import { computeScheduledDeadlines, notificationBody } from './scheduled-deadlines';
 
 function makeList(overrides: Partial<ListDto> = {}): ListDto {
 	return {
@@ -49,8 +49,8 @@ describe('computeScheduledDeadlines', () => {
 			{
 				itemId: 1,
 				listId: 1,
-				title: 'Required by',
-				body: 'Return library book',
+				title: 'Return library book',
+				body: '',
 				at: new Date(2026, 8, 5, 14, 30),
 				deadline: '2026-09-05T14:30'
 			}
@@ -66,8 +66,8 @@ describe('computeScheduledDeadlines', () => {
 			{
 				itemId: 1,
 				listId: 1,
-				title: 'Required by',
-				body: 'Return library book',
+				title: 'Return library book',
+				body: '',
 				at: new Date(2026, 8, 6, 9, 0),
 				deadline: '2026-09-06'
 			}
@@ -101,5 +101,33 @@ describe('computeScheduledDeadlines', () => {
 	it('skips a list with no fetched items', () => {
 		const list = makeList();
 		expect(computeScheduledDeadlines([list], new Map(), now)).toEqual([]);
+	});
+
+	it('uses the item name as the title and its notes as the body', () => {
+		const list = makeList();
+		const item = makeItem({ deadline: '2026-09-06', notes: 'Ask at the front desk' });
+		const result = computeScheduledDeadlines([list], new Map([[1, [item]]]), now);
+
+		expect(result[0].title).toBe('Return library book');
+		expect(result[0].body).toBe('Ask at the front desk');
+	});
+});
+
+describe('notificationBody', () => {
+	it('returns an empty string when there are no notes', () => {
+		expect(notificationBody(null)).toBe('');
+	});
+
+	it('returns notes unchanged when within the length limit', () => {
+		expect(notificationBody('Ask at the front desk')).toBe('Ask at the front desk');
+	});
+
+	it('truncates long notes with an ellipsis', () => {
+		const notes = 'a'.repeat(200);
+		const result = notificationBody(notes);
+
+		expect(result.length).toBe(150);
+		expect(result.endsWith('…')).toBe(true);
+		expect(result.startsWith('a'.repeat(149))).toBe(true);
 	});
 });
