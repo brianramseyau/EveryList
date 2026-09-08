@@ -35,20 +35,24 @@ function hasTime(deadline: string): boolean {
   return deadline.length > 10
 }
 
+/** A date-only deadline's default notification time — 9am, matching Google
+ * Tasks' baseline behavior and `scheduled-deadlines.ts#triggerDate`'s
+ * native/Electron local-notification trigger for the same case. */
+const DEFAULT_NOTIFICATION_HOUR = 9
+
 /**
- * True exactly for the window a deadline's notification should fire in: a
- * datetime deadline is due from the minute it passes through
- * `GRACE_MINUTES` later; a date-only deadline is due for the whole of its
- * calendar day (deduped by `deadline_notification_sends`, so it still only
- * sends once).
+ * True exactly for the window a deadline's notification should fire in: due
+ * from the minute its effective time passes through `GRACE_MINUTES` later. A
+ * date-only deadline has no time of its own, so its effective time is
+ * `DEFAULT_NOTIFICATION_HOUR` that day.
  */
 export function isNotificationDue(deadline: string, now: DateTime): boolean {
-  if (hasTime(deadline)) {
-    const nowIso = nowLocalMinuteIso(now)
-    const windowStartIso = nowLocalMinuteIso(now.minus({ minutes: GRACE_MINUTES }))
-    return deadline > windowStartIso && deadline <= nowIso
-  }
-  return deadline === todayLocalIso(now)
+  const effectiveDeadline = hasTime(deadline)
+    ? deadline
+    : `${deadline}T${pad(DEFAULT_NOTIFICATION_HOUR)}:00`
+  const nowIso = nowLocalMinuteIso(now)
+  const windowStartIso = nowLocalMinuteIso(now.minus({ minutes: GRACE_MINUTES }))
+  return effectiveDeadline > windowStartIso && effectiveDeadline <= nowIso
 }
 
 /**

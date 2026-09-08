@@ -49,14 +49,30 @@ test.group('isNotificationDue', () => {
     assert.isFalse(isNotificationDue('2026-08-01T09:00', now))
   })
 
-  test('date-only deadline: due for the whole of its calendar day', ({ assert }) => {
-    const now = DateTime.fromISO('2026-09-05T00:00:00')
+  test('date-only deadline: due at 9am on its calendar day, matching the native/Electron default', ({
+    assert,
+  }) => {
+    const now = DateTime.fromISO('2026-09-05T09:00:00')
     assert.isTrue(isNotificationDue('2026-09-05', now))
-    assert.isTrue(isNotificationDue('2026-09-05', now.set({ hour: 23, minute: 59 })))
   })
 
-  test('date-only deadline: not due before or after its day', ({ assert }) => {
-    const now = DateTime.fromISO('2026-09-05T12:00:00')
+  test('date-only deadline: not yet due before 9am', ({ assert }) => {
+    const now = DateTime.fromISO('2026-09-05T08:59:00')
+    assert.isFalse(isNotificationDue('2026-09-05', now))
+  })
+
+  test('date-only deadline: still due within the grace window after 9am', ({ assert }) => {
+    const now = DateTime.fromISO('2026-09-05T09:10:00')
+    assert.isTrue(isNotificationDue('2026-09-05', now))
+  })
+
+  test('date-only deadline: no longer due once the grace window has passed', ({ assert }) => {
+    const now = DateTime.fromISO('2026-09-05T09:16:00')
+    assert.isFalse(isNotificationDue('2026-09-05', now))
+  })
+
+  test('date-only deadline: not due on a different day', ({ assert }) => {
+    const now = DateTime.fromISO('2026-09-05T09:00:00')
     assert.isFalse(isNotificationDue('2026-09-06', now))
     assert.isFalse(isNotificationDue('2026-09-04', now))
   })
