@@ -61,14 +61,15 @@ test.group('isNotificationDue', () => {
     assert.isFalse(isNotificationDue('2026-09-05', now))
   })
 
-  test('date-only deadline: still due within the grace window after 9am', ({ assert }) => {
-    const now = DateTime.fromISO('2026-09-05T09:10:00')
-    assert.isTrue(isNotificationDue('2026-09-05', now))
-  })
-
-  test('date-only deadline: no longer due once the grace window has passed', ({ assert }) => {
-    const now = DateTime.fromISO('2026-09-05T09:16:00')
-    assert.isFalse(isNotificationDue('2026-09-05', now))
+  test('date-only deadline: still due later the same day, not limited to a narrow grace window', ({
+    assert,
+  }) => {
+    // Unlike a datetime deadline, a date-only deadline stays due for the
+    // rest of its calendar day once past 9am — a self-hosted instance that
+    // was down at 9am must still catch up later, same resilience as the
+    // original all-day behavior (see Kilo Code review on PR #210).
+    assert.isTrue(isNotificationDue('2026-09-05', DateTime.fromISO('2026-09-05T09:16:00')))
+    assert.isTrue(isNotificationDue('2026-09-05', DateTime.fromISO('2026-09-05T23:59:00')))
   })
 
   test('date-only deadline: not due on a different day', ({ assert }) => {

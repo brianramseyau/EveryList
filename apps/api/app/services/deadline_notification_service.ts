@@ -41,18 +41,30 @@ function hasTime(deadline: string): boolean {
 const DEFAULT_NOTIFICATION_HOUR = 9
 
 /**
- * True exactly for the window a deadline's notification should fire in: due
- * from the minute its effective time passes through `GRACE_MINUTES` later. A
- * date-only deadline has no time of its own, so its effective time is
- * `DEFAULT_NOTIFICATION_HOUR` that day.
+ * True exactly for the window a deadline's notification should fire in.
+ *
+ * A datetime deadline is due from the minute it passes through
+ * `GRACE_MINUTES` later — a narrow window is correct there since the exact
+ * time is the point.
+ *
+ * A date-only deadline has no time of its own, so it defaults to
+ * `DEFAULT_NOTIFICATION_HOUR` that day, but — unlike the datetime case —
+ * stays due for the *rest* of its calendar day rather than a narrow grace
+ * window: a self-hosted single-process instance can be down or restarting
+ * right at 9am (deploy, host reboot, power blip), and a "date-only deadline"
+ * user only cares about "today", not the exact minute, so the wider window
+ * preserves the resilience the original all-day behavior had while still
+ * not firing before 9am. See Kilo Code review on PR #210.
  */
 export function isNotificationDue(deadline: string, now: DateTime): boolean {
-  const effectiveDeadline = hasTime(deadline)
-    ? deadline
-    : `${deadline}T${pad(DEFAULT_NOTIFICATION_HOUR)}:00`
-  const nowIso = nowLocalMinuteIso(now)
-  const windowStartIso = nowLocalMinuteIso(now.minus({ minutes: GRACE_MINUTES }))
-  return effectiveDeadline > windowStartIso && effectiveDeadline <= nowIso
+  if (hasTime(deadline)) {
+    const nowIso = nowLocalMinuteIso(now)
+    const windowStartIso = nowLocalMinuteIso(now.minus({ minutes: GRACE_MINUTES }))
+    return deadline > windowStartIso && deadline <= nowIso
+  }
+  if (deadline !== todayLocalIso(now)) return false
+  const triggerIso = `${deadline}T${pad(DEFAULT_NOTIFICATION_HOUR)}:00`
+  return nowLocalMinuteIso(now) >= triggerIso
 }
 
 /**
