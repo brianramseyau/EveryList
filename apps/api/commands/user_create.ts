@@ -15,6 +15,18 @@ const emailValidator = vine.compile(vine.string().trim().toLowerCase().email().m
 const passwordValidator = vine.compile(vine.string().minLength(8).maxLength(32))
 
 /**
+ * better-sqlite3 surfaces a unique-constraint violation as `SqliteError` with
+ * `code: 'SQLITE_CONSTRAINT_UNIQUE'` — knex/Lucid pass that property through
+ * unchanged. Same check as #exceptions/handler.ts's `isUniqueConstraintError`,
+ * duplicated here rather than imported since that one isn't exported and this
+ * command doesn't otherwise depend on the HTTP layer.
+ */
+function isUniqueConstraintError(error: unknown): boolean {
+  const code = (error as { code?: unknown })?.code
+  return typeof code === 'string' && code.startsWith('SQLITE_CONSTRAINT')
+}
+
+/**
  * Creates a user from the command line, following the same flow as a real
  * signup (see #controllers/new_account_controller) — including the two
  * starter lists — but bypassing `PUBLIC_SIGNUP_ENABLED` and invite checks
@@ -26,8 +38,14 @@ const passwordValidator = vine.compile(vine.string().minLength(8).maxLength(32))
  *
  *   node ace user:create --email you@example.com --full-name "Your Name"
  *
- * Any of --email/--password/--full-name left off are prompted for
- * interactively (password is prompted with masked input + confirmation).
+ * Any of --email/--full-name left off are prompted for interactively;
+ * the password is always prompted for with masked input + confirmation
+ * unless --password-stdin is given, since a plain `--password` flag would
+ * leave the credential sitting in shell history and visible to other users
+ * on the host via `ps`/`/proc/<pid>/cmdline` for the run's duration:
+ *
+ *   echo -n 'correct horse battery staple' | node ace user:create \
+ *     --email you@example.com --password-stdin
  */
 export default class UserCreate extends BaseCommand {
   static commandName = 'user:create'
@@ -38,13 +56,17 @@ export default class UserCreate extends BaseCommand {
   @flags.string({ description: 'Email address' })
   declare email?: string
 
-  @flags.string({ description: 'Password (8-32 characters); omit to be prompted securely' })
-  declare password?: string
+  @flags.boolean({
+    description:
+      'Read the password (8-32 characters) from stdin instead of an interactive masked prompt',
+  })
+  declare passwordStdin?: boolean
 
   @flags.string({ description: 'Full name' })
   declare fullName?: string
 
   async run() {
+    const { default: db } = await import('@adonisjs/lucid/services/db')
     const { default: User } = await import('#models/user')
     const { createOwnedList } = await import('#services/list_creation')
 
@@ -57,26 +79,44 @@ export default class UserCreate extends BaseCommand {
     const fullName =
       this.fullName ?? (await this.prompt.ask('Full name (optional)', { default: '' })) ?? ''
 
-    const user = await User.create({
-      fullName: fullName.trim().length > 0 ? fullName.trim() : null,
-      email,
-      password,
-    })
+    try {
+      const user = await db.transaction(async (trx) => {
+        const created = await User.create(
+          { fullName: fullName.trim().length > 0 ? fullName.trim() : null, email, password },
+          { client: trx }
+        )
 
-    await createOwnedList({
-      ownerId: user.id,
-      ...TODOS_LIST,
-      useCategories: false,
-      useShops: false,
-      useFavorites: false,
-      useRecent: false,
-      useQuantity: false,
-      usePrice: false,
-      seedStarterTodoItems: true,
-    })
-    await createOwnedList({ ownerId: user.id, ...STARTER_LIST, seedStarterCategories: true })
+        await createOwnedList({
+          ownerId: created.id,
+          ...TODOS_LIST,
+          useCategories: false,
+          useShops: false,
+          useFavorites: false,
+          useRecent: false,
+          useQuantity: false,
+          usePrice: false,
+          seedStarterTodoItems: true,
+          client: trx,
+        })
+        await createOwnedList({
+          ownerId: created.id,
+          ...STARTER_LIST,
+          seedStarterCategories: true,
+          client: trx,
+        })
 
-    this.logger.success(`user:create: created ${user.email} (id ${user.id}) with starter lists`)
+        return created
+      })
+
+      this.logger.success(`user:create: created ${user.email} (id ${user.id}) with starter lists`)
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        this.logger.error(`A user with email ${email} already exists`)
+        this.exitCode = 1
+        return
+      }
+      throw error
+    }
   }
 
   /**
@@ -85,6 +125,10 @@ export default class UserCreate extends BaseCommand {
    * to an interactive prompt would be surprising). A value left off the flag
    * is prompted for, and re-prompted on rejection since a human is right
    * there to correct it.
+   *
+   * This pre-check is a courtesy for the common case — the transaction in
+   * `run()` still catches a duplicate-email constraint violation, since this
+   * check-then-insert has a TOCTOU window against a concurrent run.
    */
   private async resolveEmail(User: typeof import('#models/user').default): Promise<string | null> {
     if (this.email !== undefined) {
@@ -127,11 +171,12 @@ export default class UserCreate extends BaseCommand {
   }
 
   private async resolvePassword(): Promise<string | null> {
-    if (this.password !== undefined) {
+    if (this.passwordStdin) {
+      const raw = (await this.readStdin()).trim()
       try {
-        return await passwordValidator.validate(this.password)
+        return await passwordValidator.validate(raw)
       } catch {
-        this.logger.error('Password must be 8-32 characters')
+        this.logger.error('Password read from stdin must be 8-32 characters')
         this.exitCode = 1
         return null
       }
@@ -151,5 +196,13 @@ export default class UserCreate extends BaseCommand {
         this.logger.warning('Password must be 8-32 characters')
       }
     }
+  }
+
+  private async readStdin(): Promise<string> {
+    const chunks: Buffer[] = []
+    for await (const chunk of process.stdin) {
+      chunks.push(chunk as Buffer)
+    }
+    return Buffer.concat(chunks).toString('utf8')
   }
 }
