@@ -45,7 +45,13 @@ function isUniqueConstraintError(error: unknown): boolean {
  * on the host via `ps`/`/proc/<pid>/cmdline` for the run's duration:
  *
  *   echo -n 'correct horse battery staple' | node ace user:create \
- *     --email you@example.com --password-stdin
+ *     --email you@example.com --full-name "Your Name" --password-stdin
+ *
+ * --password-stdin requires --email and --full-name alongside it (rather
+ * than falling back to their interactive prompts) — those prompts read
+ * keystroke-by-keystroke from the same stdin a piped password arrives on,
+ * so leaving either to interactive input would consume some or all of the
+ * piped password instead of prompting.
  */
 export default class UserCreate extends BaseCommand {
   static commandName = 'user:create'
@@ -66,9 +72,10 @@ export default class UserCreate extends BaseCommand {
   declare fullName?: string
 
   async run() {
-    if (this.passwordStdin && this.email === undefined) {
+    if (this.passwordStdin && (this.email === undefined || this.fullName === undefined)) {
       this.logger.error(
-        '--password-stdin requires --email to also be given — both would otherwise try to read the same piped stdin'
+        '--password-stdin requires --email and --full-name to also be given — any of them left ' +
+          'to an interactive prompt would try to read the same piped stdin as the password'
       )
       this.exitCode = 1
       return
