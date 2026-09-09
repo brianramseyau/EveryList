@@ -60,6 +60,12 @@ const routes = {
     tokens: [{"old":"/api/v1/account/profile","type":0,"val":"api","end":""},{"old":"/api/v1/account/profile","type":0,"val":"v1","end":""},{"old":"/api/v1/account/profile","type":0,"val":"account","end":""},{"old":"/api/v1/account/profile","type":0,"val":"profile","end":""}],
     types: placeholder as Registry['profile.profile.update']['types'],
   },
+  'profile.profile.update_password': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/account/password',
+    tokens: [{"old":"/api/v1/account/password","type":0,"val":"api","end":""},{"old":"/api/v1/account/password","type":0,"val":"v1","end":""},{"old":"/api/v1/account/password","type":0,"val":"account","end":""},{"old":"/api/v1/account/password","type":0,"val":"password","end":""}],
+    types: placeholder as Registry['profile.profile.update_password']['types'],
+  },
   'profile.access_tokens.destroy': {
     methods: ["POST"],
     pattern: '/api/v1/account/logout',

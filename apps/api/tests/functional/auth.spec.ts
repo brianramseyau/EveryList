@@ -235,6 +235,161 @@ test.group('Auth flow', (group) => {
       .header('Authorization', `Bearer ${token}`)
     afterLogout.assertStatus(401)
   })
+
+  test('changing password requires authentication', async ({ client }) => {
+    const response = await client.patch('/api/v1/account/password').json({
+      currentPassword: 'password123',
+      password: 'newpassword456',
+      passwordConfirmation: 'newpassword456',
+    })
+
+    response.assertStatus(401)
+  })
+
+  test('changing password rejects an incorrect current password', async ({ client }) => {
+    const signup = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+    const token = signup.body().data.token
+
+    const response = await client
+      .patch('/api/v1/account/password')
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        currentPassword: 'wrong-password',
+        password: 'newpassword456',
+        passwordConfirmation: 'newpassword456',
+      })
+
+    response.assertStatus(400)
+
+    const stillWorks = await client
+      .get('/api/v1/account/profile')
+      .header('Authorization', `Bearer ${token}`)
+    stillWorks.assertStatus(200)
+  })
+
+  test('changing password requires the confirmation to match', async ({ client }) => {
+    const signup = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+    const token = signup.body().data.token
+
+    const response = await client
+      .patch('/api/v1/account/password')
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        currentPassword: 'password123',
+        password: 'newpassword456',
+        passwordConfirmation: 'does-not-match',
+      })
+
+    response.assertStatus(422)
+  })
+
+  test('changing password updates credentials without touching any session by default', async ({
+    client,
+    assert,
+  }) => {
+    const signup = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+    const originalToken = signup.body().data.token
+
+    const otherSession = await client.post('/api/v1/auth/login').json({
+      email: 'ada@example.com',
+      password: 'password123',
+    })
+    const otherToken = otherSession.body().data.token
+
+    const response = await client
+      .patch('/api/v1/account/password')
+      .header('Authorization', `Bearer ${originalToken}`)
+      .json({
+        currentPassword: 'password123',
+        password: 'newpassword456',
+        passwordConfirmation: 'newpassword456',
+      })
+
+    response.assertStatus(200)
+    assert.equal(response.body().data.email, 'ada@example.com')
+
+    // Neither the token that authenticated the change nor any other
+    // outstanding session is revoked — a routine password change is
+    // password hygiene, not a security incident.
+    const originalTokenStillWorks = await client
+      .get('/api/v1/account/profile')
+      .header('Authorization', `Bearer ${originalToken}`)
+    originalTokenStillWorks.assertStatus(200)
+
+    const otherTokenStillWorks = await client
+      .get('/api/v1/account/profile')
+      .header('Authorization', `Bearer ${otherToken}`)
+    otherTokenStillWorks.assertStatus(200)
+
+    const loginWithNewPassword = await client.post('/api/v1/auth/login').json({
+      email: 'ada@example.com',
+      password: 'newpassword456',
+    })
+    loginWithNewPassword.assertStatus(200)
+
+    const loginWithOldPassword = await client.post('/api/v1/auth/login').json({
+      email: 'ada@example.com',
+      password: 'password123',
+    })
+    loginWithOldPassword.assertStatus(400)
+  })
+
+  test('changing password with signOutOtherDevices revokes every other session but not this one', async ({
+    client,
+  }) => {
+    const signup = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+    })
+    const originalToken = signup.body().data.token
+
+    const otherSession = await client.post('/api/v1/auth/login').json({
+      email: 'ada@example.com',
+      password: 'password123',
+    })
+    const otherToken = otherSession.body().data.token
+
+    const response = await client
+      .patch('/api/v1/account/password')
+      .header('Authorization', `Bearer ${originalToken}`)
+      .json({
+        currentPassword: 'password123',
+        password: 'newpassword456',
+        passwordConfirmation: 'newpassword456',
+        signOutOtherDevices: true,
+      })
+
+    response.assertStatus(200)
+
+    // The session used to make the request survives...
+    const originalTokenStillWorks = await client
+      .get('/api/v1/account/profile')
+      .header('Authorization', `Bearer ${originalToken}`)
+    originalTokenStillWorks.assertStatus(200)
+
+    // ...but every other session is signed out.
+    const otherTokenRevoked = await client
+      .get('/api/v1/account/profile')
+      .header('Authorization', `Bearer ${otherToken}`)
+    otherTokenRevoked.assertStatus(401)
+  })
 })
 
 test.group('Public signup toggle', (group) => {

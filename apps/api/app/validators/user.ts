@@ -34,3 +34,18 @@ export const loginValidator = vine.create({
 export const updateProfileValidator = vine.create({
   fullName: vine.string().trim().minLength(1).maxLength(150).nullable(),
 })
+
+/**
+ * Validator for a logged-in user changing their own password from Settings.
+ * Requires the current password (unlike the email-token reset flow), since
+ * there's no separate proof of identity here. `signOutOtherDevices` is opt-in
+ * — a routine hygiene change shouldn't force every other session to log back
+ * in, but the user should be able to choose that when they suspect
+ * compromise.
+ */
+export const updatePasswordValidator = vine.create({
+  currentPassword: vine.string(),
+  password: password(),
+  passwordConfirmation: password().sameAs('password'),
+  signOutOtherDevices: vine.boolean().optional(),
+})

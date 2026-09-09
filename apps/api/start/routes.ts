@@ -49,6 +49,7 @@ router
       .group(() => {
         router.get('profile', [controllers.Profile, 'show'])
         router.patch('profile', [controllers.Profile, 'update'])
+        router.patch('password', [controllers.Profile, 'updatePassword'])
         router.post('logout', [controllers.AccessTokens, 'destroy'])
         router.post('refresh', [controllers.AccessTokens, 'refresh'])
       })
