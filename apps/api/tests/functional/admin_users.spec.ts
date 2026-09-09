@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import type { ApiClient } from '@japa/api-client'
 import testUtils from '@adonisjs/core/services/test_utils'
-import type { AdminUserDto } from '@everylist/shared'
+import type { AdminUserDto, ListDto } from '@everylist/shared'
 import { bodyData, signupAndGetUser } from './helpers.js'
 
 const PASSWORD = 'password123'
@@ -96,7 +96,7 @@ test.group('Admin user management', (group) => {
       .get('/api/v1/lists')
       .header('Authorization', `Bearer ${login.body().data.token}`)
     lists.assertStatus(200)
-    assert.lengthOf(bodyData(lists), 0)
+    assert.lengthOf(bodyData<ListDto[]>(lists), 0)
   })
 
   test('store rejects a duplicate email', async ({ client }) => {

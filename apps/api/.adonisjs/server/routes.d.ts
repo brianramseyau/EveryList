@@ -17,6 +17,10 @@ export type ScannedRoutes = {
     'profile.access_tokens.refresh': { paramsTuple?: []; params?: {} }
     'metas.show': { paramsTuple?: []; params?: {} }
     'debug.show': { paramsTuple?: []; params?: {} }
+    'adminUsers.admin_users.index': { paramsTuple?: []; params?: {} }
+    'adminUsers.admin_users.store': { paramsTuple?: []; params?: {} }
+    'adminUsers.admin_users.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'adminUsers.admin_users.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'folders.folders.index': { paramsTuple?: []; params?: {} }
     'folders.folders.store': { paramsTuple?: []; params?: {} }
     'folders.folders.reorder': { paramsTuple?: []; params?: {} }
@@ -94,6 +98,7 @@ export type ScannedRoutes = {
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'metas.show': { paramsTuple?: []; params?: {} }
     'debug.show': { paramsTuple?: []; params?: {} }
+    'adminUsers.admin_users.index': { paramsTuple?: []; params?: {} }
     'folders.folders.index': { paramsTuple?: []; params?: {} }
     'lists.lists.index': { paramsTuple?: []; params?: {} }
     'lists.lists.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -123,6 +128,7 @@ export type ScannedRoutes = {
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'metas.show': { paramsTuple?: []; params?: {} }
     'debug.show': { paramsTuple?: []; params?: {} }
+    'adminUsers.admin_users.index': { paramsTuple?: []; params?: {} }
     'folders.folders.index': { paramsTuple?: []; params?: {} }
     'lists.lists.index': { paramsTuple?: []; params?: {} }
     'lists.lists.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -156,6 +162,7 @@ export type ScannedRoutes = {
     'auth.password_reset.reset': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.refresh': { paramsTuple?: []; params?: {} }
+    'adminUsers.admin_users.store': { paramsTuple?: []; params?: {} }
     'folders.folders.store': { paramsTuple?: []; params?: {} }
     'lists.lists.store': { paramsTuple?: []; params?: {} }
     'lists.categories.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
@@ -180,6 +187,7 @@ export type ScannedRoutes = {
   }
   PATCH: {
     'profile.profile.update': { paramsTuple?: []; params?: {} }
+    'adminUsers.admin_users.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'folders.folders.reorder': { paramsTuple?: []; params?: {} }
     'folders.folders.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.lists.reorder': { paramsTuple?: []; params?: {} }
@@ -197,6 +205,7 @@ export type ScannedRoutes = {
     'backupSettings.backup_settings.update': { paramsTuple?: []; params?: {} }
   }
   DELETE: {
+    'adminUsers.admin_users.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'folders.folders.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.lists.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'lists.categories.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'categoryId': ParamValue} }

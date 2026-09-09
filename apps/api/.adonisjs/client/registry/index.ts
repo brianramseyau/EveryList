@@ -84,6 +84,30 @@ const routes = {
     tokens: [{"old":"/api/v1/debug","type":0,"val":"api","end":""},{"old":"/api/v1/debug","type":0,"val":"v1","end":""},{"old":"/api/v1/debug","type":0,"val":"debug","end":""}],
     types: placeholder as Registry['debug.show']['types'],
   },
+  'adminUsers.admin_users.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/admin/users',
+    tokens: [{"old":"/api/v1/admin/users","type":0,"val":"api","end":""},{"old":"/api/v1/admin/users","type":0,"val":"v1","end":""},{"old":"/api/v1/admin/users","type":0,"val":"admin","end":""},{"old":"/api/v1/admin/users","type":0,"val":"users","end":""}],
+    types: placeholder as Registry['adminUsers.admin_users.index']['types'],
+  },
+  'adminUsers.admin_users.store': {
+    methods: ["POST"],
+    pattern: '/api/v1/admin/users',
+    tokens: [{"old":"/api/v1/admin/users","type":0,"val":"api","end":""},{"old":"/api/v1/admin/users","type":0,"val":"v1","end":""},{"old":"/api/v1/admin/users","type":0,"val":"admin","end":""},{"old":"/api/v1/admin/users","type":0,"val":"users","end":""}],
+    types: placeholder as Registry['adminUsers.admin_users.store']['types'],
+  },
+  'adminUsers.admin_users.update': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/admin/users/:id',
+    tokens: [{"old":"/api/v1/admin/users/:id","type":0,"val":"api","end":""},{"old":"/api/v1/admin/users/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/admin/users/:id","type":0,"val":"admin","end":""},{"old":"/api/v1/admin/users/:id","type":0,"val":"users","end":""},{"old":"/api/v1/admin/users/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['adminUsers.admin_users.update']['types'],
+  },
+  'adminUsers.admin_users.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/admin/users/:id',
+    tokens: [{"old":"/api/v1/admin/users/:id","type":0,"val":"api","end":""},{"old":"/api/v1/admin/users/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/admin/users/:id","type":0,"val":"admin","end":""},{"old":"/api/v1/admin/users/:id","type":0,"val":"users","end":""},{"old":"/api/v1/admin/users/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['adminUsers.admin_users.destroy']['types'],
+  },
   'folders.folders.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/folders',

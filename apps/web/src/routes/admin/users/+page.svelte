@@ -4,7 +4,6 @@
 	import { resolve } from '$app/paths';
 	import type { AdminUserDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { fetchProfile } from '$lib/api/auth';
 	import {
 		createAdminUser,
 		deleteAdminUser,
@@ -15,7 +14,11 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 
-	let currentUserId = $state<number | null>(null);
+	// This whole page 403s server-side for anyone but user id 1 (see admin_users_controller.ts),
+	// so successfully loading it already proves "I am id 1" — no need for a second fetchProfile()
+	// round trip (whose failure would otherwise have to be handled) just to know which row is "me".
+	const CURRENT_USER_ID = 1;
+
 	let users = $state<AdminUserDto[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -160,9 +163,6 @@
 			return;
 		}
 		void load();
-		fetchProfile()
-			.then((profile) => (currentUserId = profile.id))
-			.catch(() => {});
 	});
 </script>
 
@@ -228,7 +228,7 @@
 							<div class="min-w-0">
 								<p class="truncate text-sm font-medium">
 									{displayName(user)}
-									{#if user.id === currentUserId}
+									{#if user.id === CURRENT_USER_ID}
 										<span class="text-xs text-gray-400">(you)</span>
 									{/if}
 								</p>
@@ -249,7 +249,7 @@
 								>
 									<Icon name="pencil" class="h-4 w-4" />
 								</button>
-								{#if user.id !== currentUserId}
+								{#if user.id !== CURRENT_USER_ID}
 									<button
 										type="button"
 										onclick={() => toggleDisabled(user)}

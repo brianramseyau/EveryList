@@ -28,7 +28,9 @@ export const adminUpdateUserValidator = vine.create({
       table: 'users',
       column: 'email',
       caseInsensitive: true,
-      filter: (db, _value, field) => db.whereNot('id', field.meta.userId as number),
+      filter: (db, _value, field) => {
+        db.whereNot('id', field.meta.userId as number)
+      },
     })
     .optional(),
   password: password().optional(),

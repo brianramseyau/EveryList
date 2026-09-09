@@ -20,6 +20,19 @@ export async function authorizeListChannel(
     // the role down to what the token actually grants either way.
     await ctx.auth.authenticateUsing(['api', 'pat'])
     const user = ctx.auth.getUserOrFail()
+
+    // This subscribe route sits outside the `middleware.auth()` groups in start/routes.ts (it's
+    // wired up by Transmit's own `authorize()` hook below), so AuthMiddleware's disabledAt check
+    // never runs here — without this, a disabled user's still-valid token could keep receiving
+    // realtime list updates over SSE even though every REST request now 403s.
+    if (user.disabledAt) {
+      ctx.logger.debug(
+        { listId: params.id, userId: user.id },
+        'transmit channel authorization denied: account disabled'
+      )
+      return false
+    }
+
     const role = await ListPolicy.roleFor(user, params.id)
     if (role === null) {
       ctx.logger.debug(

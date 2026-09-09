@@ -33,6 +33,14 @@ export interface ApiDefinition {
   debug: {
     show: typeof routes['debug.show']
   }
+  adminUsers: {
+    adminUsers: {
+      index: typeof routes['adminUsers.admin_users.index']
+      store: typeof routes['adminUsers.admin_users.store']
+      update: typeof routes['adminUsers.admin_users.update']
+      destroy: typeof routes['adminUsers.admin_users.destroy']
+    }
+  }
   folders: {
     folders: {
       index: typeof routes['folders.folders.index']

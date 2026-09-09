@@ -5,7 +5,6 @@ import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/api/auth', () => ({ fetchProfile: vi.fn() }));
 vi.mock('$lib/api/admin-users', () => ({
 	fetchAdminUsers: vi.fn(),
 	createAdminUser: vi.fn(),
@@ -13,13 +12,13 @@ vi.mock('$lib/api/admin-users', () => ({
 	deleteAdminUser: vi.fn()
 }));
 
-const { fetchProfile } = await import('$lib/api/auth');
-const { fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser } = await import(
-	'$lib/api/admin-users'
-);
+const { fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser } =
+	await import('$lib/api/admin-users');
 const { goto } = await import('$app/navigation');
 const AdminUsersPage = (await import('./+page.svelte')).default;
 
+// This page 403s server-side for anyone but user id 1, so id 1 in these fixtures always means
+// "the account viewing this page" — see the CURRENT_USER_ID comment in +page.svelte.
 const admin = {
 	id: 1,
 	fullName: 'Ada Lovelace',
@@ -38,21 +37,9 @@ const other = {
 	disabledAt: null
 };
 
-/** `fetchProfile` returns a `UserDto`, not `AdminUserDto` — same account as `admin` above, but
- * with `initials` instead of `disabledAt`. */
-const adminProfile = {
-	id: 1,
-	fullName: 'Ada Lovelace',
-	email: 'ada@example.com',
-	createdAt: '2026-08-01T00:00:00.000Z',
-	updatedAt: null,
-	initials: 'AL'
-};
-
 describe('Admin users +page.svelte', () => {
 	beforeEach(() => {
 		setToken('test-token');
-		vi.mocked(fetchProfile).mockResolvedValue(adminProfile);
 	});
 
 	afterEach(() => {
@@ -110,15 +97,6 @@ describe('Admin users +page.svelte', () => {
 		render(AdminUsersPage);
 
 		await expect.element(page.getByText('Failed to load users.')).toBeInTheDocument();
-	});
-
-	it('ignores a failure to load the current profile', async () => {
-		vi.mocked(fetchAdminUsers).mockResolvedValue([admin]);
-		vi.mocked(fetchProfile).mockRejectedValue(new TypeError('network down'));
-
-		render(AdminUsersPage);
-
-		await expect.element(page.getByText('ada@example.com')).toBeInTheDocument();
 	});
 
 	it('displays a user by email when they have no full name', async () => {
