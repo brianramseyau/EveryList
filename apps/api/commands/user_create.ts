@@ -23,7 +23,7 @@ const passwordValidator = vine.compile(vine.string().minLength(8).maxLength(32))
  */
 function isUniqueConstraintError(error: unknown): boolean {
   const code = (error as { code?: unknown })?.code
-  return typeof code === 'string' && code.startsWith('SQLITE_CONSTRAINT')
+  return code === 'SQLITE_CONSTRAINT_UNIQUE'
 }
 
 /**
@@ -66,6 +66,22 @@ export default class UserCreate extends BaseCommand {
   declare fullName?: string
 
   async run() {
+    if (this.passwordStdin && this.email === undefined) {
+      this.logger.error(
+        '--password-stdin requires --email to also be given — both would otherwise try to read the same piped stdin'
+      )
+      this.exitCode = 1
+      return
+    }
+
+    if (this.passwordStdin && process.stdin.isTTY) {
+      this.logger.error(
+        "--password-stdin expects a password piped in, e.g.: echo -n 'your-password' | node ace user:create --email you@example.com --password-stdin"
+      )
+      this.exitCode = 1
+      return
+    }
+
     const { default: db } = await import('@adonisjs/lucid/services/db')
     const { default: User } = await import('#models/user')
     const { createOwnedList } = await import('#services/list_creation')
@@ -173,7 +189,11 @@ export default class UserCreate extends BaseCommand {
   private async resolvePassword(): Promise<string | null> {
     if (this.passwordStdin) {
       const stdin = await this.readStdin()
-      const raw = stdin.trim()
+      // Only the trailing newline `echo`/a heredoc appends is stripped — unlike
+      // a blanket `.trim()`, this doesn't also drop a legitimate leading/trailing
+      // space from the password itself (which would silently diverge from what
+      // the interactive prompt.secure() path accepts unmodified).
+      const raw = stdin.replace(/\r?\n$/, '')
       try {
         return await passwordValidator.validate(raw)
       } catch {
