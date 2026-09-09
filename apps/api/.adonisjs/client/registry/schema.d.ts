@@ -1027,6 +1027,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['run']>>>
     }
   }
+  'backupSettings.backup_settings.download': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/backup-settings/download/:filename'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { filename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['download']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['download']>>>
+    }
+  }
   'push.push_subscriptions.public_key': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/push/public-key'

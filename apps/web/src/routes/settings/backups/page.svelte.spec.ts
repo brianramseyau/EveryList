@@ -9,10 +9,12 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/backups', () => ({
 	fetchBackupState: vi.fn(),
 	updateBackupSettings: vi.fn(),
-	runBackupNow: vi.fn()
+	runBackupNow: vi.fn(),
+	downloadBackup: vi.fn()
 }));
 
-const { fetchBackupState, updateBackupSettings, runBackupNow } = await import('$lib/api/backups');
+const { fetchBackupState, updateBackupSettings, runBackupNow, downloadBackup } =
+	await import('$lib/api/backups');
 const { goto } = await import('$app/navigation');
 const BackupsPage = (await import('./+page.svelte')).default;
 
@@ -256,5 +258,70 @@ describe('Backups +page.svelte', () => {
 		await page.getByRole('button', { name: 'Back up now' }).click();
 
 		await expect.element(page.getByText('Failed to run a backup.')).toBeInTheDocument();
+	});
+
+	it('downloads a backup file', async () => {
+		vi.mocked(downloadBackup).mockResolvedValue(undefined);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Download' }).click();
+
+		expect(downloadBackup).toHaveBeenCalledWith('everylist-manual-20260822-090000.sqlite3');
+	});
+
+	it('shows the ApiError message when a download fails', async () => {
+		vi.mocked(downloadBackup).mockRejectedValue(new ApiError(403, 'Not authorized'));
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Download' }).click();
+
+		await expect.element(page.getByText('Not authorized')).toBeInTheDocument();
+	});
+
+	it('shows a generic error message when a download fails without an ApiError', async () => {
+		vi.mocked(downloadBackup).mockRejectedValue(new TypeError('network down'));
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Download' }).click();
+
+		await expect
+			.element(page.getByText('Failed to download everylist-manual-20260822-090000.sqlite3.'))
+			.toBeInTheDocument();
 	});
 });

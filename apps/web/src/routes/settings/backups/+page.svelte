@@ -5,7 +5,12 @@
 	import { Button } from 'flowbite-svelte';
 	import type { BackupFileDto, BackupFrequency, BackupSettingsDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
-	import { fetchBackupState, runBackupNow, updateBackupSettings } from '$lib/api/backups';
+	import {
+		downloadBackup,
+		fetchBackupState,
+		runBackupNow,
+		updateBackupSettings
+	} from '$lib/api/backups';
 	import { formatFileSize } from '$lib/api/format-file-size';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -21,6 +26,7 @@
 	let saving = $state(false);
 
 	let runningNow = $state(false);
+	let downloadingFilename = $state<string | null>(null);
 
 	// Driven by the file list (the actual most recent backup, automatic or
 	// manual) — there's no separate "last backup" field on the server to read
@@ -90,6 +96,18 @@
 			error = err instanceof ApiError ? err.message : 'Failed to run a backup.';
 		} finally {
 			runningNow = false;
+		}
+	}
+
+	async function handleDownload(filename: string) {
+		downloadingFilename = filename;
+		try {
+			await downloadBackup(filename);
+			error = null;
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : `Failed to download ${filename}.`;
+		} finally {
+			downloadingFilename = null;
 		}
 	}
 </script>
@@ -190,9 +208,20 @@
 								</span>
 								<span class="truncate">{file.filename}</span>
 							</div>
-							<span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">
-								{formatFileSize(file.sizeBytes)} · {formatTimestamp(file.createdAt)}
-							</span>
+							<div class="flex shrink-0 items-center gap-2">
+								<span class="text-xs text-gray-500 dark:text-gray-400">
+									{formatFileSize(file.sizeBytes)} · {formatTimestamp(file.createdAt)}
+								</span>
+								<Button
+									type="button"
+									size="xs"
+									color="alternative"
+									onclick={() => handleDownload(file.filename)}
+									disabled={downloadingFilename === file.filename}
+								>
+									{downloadingFilename === file.filename ? 'Downloading…' : 'Download'}
+								</Button>
+							</div>
 						</li>
 					{/each}
 				</ul>
