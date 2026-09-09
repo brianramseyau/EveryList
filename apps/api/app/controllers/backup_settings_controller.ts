@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import type User from '#models/user'
 import BackupSetting from '#models/backup_setting'
@@ -99,6 +100,10 @@ export default class BackupSettingsController {
     }
 
     const filePath = path.join(backupDirectory(), filename)
+    if (!fs.existsSync(filePath)) {
+      return response.notFound({ message: 'Backup file not found' })
+    }
+
     logger.info({ filename }, 'admin downloaded backup file')
     return response.attachment(filePath, filename)
   }

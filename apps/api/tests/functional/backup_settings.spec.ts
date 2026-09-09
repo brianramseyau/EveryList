@@ -207,4 +207,13 @@ test.group('Backup settings', (group) => {
       .header('Authorization', `Bearer ${admin.token}`)
     download.assertStatus(400)
   })
+
+  test('404s for a well-formed filename that has no matching file on disk', async ({ client }) => {
+    const admin = await signupAndGetUser(client)
+
+    const download = await client
+      .get('/api/v1/backup-settings/download/everylist-manual-20260101-000000.sqlite3')
+      .header('Authorization', `Bearer ${admin.token}`)
+    download.assertStatus(404)
+  })
 })
