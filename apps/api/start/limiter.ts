@@ -60,8 +60,14 @@ export const listsThrottle = limiter.define('lists', (ctx) => {
  * user id, not IP, since the threat model here is "attacker already has a
  * token for this account" rather than an anonymous credential-stuffing pass
  * — must run after the auth middleware so `ctx.auth.user` is populated.
+ *
+ * Falls back to the request IP if `ctx.auth.user` is ever missing here
+ * (e.g. the route's middleware order changes) — matching `listsThrottle`'s
+ * optional-chaining above — rather than a bare non-null assertion that
+ * would turn that misconfiguration into a 500 on every request.
  */
 export const passwordChangeThrottle = limiter.define('accountPassword', (ctx) => {
   if (app.inTest) return limiter.noLimit()
-  return limiter.allowRequests(10).every('1 minute').usingKey(String(ctx.auth.user!.id))
+  const key = ctx.auth.user?.id ?? ctx.request.ip()
+  return limiter.allowRequests(10).every('1 minute').usingKey(String(key))
 })
