@@ -172,7 +172,8 @@ export default class UserCreate extends BaseCommand {
 
   private async resolvePassword(): Promise<string | null> {
     if (this.passwordStdin) {
-      const raw = (await this.readStdin()).trim()
+      const stdin = await this.readStdin()
+      const raw = stdin.trim()
       try {
         return await passwordValidator.validate(raw)
       } catch {
