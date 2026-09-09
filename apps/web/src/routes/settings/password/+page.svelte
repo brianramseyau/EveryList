@@ -75,6 +75,7 @@
 				bind:value={password}
 				required
 				minlength={8}
+				maxlength={32}
 				autocomplete="new-password"
 			/>
 		</div>
@@ -86,6 +87,7 @@
 				bind:value={passwordConfirmation}
 				required
 				minlength={8}
+				maxlength={32}
 				autocomplete="new-password"
 			/>
 		</div>

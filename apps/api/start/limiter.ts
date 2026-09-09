@@ -51,3 +51,17 @@ export const listsThrottle = limiter.define('lists', (ctx) => {
   if (token?.type !== 'pat') return limiter.noLimit()
   return limiter.allowRequests(60).every('1 minute').usingKey(String(token.identifier))
 })
+
+/**
+ * Applied to `PATCH account/password` — although this route requires a valid
+ * bearer token, it still accepts a caller-supplied `currentPassword` it
+ * checks against the account's real one, making it a password oracle for
+ * anyone holding a stolen (but otherwise unrelated) session token. Keyed by
+ * user id, not IP, since the threat model here is "attacker already has a
+ * token for this account" rather than an anonymous credential-stuffing pass
+ * — must run after the auth middleware so `ctx.auth.user` is populated.
+ */
+export const passwordChangeThrottle = limiter.define('accountPassword', (ctx) => {
+  if (app.inTest) return limiter.noLimit()
+  return limiter.allowRequests(10).every('1 minute').usingKey(String(ctx.auth.user!.id))
+})

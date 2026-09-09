@@ -21,12 +21,12 @@ export interface ApiDefinition {
     profile: {
       show: typeof routes['profile.profile.show']
       update: typeof routes['profile.profile.update']
-      updatePassword: typeof routes['profile.profile.update_password']
     }
     accessTokens: {
       destroy: typeof routes['profile.access_tokens.destroy']
       refresh: typeof routes['profile.access_tokens.refresh']
     }
+    updatePassword: typeof routes['profile.update_password']
   }
   metas: {
     show: typeof routes['metas.show']

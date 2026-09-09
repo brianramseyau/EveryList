@@ -13,9 +13,9 @@ export type ScannedRoutes = {
     'auth.password_reset.reset': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'profile.profile.update': { paramsTuple?: []; params?: {} }
-    'profile.profile.update_password': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.refresh': { paramsTuple?: []; params?: {} }
+    'profile.update_password': { paramsTuple?: []; params?: {} }
     'metas.show': { paramsTuple?: []; params?: {} }
     'debug.show': { paramsTuple?: []; params?: {} }
     'adminUsers.admin_users.index': { paramsTuple?: []; params?: {} }
@@ -191,7 +191,7 @@ export type ScannedRoutes = {
   }
   PATCH: {
     'profile.profile.update': { paramsTuple?: []; params?: {} }
-    'profile.profile.update_password': { paramsTuple?: []; params?: {} }
+    'profile.update_password': { paramsTuple?: []; params?: {} }
     'adminUsers.admin_users.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'folders.folders.reorder': { paramsTuple?: []; params?: {} }
     'folders.folders.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
