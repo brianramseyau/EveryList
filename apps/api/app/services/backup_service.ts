@@ -36,6 +36,13 @@ function parseBackupFilename(filename: string): BackupKind | null {
   return match ? (match[1] as BackupKind) : null
 }
 
+/** Whether `filename` is exactly the shape `performBackup` produces — used to validate a
+ * user-supplied filename (e.g. a download request) before it ever touches the filesystem, since
+ * it's the only thing standing between that request and path traversal outside `backupDirectory()`. */
+export function isBackupFilename(filename: string): boolean {
+  return FILENAME_PATTERN.test(filename)
+}
+
 export function listBackups(backupDir: string): BackupFileInfo[] {
   if (!fs.existsSync(backupDir)) return []
 

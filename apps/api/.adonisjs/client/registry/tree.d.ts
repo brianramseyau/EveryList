@@ -157,6 +157,7 @@ export interface ApiDefinition {
       show: typeof routes['backupSettings.backup_settings.show']
       update: typeof routes['backupSettings.backup_settings.update']
       run: typeof routes['backupSettings.backup_settings.run']
+      download: typeof routes['backupSettings.backup_settings.download']
     }
   }
   push: {

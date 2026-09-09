@@ -89,6 +89,7 @@ export type ScannedRoutes = {
     'backupSettings.backup_settings.show': { paramsTuple?: []; params?: {} }
     'backupSettings.backup_settings.update': { paramsTuple?: []; params?: {} }
     'backupSettings.backup_settings.run': { paramsTuple?: []; params?: {} }
+    'backupSettings.backup_settings.download': { paramsTuple: [ParamValue]; params: {'filename': ParamValue} }
     'push.push_subscriptions.public_key': { paramsTuple?: []; params?: {} }
     'push.push_subscriptions.store': { paramsTuple?: []; params?: {} }
     'push.push_subscriptions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -121,6 +122,7 @@ export type ScannedRoutes = {
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'backupSettings.backup_settings.show': { paramsTuple?: []; params?: {} }
+    'backupSettings.backup_settings.download': { paramsTuple: [ParamValue]; params: {'filename': ParamValue} }
     'push.push_subscriptions.public_key': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
@@ -151,6 +153,7 @@ export type ScannedRoutes = {
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'backupSettings.backup_settings.show': { paramsTuple?: []; params?: {} }
+    'backupSettings.backup_settings.download': { paramsTuple: [ParamValue]; params: {'filename': ParamValue} }
     'push.push_subscriptions.public_key': { paramsTuple?: []; params?: {} }
   }
   POST: {

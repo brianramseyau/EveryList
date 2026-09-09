@@ -4,7 +4,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import { DateTime } from 'luxon'
 import type { BackupSettingsStateDto } from '@everylist/shared'
 import { backupDirectory, runScheduledBackupIfDue } from '#services/backup_service'
-import { bodyData, signupAndGetToken } from './helpers.js'
+import { bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 // The first-ever automatic backup only fires once a scheduled period boundary
 // has passed since the settings row was created (see isBackupDue) — checking
@@ -132,22 +132,88 @@ test.group('Backup settings', (group) => {
     assert.isTrue(ran)
   })
 
-  test('the schedule is shared across every user, not per-account', async ({ client, assert }) => {
-    const tokenA = await signupAndGetToken(client)
-    const tokenB = await signupAndGetToken(client)
+  test('the schedule is shared instance-wide, readable by the primary account regardless of who set it', async ({
+    client,
+    assert,
+  }) => {
+    const admin = await signupAndGetUser(client)
+    assert.equal(admin.id, 1)
 
     await client
       .patch('/api/v1/backup-settings')
-      .header('Authorization', `Bearer ${tokenA}`)
+      .header('Authorization', `Bearer ${admin.token}`)
       .json({ frequency: 'monthly', timeOfDay: '02:15', retentionCount: 6 })
 
     const show = await client
       .get('/api/v1/backup-settings')
-      .header('Authorization', `Bearer ${tokenB}`)
+      .header('Authorization', `Bearer ${admin.token}`)
     assert.deepEqual(bodyData<BackupSettingsStateDto>(show).settings, {
       frequency: 'monthly',
       timeOfDay: '02:15',
       retentionCount: 6,
     })
+  })
+
+  test('forbids any user other than id 1', async ({ client, assert }) => {
+    const admin = await signupAndGetUser(client)
+    assert.equal(admin.id, 1)
+    const other = await signupAndGetUser(client)
+    assert.notEqual(other.id, 1)
+
+    const show = await client
+      .get('/api/v1/backup-settings')
+      .header('Authorization', `Bearer ${other.token}`)
+    show.assertStatus(403)
+
+    const update = await client
+      .patch('/api/v1/backup-settings')
+      .header('Authorization', `Bearer ${other.token}`)
+      .json({ frequency: 'daily', timeOfDay: '03:00', retentionCount: 4 })
+    update.assertStatus(403)
+
+    const run = await client
+      .post('/api/v1/backup-settings/run')
+      .header('Authorization', `Bearer ${other.token}`)
+    run.assertStatus(403)
+
+    const download = await client
+      .get('/api/v1/backup-settings/download/everylist-manual-20260101-000000.sqlite3')
+      .header('Authorization', `Bearer ${other.token}`)
+    download.assertStatus(403)
+  })
+
+  test('downloads a backup file by its exact filename', async ({ client, assert }) => {
+    const admin = await signupAndGetUser(client)
+
+    const run = await client
+      .post('/api/v1/backup-settings/run')
+      .header('Authorization', `Bearer ${admin.token}`)
+    const filename = bodyData<BackupSettingsStateDto>(run).files[0]!.filename
+
+    const download = await client
+      .get(`/api/v1/backup-settings/download/${filename}`)
+      .header('Authorization', `Bearer ${admin.token}`)
+    download.assertStatus(200)
+    assert.equal(download.header('content-disposition'), `attachment; filename="${filename}"`)
+  })
+
+  test('rejects a download filename that does not match the backup naming pattern', async ({
+    client,
+  }) => {
+    const admin = await signupAndGetUser(client)
+
+    const download = await client
+      .get('/api/v1/backup-settings/download/..%2F..%2Fpackage.json')
+      .header('Authorization', `Bearer ${admin.token}`)
+    download.assertStatus(400)
+  })
+
+  test('404s for a well-formed filename that has no matching file on disk', async ({ client }) => {
+    const admin = await signupAndGetUser(client)
+
+    const download = await client
+      .get('/api/v1/backup-settings/download/everylist-manual-20260101-000000.sqlite3')
+      .header('Authorization', `Bearer ${admin.token}`)
+    download.assertStatus(404)
   })
 })

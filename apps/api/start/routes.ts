@@ -230,13 +230,15 @@ router
       .as('stores')
       .use(middleware.auth())
 
-    // Instance-wide, not per-list — there's no admin role in this app, so any
-    // authenticated user can view/change the shared backup schedule.
+    // Instance-wide, not per-list. Any authenticated user can reach these routes; the
+    // controller itself hard-codes the user id 1 check (see backup_settings_controller.ts) —
+    // same shape as /debug and /admin/users above, since backups expose the raw database file.
     router
       .group(() => {
         router.get('/', [controllers.BackupSettings, 'show'])
         router.patch('/', [controllers.BackupSettings, 'update'])
         router.post('run', [controllers.BackupSettings, 'run'])
+        router.get('download/:filename', [controllers.BackupSettings, 'download'])
       })
       .prefix('backup-settings')
       .as('backupSettings')
