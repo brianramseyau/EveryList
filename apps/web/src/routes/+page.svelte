@@ -47,9 +47,4 @@
 	</ul>
 
 	<Button href={resolve('/login')}>Log in</Button>
-	<div class="flex gap-4 text-sm">
-		<a href={resolve('/settings')} class="text-primary-700 underline dark:text-primary-400"
-			>Settings</a
-		>
-	</div>
 </main>
