@@ -242,6 +242,25 @@ describe('Settings +page.svelte', () => {
 		await expect.element(page.getByRole('link', { name: 'Debug info' })).not.toBeInTheDocument();
 	});
 
+	it("links to the manage-users page for the instance's primary account (user id 1)", async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(fetchProfile).mockResolvedValue(profile);
+
+		render(SettingsPage);
+
+		await expect.element(page.getByRole('link', { name: 'Manage users' })).toBeInTheDocument();
+	});
+
+	it('hides the manage-users link for any other account', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(fetchProfile).mockResolvedValue({ ...profile, id: 2 });
+
+		render(SettingsPage);
+		await expect.element(page.getByText('Reset', { exact: true })).toBeInTheDocument();
+
+		await expect.element(page.getByRole('link', { name: 'Manage users' })).not.toBeInTheDocument();
+	});
+
 	it('switches the app theme preference and reflects the choice in the radio group', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 

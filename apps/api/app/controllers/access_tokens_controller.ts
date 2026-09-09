@@ -4,7 +4,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import UserTransformer from '#transformers/user_transformer'
 
 export default class AccessTokensController {
-  async store({ request, serialize, logger }: HttpContext) {
+  async store({ request, response, serialize, logger }: HttpContext) {
     const { email, password } = await request.validateUsing(loginValidator)
 
     // A failed `verifyCredentials` throws `E_INVALID_CREDENTIALS` — logged as
@@ -13,6 +13,12 @@ export default class AccessTokensController {
     // login attempt with zero trace, on the one route group the app treats
     // as its brute-force/credential-stuffing surface — see `start/limiter.ts`).
     const user = await User.verifyCredentials(email, password)
+
+    if (user.disabledAt) {
+      logger.warn({ userId: user.id }, 'login denied: account disabled')
+      return response.forbidden({ message: 'This account has been disabled.' })
+    }
+
     const token = await User.accessTokens.create(user)
     logger.debug({ userId: user.id }, 'login succeeded')
 
