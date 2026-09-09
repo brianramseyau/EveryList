@@ -5,6 +5,7 @@
 
 export const controllers = {
   AccessTokens: () => import('#controllers/access_tokens_controller'),
+  AdminUsers: () => import('#controllers/admin_users_controller'),
   Alexa: () => import('#controllers/alexa_controller'),
   AlexaIcons: () => import('#controllers/alexa_icons_controller'),
   AlexaOauth: () => import('#controllers/alexa_oauth_controller'),

@@ -15,6 +15,14 @@ export default class AuthMiddleware {
     } = {}
   ) {
     await ctx.auth.authenticateUsing(options.guards)
+
+    // Checked here rather than only at login, so disabling a user (see
+    // admin_users_controller.ts) takes effect on every route immediately —
+    // including for tokens that were already issued before the account was disabled.
+    if (ctx.auth.user?.disabledAt) {
+      return ctx.response.forbidden({ message: 'This account has been disabled.' })
+    }
+
     return next()
   }
 }
