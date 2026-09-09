@@ -125,10 +125,7 @@ test.group('Admin user management', (group) => {
     assert.equal(updated.email, 'renamed@example.com')
   })
 
-  test('update allows re-submitting a user’s own unchanged email', async ({
-    client,
-    assert,
-  }) => {
+  test('update allows re-submitting a user’s own unchanged email', async ({ client, assert }) => {
     const admin = await signupWithEmail(client, 'admin@example.com')
     const other = await signupWithEmail(client, 'other@example.com')
 
@@ -151,9 +148,7 @@ test.group('Admin user management', (group) => {
     response.assertStatus(422)
   })
 
-  test('update with a new password revokes the target’s existing tokens', async ({
-    client,
-  }) => {
+  test('update with a new password revokes the target’s existing tokens', async ({ client }) => {
     const admin = await signupWithEmail(client, 'admin@example.com')
     const other = await signupWithEmail(client, 'other@example.com')
 
