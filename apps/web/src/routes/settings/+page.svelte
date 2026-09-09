@@ -8,7 +8,7 @@
 	import type { MetaResponse, UserDto } from '@everylist/shared';
 	import { fetchMeta } from '$lib/api/meta';
 	import { formatBuildDate } from '$lib/api/format-build-date';
-	import { clearToken } from '$lib/api/token';
+	import { clearToken, getToken } from '$lib/api/token';
 	import { clearServerUrl, getServerUrl } from '$lib/api/server-url';
 	import { getThemePreference, setThemePreference, type ThemePreference } from '$lib/theme';
 	import {
@@ -295,6 +295,10 @@
 	}
 
 	onMount(async () => {
+		if (!getToken()) {
+			void goto(resolve('/login'));
+			return;
+		}
 		themePreference = getThemePreference();
 		progressDisplayPreference = getProgressDisplayPreference();
 		accentPreference = getAccentPreference();

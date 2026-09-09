@@ -1,13 +1,15 @@
 import { page } from 'vitest/browser';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import type { QueuedMutation } from '$lib/offline/db';
+import { setToken, clearToken } from '$lib/api/token';
 import {
 	resetConnectivityForTesting,
 	setLastSuccessfulSyncAtForTesting,
 	setServerUnavailableForTesting
 } from '$lib/offline/connectivity.svelte';
 
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/offline/sync-queue', () => ({
 	queueCounts: vi.fn(),
 	pendingMutations: vi.fn(),
@@ -18,6 +20,7 @@ vi.mock('$lib/offline/sync-queue', () => ({
 vi.mock('$lib/offline/flush', () => ({ flushQueue: vi.fn(), onFlushOutcome: vi.fn() }));
 vi.mock('$lib/reload', () => ({ refreshApp: vi.fn() }));
 
+const { goto } = await import('$app/navigation');
 const { queueCounts, pendingMutations, failedMutations, retryMutation, dequeueMutation } =
 	await import('$lib/offline/sync-queue');
 const { flushQueue } = await import('$lib/offline/flush');
@@ -40,10 +43,24 @@ function mutation(overrides: Partial<QueuedMutation> & { id: number }): QueuedMu
 }
 
 describe('Sync status +page.svelte', () => {
+	beforeEach(() => {
+		setToken('test-token');
+	});
+
 	afterEach(() => {
 		resetConnectivityForTesting();
 		vi.useRealTimers();
 		vi.clearAllMocks();
+		clearToken();
+	});
+
+	it('redirects to /login when there is no token', async () => {
+		clearToken();
+		vi.mocked(goto).mockResolvedValue(undefined);
+
+		render(SyncStatusPage);
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 	});
 
 	it('sets the document title', async () => {

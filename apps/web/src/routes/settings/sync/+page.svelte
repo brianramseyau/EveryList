@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { Button } from 'flowbite-svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { getToken } from '$lib/api/token';
 	import type { QueuedMutation } from '$lib/offline/db';
 	import {
 		failedMutations,
@@ -66,13 +68,17 @@
 	}
 
 	onMount(() => {
+		if (!getToken()) {
+			void goto(resolve('/login'));
+			return;
+		}
 		void refresh();
 		pollInterval = setInterval(() => void refresh(), POLL_INTERVAL_MS);
 	});
 
 	onDestroy(() => {
-		// pollInterval is always set by onMount before onDestroy can run.
-		clearInterval(pollInterval!);
+		// pollInterval is null if onMount redirected an unauthenticated user before setting it.
+		if (pollInterval) clearInterval(pollInterval);
 	});
 
 	const entityLabel: Record<QueuedMutation['entityType'], string> = {

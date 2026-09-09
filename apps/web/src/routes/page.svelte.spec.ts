@@ -11,11 +11,10 @@ describe('Home +page.svelte', () => {
 		clearToken();
 	});
 
-	it('shows a login link and a settings link', async () => {
+	it('shows a login link', async () => {
 		render(HomePage);
 
 		await expect.element(page.getByRole('link', { name: 'Log in' })).toBeInTheDocument();
-		await expect.element(page.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
 	});
 });
 

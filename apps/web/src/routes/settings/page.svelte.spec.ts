@@ -55,7 +55,7 @@ const { ApiError } = await import('$lib/api/client');
 const { Capacitor } = await import('@capacitor/core');
 const { App } = await import('@capacitor/app');
 const { getServerUrl, clearServerUrl } = await import('$lib/api/server-url');
-const { getToken, setToken } = await import('$lib/api/token');
+const { getToken, setToken, clearToken } = await import('$lib/api/token');
 const { isDesktop, desktopInfo } = await import('$lib/platform/desktop');
 const { checkForDesktopUpdate } = await import('$lib/platform/desktop-update');
 const {
@@ -79,6 +79,7 @@ describe('Settings +page.svelte', () => {
 	let matchMediaSpy: ReturnType<typeof vi.spyOn>;
 
 	beforeEach(() => {
+		setToken('test-token');
 		// Screen Orientation and Shake to undo are gated on a coarse (touch) pointer, matching a
 		// phone/tablet — default the test environment (a real, mouse-driven headless browser) to
 		// report one so existing specs keep exercising these sections without each opting in
@@ -106,6 +107,10 @@ describe('Settings +page.svelte', () => {
 		vi.mocked(desktopInfo).mockReturnValue(null);
 		vi.mocked(notificationPlatform).mockReturnValue('unsupported');
 		vi.mocked(getDeadlineNotificationsPreference).mockReturnValue(false);
+		// Runs after the Capacitor platform mock is reset back to 'web' above — clearToken's
+		// native-auth-mirror path calls Capacitor.registerPlugin() when the platform reads
+		// 'android', which this suite's @capacitor/core mock doesn't implement.
+		clearToken();
 		// Orientation radio clicks persist the choice to localStorage (see the
 		// auto-rotate/not-supported tests) — clear it so it can't leak into a
 		// later spec file sharing this worker's browser context.
@@ -123,6 +128,15 @@ describe('Settings +page.svelte', () => {
 		render(SettingsPage);
 
 		await expect.poll(() => document.title).toBe('Settings — EveryList');
+	});
+
+	it('redirects to /login when there is no token', async () => {
+		clearToken();
+		vi.mocked(goto).mockResolvedValue(undefined);
+
+		render(SettingsPage);
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 	});
 
 	it('logs out and navigates to /login', async () => {
