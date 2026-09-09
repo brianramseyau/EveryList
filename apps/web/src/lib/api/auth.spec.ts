@@ -5,8 +5,16 @@ vi.mock('./token', () => ({ setToken: vi.fn(), clearToken: vi.fn() }));
 
 const { apiPost, apiGet, apiPatch } = await import('./client');
 const { setToken, clearToken } = await import('./token');
-const { fetchProfile, forgotPassword, login, logout, resetPassword, signup, updateProfile } =
-	await import('./auth');
+const {
+	changePassword,
+	fetchProfile,
+	forgotPassword,
+	login,
+	logout,
+	resetPassword,
+	signup,
+	updateProfile
+} = await import('./auth');
 
 const authResponse = {
 	user: {
@@ -97,5 +105,19 @@ describe('auth', () => {
 			password: 'newpassword123',
 			passwordConfirmation: 'newpassword123'
 		});
+	});
+
+	it('changePassword PATCHes the current password, new password, and sign-out preference', async () => {
+		vi.mocked(apiPatch).mockResolvedValue(authResponse.user);
+
+		const input = {
+			currentPassword: 'oldpassword',
+			password: 'newpassword123',
+			passwordConfirmation: 'newpassword123',
+			signOutOtherDevices: true
+		};
+		await expect(changePassword(input)).resolves.toEqual(authResponse.user);
+
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/account/password', input);
 	});
 });

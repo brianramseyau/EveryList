@@ -52,3 +52,12 @@ export function resetPassword(input: {
 }): Promise<void> {
 	return apiPost('/api/v1/auth/reset-password', input);
 }
+
+export function changePassword(input: {
+	currentPassword: string;
+	password: string;
+	passwordConfirmation: string;
+	signOutOtherDevices?: boolean;
+}): Promise<UserDto> {
+	return apiPatch('/api/v1/account/password', input);
+}

@@ -11,7 +11,7 @@ import { middleware } from '#start/kernel'
 import router from '@adonisjs/core/services/router'
 import { controllers } from '#generated/controllers'
 import app from '@adonisjs/core/services/app'
-import { authThrottle, listsThrottle } from '#start/limiter'
+import { authThrottle, listsThrottle, passwordChangeThrottle } from '#start/limiter'
 
 // Registers __transmit/events, __transmit/subscribe, and __transmit/unsubscribe
 // (see #start/transmit) before this file's own SPA catch-all route below. This
@@ -55,6 +55,13 @@ router
       .prefix('account')
       .as('profile')
       .use(middleware.auth())
+
+    // Kept out of the `account` group above so the throttle below can run
+    // after auth resolves `ctx.auth.user` (needed to key it per-user) — see
+    // start/limiter.ts for why this endpoint needs its own limit at all.
+    router
+      .patch('account/password', [controllers.Profile, 'updatePassword'])
+      .use([middleware.auth(), passwordChangeThrottle])
 
     router.get('meta', [controllers.Metas, 'show'])
 

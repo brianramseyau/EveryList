@@ -139,6 +139,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/access_tokens_controller').default['refresh']>>>
     }
   }
+  'profile.update_password': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/account/password'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/user').updatePasswordValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/user').updatePasswordValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/profile_controller').default['updatePassword']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/profile_controller').default['updatePassword']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'metas.show': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/meta'

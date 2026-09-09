@@ -26,6 +26,7 @@ export interface ApiDefinition {
       destroy: typeof routes['profile.access_tokens.destroy']
       refresh: typeof routes['profile.access_tokens.refresh']
     }
+    updatePassword: typeof routes['profile.update_password']
   }
   metas: {
     show: typeof routes['metas.show']
