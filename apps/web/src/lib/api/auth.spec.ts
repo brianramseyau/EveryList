@@ -2,9 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./client', () => ({ apiPost: vi.fn(), apiGet: vi.fn(), apiPatch: vi.fn() }));
 vi.mock('./token', () => ({ setToken: vi.fn(), clearToken: vi.fn() }));
+vi.mock('../offline/db', () => ({ clearLocalData: vi.fn() }));
 
 const { apiPost, apiGet, apiPatch } = await import('./client');
 const { setToken, clearToken } = await import('./token');
+const { clearLocalData } = await import('../offline/db');
 const {
 	changePassword,
 	fetchProfile,
@@ -58,21 +60,23 @@ describe('auth', () => {
 		expect(setToken).toHaveBeenCalledWith('tok-123');
 	});
 
-	it('logout clears the token even if the request fails', async () => {
+	it('logout clears the token and purges the local db even if the request fails', async () => {
 		vi.mocked(apiPost).mockRejectedValue(new Error('network error'));
 
 		await expect(logout()).rejects.toThrow('network error');
 
 		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/logout');
 		expect(clearToken).toHaveBeenCalled();
+		expect(clearLocalData).toHaveBeenCalled();
 	});
 
-	it('logout clears the token on success too', async () => {
+	it('logout clears the token and purges the local db on success too', async () => {
 		vi.mocked(apiPost).mockResolvedValue(undefined);
 
 		await logout();
 
 		expect(clearToken).toHaveBeenCalled();
+		expect(clearLocalData).toHaveBeenCalled();
 	});
 
 	it('fetchProfile GETs the current account', () => {

@@ -1,6 +1,7 @@
 import type { UserDto } from '@everylist/shared';
 import { apiGet, apiPatch, apiPost } from './client';
 import { clearToken, setToken } from './token';
+import { clearLocalData } from '../offline/db';
 
 interface AuthResponse {
 	user: UserDto;
@@ -38,6 +39,7 @@ export async function logout(): Promise<void> {
 		await apiPost('/api/v1/account/logout');
 	} finally {
 		clearToken();
+		await clearLocalData();
 	}
 }
 

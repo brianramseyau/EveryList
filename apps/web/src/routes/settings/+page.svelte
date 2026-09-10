@@ -37,6 +37,7 @@
 		setRememberListScrollPreference
 	} from '$lib/nav-direction';
 	import { fetchProfile, logout, updateProfile } from '$lib/api/auth';
+	import { failedMutations, pendingMutations } from '$lib/offline/sync-queue';
 	import { ApiError } from '$lib/api/client';
 	import { resetApp } from '$lib/pwa/reset';
 	import { checkForUpdate } from '$lib/pwa/update';
@@ -205,7 +206,32 @@
 		setRememberListScrollPreference(enabled);
 	}
 
+	let loggingOut = $state(false);
+	let confirmingLogout = $state(false);
+	let unsyncedCount = $state(0);
+	let unsyncedLogoutWarning = $derived(
+		`You have ${unsyncedCount} change${unsyncedCount === 1 ? '' : 's'} that ${unsyncedCount === 1 ? "hasn't" : "haven't"} finished syncing. Logging out will lose ${unsyncedCount === 1 ? 'it' : 'them'}.`
+	);
+
+	/** Logging out purges the locally cached Dexie data (it's a single database shared across
+	 * whoever's signed in on this device — see offline/db.ts's `clearLocalData`), so any
+	 * still-queued offline edits — pending or already-DLQ'd `failed` ones (see the sync-status
+	 * page) — would be lost with it. Route through the inline confirm below rather than
+	 * silently dropping them; `window.confirm` doesn't reliably render across every shell this
+	 * app runs in (web/PWA, Capacitor iOS/Android, Electron), so this mirrors the Reset section's
+	 * inline confirm instead. */
 	async function handleLogout() {
+		const [pending, failed] = await Promise.all([pendingMutations(), failedMutations()]);
+		unsyncedCount = pending.length + failed.length;
+		if (unsyncedCount > 0) {
+			confirmingLogout = true;
+			return;
+		}
+		await doLogout();
+	}
+
+	async function doLogout() {
+		loggingOut = true;
 		await logout();
 		await goto(resolve('/login'));
 	}
@@ -405,16 +431,42 @@
 			<span>Change password</span>
 			<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
 		</a>
-		<div class="flex items-center justify-between px-4 py-3">
-			<span class="text-sm font-medium">Signed in</span>
-			<button
-				type="button"
-				onclick={handleLogout}
-				class="text-sm text-gray-600 hover:underline dark:text-gray-400"
+		{#if confirmingLogout}
+			<div
+				class="flex items-center justify-between gap-2 border-t border-gray-200 px-4 py-3 text-sm dark:border-gray-700"
 			>
-				Log out
-			</button>
-		</div>
+				<p class="text-red-600 dark:text-red-400">{unsyncedLogoutWarning}</p>
+				<div class="flex shrink-0 gap-2">
+					<button
+						type="button"
+						onclick={doLogout}
+						disabled={loggingOut}
+						class="w-32 rounded-lg border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+					>
+						{loggingOut ? 'Logging out…' : 'Log out anyway'}
+					</button>
+					<button
+						type="button"
+						onclick={() => (confirmingLogout = false)}
+						disabled={loggingOut}
+						class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+					>
+						Cancel
+					</button>
+				</div>
+			</div>
+		{:else}
+			<div class="flex items-center justify-between px-4 py-3">
+				<span class="text-sm font-medium">Signed in</span>
+				<button
+					type="button"
+					onclick={handleLogout}
+					class="text-sm text-gray-600 hover:underline dark:text-gray-400"
+				>
+					Log out
+				</button>
+			</div>
+		{/if}
 	</section>
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">

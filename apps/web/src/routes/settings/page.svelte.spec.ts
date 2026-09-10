@@ -7,6 +7,7 @@ import {
 } from '$lib/offline/connectivity.svelte';
 import { stopShakeListening } from '$lib/shake';
 import { registerUndo, resetUndoForTesting } from '$lib/undo';
+import { getDb, resetDbForTesting } from '$lib/offline/db';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/auth', () => ({
@@ -95,7 +96,7 @@ describe('Settings +page.svelte', () => {
 		);
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		matchMediaSpy.mockRestore();
 		vi.unstubAllGlobals();
 		vi.clearAllMocks();
@@ -122,6 +123,10 @@ describe('Settings +page.svelte', () => {
 		stopShakeListening();
 		resetUndoForTesting();
 		resetConnectivityForTesting();
+		// This suite's logout tests write real rows into the syncQueue table (the page's
+		// pendingMutations() check hits the real Dexie db, unlike $lib/api/auth which is mocked
+		// above) — reset so a queued row from one test doesn't leak into the next.
+		await resetDbForTesting();
 	});
 
 	it('sets the document title', async () => {
@@ -148,8 +153,123 @@ describe('Settings +page.svelte', () => {
 
 		await page.getByRole('button', { name: 'Log out' }).click();
 
-		expect(logout).toHaveBeenCalled();
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(logout).toHaveBeenCalled();
+	});
+
+	it('shows an inline confirm before logging out when a change is still queued, and honors cancel', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(logout).mockResolvedValue(undefined);
+		vi.mocked(goto).mockResolvedValue(undefined);
+		await getDb()!.syncQueue.add({
+			entityType: 'item',
+			op: 'update',
+			targetId: 1,
+			expectedVersion: 1,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x',
+			status: 'pending',
+			attempts: 0,
+			createdAt: Date.now()
+		});
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Log out' }).click();
+
+		await expect.element(page.getByText(/1 change that/)).toBeInTheDocument();
+		expect(logout).not.toHaveBeenCalled();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		await expect.element(page.getByRole('button', { name: 'Log out' })).toBeInTheDocument();
+		expect(logout).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('pluralizes the inline confirm when multiple changes are queued', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(logout).mockResolvedValue(undefined);
+		vi.mocked(goto).mockResolvedValue(undefined);
+		const db = getDb()!;
+		await db.syncQueue.add({
+			entityType: 'item',
+			op: 'update',
+			targetId: 1,
+			expectedVersion: 1,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x',
+			status: 'pending',
+			attempts: 0,
+			createdAt: Date.now()
+		});
+		await db.syncQueue.add({
+			entityType: 'item',
+			op: 'update',
+			targetId: 2,
+			expectedVersion: 1,
+			payload: { name: 'Bread' },
+			url: '/api/v1/x',
+			status: 'pending',
+			attempts: 0,
+			createdAt: Date.now()
+		});
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Log out' }).click();
+
+		await expect.element(page.getByText(/2 changes that.*lose them/)).toBeInTheDocument();
+	});
+
+	it('counts already-failed (DLQ) mutations toward the confirm, not just pending ones', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(logout).mockResolvedValue(undefined);
+		vi.mocked(goto).mockResolvedValue(undefined);
+		await getDb()!.syncQueue.add({
+			entityType: 'item',
+			op: 'update',
+			targetId: 1,
+			expectedVersion: 1,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x',
+			status: 'failed',
+			attempts: 5,
+			createdAt: Date.now(),
+			lastError: 'network error'
+		});
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Log out' }).click();
+
+		await expect.element(page.getByText(/1 change that/)).toBeInTheDocument();
+		expect(logout).not.toHaveBeenCalled();
+	});
+
+	it('logs out anyway when the user confirms losing a queued change', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(logout).mockResolvedValue(undefined);
+		vi.mocked(goto).mockResolvedValue(undefined);
+		await getDb()!.syncQueue.add({
+			entityType: 'item',
+			op: 'update',
+			targetId: 1,
+			expectedVersion: 1,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x',
+			status: 'pending',
+			attempts: 0,
+			createdAt: Date.now()
+		});
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Log out' }).click();
+		await page.getByRole('button', { name: 'Log out anyway' }).click();
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(logout).toHaveBeenCalled();
 	});
 
 	it('shows build metadata once /api/v1/meta resolves', async () => {
