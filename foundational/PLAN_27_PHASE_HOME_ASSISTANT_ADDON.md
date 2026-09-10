@@ -28,12 +28,8 @@ release automatically (see below), which is a plain in-repo commit with the
 default `GITHUB_TOKEN` and would otherwise need a PAT with write access to
 a second repo.
 
-Deliberately deferred out of v1:
-- **Ingress** (embedding the UI in the HA sidebar via Supervisor's reverse
-  proxy) — the SvelteKit SPA's asset paths, cookies, and CORS/`APP_URL`
-  handling haven't been verified against ingress's path-prefix proxying.
-  v1 ships a plain port mapping + `webui` link, same UX as the Unraid
-  template today.
+Deliberately deferred out of v1 (Ingress landed in a follow-up — see
+"Ingress support" below):
 - **PUID/PGID exposure** — meaningful for Unraid/LSIO-style host bind
   mounts, not for Supervisor-managed `addon_config` volumes. Left at the
   image's baked-in defaults (99:100), not surfaced as an add-on option.
@@ -146,8 +142,94 @@ this add-on (runs the server itself).
   and `config.yaml` now carries a comment explaining why, so this doesn't
   regress on a future edit.
 
+## Ingress support
+
+The plain-port `webui` link 404'd against the user's real setup: their
+reverse proxy fronts Home Assistant's own domain only, the same way every
+other Ingress add-on they run (e.g. AdGuard) already works, and had no
+route for EveryList's separate host port. Verified with an Explore agent
+against `apps/web`/`apps/api` before touching anything, since Ingress had
+been deferred specifically because this wasn't yet known to be safe:
+
+- Supervisor's ingress proxy strips its per-install, random token path
+  prefix (`/api/hassio_ingress/<token>/...`) before forwarding to the
+  container, so the *server* never needs to know about it — but the
+  browser resolves any **root-absolute** URL the app emits
+  (`/api/v1/...`, `/_app/...`, the PWA manifest, service worker scope)
+  against the real page URL, bypassing that prefix and 404ing.
+- EveryList is root-absolute almost everywhere: every API call funnels
+  through `apps/web/src/lib/api/base-url.ts`'s `apiBaseUrl()` with a
+  literal `/api/v1/...` path; `apps/web/vite.config.ts` sets
+  adapter-static's `paths.relative: false` **deliberately**, for
+  Capacitor's native WebView SPA fallback — not touched here, since
+  flipping it back risks reintroducing that native-app bug; the PWA
+  manifest/Workbox config (`apps/web/pwa.config.mjs`) is root-absolute
+  too.
+- `apps/api/start/routes.ts`'s SPA-fallback wildcard route is the *only*
+  HTML response with a server-side hook at all — prerendered pages are
+  served directly by `@adonisjs/static` (runs before routing, no
+  per-request customization). A static build has no way to bake a
+  runtime-only ingress token into an arbitrary prerendered page, so the
+  fix has to control *which* URL the Ingress iframe ever loads, not
+  rewrite arbitrary pages.
+
+**Implementation**: `ha-addon/everylist/config.yaml` sets `ingress: true`,
+`ingress_port: 3000`, `ingress_entry: /_ha-ingress-entry` — a path that
+isn't one of `apps/web`'s real routes, so it always falls through to the
+wildcard route instead of being served as a static file.
+`apps/api/start/routes.ts`'s wildcard route now checks for the
+`x-ingress-path` request header (verify the exact header name against
+current HA developer docs if this ever needs revisiting — an external,
+evolving contract); when present, `#services/ingress_service`'s
+`rewriteHtmlForIngress()` rewrites every root-absolute `src="/`/`href="/`
+in `200.html` to be prefixed, and injects
+`window.__EVERYLIST_INGRESS_BASE__ = "<prefix>";` as the first thing in
+`<head>`. No header → today's exact `response.download()` behavior,
+byte-for-byte; every other route is untouched.
+
+On the frontend, `apps/web/src/lib/api/ingress.ts` (`ingressBase()`,
+`isIngress()`) reads that global. `base-url.ts`'s `apiBaseUrl()` checks it
+ahead of the existing native `getServerUrl()` source — since every
+API/realtime/push call already funnels through that one function, this
+single change covers every call site with no literal-path hunting.
+`+layout.svelte` skips Service Worker registration and the PWA install
+prompt entirely under ingress (same signal, same file) — "install as a
+PWA" pointed at a rotating per-install token URL isn't coherent, so this
+sidesteps the SW-scope/manifest-prefix problem rather than solving it.
+
+**Known, accepted limitation**: SvelteKit's client-side router
+(`resolve()`/`goto()` — confirmed no raw `goto('/...')` literals anywhere)
+bakes its `base` in at build time, so a hard refresh or a direct deep link
+to a sub-page while inside the Ingress iframe still lands outside the
+proxy prefix and 404s. Everything after the first load runs client-side
+with no further server round-trip, so this only matters on an explicit
+refresh — reopening the add-on from Home Assistant always returns to a
+working state. Documented in `ha-addon/everylist/DOCS.md`, not left as a
+silent surprise.
+
+**Tests**: `apps/api/tests/unit/ingress_service.spec.ts` (the pure
+rewrite function — prefixing, global injection, `<head>` with attributes,
+protocol-relative/external/already-relative URLs left untouched, no
+`<head>` at all as a defensive fallback) and
+`apps/api/tests/functional/spa_fallback.spec.ts` (the route: no header →
+unchanged, header → rewritten + correct content-type, `/api/*` still
+404s as JSON either way). `apps/web/src/lib/api/ingress.spec.ts` +
+`ingress.svelte.spec.ts` (no-window guard + real-browser global) and an
+updated `base-url.spec.ts` (ingress source takes priority over native).
+`+layout.svelte` itself is excluded from the web coverage gate (framework
+glue, per `vite.config.ts`), so its SW/install-prompt skip isn't unit
+tested — covered by the live-instance verification below instead.
+
+**Verification** (live instance, in addition to Phase 1's list): confirm
+the add-on now opens through the existing reverse-proxy path with no
+separate port; log in and exercise the golden path (create a list,
+add/check items, realtime update) entirely inside the iframe; confirm the
+documented refresh caveat behaves as described (lands outside the proxy,
+not a crash, reopening recovers); confirm the plain-port `webui` link
+still works unchanged.
+
 ## Out of scope (future)
 
-Ingress support; submitting to the official Home Assistant Community
-Add-ons repository (a much higher bar — code review, its own contribution
-guidelines — not needed for self-hosting via a personal add-on repository).
+Submitting to the official Home Assistant Community Add-ons repository (a
+much higher bar — code review, its own contribution guidelines — not
+needed for self-hosting via a personal add-on repository).

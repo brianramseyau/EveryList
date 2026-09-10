@@ -11,6 +11,7 @@
 	import { getServerUrl } from '$lib/api/server-url';
 	import { fetchSetupStatus } from '$lib/api/setup';
 	import { isRemoteClient } from '$lib/platform/desktop';
+	import { isIngress } from '$lib/api/ingress';
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
 	import { initOrientation } from '$lib/orientation';
@@ -157,7 +158,12 @@
 		startFlushLoop();
 		startConnectivityMonitor();
 		startBackgroundSync();
-		initInstallPrompt();
+		// Installing a PWA / registering a Service Worker pointed at Home Assistant's Ingress
+		// URL (a random, per-install token path Supervisor can rotate) isn't a coherent concept —
+		// skipped entirely under ingress, same reasoning as the native/desktop skip below, rather
+		// than trying to scope either mechanism to it. See $lib/api/ingress.ts and
+		// PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
+		if (!isIngress()) initInstallPrompt();
 		// The Workbox service worker is meaningful for the browser/PWA build (offline caching,
 		// update prompts) but Capacitor's WebView already loads the bundle from local files —
 		// there's no real network layer for it to usefully intercept there, and registering one
@@ -166,7 +172,7 @@
 		// (PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §2/§4) — a Workbox precache over that loopback origin adds
 		// nothing and reintroduces the same stale-asset bug class. Skip it entirely on either
 		// rather than relying on it merely no-oping harmlessly.
-		if (!isRemoteClient()) {
+		if (!isRemoteClient() && !isIngress()) {
 			// Belt-and-suspenders for a device that logged in before the service worker's
 			// "Complete"/"Snooze" notification actions shipped: setToken/clearToken keep the mirror
 			// current from here on, but a token set before that point never went through them.

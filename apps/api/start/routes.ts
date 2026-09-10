@@ -12,6 +12,8 @@ import router from '@adonisjs/core/services/router'
 import { controllers } from '#generated/controllers'
 import app from '@adonisjs/core/services/app'
 import { authThrottle, listsThrottle, passwordChangeThrottle } from '#start/limiter'
+import { readFile } from 'node:fs/promises'
+import { rewriteHtmlForIngress } from '#services/ingress_service'
 
 // Registers __transmit/events, __transmit/subscribe, and __transmit/unsubscribe
 // (see #start/transmit) before this file's own SPA catch-all route below. This
@@ -300,10 +302,30 @@ router
  * before routing — so this only ever fires for a path that isn't a real file,
  * letting SvelteKit's client-side router take over. A stray /api/v1/* miss
  * still 404s as JSON instead of getting the HTML shell.
+ *
+ * Also doubles as the Home Assistant add-on's Ingress entry point
+ * (ha-addon/everylist/config.yaml's `ingress_entry: /_ha-ingress-entry` - a
+ * path that isn't one of apps/web's real routes, so it always falls through
+ * to here instead of the static middleware, which has no per-request
+ * customization hook). When Supervisor's ingress proxy is in front of this
+ * request (`x-ingress-path` header - stripped before reaching this
+ * container otherwise), the shell gets rewritten so its root-absolute asset
+ * references resolve under that proxy's prefix instead of 404ing - see
+ * #services/ingress_service and foundational/PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
+ * No header present → byte-identical to the plain `response.download` this
+ * replaced; every other route (prerendered pages, /api/*) is untouched.
  */
-router.get('*', ({ request, response }) => {
+router.get('*', async ({ request, response }) => {
   if (request.url().startsWith('/api/')) {
     return response.notFound({ message: 'Not found' })
   }
-  return response.download(app.publicPath('200.html'))
+
+  const ingressPath = request.header('x-ingress-path')
+  if (!ingressPath) {
+    return response.download(app.publicPath('200.html'))
+  }
+
+  const html = await readFile(app.publicPath('200.html'), 'utf-8')
+  response.header('content-type', 'text/html; charset=utf-8')
+  return response.send(rewriteHtmlForIngress(html, ingressPath))
 })
