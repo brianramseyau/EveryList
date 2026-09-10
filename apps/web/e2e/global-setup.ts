@@ -24,8 +24,8 @@ export default async function globalSetup() {
 	});
 	if (!status.data.needsSetup) return;
 
-	const response = await withRetries(() =>
-		fetch(`${API_BASE}/api/v1/setup`, {
+	await withRetries(async () => {
+		const response = await fetch(`${API_BASE}/api/v1/setup`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
@@ -35,13 +35,15 @@ export default async function globalSetup() {
 				passwordConfirmation: 'correct horse battery staple',
 				backup: { frequency: 'weekly', timeOfDay: '03:00', retentionCount: 4 }
 			})
-		})
-	);
-	// A 409 here means another worker's globalSetup (or a stale server from a previous run) beat
-	// this one to it — setup is done either way, which is all this function needs.
-	if (!response.ok && response.status !== 409) {
-		throw new Error(`E2E global setup failed: POST /api/v1/setup returned ${response.status}`);
-	}
+		});
+		// A 409 means another worker's globalSetup (or a stale server from a previous run) beat
+		// this one to it — setup is done either way, so treat it as success rather than retrying.
+		// Any other non-2xx (including a transient 5xx during the startup window) is retried the
+		// same way the status check above retries one, instead of failing the whole run outright.
+		if (!response.ok && response.status !== 409) {
+			throw new Error(`POST /api/v1/setup returned ${response.status}`);
+		}
+	});
 }
 
 async function withRetries<T>(attempt: () => Promise<T>): Promise<T> {
