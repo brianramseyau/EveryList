@@ -3036,6 +3036,38 @@ describe('List detail +page.svelte', () => {
 		expect(fetchList).toHaveBeenCalledTimes(1);
 	});
 
+	it('suppresses the refresh for a create broadcast while this client has one of its own item creates in flight for the same list', async () => {
+		// A create's broadcast can't be matched against `isSelfMutation` — the creating client
+		// only learns the row's real id from its own request's response, which may resolve
+		// after the broadcast arrives. Reproduces the sortable-prototype E2E flake: without this
+		// suppression, a reload here would race `offlineCreate`'s own resolution and merge the
+		// server's real row in alongside the not-yet-deleted optimistic temp row.
+		const { enqueueMutation } = await import('$lib/offline/sync-queue');
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'create',
+			targetId: -1,
+			expectedVersion: null,
+			payload: { name: 'Vexnal Item', listId: 1 },
+			url: '/api/v1/lists/1/items'
+		});
+
+		let handler: (event: SyncEventDto) => void = () => {};
+		vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
+			handler = onEvent;
+			return vi.fn();
+		});
+
+		render(ListDetailPage);
+		await expect
+			.element(page.getByText('Nothing here yet. Add your first item above.'))
+			.toBeInTheDocument();
+
+		handler({ entityType: 'item', entityId: 30, op: 'create', payload: null, version: 1 });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(fetchList).toHaveBeenCalledTimes(1);
+	});
+
 	it('silently refreshes when the offline flush loop reconciles a conflict', async () => {
 		let handler: ConflictListener = () => {};
 		vi.mocked(onConflict).mockImplementation((listener) => {

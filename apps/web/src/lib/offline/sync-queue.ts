@@ -94,6 +94,53 @@ export async function enqueueConsolidated(
 	return { id, alreadyPending: pending.length > 0 };
 }
 
+/** Bounds how long a queued create/attach can suppress a realtime reload for its list — see
+ * `hasPendingCreateForList` below. Matches `self-mutations.ts`'s own suppression window: the race
+ * this guards against (the create's realtime broadcast arriving before its own HTTP response)
+ * resolves in a single request round trip, not however long the mutation stays queued (which, for
+ * an offline create, could be arbitrarily long — see the WARNING this constant fixes).
+ *
+ * This is a deliberate, imperfect heuristic, not a precise fix — there's no id shared between a
+ * temp row and its eventual realtime broadcast to correlate them exactly (that would need a
+ * client-generated request id threaded through `broadcastSync` and `SyncEventDto`, a much larger
+ * change than this bug warrants). Any fixed window trades one direction of the original race for
+ * the other: too long, and a genuinely concurrent create from another device on this list can be
+ * silently dropped within the window (accepted below); too short, and an unusually slow (>10s) own
+ * create re-opens the exact race this exists to close. 10s is chosen as generous for a normal
+ * request round trip while still being a small fraction of how long an offline create can sit
+ * queued — narrowing the window doesn't eliminate the trade-off, only shifts which side is more
+ * likely to bite. */
+const PENDING_CREATE_WINDOW_MS = 10_000;
+
+/** True while a `create`/`attach` mutation for this list was enqueued within the last
+ * `PENDING_CREATE_WINDOW_MS` and is still queued. Lets a realtime `create` broadcast for the same
+ * list recognize "this might be my own in-flight create" and skip a redundant reload that would
+ * otherwise race the create's own resolution — see the realtime handler in
+ * `routes/lists/[id]/+page.svelte` and AGENTS.md's sortable-prototype E2E flake writeup.
+ *
+ * Deliberately time-bounded rather than "any pending create for this list, however old": an
+ * offline create can stay queued far longer than the single request round trip this is guarding
+ * against, and a list-wide (not per-item) suppression that lasted the whole queued duration would
+ * silently drop a genuinely concurrent create broadcast from another device on the same list for
+ * as long as this client stayed offline. */
+export async function hasPendingCreateForList(
+	entityType: SyncEntityType,
+	listId: number
+): Promise<boolean> {
+	const db = getDb();
+	if (!db) return false;
+
+	const cutoff = Date.now() - PENDING_CREATE_WINDOW_MS;
+	const pending = await db.syncQueue.where('status').equals('pending').toArray();
+	return pending.some(
+		(row) =>
+			row.entityType === entityType &&
+			(row.op === 'create' || row.op === 'attach') &&
+			row.payload?.listId === listId &&
+			row.createdAt >= cutoff
+	);
+}
+
 /** All `pending` mutations, oldest first — the flush loop's replay order (PLAN_05_PHASE_OFFLINE_PWA.md §4). */
 export async function pendingMutations(): Promise<QueuedMutation[]> {
 	// Provably covered in isolation — other spec files' `vi.mock('./db', …)`/
