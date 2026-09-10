@@ -13,7 +13,7 @@ import { controllers } from '#generated/controllers'
 import app from '@adonisjs/core/services/app'
 import { authThrottle, listsThrottle, passwordChangeThrottle } from '#start/limiter'
 import { readFile } from 'node:fs/promises'
-import { rewriteHtmlForIngress } from '#services/ingress_service'
+import { isValidIngressPath, rewriteHtmlForIngress } from '#services/ingress_service'
 
 // Registers __transmit/events, __transmit/subscribe, and __transmit/unsubscribe
 // (see #start/transmit) before this file's own SPA catch-all route below. This
@@ -295,6 +295,33 @@ router
   .prefix('/api/v1')
 
 /**
+ * The Ingress-scope-shadowing worker (see PLAN_27's "root-scoped service worker" fix): Home
+ * Assistant's own frontend service worker is registered at scope `/` (the whole origin), so it
+ * becomes the controller for any page under that origin by default - including this app's Ingress
+ * iframe, since nothing more specific is registered for it, silently 404ing this app's asset
+ * fetches. A worker registered at a more specific scope always wins over `/`, so
+ * apps/web/src/lib/api/ingress.ts registers this one at the ingress path prefix specifically to
+ * take precedence there. Deliberately trivial - no caching, not a real PWA registration, just
+ * enough to claim that scope and pass every fetch straight to network.
+ *
+ * Registered before the `*` SPA fallback below - matchit (the route matcher) returns the first
+ * pattern in registration order that matches, with no static-vs-wildcard prioritization (see this
+ * file's own top comment on the __transmit routes for exactly this footgun), so this would never
+ * be reached if it came after the wildcard.
+ */
+router.get('/_ha-ingress-shadow-sw.js', ({ response }) => {
+  response.header('content-type', 'text/javascript; charset=utf-8')
+  return response.send(
+    `self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', (event) => {
+  event.respondWith(fetch(event.request));
+});
+`
+  )
+})
+
+/**
  * SPA fallback: apps/web is built with adapter-static's `fallback: '200.html'`
  * (see apps/web/vite.config.ts) so routes with no known params at build time
  * (e.g. /lists/:id) aren't prerendered. Static files under public/ (prerendered
@@ -304,16 +331,20 @@ router
  * still 404s as JSON instead of getting the HTML shell.
  *
  * Also doubles as the Home Assistant add-on's Ingress entry point
- * (ha-addon/everylist/config.yaml's `ingress_entry: /_ha-ingress-entry` - a
- * path that isn't one of apps/web's real routes, so it always falls through
- * to here instead of the static middleware, which has no per-request
- * customization hook). When Supervisor's ingress proxy is in front of this
- * request (`x-ingress-path` header - stripped before reaching this
- * container otherwise), the shell gets rewritten so its root-absolute asset
+ * (ha-addon/everylist/config.yaml's `ingress_entry: /ha-ingress-entry` -
+ * apps/web/src/routes/ha-ingress-entry/ is a real route the client router
+ * recognizes post-hydration, but deliberately excluded from prerendering so
+ * it always falls through to here instead of the static middleware, which
+ * has no per-request customization hook). When Supervisor's ingress proxy
+ * is in front of this request (`x-ingress-path` header - stripped before
+ * reaching this container otherwise) and its value matches Supervisor's
+ * actual format, the shell gets rewritten so its root-absolute asset
  * references resolve under that proxy's prefix instead of 404ing - see
  * #services/ingress_service and foundational/PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
- * No header present → byte-identical to the plain `response.download` this
- * replaced; every other route (prerendered pages, /api/*) is untouched.
+ * No header, or a header that doesn't match the expected format (untrusted
+ * input - see isValidIngressPath) → byte-identical to the plain
+ * `response.download` this replaced; every other route (prerendered pages,
+ * /api/*) is untouched.
  */
 router.get('*', async ({ request, response }) => {
   if (request.url().startsWith('/api/')) {
@@ -321,11 +352,12 @@ router.get('*', async ({ request, response }) => {
   }
 
   const ingressPath = request.header('x-ingress-path')
-  if (!ingressPath) {
+  if (!ingressPath || !isValidIngressPath(ingressPath)) {
     return response.download(app.publicPath('200.html'))
   }
 
   const html = await readFile(app.publicPath('200.html'), 'utf-8')
   response.header('content-type', 'text/html; charset=utf-8')
+  response.header('vary', 'x-ingress-path')
   return response.send(rewriteHtmlForIngress(html, ingressPath))
 })

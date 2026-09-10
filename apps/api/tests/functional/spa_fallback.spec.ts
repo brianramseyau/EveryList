@@ -30,7 +30,7 @@ test.group('SPA fallback / Home Assistant Ingress entry point', (group) => {
     assert,
   }) => {
     const response = await client
-      .get('/_ha-ingress-entry')
+      .get('/ha-ingress-entry')
       .header('x-ingress-path', '/api/hassio_ingress/abc123')
 
     response.assertStatus(200)
@@ -40,6 +40,18 @@ test.group('SPA fallback / Home Assistant Ingress entry point', (group) => {
     )
     assert.include(response.text(), 'href="/api/hassio_ingress/abc123/manifest.webmanifest"')
     assert.match(response.header('content-type')!, /text\/html/)
+    assert.equal(response.header('vary'), 'x-ingress-path')
+  })
+
+  test('falls back to the unmodified shell when x-ingress-path does not match the expected format', async ({
+    client,
+    assert,
+  }) => {
+    const response = await client.get('/ha-ingress-entry').header('x-ingress-path', '/etc/passwd')
+
+    response.assertStatus(200)
+    assert.equal(response.text(), FIXTURE)
+    assert.notInclude(response.text(), '__EVERYLIST_INGRESS_BASE__')
   })
 
   test('still 404s a missed /api/* route as JSON, ingress header or not', async ({
@@ -52,5 +64,18 @@ test.group('SPA fallback / Home Assistant Ingress entry point', (group) => {
 
     response.assertStatus(404)
     assert.equal(response.body().message, 'Not found')
+  })
+})
+
+test.group('Ingress scope-shadowing service worker route', () => {
+  test('serves a plain-passthrough worker script', async ({ client, assert }) => {
+    const response = await client.get('/_ha-ingress-shadow-sw.js')
+
+    response.assertStatus(200)
+    assert.match(response.header('content-type')!, /text\/javascript/)
+    const body = response.text()
+    assert.include(body, 'skipWaiting')
+    assert.include(body, 'clients.claim()')
+    assert.include(body, 'fetch(event.request)')
   })
 })

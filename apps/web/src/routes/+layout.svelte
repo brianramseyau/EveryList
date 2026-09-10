@@ -11,7 +11,7 @@
 	import { getServerUrl } from '$lib/api/server-url';
 	import { fetchSetupStatus } from '$lib/api/setup';
 	import { isRemoteClient } from '$lib/platform/desktop';
-	import { isIngress } from '$lib/api/ingress';
+	import { isIngress, registerIngressShadowServiceWorker } from '$lib/api/ingress';
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
 	import { initOrientation } from '$lib/orientation';
@@ -158,12 +158,18 @@
 		startFlushLoop();
 		startConnectivityMonitor();
 		startBackgroundSync();
-		// Installing a PWA / registering a Service Worker pointed at Home Assistant's Ingress
-		// URL (a random, per-install token path Supervisor can rotate) isn't a coherent concept —
-		// skipped entirely under ingress, same reasoning as the native/desktop skip below, rather
-		// than trying to scope either mechanism to it. See $lib/api/ingress.ts and
-		// PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
-		if (!isIngress()) initInstallPrompt();
+		// Installing a PWA / registering the *real* Service Worker pointed at Home Assistant's
+		// Ingress URL (a random, per-install token path Supervisor can rotate) isn't a coherent
+		// concept — skipped entirely under ingress, same reasoning as the native/desktop skip
+		// below, rather than trying to scope either mechanism to it. A separate, trivial
+		// scope-shadowing worker is still registered under ingress (see $lib/api/ingress.ts) —
+		// unrelated to either of those, it exists purely to stop Home Assistant's own root-scoped
+		// service worker from intercepting this app's fetches. See PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
+		if (isIngress()) {
+			void registerIngressShadowServiceWorker();
+		} else {
+			initInstallPrompt();
+		}
 		// The Workbox service worker is meaningful for the browser/PWA build (offline caching,
 		// update prompts) but Capacitor's WebView already loads the bundle from local files —
 		// there's no real network layer for it to usefully intercept there, and registering one

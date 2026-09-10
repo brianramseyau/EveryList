@@ -60,9 +60,15 @@ const shieldConfig = defineConfig({
     enabled: true,
 
     /**
-     * Block all framing attempts. Default value is DENY.
+     * SAMEORIGIN (not the default DENY) - Home Assistant's Ingress feature embeds this app in an
+     * <iframe> served from Home Assistant's own domain (see ha-addon/everylist/config.yaml's
+     * `ingress: true`) - the iframe and the parent page share the exact same origin, so
+     * SAMEORIGIN permits that embedding while still blocking the actual threat X-Frame-Options
+     * exists for: a *different* site framing EveryList for clickjacking. DENY would block
+     * same-origin framing too, breaking Ingress outright. See
+     * foundational/PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
      */
-    action: 'DENY',
+    action: 'SAMEORIGIN',
   },
 
   /**

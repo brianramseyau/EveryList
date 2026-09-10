@@ -1,5 +1,26 @@
 import { test } from '@japa/runner'
-import { rewriteHtmlForIngress } from '#services/ingress_service'
+import { isValidIngressPath, rewriteHtmlForIngress } from '#services/ingress_service'
+
+test.group('isValidIngressPath', () => {
+  test("accepts Supervisor's real format", ({ assert }) => {
+    assert.isTrue(isValidIngressPath('/api/hassio_ingress/abc123def456'))
+    assert.isTrue(isValidIngressPath('/api/hassio_ingress/ABC123DEF456'))
+  })
+
+  test('rejects a value that would break out of the HTML attribute', ({ assert }) => {
+    assert.isFalse(isValidIngressPath('/api/hassio_ingress/abc"><script>alert(1)</script>'))
+  })
+
+  test('rejects a value that would break out of the injected <script> body', ({ assert }) => {
+    assert.isFalse(isValidIngressPath('/api/hassio_ingress/abc</script><script>alert(1)</script>'))
+  })
+
+  test('rejects paths outside the expected prefix', ({ assert }) => {
+    assert.isFalse(isValidIngressPath('/etc/passwd'))
+    assert.isFalse(isValidIngressPath('/api/hassio_ingress/'))
+    assert.isFalse(isValidIngressPath(''))
+  })
+})
 
 test.group('rewriteHtmlForIngress', () => {
   test('prefixes root-absolute src/href attributes with the ingress path', ({ assert }) => {

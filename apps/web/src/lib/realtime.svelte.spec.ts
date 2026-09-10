@@ -85,6 +85,14 @@ describe('realtime', () => {
 		});
 	});
 
+	it('resolves a Home Assistant Ingress root-relative base to an absolute URL', () => {
+		vi.mocked(apiBaseUrl).mockReturnValue('/api/hassio_ingress/abc123');
+		subscribeToList(1, vi.fn());
+		expect(vi.mocked(Transmit).mock.calls[0][0]).toMatchObject({
+			baseUrl: `${window.location.origin}/api/hassio_ingress/abc123`
+		});
+	});
+
 	it('reuses the same client across multiple subscriptions', () => {
 		subscribeToList(1, vi.fn());
 		subscribeToList(2, vi.fn());

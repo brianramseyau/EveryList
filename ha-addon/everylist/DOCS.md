@@ -44,11 +44,12 @@ install.
   this if you're restoring onto a fresh install or intentionally rotating
   the key.
 
-Everything else — public signups, outbound mail (SMTP), automated backups,
-Alexa account-linking — is configured after first boot from inside the app
+Everything else — public signups, outbound mail (SMTP), Alexa
+account-linking — is configured after first boot from inside the app
 itself, under **Settings → Server settings** (visible to the instance
 owner). See the main [README](https://github.com/brianramseyau/EveryList#server-settings-configconfigyaml)
-for details.
+for details. Automated backups have their own page — see "Data & backups"
+below.
 
 ## Data & backups
 

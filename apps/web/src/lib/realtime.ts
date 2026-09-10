@@ -17,6 +17,22 @@ function hasWindow(): boolean {
 	return typeof window !== 'undefined';
 }
 
+/** Resolves apiBaseUrl()'s value to an absolute origin Transmit can use as `baseUrl`. Empty (web/
+ * PWA/Docker) resolves to the page's own origin, same as always; an already-absolute native
+ * server URL passes through unchanged (deliberately *not* routed through `new URL()`, which would
+ * normalize a bare origin by adding a trailing slash — `server-url.ts` stores it without one, and
+ * introducing a mismatch there risks a double slash if Transmit ever concatenates naively). Only
+ * the Home Assistant Ingress case is actually new: `apiBaseUrl()` returns a root-relative path
+ * there (`/api/hassio_ingress/<token>`, see `api/ingress.ts`), which used to short-circuit past
+ * the old `apiBaseUrl() || window.location.origin` fallback and hand Transmit something that
+ * isn't a valid absolute URL at all. */
+export function resolveRealtimeBaseUrl(): string {
+	const base = apiBaseUrl();
+	if (base === '') return window.location.origin;
+	if (base.startsWith('/')) return window.location.origin + base;
+	return base;
+}
+
 function getClient(): Transmit | null {
 	if (!hasWindow()) return null;
 	if (!client) {
@@ -28,7 +44,7 @@ function getClient(): Transmit | null {
 		// documented on `lib/api/selected-store.ts`, not missing coverage.
 		/* v8 ignore next 7 */
 		client = new Transmit({
-			baseUrl: apiBaseUrl() || window.location.origin,
+			baseUrl: resolveRealtimeBaseUrl(),
 			// transmit-client gives up permanently after 5 failed reconnect attempts by
 			// default (closing the EventSource and never retrying again), which
 			// co-shopping hits routinely: a phone locking, backgrounding, or losing

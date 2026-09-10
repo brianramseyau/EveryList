@@ -23,3 +23,87 @@ export function ingressBase(): string {
 export function isIngress(): boolean {
 	return ingressBase() !== '';
 }
+
+const RELOAD_ONCE_KEY = 'everylist:haIngressShadowSwReloaded';
+
+/** Resolves once `worker` reaches the `activated` state — i.e. after its `activate` handler's
+ * `clients.claim()` has actually run (see the route this registers,
+ * apps/api/start/routes.ts's `/_ha-ingress-shadow-sw.js`). Not exported — an implementation
+ * detail of `registerIngressShadowServiceWorker` below, split out only so it's independently
+ * testable without a real browser SW lifecycle. */
+export function waitForActivation(worker: ServiceWorker): Promise<void> {
+	if (worker.state === 'activated') return Promise.resolve();
+	return new Promise((resolve) => {
+		worker.addEventListener('statechange', function onStateChange() {
+			if (worker.state !== 'activated') return;
+			worker.removeEventListener('statechange', onStateChange);
+			resolve();
+		});
+	});
+}
+
+/**
+ * Registers a trivial service worker scoped specifically to the Ingress path prefix, so it takes
+ * precedence over Home Assistant's own root-scoped (`/`) service worker for this app's fetches —
+ * a more specific registered scope always wins over a broader one. See
+ * apps/api/start/routes.ts's `/_ha-ingress-shadow-sw.js` route and
+ * foundational/PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md for why HA's own worker ends up controlling
+ * this app's Ingress iframe at all.
+ *
+ * A freshly-registered worker's `clients.claim()` (in its `activate` handler) can take over an
+ * already-open page immediately, without a reload — but only for fetches issued *after* that
+ * completes; the handful of synchronous `<script src>`/modulepreload fetches the browser fires
+ * while parsing the initial HTML have usually already raced past it by the time this resolves.
+ * So: once this registration's worker reaches `activated` for the first time *this browser
+ * session* (a `sessionStorage` flag guards against reloading on every subsequent open, or in a
+ * loop), reload once so the reloaded page loads entirely under the shadow worker's control from
+ * the start — the same reload-once idea `+layout.svelte`'s own `onNeedReload` handler already
+ * uses for the real Workbox worker elsewhere in this app.
+ *
+ * `reload` is injectable (defaults to the real `window.location.reload`) purely for testing —
+ * `location.reload` isn't a configurable property in a real browser, so it can't be stubbed with
+ * `vi.spyOn` the way most other browser APIs in this codebase are.
+ */
+/* v8 ignore start */
+function reloadPage(): void {
+	window.location.reload();
+}
+/* v8 ignore stop */
+
+export async function registerIngressShadowServiceWorker(
+	reload: () => void = reloadPage
+): Promise<void> {
+	// No separate hasWindow() check needed - isIngress() already requires it (ingressBase() only
+	// ever returns a non-empty value when window exists), so reaching here guarantees it does.
+	if (!isIngress()) return;
+	// Genuinely untestable in this project's real-Chromium test environment (vitest-browser via
+	// Playwright) - `serviceWorker` is a Navigator.prototype accessor there, so deleting it as an
+	// own property (the usual stub-absence trick elsewhere in this codebase, e.g.
+	// pwa/push.svelte.spec.ts's afterEach) is a silent no-op; there's no supported browser left to
+	// genuinely lack it either. Kept as a defensive guard, not dead code.
+	/* v8 ignore next */
+	if (!('serviceWorker' in navigator)) return;
+
+	let registration: ServiceWorkerRegistration;
+	try {
+		registration = await navigator.serviceWorker.register(
+			`${ingressBase()}/_ha-ingress-shadow-sw.js`,
+			{ scope: `${ingressBase()}/` }
+		);
+	} catch {
+		return; // best-effort - HA's own worker still serves the page, just possibly broken
+	}
+
+	const worker = registration.installing ?? registration.waiting ?? registration.active;
+	if (worker) await waitForActivation(worker);
+
+	let alreadyReloaded = false;
+	try {
+		alreadyReloaded = window.sessionStorage.getItem(RELOAD_ONCE_KEY) === '1';
+		window.sessionStorage.setItem(RELOAD_ONCE_KEY, '1');
+	} catch {
+		// sessionStorage unavailable (e.g. privacy mode) - reload anyway; it just won't be
+		// remembered for the next open in this same session.
+	}
+	if (!alreadyReloaded) reload();
+}

@@ -174,9 +174,10 @@ been deferred specifically because this wasn't yet known to be safe:
   rewrite arbitrary pages.
 
 **Implementation**: `ha-addon/everylist/config.yaml` sets `ingress: true`,
-`ingress_port: 3000`, `ingress_entry: /_ha-ingress-entry` — a path that
-isn't one of `apps/web`'s real routes, so it always falls through to the
-wildcard route instead of being served as a static file.
+`ingress_port: 3000`, `ingress_entry: /ha-ingress-entry` — see "Fixing
+Ingress for real" below for why that's a real, deliberately
+non-prerendered route rather than a made-up path, so it always falls
+through to the wildcard route instead of being served as a static file.
 `apps/api/start/routes.ts`'s wildcard route now checks for the
 `x-ingress-path` request header (verify the exact header name against
 current HA developer docs if this ever needs revisiting — an external,
@@ -257,6 +258,125 @@ add/check items, realtime update) entirely inside the iframe; confirm the
 documented refresh caveat behaves as described (lands outside the proxy,
 not a crash, reopening recovers); confirm the plain-port `webui` link
 still works unchanged.
+
+## Fixing Ingress for real
+
+The service worker fix above was verified, live, to not be enough on its
+own — the iframe still rendered blank. This repo's PR #224 automated
+review (Kilo Code Review) caught several more fundamental problems in the
+same code, most of which are more directly responsible for the blank page
+than the service worker ever was. Each was verified against actual source
+before acting on it:
+
+1. **`X-Frame-Options: DENY` blocked the iframe outright.**
+   `apps/api/config/shield.ts` (`@adonisjs/shield`'s middleware, applied
+   globally) set `action: 'DENY'` — blocking *any* framing, same-origin
+   included. Ingress embeds this app in an iframe inside Home Assistant's
+   own frontend page; `DENY` refuses that regardless of anything else
+   being correct, before asset loading or the service worker even get a
+   chance to matter. Almost certainly the actual primary cause. Fixed:
+   `action: 'SAMEORIGIN'` — safe globally, not an ingress-only carve-out,
+   since HA's frontend and this app's ingress-proxied content share the
+   exact same origin. Still blocks the actual clickjacking threat
+   `X-Frame-Options` exists for (a *different* site framing EveryList).
+
+2. **`ingress_entry: /_ha-ingress-entry` was never a valid route, for two
+   independent reasons.** It didn't correspond to any real SvelteKit
+   route — `+layout.ts`'s `prerender = true` default makes every real
+   page a static file `@adonisjs/static` serves before routing runs, so
+   the entry had to be a made-up path to reach the rewrite route at all —
+   but SvelteKit's client router matches the *current URL* against the
+   real route table on hydration regardless of which HTML shell served
+   it, rendering its own 404 for an unmatched URL even with the rewrite
+   working perfectly. Separately, the leading underscore was itself a
+   SvelteKit routing-exclusion convention collision (`_`-prefixed
+   directories under `src/routes/` are excluded from routing entirely,
+   for colocating non-route files) — so the path was never routable in
+   the first place, independent of the prerendering problem. Fixed: a
+   new, real, deliberately non-prerendered route,
+   `apps/web/src/routes/ha-ingress-entry/` (no underscore) — `+page.ts`
+   sets `export const prerender = false` (keeps it dependent on the
+   200.html fallback, reaching the rewrite route) and its `load()`
+   unconditionally `redirect(307, resolve('/'))`s, reusing `/`'s own
+   existing "signed-in → `/lists`, else show the splash" logic
+   (`apps/web/src/routes/+page.ts`) instead of duplicating it — resolved
+   entirely client-side via SvelteKit's own router, no second HTTP
+   request. `config.yaml`'s `ingress_entry` updated to match.
+
+3. **Home Assistant's root-scoped service worker** — the original
+   finding above, unchanged: still needed once #1 and #2 let the page
+   actually render.
+
+4. **`x-ingress-path` was interpolated into HTML/JS unescaped.**
+   `ingress_service.ts` spliced the header value directly into
+   attributes and a `<script>` body with no validation — attacker
+   reachable (it's an HTTP header), even though normally
+   Supervisor-generated. Fixed: `isValidIngressPath()` checks it against
+   Supervisor's real format (`^/api/hassio_ingress/[a-f0-9]+$`) before
+   rewriting anything; a non-match is treated exactly like no header at
+   all (unmodified passthrough), not sanitized/escaped.
+
+5. **`apiBaseUrl()` returning a relative path broke `realtime.ts`'s
+   fallback.** `realtime.ts` did `apiBaseUrl() || window.location.origin`
+   — always absolute before this phase (`''` or a full native server
+   URL). Under ingress, `apiBaseUrl()` now returns a non-empty *relative*
+   path, short-circuiting the `||` and handing Transmit an invalid
+   `baseUrl`, breaking realtime sync specifically under ingress. Fixed:
+   new `resolveRealtimeBaseUrl()` — empty resolves to
+   `window.location.origin` (unchanged), an already-absolute native URL
+   passes through unchanged (deliberately *not* routed through `new
+   URL()`, which normalizes a bare origin by adding a trailing slash —
+   `server-url.ts` stores it without one), and a root-relative ingress
+   path resolves against `window.location.origin`.
+
+6. **Option-supplied `APP_KEY` was never persisted.**
+   `05-ha-options` set it as an env var but never wrote it to
+   `/config/app_key` the way `20-app-key` does for a generated key —
+   clearing the option later left `20-app-key` with neither an env var
+   nor a persisted file, silently generating a *new* key and invalidating
+   every existing session. Fixed: `05-ha-options` now also persists an
+   option-supplied `APP_KEY` to `/config/app_key` (same file/permissions
+   `20-app-key` itself uses), so clearing the option later still finds it
+   via the existing fallback.
+
+**Smaller fixes bundled in alongside these** (same files, low risk):
+`config.yaml`'s `app_url` schema type `str?` → `url?` (proper validation
+in the HA options UI); a `Vary: x-ingress-path` response header on the
+rewritten shell, since it's genuinely conditional on that header;
+`DOCS.md`'s Options section incorrectly implied automated backups live
+under Server settings — they have their own page (already correctly
+described in this same file's "Data & backups" section).
+
+**Findings checked and correctly not acted on**: CI's `bump-addon-version`
+job already explicitly checks out `ref: main` — not an "implicit target
+branch." The `version:` "v" prefix and `image:` tag resolution were both
+already empirically verified correct by the live install (the earlier
+`0.0.0` → `v1.4.0` fix *was* that verification). The test fixture
+teardown deleting `200.html` is intentional, matching this suite's
+existing setup/teardown-returns-cleanup pattern.
+
+**Tests**: unit tests for `isValidIngressPath` (valid format; each
+injection-shaped rejection — attribute breakout, script-body breakout;
+out-of-prefix/empty rejections) and for the new
+`ha-ingress-entry/+page.ts` redirect (mirrors the existing test for `/`'s
+own `load()` redirect). A `realtime.svelte.spec.ts` case for the
+ingress-relative-path resolving to an absolute URL. A functional test for
+the new `/_ha-ingress-shadow-sw.js` route. All pass at 100% coverage on
+both apps alongside the rest of the suite (`registerIngressShadowServiceWorker`
+needed two `/* v8 ignore */` markers — `window.location.reload` isn't
+mockable in this project's real-Chromium browser tests, so its default
+reload function is split into its own ignored block the same way
+`realtime.ts`'s Transmit constructor already is; a defensive
+`'serviceWorker' in navigator` check can't be forced false in that same
+real-Chromium environment either, for the same reason `Reflect.deleteProperty`
+can't remove a `Navigator.prototype` accessor).
+
+**Verification** (live instance, supersedes the earlier verification
+note): reinstall/refresh once more, open the Ingress panel, confirm it
+actually renders (not blank) — possibly with one visible reload on the
+first open this session (the shadow-worker race) — then the golden path
+end to end inside the iframe, and that a second open in the same browser
+session loads immediately with no reload and no 404s.
 
 ## Out of scope (future)
 

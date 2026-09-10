@@ -28,15 +28,17 @@ ports_description:
 webui: http://[HOST]:[PORT:3000]/
 # Ingress lets EveryList open through Home Assistant's own proxied domain (no separate port
 # needed through a reverse proxy in front of HA) - the default way in now that the port above is
-# off by default. ingress_entry deliberately isn't one of apps/web's real routes, so it always
-# reaches apps/api's SPA-fallback route (which recognizes it and rewrites the shell for the
-# ingress prefix) instead of being served as a static file - see
+# off by default. ingress_entry points at a real, dedicated SvelteKit route
+# (apps/web/src/routes/ha-ingress-entry/) that's deliberately excluded from prerendering, so it
+# always reaches apps/api's SPA-fallback route (which recognizes the ingress request and rewrites
+# the shell for the ingress prefix) instead of being served as a static file, while still being a
+# route the client router recognizes post-hydration instead of 404ing - see
 # foundational/PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md. panel_icon gives EveryList a proper icon
 # for Home Assistant's own "Show in sidebar" toggle (Settings > Add-ons > EveryList > Info) -
 # that toggle is native to any Ingress-enabled add-on, no extra config needed to make it appear.
 ingress: true
 ingress_port: 3000
-ingress_entry: /_ha-ingress-entry
+ingress_entry: /ha-ingress-entry
 panel_icon: mdi:format-list-checks
 map:
   - type: addon_config
@@ -46,5 +48,5 @@ options:
   app_url: ""
   app_key: ""
 schema:
-  app_url: str?
+  app_url: url?
   app_key: password?
