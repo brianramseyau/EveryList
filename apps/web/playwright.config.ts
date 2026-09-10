@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { API_PORT, WEB_PORT } from './e2e/ports';
 
 // The offline-sync E2E scenario needs a real API to round-trip through — the plain
 // `build && preview` static server has nowhere to proxy `/api/v1/*` requests to. So E2E runs
@@ -7,13 +8,15 @@ import { defineConfig } from '@playwright/test';
 // so a normal `pnpm dev` session's data is never touched.
 //
 // Dev binds the API on 3334 and the web app on 5174 (see apps/api/.env.example and
-// apps/web/vite.config.ts), so E2E steps one further to 3335/5175 to guarantee it never
-// collides with — or gets `reuseExistingServer`-reused by — an in-progress dev session.
-const API_PORT = 3335;
-const WEB_PORT = 5175;
+// apps/web/vite.config.ts), so E2E steps one further to 3335/5175 (see ./e2e/ports.ts) to
+// guarantee it never collides with — or gets `reuseExistingServer`-reused by — an
+// in-progress dev session.
 const DB_FILE = 'tmp/e2e.sqlite3';
 
 export default defineConfig({
+	// Completes the first-run setup wizard once against the real API, before any spec's own
+	// page.goto runs — see global-setup.ts for why.
+	globalSetup: './e2e/global-setup.ts',
 	webServer: [
 		{
 			command: `rm -f ${DB_FILE} && DATABASE_FILENAME=${DB_FILE} node ace migration:run --force && DATABASE_FILENAME=${DB_FILE} PORT=${API_PORT} node ace serve`,
