@@ -342,6 +342,37 @@ test.group('Server config', (group) => {
     assert.equal(mode, 0o600)
   })
 
+  test('still commits a successful write even when tightening its permissions afterward fails', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    // Some mounts accept writes but reject chmod (e.g. certain network/Windows binds) — the write
+    // itself must still count as having succeeded rather than reporting 403 for a change that's
+    // actually already on disk. fs.chmodSync is monkey-patched for this one call only, restored
+    // immediately after.
+    const originalChmodSync = fs.chmodSync
+    fs.chmodSync = () => {
+      throw new Error('EPERM: operation not permitted, chmod')
+    }
+    try {
+      const update = await client
+        .patch('/api/v1/server-config')
+        .header('Authorization', `Bearer ${token}`)
+        .json({ mailHost: 'mail.example.com' })
+      update.assertStatus(200)
+      assert.equal(bodyData<ServerConfigStateDto>(update).mailHost.value, 'mail.example.com')
+    } finally {
+      fs.chmodSync = originalChmodSync
+    }
+
+    const show = await client
+      .get('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+    assert.equal(bodyData<ServerConfigStateDto>(show).mailHost.value, 'mail.example.com')
+  })
+
   test('coerces a quoted "false"/"true" string in config.yaml into a real boolean, not a truthy string', async ({
     client,
     assert,
@@ -386,16 +417,17 @@ test.group('Server config', (group) => {
     assert.equal(state.mailPort.value, null)
   })
 
-  test('ignores a YAML .nan literal for a numeric setting, falling back to default', async ({
+  test('ignores a YAML .nan/.inf literal for a numeric setting, falling back to default', async ({
     client,
     assert,
   }) => {
     const token = await signupAndGetToken(client)
 
-    // YAML's `.nan` scalar parses straight to the JS number NaN — a genuine `number`-typed value
-    // that still isn't a usable port, so coerceFileValue rejects it explicitly rather than letting
-    // NaN flow into smtpTransportConfig.port.
-    fs.writeFileSync(serverConfigYamlPath(), 'mail:\n  port: .nan\n', 'utf8')
+    // YAML's `.nan`/`.inf` scalars parse straight to the JS number NaN/Infinity — genuinely
+    // `number`-typed values that still aren't a usable port, so coerceFileValue rejects both
+    // explicitly (Number.isFinite, not just Number.isNaN) rather than letting either flow into
+    // smtpTransportConfig.port.
+    fs.writeFileSync(serverConfigYamlPath(), 'mail:\n  port: .inf\n', 'utf8')
     loadFileCache()
 
     const show = await client
@@ -404,6 +436,116 @@ test.group('Server config', (group) => {
     const state = bodyData<ServerConfigStateDto>(show)
     assert.equal(state.mailPort.source, 'default')
     assert.equal(state.mailPort.value, null)
+  })
+
+  test('ignores an "Infinity"/whitespace-only numeric string in config.yaml, falling back to default', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    // Number('Infinity') and Number('  ') both succeed (Infinity and 0 respectively) without a
+    // finiteness/blank check — quoting either in a hand-edited file must not silently produce a
+    // usable-looking port.
+    fs.writeFileSync(serverConfigYamlPath(), "mail:\n  port: 'Infinity'\n", 'utf8')
+    loadFileCache()
+
+    const show = await client
+      .get('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+    const state = bodyData<ServerConfigStateDto>(show)
+    assert.equal(state.mailPort.source, 'default')
+    assert.equal(state.mailPort.value, null)
+  })
+
+  test('coerces a numeric YAML 0/1 for a boolean setting instead of falling back to default', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    // An unquoted `publicSignupEnabled: 0` parses as the YAML number 0, not a string — before the
+    // fix, coerceFileValue only accepted boolean/string raw values, so this fell through to
+    // "unset" and silently resolved to the default (true), re-enabling signups a hand-edited file
+    // meant to disable.
+    fs.writeFileSync(serverConfigYamlPath(), 'publicSignupEnabled: 0\n', 'utf8')
+    loadFileCache()
+
+    const show = await client
+      .get('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+    const state = bodyData<ServerConfigStateDto>(show)
+    assert.equal(state.publicSignupEnabled.source, 'file')
+    assert.equal(state.publicSignupEnabled.value, false)
+  })
+
+  test('coerces a numeric YAML 1 for a boolean setting to true', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+
+    fs.writeFileSync(serverConfigYamlPath(), 'publicSignupEnabled: 1\n', 'utf8')
+    loadFileCache()
+
+    const show = await client
+      .get('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+    const state = bodyData<ServerConfigStateDto>(show)
+    assert.equal(state.publicSignupEnabled.source, 'file')
+    assert.equal(state.publicSignupEnabled.value, true)
+  })
+
+  test('ignores a numeric YAML value that is neither 0 nor 1 for a boolean setting', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    fs.writeFileSync(serverConfigYamlPath(), 'publicSignupEnabled: 2\n', 'utf8')
+    loadFileCache()
+
+    const show = await client
+      .get('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+    const state = bodyData<ServerConfigStateDto>(show)
+    assert.equal(state.publicSignupEnabled.source, 'default')
+    assert.equal(state.publicSignupEnabled.value, null)
+  })
+
+  test('ignores a whitespace-only quoted numeric value in config.yaml, falling back to default', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    fs.writeFileSync(serverConfigYamlPath(), "mail:\n  port: '   '\n", 'utf8')
+    loadFileCache()
+
+    const show = await client
+      .get('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+    const state = bodyData<ServerConfigStateDto>(show)
+    assert.equal(state.mailPort.source, 'default')
+    assert.equal(state.mailPort.value, null)
+  })
+
+  test('ignores a whitespace-only SMTP2GO_PORT env var, falling back to file/default', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    const original = process.env.SMTP2GO_PORT
+    process.env.SMTP2GO_PORT = '   '
+    try {
+      const show = await client
+        .get('/api/v1/server-config')
+        .header('Authorization', `Bearer ${token}`)
+      const state = bodyData<ServerConfigStateDto>(show)
+      assert.equal(state.mailPort.source, 'default')
+      assert.equal(state.mailPort.value, null)
+    } finally {
+      if (original === undefined) delete process.env.SMTP2GO_PORT
+      else process.env.SMTP2GO_PORT = original
+    }
   })
 
   test('coerces a quoted numeric string in config.yaml into a real number', async ({

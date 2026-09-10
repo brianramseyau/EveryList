@@ -244,14 +244,20 @@ function parseBoolean(raw: string): boolean | undefined {
 function coerceFileValue(setting: SettingDef, raw: unknown): string | number | boolean | undefined {
   if (setting.type === 'boolean') {
     if (typeof raw === 'boolean') return raw
+    // An unquoted `publicSignupEnabled: 0`/`1` parses as a YAML *number*, not a string — accept
+    // it the same way parseBoolean already accepts the '0'/'1' strings, so a hand-edited `0`
+    // doesn't fall through to "unset" (whose default happens to be `true`, silently inverting it).
+    if (typeof raw === 'number') return raw === 1 ? true : raw === 0 ? false : undefined
     if (typeof raw === 'string') return parseBoolean(raw)
     return undefined
   }
   if (setting.type === 'number') {
-    if (typeof raw === 'number') return Number.isNaN(raw) ? undefined : raw
+    if (typeof raw === 'number') return Number.isFinite(raw) ? raw : undefined
     if (typeof raw === 'string') {
-      const num = Number(raw)
-      return raw !== '' && !Number.isNaN(num) ? num : undefined
+      const trimmed = raw.trim()
+      if (trimmed === '') return undefined
+      const num = Number(trimmed)
+      return Number.isFinite(num) ? num : undefined
     }
     return undefined
   }
@@ -266,8 +272,10 @@ function envValue(setting: SettingDef): string | number | boolean | undefined {
   if (raw === undefined || raw === '') return undefined
   if (setting.type === 'boolean') return parseBoolean(raw)
   if (setting.type === 'number') {
-    const num = Number(raw)
-    return Number.isNaN(num) ? undefined : num
+    const trimmed = raw.trim()
+    if (trimmed === '') return undefined
+    const num = Number(trimmed)
+    return Number.isFinite(num) ? num : undefined
   }
   return raw
 }
@@ -405,10 +413,21 @@ export async function updateServerConfig(
     // option only applies when the file is newly created, so a rewrite of an existing file (with
     // looser inherited permissions) is tightened explicitly right after.
     fs.writeFileSync(filePath, YAML.stringify(draft), { encoding: 'utf8', mode: 0o600 })
-    fs.chmodSync(filePath, 0o600)
   } catch (error) {
     logger.error({ err: error, filePath }, 'failed to write config.yaml')
     throw new ConfigReadOnlyException()
+  }
+  // Best-effort, in its own try/catch: the write above is what actually matters, and some mounts
+  // (certain network/Windows binds) accept writes but reject chmod. Letting that fail the whole
+  // request would report the change as rejected (403) while it was, in fact, already persisted —
+  // worse than leaving the file at whatever permissions the write itself produced.
+  try {
+    fs.chmodSync(filePath, 0o600)
+  } catch (error) {
+    logger.error(
+      { err: error, filePath },
+      'wrote config.yaml but failed to tighten its permissions'
+    )
   }
   fileCache = draft
 
