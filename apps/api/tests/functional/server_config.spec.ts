@@ -24,6 +24,25 @@ test.group('Server config', (group) => {
       loadFileCache()
     }
   })
+  // meta.spec.ts/auth.spec.ts use `env.set('PUBLIC_SIGNUP_ENABLED', ...)` to toggle it for their
+  // own tests — being a real AdonisJS `Env` instance, that also writes through to `process.env`
+  // (see @adonisjs/env's `Env#set`) and can leave it set for the rest of the process. Several
+  // tests below assert this file's exact resolved source/value for PUBLIC_SIGNUP_ENABLED and
+  // SMTP2GO_PORT, so both are unset here regardless of what ran before this group.
+  group.each.setup(() => {
+    const original = {
+      publicSignupEnabled: process.env.PUBLIC_SIGNUP_ENABLED,
+      smtp2goPort: process.env.SMTP2GO_PORT,
+    }
+    delete process.env.PUBLIC_SIGNUP_ENABLED
+    delete process.env.SMTP2GO_PORT
+    return () => {
+      if (original.publicSignupEnabled === undefined) delete process.env.PUBLIC_SIGNUP_ENABLED
+      else process.env.PUBLIC_SIGNUP_ENABLED = original.publicSignupEnabled
+      if (original.smtp2goPort === undefined) delete process.env.SMTP2GO_PORT
+      else process.env.SMTP2GO_PORT = original.smtp2goPort
+    }
+  })
 
   test('requires authentication', async ({ client }) => {
     const show = await client.get('/api/v1/server-config')
@@ -178,28 +197,16 @@ test.group('Server config', (group) => {
   test('persists a top-level (non-nested) setting', async ({ client, assert }) => {
     const token = await signupAndGetToken(client)
 
-    // Other spec files (meta.spec.ts, auth.spec.ts) use `env.set('PUBLIC_SIGNUP_ENABLED', ...)`
-    // to toggle this for their own tests — which, being a real AdonisJS `Env` instance, also
-    // writes through to `process.env` (see @adonisjs/env's `Env#set`) and can leave it set for
-    // the rest of the process. Unset it here so this test sees a clean "not set via env" slate
-    // regardless of what ran before it.
-    const original = process.env.PUBLIC_SIGNUP_ENABLED
-    delete process.env.PUBLIC_SIGNUP_ENABLED
-    try {
-      const update = await client
-        .patch('/api/v1/server-config')
-        .header('Authorization', `Bearer ${token}`)
-        .json({ publicSignupEnabled: false })
-      const state = bodyData<ServerConfigStateDto>(update)
-      assert.equal(state.publicSignupEnabled.value, false)
-      assert.equal(state.publicSignupEnabled.source, 'file')
+    const update = await client
+      .patch('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ publicSignupEnabled: false })
+    const state = bodyData<ServerConfigStateDto>(update)
+    assert.equal(state.publicSignupEnabled.value, false)
+    assert.equal(state.publicSignupEnabled.source, 'file')
 
-      const meta = await client.get('/api/v1/meta')
-      assert.isFalse(meta.body().publicSignupEnabled)
-    } finally {
-      if (original === undefined) delete process.env.PUBLIC_SIGNUP_ENABLED
-      else process.env.PUBLIC_SIGNUP_ENABLED = original
-    }
+    const meta = await client.get('/api/v1/meta')
+    assert.isFalse(meta.body().publicSignupEnabled)
   })
 
   test('ignores an unparseable env value for a boolean/number setting, falling back to file/default', async ({
@@ -281,7 +288,10 @@ test.group('Server config', (group) => {
     assert.equal(bodyData<ServerConfigStateDto>(update).mailHost.value, 'mail.example.com')
   })
 
-  test('rejects a write that fails despite the writability pre-check', async ({ client }) => {
+  test('rejects a write that fails despite the writability pre-check, without leaking the attempted value into memory', async ({
+    client,
+    assert,
+  }) => {
     const token = await signupAndGetToken(client)
 
     // A directory at the config path passes the access() writability pre-check (you can create
@@ -295,8 +305,121 @@ test.group('Server config', (group) => {
         .header('Authorization', `Bearer ${token}`)
         .json({ mailHost: 'mail.example.com' })
       update.assertStatus(403)
+
+      // The attempted value must never appear as if it were live — updateServerConfig applies a
+      // patch to a clone and only commits it to the shared in-memory cache after a successful
+      // write, so a failed write leaves every call site (this GET included) still resolving the
+      // pre-attempt state, not a value that was never actually persisted.
+      const show = await client
+        .get('/api/v1/server-config')
+        .header('Authorization', `Bearer ${token}`)
+      const state = bodyData<ServerConfigStateDto>(show)
+      assert.equal(state.mailHost.source, 'default')
+      assert.isNull(state.mailHost.value)
     } finally {
       fs.rmdirSync(filePath)
     }
+  })
+
+  test('writes config.yaml with 0600 permissions, even over an existing looser-permissioned file', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const filePath = serverConfigYamlPath()
+
+    // Simulate a file that predates this permission tightening (or was hand-created with
+    // default umask) — the fix must re-tighten it on every write, not just at creation.
+    fs.writeFileSync(filePath, 'mail: {}\n', { mode: 0o644 })
+    loadFileCache()
+
+    await client
+      .patch('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ mailHost: 'mail.example.com' })
+
+    const mode = fs.statSync(filePath).mode & 0o777
+    assert.equal(mode, 0o600)
+  })
+
+  test('coerces a quoted "false"/"true" string in config.yaml into a real boolean, not a truthy string', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    // A hand-edited file quoting a boolean turns it into a YAML string — without coercion, that
+    // string would resolve as a *truthy* value wherever it's read as a boolean (`Boolean('false')`
+    // is `true`), silently flipping the setting's meaning. server_config.ts's coerceFileValue
+    // parses recognizable boolean strings explicitly instead of passing the raw string through.
+    fs.writeFileSync(serverConfigYamlPath(), "publicSignupEnabled: 'false'\n", 'utf8')
+    loadFileCache()
+
+    const show = await client
+      .get('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+    const state = bodyData<ServerConfigStateDto>(show)
+    assert.equal(state.publicSignupEnabled.source, 'file')
+    assert.equal(state.publicSignupEnabled.value, false)
+  })
+
+  test('ignores an unparsable boolean/number value in a hand-edited config.yaml, falling back to default', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    fs.writeFileSync(
+      serverConfigYamlPath(),
+      "publicSignupEnabled: 'maybe'\nmail:\n  port: 'not-a-port'\n",
+      'utf8'
+    )
+    loadFileCache()
+
+    const show = await client
+      .get('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+    const state = bodyData<ServerConfigStateDto>(show)
+    assert.equal(state.publicSignupEnabled.source, 'default')
+    assert.equal(state.publicSignupEnabled.value, null)
+    assert.equal(state.mailPort.source, 'default')
+    assert.equal(state.mailPort.value, null)
+  })
+
+  test('ignores a YAML .nan literal for a numeric setting, falling back to default', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    // YAML's `.nan` scalar parses straight to the JS number NaN — a genuine `number`-typed value
+    // that still isn't a usable port, so coerceFileValue rejects it explicitly rather than letting
+    // NaN flow into smtpTransportConfig.port.
+    fs.writeFileSync(serverConfigYamlPath(), 'mail:\n  port: .nan\n', 'utf8')
+    loadFileCache()
+
+    const show = await client
+      .get('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+    const state = bodyData<ServerConfigStateDto>(show)
+    assert.equal(state.mailPort.source, 'default')
+    assert.equal(state.mailPort.value, null)
+  })
+
+  test('coerces a quoted numeric string in config.yaml into a real number', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    fs.writeFileSync(serverConfigYamlPath(), "mail:\n  port: '2525'\n", 'utf8')
+    loadFileCache()
+
+    const show = await client
+      .get('/api/v1/server-config')
+      .header('Authorization', `Bearer ${token}`)
+    const state = bodyData<ServerConfigStateDto>(show)
+    assert.equal(state.mailPort.source, 'file')
+    assert.equal(state.mailPort.value, 2525)
   })
 })

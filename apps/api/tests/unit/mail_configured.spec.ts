@@ -1,5 +1,7 @@
+import fs from 'node:fs'
 import { test } from '@japa/runner'
 import isMailConfigured from '#services/mail_configured'
+import { loadFileCache, serverConfigYamlPath, updateServerConfig } from '#services/server_config'
 
 test.group('isMailConfigured', (group) => {
   const original = {
@@ -34,5 +36,21 @@ test.group('isMailConfigured', (group) => {
     delete process.env.SMTP2GO_PASSWORD
 
     assert.isFalse(isMailConfigured())
+  })
+
+  test('is true when the credentials come from /config/config.yaml instead of env vars', async ({
+    assert,
+  }) => {
+    delete process.env.SMTP2GO_USERNAME
+    delete process.env.SMTP2GO_PASSWORD
+
+    try {
+      await updateServerConfig({ mailUsername: 'file-user', mailPassword: 'file-pass' })
+      assert.isTrue(isMailConfigured())
+    } finally {
+      const filePath = serverConfigYamlPath()
+      if (fs.existsSync(filePath)) fs.rmSync(filePath)
+      loadFileCache()
+    }
   })
 })

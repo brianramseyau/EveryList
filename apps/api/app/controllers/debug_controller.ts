@@ -32,9 +32,7 @@ export default class DebugController {
     // server_config.ts. Kept as a suffix rather than a separate field so DebugResponse's shape
     // (a flat env-var-name allowlist) doesn't need to change just for this.
     const withSource = (field: { value: string | number | boolean | null; source: string }) =>
-      typeof field.value === 'string' && field.source === 'file'
-        ? `${field.value} (file)`
-        : field.value
+      field.source === 'file' ? `${field.value} (file)` : field.value
 
     const body: DebugResponse = {
       app: {

@@ -191,13 +191,21 @@ export function loadFileCache(): void {
     const parsed = YAML.parse(fs.readFileSync(filePath, 'utf8'))
     fileCache = parsed && typeof parsed === 'object' ? parsed : {}
   } catch (error) {
-    logger.error({ err: error, filePath }, 'failed to parse config.yaml — ignoring file overrides')
+    // Deliberately not logging the raw error: the `yaml` package's parse-error messages embed
+    // the offending source line verbatim, which could be a `mail.password`/
+    // `alexa.authentikClientSecret` line from a hand-edited file — logging only the error code
+    // (e.g. `BLOCK_IN_FLOW`) still gives an operator enough to find and fix the syntax error.
+    // The `yaml` package's own parse errors are always `Error` instances carrying a `code` (e.g.
+    // `BLOCK_IN_FLOW`); this only guards a theoretical non-Error throw.
+    /* c8 ignore next */
+    const code = error instanceof Error && 'code' in error ? String(error.code) : undefined
+    logger.error({ code, filePath }, 'failed to parse config.yaml — ignoring file overrides')
     fileCache = {}
   }
 }
 
-function getYamlValue(yamlPath: YamlPath): unknown {
-  let node: unknown = fileCache
+function getYamlValue(source: Record<string, unknown>, yamlPath: YamlPath): unknown {
+  let node: unknown = source
   for (const segment of yamlPath) {
     if (typeof node !== 'object' || node === null) return undefined
     node = (node as Record<string, unknown>)[segment]
@@ -205,24 +213,49 @@ function getYamlValue(yamlPath: YamlPath): unknown {
   return node
 }
 
-function setYamlValue(yamlPath: YamlPath, value: unknown): void {
+/** Mutates `target` (never the shared `fileCache` directly — see `updateServerConfig`, which
+ * applies this to a draft clone and only commits it after a successful write). */
+function setYamlValue(target: Record<string, unknown>, yamlPath: YamlPath, value: unknown): void {
   if (yamlPath.length === 1) {
-    fileCache[yamlPath[0]] = value
+    target[yamlPath[0]] = value
     return
   }
 
   const [group, field] = yamlPath
-  const existing = fileCache[group]
+  const existing = target[group]
   const groupNode =
     existing && typeof existing === 'object' ? (existing as Record<string, unknown>) : {}
   groupNode[field] = value
-  fileCache[group] = groupNode
+  target[group] = groupNode
 }
 
-function parseEnvBoolean(raw: string): boolean | undefined {
+function parseBoolean(raw: string): boolean | undefined {
   if (raw === 'true' || raw === '1') return true
   if (raw === 'false' || raw === '0') return false
   return undefined
+}
+
+/**
+ * A hand-edited `config.yaml` can carry the wrong YAML type for a setting (e.g. a quoted
+ * `publicSignupEnabled: 'false'`, a truthy non-empty string) — coerce or reject rather than
+ * passing it through as-is, which would otherwise let a string silently masquerade as a
+ * `boolean`/`number` at every call site (`serverConfigValue`, `applyMailConfig`, ...).
+ */
+function coerceFileValue(setting: SettingDef, raw: unknown): string | number | boolean | undefined {
+  if (setting.type === 'boolean') {
+    if (typeof raw === 'boolean') return raw
+    if (typeof raw === 'string') return parseBoolean(raw)
+    return undefined
+  }
+  if (setting.type === 'number') {
+    if (typeof raw === 'number') return Number.isNaN(raw) ? undefined : raw
+    if (typeof raw === 'string') {
+      const num = Number(raw)
+      return raw !== '' && !Number.isNaN(num) ? num : undefined
+    }
+    return undefined
+  }
+  return typeof raw === 'string' ? raw : undefined
 }
 
 function envValue(setting: SettingDef): string | number | boolean | undefined {
@@ -231,7 +264,7 @@ function envValue(setting: SettingDef): string | number | boolean | undefined {
   // suite toggle these per-call, and means an env var always wins even though it's re-read fresh.
   const raw = process.env[setting.envKey]
   if (raw === undefined || raw === '') return undefined
-  if (setting.type === 'boolean') return parseEnvBoolean(raw)
+  if (setting.type === 'boolean') return parseBoolean(raw)
   if (setting.type === 'number') {
     const num = Number(raw)
     return Number.isNaN(num) ? undefined : num
@@ -246,10 +279,8 @@ function resolveSetting(setting: SettingDef): {
   const fromEnv = envValue(setting)
   if (fromEnv !== undefined) return { value: fromEnv, source: 'env' }
 
-  const fromFile = getYamlValue(setting.yamlPath)
-  if (fromFile !== undefined && fromFile !== null) {
-    return { value: fromFile as string | number | boolean, source: 'file' }
-  }
+  const fromFile = coerceFileValue(setting, getYamlValue(fileCache, setting.yamlPath))
+  if (fromFile !== undefined) return { value: fromFile, source: 'file' }
 
   return { value: undefined, source: 'default' }
 }
@@ -357,19 +388,29 @@ export async function updateServerConfig(
     throw new ConfigReadOnlyException()
   }
 
+  // Applied to a clone, not `fileCache` itself — if the write below fails, `fileCache` must stay
+  // exactly as it was (still reflecting the real on-disk content), not silently carry an
+  // unpersisted value in memory until the next restart or reload.
+  const draft = structuredClone(fileCache)
   for (const setting of SETTINGS) {
     const incoming = patch[setting.dtoField]
     if (incoming === undefined) continue
-    setYamlValue(setting.yamlPath, incoming)
+    setYamlValue(draft, setting.yamlPath, incoming)
   }
 
   const filePath = serverConfigYamlPath()
   try {
-    fs.writeFileSync(filePath, YAML.stringify(fileCache), 'utf8')
+    // Secrets (mail password, Authentik client secret) can live in this file in cleartext —
+    // 0600 keeps it readable only by the account the server runs as. `writeFileSync`'s `mode`
+    // option only applies when the file is newly created, so a rewrite of an existing file (with
+    // looser inherited permissions) is tightened explicitly right after.
+    fs.writeFileSync(filePath, YAML.stringify(draft), { encoding: 'utf8', mode: 0o600 })
+    fs.chmodSync(filePath, 0o600)
   } catch (error) {
     logger.error({ err: error, filePath }, 'failed to write config.yaml')
     throw new ConfigReadOnlyException()
   }
+  fileCache = draft
 
   if ((Object.keys(patch) as DtoField[]).some((field) => MAIL_DTO_FIELDS.includes(field))) {
     applyMailConfig()

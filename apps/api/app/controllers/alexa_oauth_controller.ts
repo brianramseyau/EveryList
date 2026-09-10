@@ -44,10 +44,12 @@ export default class AlexaOAuthController {
   async token({ request, response, logger }: HttpContext) {
     const { clientId, clientSecret } = extractClientCredentials(request)
     const expectedId = serverConfigValue('AUTHENTIK_CLIENT_ID', '')
+    const expectedSecret = serverConfigValue('AUTHENTIK_CLIENT_SECRET', '')
     if (
       !expectedId ||
+      !expectedSecret ||
       clientId !== expectedId ||
-      clientSecret !== serverConfigValue('AUTHENTIK_CLIENT_SECRET', '')
+      clientSecret !== expectedSecret
     ) {
       logger.warn({ clientId }, 'Alexa OAuth token request had invalid client credentials')
       return response.unauthorized({ error: 'invalid_client' })

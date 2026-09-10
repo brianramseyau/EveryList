@@ -20,7 +20,10 @@
 	let publicSignupEnabled = $state(true);
 	let appUrl = $state('');
 	let mailHost = $state('');
-	let mailPort = $state<number | ''>('');
+	// A Flowbite number input's bind:value hands back `null` when emptied, not `''` — see
+	// lists/[id]/settings/+page.svelte's draftLimitText for the same gotcha — so this has to
+	// accept null too, normalized alongside '' wherever "unchanged" is checked below.
+	let mailPort = $state<number | string | null>('');
 	let mailUsername = $state('');
 	let mailPassword = $state('');
 	let mailFromAddress = $state('');
@@ -81,12 +84,16 @@
 			// text fields are also omitted rather than sent as `''`: they mean "untouched", not "clear
 			// this value" (the url()/email() validators would reject an empty string besides), the
 			// same "leave unchanged" contract the password fields below already use.
+			/* v8 ignore next -- the form (and this submit handler) only renders once config has
+			   loaded, inside `{:else if config}` below; unreachable through the UI. */
 			if (!config) return;
 			const next = await updateServerConfig({
 				...(!isLocked(config.publicSignupEnabled) && { publicSignupEnabled }),
 				...(!isLocked(config.appUrl) && appUrl && { appUrl }),
 				...(!isLocked(config.mailHost) && mailHost && { mailHost }),
-				...(!isLocked(config.mailPort) && mailPort !== '' && { mailPort }),
+				...(!isLocked(config.mailPort) &&
+					mailPort !== '' &&
+					mailPort !== null && { mailPort: Number(mailPort) }),
 				...(!isLocked(config.mailUsername) && mailUsername && { mailUsername }),
 				...(!isLocked(config.mailPassword) && mailPassword && { mailPassword }),
 				...(!isLocked(config.mailFromAddress) && mailFromAddress && { mailFromAddress }),
@@ -186,6 +193,8 @@
 					<input
 						type="number"
 						aria-label="Mail port"
+						min="1"
+						max="65535"
 						disabled={isLocked(config.mailPort) || !config.writable}
 						class="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800"
 						bind:value={mailPort}
