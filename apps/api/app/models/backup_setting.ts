@@ -1,4 +1,5 @@
 import { BackupSettingSchema } from '#database/schema'
+import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 
 export type BackupFrequency = 'daily' | 'weekly' | 'monthly'
 
@@ -9,11 +10,15 @@ export type BackupFrequency = 'daily' | 'weekly' | 'monthly'
  * fresh instance always finds sane defaults instead of a missing row.
  */
 export default class BackupSetting extends BackupSettingSchema {
-  static async current(): Promise<BackupSetting> {
+  /** `client`, when given, runs the read/create on that transaction instead of the default
+   * connection — see #controllers/setup_controller, which needs this row's creation to commit
+   * atomically alongside the owner account it provisions in the same transaction. */
+  static async current(client?: QueryClientContract): Promise<BackupSetting> {
     return BackupSetting.firstOrCreate(
       { id: 1 },
       // 4 weekly backups, matching the default weekly schedule.
-      { id: 1, frequency: 'weekly', timeOfDay: '03:00', retentionCount: 4 }
+      { id: 1, frequency: 'weekly', timeOfDay: '03:00', retentionCount: 4 },
+      client ? { client } : undefined
     )
   }
 }

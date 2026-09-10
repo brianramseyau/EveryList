@@ -78,6 +78,12 @@
 			});
 			await goto(resolve('/lists'));
 		} catch (err) {
+			if (err instanceof ApiError && err.status === 409) {
+				// Setup was already completed elsewhere (another tab/device) while this one was open —
+				// same destination the onMount status check already sends a completed instance to.
+				await goto(resolve('/login'), { replaceState: true });
+				return;
+			}
 			error = err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
 		} finally {
 			submitting = false;
