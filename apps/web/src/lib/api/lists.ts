@@ -107,7 +107,14 @@ export async function deleteList(id: number): Promise<void> {
 	await apiDelete(`/api/v1/lists/${id}`);
 	// Drop the cached row immediately rather than waiting for the next fetchLists prune — the
 	// caller navigates straight back to /lists, which paints from Dexie before revalidating.
-	await getDb()?.lists.delete(id);
+	// Best-effort: the server delete above already succeeded, so a local cache failure here
+	// (blocked/closed IndexedDB, quota, another tab's version change) must not surface as a
+	// failed delete — the next fetchLists prune cleans it up regardless.
+	try {
+		await getDb()?.lists.delete(id);
+	} catch {
+		// Ignored — see comment above.
+	}
 }
 
 /** `order` is the full desired list of list ids, in the new order — reorders only the
