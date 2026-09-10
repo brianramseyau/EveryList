@@ -21,7 +21,7 @@ type ListRow =
  * validation is needed here.
  */
 export function buildIconUrl(iconName: string, colorHex: string): string {
-  return `${appUrl}/api/v1/alexa/icons/${iconName}?color=${colorHex.replace('#', '')}`
+  return `${appUrl()}/api/v1/alexa/icons/${iconName}?color=${colorHex.replace('#', '')}`
 }
 
 // Matches the DB column default (`create_lists_table.ts`) — `List.create()` doesn't refresh a

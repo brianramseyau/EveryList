@@ -2,7 +2,9 @@ import env from '#start/env'
 import app from '@adonisjs/core/services/app'
 import type { HttpContext } from '@adonisjs/core/http'
 import type { DebugResponse } from '@everylist/shared'
-import { presence, toMb } from '#services/debug_info'
+import { toMb } from '#services/debug_info'
+import { appUrl } from '#config/app'
+import { serverConfigState } from '#services/server_config'
 
 export default class DebugController {
   /**
@@ -25,6 +27,14 @@ export default class DebugController {
     }
 
     const memory = process.memoryUsage()
+    const config = serverConfigState()
+    // `(file)` marks a value resolved from /config/config.yaml rather than an env var — see
+    // server_config.ts. Kept as a suffix rather than a separate field so DebugResponse's shape
+    // (a flat env-var-name allowlist) doesn't need to change just for this.
+    const withSource = (field: { value: string | number | boolean | null; source: string }) =>
+      typeof field.value === 'string' && field.source === 'file'
+        ? `${field.value} (file)`
+        : field.value
 
     const body: DebugResponse = {
       app: {
@@ -32,7 +42,7 @@ export default class DebugController {
         commit: env.get('GIT_SHA', 'unknown'),
         builtAt: env.get('BUILD_DATE', 'unknown'),
         nodeEnv: env.get('NODE_ENV'),
-        appUrl: env.get('APP_URL'),
+        appUrl: appUrl(),
       },
       runtime: {
         nodeVersion: process.version,
@@ -60,22 +70,25 @@ export default class DebugController {
         PORT: env.get('PORT'),
         HOST: env.get('HOST'),
         LOG_LEVEL: env.get('LOG_LEVEL'),
-        APP_URL: env.get('APP_URL'),
+        // Below this point, values may come from /config/config.yaml rather than an env var —
+        // see the `(file)` suffix and server_config.ts.
+        APP_URL: withSource(config.appUrl),
         DATABASE_FILENAME: env.get('DATABASE_FILENAME', app.tmpPath('db.sqlite3')),
         SESSION_DRIVER: env.get('SESSION_DRIVER'),
-        PUBLIC_SIGNUP_ENABLED: env.get('PUBLIC_SIGNUP_ENABLED', true),
+        PUBLIC_SIGNUP_ENABLED: withSource(config.publicSignupEnabled),
         LIMITER_STORE: env.get('LIMITER_STORE'),
-        SMTP2GO_HOST: env.get('SMTP2GO_HOST') ?? null,
-        SMTP2GO_PORT: env.get('SMTP2GO_PORT') ?? null,
-        SMTP2GO_USERNAME: env.get('SMTP2GO_USERNAME') ?? null,
-        SMTP2GO_PASSWORD: presence(env.get('SMTP2GO_PASSWORD')),
-        SMTP2GO_FROM_ADDRESS: env.get('SMTP2GO_FROM_ADDRESS') ?? null,
-        SMTP2GO_FROM_NAME: env.get('SMTP2GO_FROM_NAME') ?? null,
-        ALEXA_SKILL_ID: env.get('ALEXA_SKILL_ID') ?? null,
-        AUTHENTIK_TOKEN_URL: env.get('AUTHENTIK_TOKEN_URL') ?? null,
-        AUTHENTIK_USERINFO_URL: env.get('AUTHENTIK_USERINFO_URL') ?? null,
-        AUTHENTIK_CLIENT_ID: env.get('AUTHENTIK_CLIENT_ID') ?? null,
-        AUTHENTIK_CLIENT_SECRET: presence(env.get('AUTHENTIK_CLIENT_SECRET')),
+        SMTP2GO_HOST: withSource(config.mailHost),
+        SMTP2GO_PORT: withSource(config.mailPort),
+        SMTP2GO_USERNAME: withSource(config.mailUsername),
+        SMTP2GO_PASSWORD: config.mailPassword.isSet ? 'set' : 'not set',
+        SMTP2GO_FROM_ADDRESS: withSource(config.mailFromAddress),
+        SMTP2GO_FROM_NAME: withSource(config.mailFromName),
+        ALEXA_SKILL_ID: withSource(config.alexaSkillId),
+        AUTHENTIK_TOKEN_URL: withSource(config.authentikTokenUrl),
+        AUTHENTIK_USERINFO_URL: withSource(config.authentikUserinfoUrl),
+        AUTHENTIK_CLIENT_ID: withSource(config.authentikClientId),
+        AUTHENTIK_CLIENT_SECRET: config.authentikClientSecret.isSet ? 'set' : 'not set',
+        CONFIG_YAML_WRITABLE: config.writable,
       },
     }
 

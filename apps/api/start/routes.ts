@@ -264,6 +264,19 @@ router
       .as('backupSettings')
       .use(middleware.auth())
 
+    // Instance-wide server settings backed by /config/config.yaml — mail, public signups, Alexa
+    // account-linking (see server_config.ts). Same shape as /backup-settings above: any
+    // authenticated user can reach these routes, the controller itself hard-codes the user id 1
+    // check.
+    router
+      .group(() => {
+        router.get('/', [controllers.ServerConfig, 'show'])
+        router.patch('/', [controllers.ServerConfig, 'update'])
+      })
+      .prefix('server-config')
+      .as('serverConfig')
+      .use(middleware.auth())
+
     router
       .group(() => {
         router.get('public-key', [controllers.PushSubscriptions, 'publicKey'])

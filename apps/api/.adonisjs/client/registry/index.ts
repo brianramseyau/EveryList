@@ -540,6 +540,18 @@ const routes = {
     tokens: [{"old":"/api/v1/backup-settings/download/:filename","type":0,"val":"api","end":""},{"old":"/api/v1/backup-settings/download/:filename","type":0,"val":"v1","end":""},{"old":"/api/v1/backup-settings/download/:filename","type":0,"val":"backup-settings","end":""},{"old":"/api/v1/backup-settings/download/:filename","type":0,"val":"download","end":""},{"old":"/api/v1/backup-settings/download/:filename","type":1,"val":"filename","end":""}],
     types: placeholder as Registry['backupSettings.backup_settings.download']['types'],
   },
+  'serverConfig.server_config.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/server-config',
+    tokens: [{"old":"/api/v1/server-config","type":0,"val":"api","end":""},{"old":"/api/v1/server-config","type":0,"val":"v1","end":""},{"old":"/api/v1/server-config","type":0,"val":"server-config","end":""}],
+    types: placeholder as Registry['serverConfig.server_config.show']['types'],
+  },
+  'serverConfig.server_config.update': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/server-config',
+    tokens: [{"old":"/api/v1/server-config","type":0,"val":"api","end":""},{"old":"/api/v1/server-config","type":0,"val":"v1","end":""},{"old":"/api/v1/server-config","type":0,"val":"server-config","end":""}],
+    types: placeholder as Registry['serverConfig.server_config.update']['types'],
+  },
   'push.push_subscriptions.public_key': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/push/public-key',

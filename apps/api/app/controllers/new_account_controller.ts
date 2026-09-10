@@ -2,7 +2,7 @@ import User from '#models/user'
 import { signupValidator } from '#validators/user'
 import type { HttpContext } from '@adonisjs/core/http'
 import UserTransformer from '#transformers/user_transformer'
-import env from '#start/env'
+import { serverConfigValue } from '#services/server_config'
 import { findActiveInvite } from '#services/invite_lookup'
 import { createOwnedList, STARTER_LIST, TODOS_LIST } from '#services/list_creation'
 
@@ -19,7 +19,7 @@ export default class NewAccountController {
   async store({ request, response, serialize, logger }: HttpContext) {
     const { fullName, email, password, inviteToken } = await request.validateUsing(signupValidator)
 
-    const publicSignupEnabled = env.get('PUBLIC_SIGNUP_ENABLED', true)
+    const publicSignupEnabled = serverConfigValue('PUBLIC_SIGNUP_ENABLED', true)
     if (!publicSignupEnabled) {
       const invite = inviteToken ? await findActiveInvite(inviteToken) : null
       if (!invite) {

@@ -3,6 +3,7 @@ import ListMember from '#models/list_member'
 import type { HttpContext } from '@adonisjs/core/http'
 import { alexaOAuthTokenValidator } from '#validators/alexa_oauth'
 import { authentikClient } from '#services/alexa/authentik_client'
+import { serverConfigValue } from '#services/server_config'
 import type { ListRole } from '#models/list_member'
 
 /** OAuth2 clients authenticate with either HTTP Basic auth or client_id/client_secret in the
@@ -35,18 +36,18 @@ export default class AlexaOAuthController {
    * Amazon's account-linking config carries exactly one client id/secret pair, used both to
    * build the `/authorize` redirect straight to Authentik *and* to authenticate this call — so
    * the credential Amazon presents here is the same confidential client EveryList registered
-   * with Authentik (`AUTHENTIK_CLIENT_ID`/`SECRET`), not a separate invented pair. Reads
-   * `process.env` directly (rather than the validated `#start/env` service) so the "not
-   * configured" case is a plain runtime check the test suite can toggle per-call — same
-   * convention as `mail_configured.ts`'s SMTP2GO check.
+   * with Authentik (`AUTHENTIK_CLIENT_ID`/`SECRET`), not a separate invented pair.
+   * `serverConfigValue` reads `process.env` live under the hood (rather than the validated
+   * `#start/env` service) so the "not configured" case is a plain runtime check the test suite
+   * can toggle per-call — same convention as `mail_configured.ts`'s SMTP2GO check.
    */
   async token({ request, response, logger }: HttpContext) {
     const { clientId, clientSecret } = extractClientCredentials(request)
-    const expectedId = process.env.AUTHENTIK_CLIENT_ID
+    const expectedId = serverConfigValue('AUTHENTIK_CLIENT_ID', '')
     if (
       !expectedId ||
       clientId !== expectedId ||
-      clientSecret !== process.env.AUTHENTIK_CLIENT_SECRET
+      clientSecret !== serverConfigValue('AUTHENTIK_CLIENT_SECRET', '')
     ) {
       logger.warn({ clientId }, 'Alexa OAuth token request had invalid client credentials')
       return response.unauthorized({ error: 'invalid_client' })

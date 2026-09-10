@@ -37,7 +37,7 @@ async function resetTokenForEmail(
   const forgotResponse = await request
   forgotResponse.assertStatus(204)
 
-  const baseUrl = origin ?? appUrl
+  const baseUrl = origin ?? appUrl()
   let resetToken = ''
   fakeMailer.mails.assertSent(PasswordResetMail, (sentMail) => {
     const message = sentMail.message

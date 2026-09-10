@@ -1,6 +1,6 @@
 import webpush from 'web-push'
 import logger from '@adonisjs/core/services/logger'
-import env from '#start/env'
+import { appUrl } from '#config/app'
 import PushSetting from '#models/push_setting'
 import type PushSubscription from '#models/push_subscription'
 
@@ -23,7 +23,7 @@ export interface DeadlinePushPayload {
  * surface back to the subscriber.
  */
 function vapidSubject(): string {
-  const hostname = new URL(env.get('APP_URL')).hostname
+  const hostname = new URL(appUrl()).hostname
   return `mailto:push@${hostname}`
 }
 
