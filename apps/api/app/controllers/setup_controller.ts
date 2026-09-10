@@ -2,16 +2,10 @@ import db from '@adonisjs/lucid/services/db'
 import User from '#models/user'
 import BackupSetting from '#models/backup_setting'
 import { setupValidator } from '#validators/setup'
-import { createOwnedList } from '#services/list_creation'
+import { createOwnedList, STARTER_LIST, TODOS_LIST } from '#services/list_creation'
 import type { HttpContext } from '@adonisjs/core/http'
 import type { BackupFrequency, BackupSettingsDto, SetupStatusDto } from '@everylist/shared'
 import UserTransformer from '#transformers/user_transformer'
-
-/** Same starter lists a real signup gets — see #controllers/new_account_controller and
- * #commands/user_create, which each keep their own copy of these for the same reason (no
- * shared caller that would justify factoring three call sites down to one). */
-const TODOS_LIST = { name: 'Todos', icon: 'formatListChecks', color: '#1d4ed8' } as const
-const STARTER_LIST = { name: 'Shopping List', icon: 'basket', color: '#c2410c' } as const
 
 function toSettingsView(setting: BackupSetting): BackupSettingsDto {
   return {

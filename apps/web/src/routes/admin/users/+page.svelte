@@ -27,6 +27,7 @@
 	let createFullName = $state('');
 	let createEmail = $state('');
 	let createPassword = $state('');
+	let createDefaultLists = $state(true);
 	let createError = $state<string | null>(null);
 	let createBusy = $state(false);
 
@@ -73,6 +74,7 @@
 		createFullName = '';
 		createEmail = '';
 		createPassword = '';
+		createDefaultLists = true;
 		createError = null;
 	}
 
@@ -88,7 +90,8 @@
 			const created = await createAdminUser({
 				fullName: createFullName.trim().length > 0 ? createFullName.trim() : null,
 				email: createEmail.trim(),
-				password: createPassword
+				password: createPassword,
+				createDefaultLists
 			});
 			users = [...users, created];
 			creating = false;
@@ -318,6 +321,14 @@
 						bind:value={createPassword}
 						class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-800"
 					/>
+					<label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+						<input
+							type="checkbox"
+							bind:checked={createDefaultLists}
+							class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-gray-600"
+						/>
+						Create default lists (Todos, Shopping List)
+					</label>
 					{#if createError}
 						<p class="text-sm text-red-600 dark:text-red-400">{createError}</p>
 					{/if}

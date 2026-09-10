@@ -12,10 +12,6 @@ import env from '#start/env'
 // cached User module later. Loading everything model-adjacent inside run(),
 // after startApp has booted the app, avoids that.
 
-/** Same starter lists a real signup gets — see #controllers/new_account_controller. */
-const TODOS_LIST = { name: 'Todos', icon: 'formatListChecks', color: '#1d4ed8' } as const
-const STARTER_LIST = { name: 'Shopping List', icon: 'basket', color: '#c2410c' } as const
-
 const MAIN_ACCOUNT = {
   fullName: 'Demo User',
   email: 'demo@example.com',
@@ -67,7 +63,7 @@ export default class DemoSeed extends BaseCommand {
     const { default: User } = await import('#models/user')
     const { default: ListMember } = await import('#models/list_member')
     const { default: Item } = await import('#models/item')
-    const { createOwnedList } = await import('#services/list_creation')
+    const { createOwnedList, STARTER_LIST, TODOS_LIST } = await import('#services/list_creation')
     const { nextListMemberSortOrder } = await import('#services/list_member_sort')
     const { broadcastSync } = await import('#services/sync_broadcaster')
 

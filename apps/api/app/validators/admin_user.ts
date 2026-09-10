@@ -13,6 +13,7 @@ export const adminCreateUserValidator = vine.create({
   fullName: vine.string().trim().minLength(1).maxLength(150).nullable(),
   email: email().unique({ table: 'users', column: 'email', caseInsensitive: true }),
   password: password(),
+  createDefaultLists: vine.boolean().optional(),
 })
 
 /**

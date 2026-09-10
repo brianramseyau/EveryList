@@ -1,8 +1,10 @@
+import db from '@adonisjs/lucid/services/db'
 import User from '#models/user'
 import { DateTime } from 'luxon'
 import type { HttpContext } from '@adonisjs/core/http'
 import AdminUserTransformer from '#transformers/admin_user_transformer'
 import { adminCreateUserValidator, adminUpdateUserValidator } from '#validators/admin_user'
+import { createOwnedList, STARTER_LIST, TODOS_LIST } from '#services/list_creation'
 
 /**
  * User management for the instance's primary account. There's no admin role in this app (see
@@ -29,18 +31,56 @@ export default class AdminUsersController {
     return ctx.serialize(AdminUserTransformer.transform(users))
   }
 
-  /** Creates a plain user record — no starter lists, unlike self-signup (new_account_controller.ts):
-   * this is provisioning a household member who'll join existing lists via invites, not a fresh
-   * account that needs somewhere to start. */
+  /** Creates a plain user record. Defaults to also creating the same starter lists a real
+   * signup gets (new_account_controller.ts) — an admin-created account that lands on an empty
+   * index is a bug users hit and had to be told to ignore, not a real "household member joining
+   * existing lists" case; `createDefaultLists: false` opts back out of that. Wrapped in one
+   * transaction (same as setup_controller.ts#store) so a failure partway through the starter
+   * lists can't leave a half-provisioned user behind that the admin can't retry (the duplicate
+   * email would reject a resubmit). */
   async store(ctx: HttpContext) {
     if (!this.requireAdmin(ctx)) return
-    const { fullName, email, password } = await ctx.request.validateUsing(adminCreateUserValidator)
+    const { fullName, email, password, createDefaultLists } =
+      await ctx.request.validateUsing(adminCreateUserValidator)
+    const shouldCreateDefaultLists = createDefaultLists ?? true
 
-    // `disabledAt` explicitly null (rather than omitted) so the in-memory model returned below
-    // has it hydrated — Lucid only populates attributes that were actually assigned, and this
-    // response skips the extra round-trip a `.refresh()` would cost.
-    const user = await User.create({ fullName, email, password, disabledAt: null })
-    ctx.logger.info({ userId: user.id }, 'admin created user')
+    const user = await db.transaction(async (trx) => {
+      // `disabledAt` explicitly null (rather than omitted) so the in-memory model returned below
+      // has it hydrated — Lucid only populates attributes that were actually assigned, and this
+      // response skips the extra round-trip a `.refresh()` would cost.
+      const created = await User.create(
+        { fullName, email, password, disabledAt: null },
+        { client: trx }
+      )
+
+      if (shouldCreateDefaultLists) {
+        await createOwnedList({
+          ownerId: created.id,
+          ...TODOS_LIST,
+          useCategories: false,
+          useShops: false,
+          useFavorites: false,
+          useRecent: false,
+          useQuantity: false,
+          usePrice: false,
+          seedStarterTodoItems: true,
+          client: trx,
+        })
+        await createOwnedList({
+          ownerId: created.id,
+          ...STARTER_LIST,
+          seedStarterCategories: true,
+          client: trx,
+        })
+      }
+
+      return created
+    })
+
+    ctx.logger.info(
+      { userId: user.id, createDefaultLists: shouldCreateDefaultLists },
+      'admin created user'
+    )
 
     return ctx.response.created(await ctx.serialize(AdminUserTransformer.transform(user)))
   }

@@ -74,7 +74,7 @@ test.group('Admin user management', (group) => {
     )
   })
 
-  test('store creates a user without starter lists', async ({ client, assert }) => {
+  test('store creates a user with starter lists by default', async ({ client, assert }) => {
     const admin = await signupAndGetUser(client)
 
     const response = await client
@@ -86,6 +86,38 @@ test.group('Admin user management', (group) => {
     const created = bodyData<AdminUserDto>(response)
     assert.equal(created.email, 'new-guy@example.com')
     assert.isNull(created.disabledAt)
+
+    const login = await client
+      .post('/api/v1/auth/login')
+      .json({ email: 'new-guy@example.com', password: PASSWORD })
+    login.assertStatus(200)
+
+    const lists = await client
+      .get('/api/v1/lists')
+      .header('Authorization', `Bearer ${login.body().data.token}`)
+    lists.assertStatus(200)
+    assert.sameMembers(
+      bodyData<ListDto[]>(lists).map((l) => l.name),
+      ['Todos', 'Shopping List']
+    )
+  })
+
+  test('store creates a user without starter lists when createDefaultLists is false', async ({
+    client,
+    assert,
+  }) => {
+    const admin = await signupAndGetUser(client)
+
+    const response = await client
+      .post('/api/v1/admin/users')
+      .header('Authorization', `Bearer ${admin.token}`)
+      .json({
+        fullName: 'New Guy',
+        email: 'new-guy@example.com',
+        password: PASSWORD,
+        createDefaultLists: false,
+      })
+    response.assertStatus(201)
 
     const login = await client
       .post('/api/v1/auth/login')
