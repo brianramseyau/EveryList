@@ -31,7 +31,7 @@ export default class PasswordResetController {
       // The requesting browser's Origin is the public URL the user is actually
       // on — use it so the emailed link works even when APP_URL wasn't
       // configured (the container's baked-in default is a loopback address).
-      const baseUrl = request.header('origin') ?? appUrl
+      const baseUrl = request.header('origin') ?? appUrl()
       await mail.send(new PasswordResetMail(user.email, token, baseUrl))
       logger.debug({ userId: user.id }, 'password reset email sent')
     } else {

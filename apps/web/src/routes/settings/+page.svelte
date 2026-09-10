@@ -775,11 +775,18 @@
 			<h2
 				class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
 			>
-				Backups
+				Server
 			</h2>
 			<a
-				href={resolve('/settings/backups')}
+				href={resolve('/settings/server')}
 				class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+			>
+				<span>Server settings</span>
+				<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
+			</a>
+			<a
+				href={resolve('/settings/backups')}
+				class="flex items-center justify-between border-t border-gray-200 px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
 			>
 				<span>Automated backups</span>
 				<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />

@@ -1,13 +1,22 @@
 import env from '#start/env'
 import app from '@adonisjs/core/services/app'
 import { defineConfig } from '@adonisjs/core/http'
+import { serverConfigValue } from '#services/server_config'
 
 /**
  * The app URL can be used in various places where you want to create absolute
  * URLs to your application. For example, when sending emails, images should
  * use absolute URLs.
+ *
+ * A function rather than a constant — unlike most of this file, `APP_URL` is also editable via
+ * `/config/config.yaml` (see server_config.ts), so it needs to be read fresh on every call
+ * rather than baked in once at boot. `APP_URL` is a required env var, so in practice most
+ * deployments already set it and that value wins; the file only matters for a deployment that
+ * hasn't.
  */
-export const appUrl = env.get('APP_URL')
+export function appUrl(): string {
+  return serverConfigValue('APP_URL', env.get('APP_URL'))
+}
 
 /**
  * The configuration settings used by the HTTP server

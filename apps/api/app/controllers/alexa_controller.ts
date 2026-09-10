@@ -1,4 +1,5 @@
 import User from '#models/user'
+import { serverConfigValue } from '#services/server_config'
 import { Secret } from '@adonisjs/core/helpers'
 import type { HttpContext } from '@adonisjs/core/http'
 import type { AccessToken } from '@adonisjs/auth/access_tokens'
@@ -103,7 +104,7 @@ export default class AlexaController {
       'Alexa request received'
     )
 
-    const skillId = process.env.ALEXA_SKILL_ID
+    const skillId = serverConfigValue('ALEXA_SKILL_ID', '')
     const requestSkillId = body.context?.System?.application?.applicationId
     if (skillId && requestSkillId !== skillId) {
       logger.warn({ expected: skillId, actual: requestSkillId }, 'Alexa skill id mismatch')

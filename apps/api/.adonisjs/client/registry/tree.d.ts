@@ -167,6 +167,12 @@ export interface ApiDefinition {
       download: typeof routes['backupSettings.backup_settings.download']
     }
   }
+  serverConfig: {
+    serverConfig: {
+      show: typeof routes['serverConfig.server_config.show']
+      update: typeof routes['serverConfig.server_config.update']
+    }
+  }
   push: {
     pushSubscriptions: {
       publicKey: typeof routes['push.push_subscriptions.public_key']

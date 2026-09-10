@@ -1,7 +1,9 @@
 import logger from '@adonisjs/core/services/logger'
+import { serverConfigValue } from '#services/server_config'
 
-/** Reads `process.env` directly (rather than the validated `#start/env` service) so the test
- * suite can toggle these per-call — same convention as `mail_configured.ts`'s SMTP2GO check. */
+/** Also configurable via `/config/config.yaml` (see server_config.ts) — falls back to
+ * `process.env` directly (rather than the validated `#start/env` service) so the test suite can
+ * still toggle these per-call, same convention as `mail_configured.ts`'s SMTP2GO check. */
 function requiredEnv(
   name:
     | 'AUTHENTIK_TOKEN_URL'
@@ -9,7 +11,7 @@ function requiredEnv(
     | 'AUTHENTIK_CLIENT_ID'
     | 'AUTHENTIK_CLIENT_SECRET'
 ): string {
-  const value = process.env[name]
+  const value = serverConfigValue(name, '')
   if (!value) throw new Error(`${name} is not configured`)
   return value
 }

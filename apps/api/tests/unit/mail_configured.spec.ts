@@ -1,5 +1,8 @@
+import fs from 'node:fs'
 import { test } from '@japa/runner'
 import isMailConfigured from '#services/mail_configured'
+import { loadFileCache, serverConfigYamlPath, updateServerConfig } from '#services/server_config'
+import { smtpTransportConfig } from '#config/mail'
 
 test.group('isMailConfigured', (group) => {
   const original = {
@@ -34,5 +37,27 @@ test.group('isMailConfigured', (group) => {
     delete process.env.SMTP2GO_PASSWORD
 
     assert.isFalse(isMailConfigured())
+  })
+
+  test('is true when the credentials come from /config/config.yaml instead of env vars', async ({
+    assert,
+  }) => {
+    delete process.env.SMTP2GO_USERNAME
+    delete process.env.SMTP2GO_PASSWORD
+
+    // updateServerConfig's mail side effect (applyMailConfig) mutates smtpTransportConfig.auth in
+    // place — deleting the file and reloading the (separate) fileCache doesn't undo that, so it's
+    // snapshotted and restored explicitly, or these credentials would stay live for whatever test
+    // runs next in this process.
+    const originalAuth = { ...smtpTransportConfig.auth }
+    try {
+      await updateServerConfig({ mailUsername: 'file-user', mailPassword: 'file-pass' })
+      assert.isTrue(isMailConfigured())
+    } finally {
+      const filePath = serverConfigYamlPath()
+      if (fs.existsSync(filePath)) fs.rmSync(filePath)
+      loadFileCache()
+      Object.assign(smtpTransportConfig.auth, originalAuth)
+    }
   })
 })

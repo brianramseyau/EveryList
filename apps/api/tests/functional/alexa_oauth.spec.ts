@@ -79,6 +79,23 @@ test.group('Alexa account-linking token exchange', (group) => {
     response.assertStatus(401)
   })
 
+  test('rejects an empty client secret when none is configured server-side, rather than treating it as a match', async ({
+    client,
+  }) => {
+    // Regression test: falling back an unset AUTHENTIK_CLIENT_SECRET to '' for comparison used to
+    // let a request presenting an explicitly empty secret slip through (`'' !== ''` is false) —
+    // see alexa_oauth_controller.ts's explicit `!expectedSecret` guard.
+    delete process.env.AUTHENTIK_CLIENT_SECRET
+    const response = await requestToken(client, {
+      grant_type: 'authorization_code',
+      code: 'abc',
+      redirect_uri: 'https://layla.amazon.com/cb',
+      client_id: 'authentik-client-id',
+      client_secret: '',
+    })
+    response.assertStatus(401)
+  })
+
   test('rejects a mismatched client id sent in the body', async ({ client }) => {
     const response = await requestToken(client, {
       grant_type: 'authorization_code',

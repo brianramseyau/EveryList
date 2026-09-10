@@ -93,6 +93,8 @@ export type ScannedRoutes = {
     'backupSettings.backup_settings.update': { paramsTuple?: []; params?: {} }
     'backupSettings.backup_settings.run': { paramsTuple?: []; params?: {} }
     'backupSettings.backup_settings.download': { paramsTuple: [ParamValue]; params: {'filename': ParamValue} }
+    'serverConfig.server_config.show': { paramsTuple?: []; params?: {} }
+    'serverConfig.server_config.update': { paramsTuple?: []; params?: {} }
     'push.push_subscriptions.public_key': { paramsTuple?: []; params?: {} }
     'push.push_subscriptions.store': { paramsTuple?: []; params?: {} }
     'push.push_subscriptions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -127,6 +129,7 @@ export type ScannedRoutes = {
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'backupSettings.backup_settings.show': { paramsTuple?: []; params?: {} }
     'backupSettings.backup_settings.download': { paramsTuple: [ParamValue]; params: {'filename': ParamValue} }
+    'serverConfig.server_config.show': { paramsTuple?: []; params?: {} }
     'push.push_subscriptions.public_key': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
@@ -159,6 +162,7 @@ export type ScannedRoutes = {
     'stores.stores.categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'backupSettings.backup_settings.show': { paramsTuple?: []; params?: {} }
     'backupSettings.backup_settings.download': { paramsTuple: [ParamValue]; params: {'filename': ParamValue} }
+    'serverConfig.server_config.show': { paramsTuple?: []; params?: {} }
     'push.push_subscriptions.public_key': { paramsTuple?: []; params?: {} }
   }
   POST: {
@@ -213,6 +217,7 @@ export type ScannedRoutes = {
     'stores.stores.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'stores.stores.reorder_categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'backupSettings.backup_settings.update': { paramsTuple?: []; params?: {} }
+    'serverConfig.server_config.update': { paramsTuple?: []; params?: {} }
   }
   DELETE: {
     'adminUsers.admin_users.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
