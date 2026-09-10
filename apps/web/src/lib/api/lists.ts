@@ -23,6 +23,15 @@ export function fetchLists(): Promise<ListDto[]> {
 		/* v8 ignore start */
 		if (db) {
 			await db.lists.bulkPut(lists.map((list, index) => ({ ...list, _localSortOrder: index })));
+			// Prune rows for lists no longer returned by the server (deleted, or no longer
+			// shared with this user) — otherwise a stale cached row lingers in Dexie forever
+			// and flashes back in on every subsequent cache-first paint of this page, even
+			// though the in-memory result here is already correct.
+			const ids = new Set(lists.map((list) => list.id));
+			const staleIds = (await db.lists.toArray())
+				.map((row) => row.id)
+				.filter((id) => !ids.has(id));
+			if (staleIds.length > 0) await db.lists.bulkDelete(staleIds);
 		}
 		/* v8 ignore stop */
 		return lists;
@@ -96,8 +105,11 @@ export function updateList(
 	return apiPatch<ListDto>(`/api/v1/lists/${id}`, input);
 }
 
-export function deleteList(id: number): Promise<void> {
-	return apiDelete(`/api/v1/lists/${id}`);
+export async function deleteList(id: number): Promise<void> {
+	await apiDelete(`/api/v1/lists/${id}`);
+	// Drop the cached row immediately rather than waiting for the next fetchLists prune — the
+	// caller navigates straight back to /lists, which paints from Dexie before revalidating.
+	await getDb()?.lists.delete(id);
 }
 
 /** `order` is the full desired list of list ids, in the new order — reorders only the
