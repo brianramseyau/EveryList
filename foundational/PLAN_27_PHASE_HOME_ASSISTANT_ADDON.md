@@ -134,6 +134,18 @@ this add-on (runs the server itself).
    `bump-addon-version` is skipped; cut a real `vX.Y.Z` tag — confirm
    `config.yaml`'s `version:` updates via a plain commit on `main`, no PR.
 
+## Post-review fixes (live-instance testing, PR #224)
+
+- `config.yaml`'s placeholder `version: "0.0.0"` and the `bump-addon-version`
+  job's `${GITHUB_REF_NAME#v}` both stripped or never matched the "v" prefix
+  that's actually part of every published GHCR tag (`vX.Y.Z`, not `X.Y.Z`).
+  Supervisor pulls `ghcr.io/brianramseyau/everylist:<version>` verbatim — an
+  `image:`-based add-on's `version:` isn't a display string, it's the literal
+  Docker tag — so `0.0.0` 404'd on install. Fixed: placeholder set to the
+  actual latest published tag (`v1.4.0`), the CI job keeps the "v" prefix,
+  and `config.yaml` now carries a comment explaining why, so this doesn't
+  regress on a future edit.
+
 ## Out of scope (future)
 
 Ingress support; submitting to the official Home Assistant Community
