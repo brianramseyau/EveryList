@@ -433,7 +433,7 @@
 		</a>
 		{#if confirmingLogout}
 			<div
-				class="flex items-center justify-between gap-2 px-4 py-3 text-sm border-t border-gray-200 dark:border-gray-700"
+				class="flex items-center justify-between gap-2 border-t border-gray-200 px-4 py-3 text-sm dark:border-gray-700"
 			>
 				<p class="text-red-600 dark:text-red-400">{unsyncedLogoutWarning}</p>
 				<div class="flex shrink-0 gap-2">
