@@ -46,12 +46,17 @@ describe('waitForActivation', () => {
 		} as unknown as ServiceWorker & { fireStateChange: (state: ServiceWorkerState) => void };
 	}
 
-	it('resolves immediately when already activated', async () => {
+	it('resolves true immediately when already activated', async () => {
 		const worker = fakeWorker('activated');
-		await expect(waitForActivation(worker)).resolves.toBeUndefined();
+		await expect(waitForActivation(worker)).resolves.toBe(true);
 	});
 
-	it('resolves once a statechange event reports activated', async () => {
+	it('resolves false immediately when already redundant at call time', async () => {
+		const worker = fakeWorker('redundant');
+		await expect(waitForActivation(worker)).resolves.toBe(false);
+	});
+
+	it('resolves true once a statechange event reports activated', async () => {
 		const worker = fakeWorker('installing') as ServiceWorker & {
 			fireStateChange: (state: ServiceWorkerState) => void;
 		};
@@ -61,10 +66,10 @@ describe('waitForActivation', () => {
 		worker.fireStateChange('activating');
 		worker.fireStateChange('activated');
 
-		await expect(promise).resolves.toBeUndefined();
+		await expect(promise).resolves.toBe(true);
 	});
 
-	it('resolves if the worker becomes redundant instead of activating (e.g. install failed)', async () => {
+	it('resolves false if the worker becomes redundant instead of activating (e.g. install failed)', async () => {
 		const worker = fakeWorker('installing') as ServiceWorker & {
 			fireStateChange: (state: ServiceWorkerState) => void;
 		};
@@ -73,7 +78,7 @@ describe('waitForActivation', () => {
 		worker.fireStateChange('installed');
 		worker.fireStateChange('redundant');
 
-		await expect(promise).resolves.toBeUndefined();
+		await expect(promise).resolves.toBe(false);
 	});
 });
 
@@ -129,6 +134,27 @@ describe('registerIngressShadowServiceWorker', () => {
 		await registerIngressShadowServiceWorker(reload);
 
 		expect(reload).not.toHaveBeenCalled();
+	});
+
+	it('reloads even when the registration exposes no installing/waiting/active worker to wait on', async () => {
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+		stubServiceWorkerContainer({});
+		const reload = vi.fn();
+
+		await registerIngressShadowServiceWorker(reload);
+
+		expect(reload).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not reload if the worker never activates (install failed)', async () => {
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+		stubServiceWorkerContainer({ active: { state: 'redundant' } });
+		const reload = vi.fn();
+
+		await registerIngressShadowServiceWorker(reload);
+
+		expect(reload).not.toHaveBeenCalled();
+		expect(window.sessionStorage.getItem(RELOAD_ONCE_KEY)).toBeNull();
 	});
 
 	it('is a no-op (no throw) if registration itself fails', async () => {

@@ -26,20 +26,24 @@ export function isIngress(): boolean {
 
 const RELOAD_ONCE_KEY = 'everylist:haIngressShadowSwReloaded';
 
-/** Resolves once `worker` reaches the `activated` state — i.e. after its `activate` handler's
- * `clients.claim()` has actually run (see the route this registers,
- * apps/api/start/routes.ts's `/_ha-ingress-shadow-sw.js`). Exported only so it's independently
- * testable without a real browser SW lifecycle — an implementation detail of
- * `registerIngressShadowServiceWorker` below, not meant to be used elsewhere. Also resolves on
- * `redundant` (install failed, or a newer registration superseded this one) so a failed worker
- * can't leave the caller awaiting a state change that will never come. */
-export function waitForActivation(worker: ServiceWorker): Promise<void> {
-	if (worker.state === 'activated') return Promise.resolve();
+/** Resolves once `worker` settles into a terminal state — `activated` (its `activate` handler's
+ * `clients.claim()` has actually run — see the route this registers,
+ * apps/api/start/routes.ts's `/_ha-ingress-shadow-sw.js`) or `redundant` (install failed, or a
+ * newer registration superseded it before this one ever activated). Resolves `true`/`false`
+ * accordingly so the caller can tell the two apart — reloading the page only helps in the
+ * `activated` case; a `redundant` worker can't fix itself with a reload. Checks the already-terminal
+ * case up front too, since a worker can already be `redundant` by the time this is called (not
+ * just reach it later via `statechange`). Exported only so it's independently testable without a
+ * real browser SW lifecycle — an implementation detail of `registerIngressShadowServiceWorker`
+ * below, not meant to be used elsewhere. */
+export function waitForActivation(worker: ServiceWorker): Promise<boolean> {
+	if (worker.state === 'activated') return Promise.resolve(true);
+	if (worker.state === 'redundant') return Promise.resolve(false);
 	return new Promise((resolve) => {
 		worker.addEventListener('statechange', function onStateChange() {
 			if (worker.state !== 'activated' && worker.state !== 'redundant') return;
 			worker.removeEventListener('statechange', onStateChange);
-			resolve();
+			resolve(worker.state === 'activated');
 		});
 	});
 }
@@ -97,7 +101,10 @@ export async function registerIngressShadowServiceWorker(
 	}
 
 	const worker = registration.installing ?? registration.waiting ?? registration.active;
-	if (worker) await waitForActivation(worker);
+	const activated = worker ? await waitForActivation(worker) : true;
+	// Install failed - HA's own worker still serves the page (just possibly broken the way it was
+	// before this registration ever existed), and reloading again can't change that outcome.
+	if (!activated) return;
 
 	try {
 		const alreadyReloaded = window.sessionStorage.getItem(RELOAD_ONCE_KEY) === '1';

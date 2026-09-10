@@ -415,10 +415,11 @@ the code above, none CRITICAL:
   further. Fixed: also resolve on `redundant`.
 - `isValidIngressPath`'s hex-charset assumption about Supervisor's real
   token format is unverified beyond what live testing has shown so far —
-  a rejected header now logs a warning (`ingressPath` included) rather
-  than silently falling back to the same shell a request with no Ingress
-  header at all would get, so a format mismatch is diagnosable instead of
-  looking identical to "not behind Ingress."
+  a rejected header now logs a warning rather than silently falling back
+  to the same shell a request with no Ingress header at all would get, so
+  a format mismatch is diagnosable instead of looking identical to "not
+  behind Ingress." (The warning's payload was revised in the next round
+  below to stop including the header's raw value.)
 - `05-ha-options`'s explicit `chown` of `/config/app_key` was redundant
   (and its comment backwards about why): this script runs *before*
   `10-remap-user`'s own `chown -R appuser:appuser /config`, which
@@ -431,6 +432,46 @@ the code above, none CRITICAL:
 - This doc's own quoted regex for `isValidIngressPath` omitted the `i`
   flag the implementation actually uses — added the case-insensitive
   note above.
+
+**Third Kilo review round** — 3 more findings, none CRITICAL, against the
+fixes above:
+
+- **The `ha-ingress-entry` route still couldn't be reached under
+  Ingress**, even after the previous round's redirect-target fix — the
+  actually blocking bug, and arguably the most consequential finding
+  across every round so far. Supervisor strips the
+  `/api/hassio_ingress/<token>` prefix server-side before forwarding to
+  this container, but the *browser* never learns that — the iframe's
+  `src` is the full prefixed URL, so `window.location.pathname` (what
+  SvelteKit's client router actually matches routes against) still
+  carries the prefix. Nothing in this app's route table — including the
+  new `/ha-ingress-entry` route itself — has any way to match a
+  random-per-install token prefix, so the client router would render its
+  own 404 before `load()` ever ran, on every single Ingress request, not
+  just the entry point. A build-time `paths.base` can't hold a
+  per-install random value, so the fix is SvelteKit's `reroute` hook
+  (`apps/web/src/hooks.client.ts`, new file): it rewrites only what the
+  router uses to *match* a route, stripping `ingressBase()` off the
+  pathname first — the address bar and `window.location` are untouched,
+  so the previous round's `ingressBase()`-prefixed redirect target is
+  still exactly right. Applies to every Ingress navigation, not just the
+  entry point, since `reroute` runs on every route change.
+- `waitForActivation` still hung if the worker was *already* `redundant`
+  at call time (the previous round's fix only handled reaching
+  `redundant` later via `statechange`), and treating `redundant` as a
+  reason to resolve at all meant `registerIngressShadowServiceWorker`
+  reloaded the page even when the worker had failed to activate — a
+  reload that can't fix a failed install. Fixed: check the already-`redundant`
+  case up front (same as the already-`activated` one), resolve
+  `true`/`false` instead of `void` so the caller can tell which happened,
+  and skip the reload entirely when `false`.
+- The `x-ingress-path` rejection log added last round echoed the header's
+  raw value — itself the exact untrusted input that had just failed
+  validation, on a public, unauthenticated, unthrottled route. Logging it
+  verbatim let any client inject arbitrary bytes into the log stream or
+  pad requests to flood it. Fixed: log only that a header was present and
+  rejected, plus its length — enough to diagnose a real Supervisor format
+  drift without echoing attacker-controlled content.
 
 Live-instance verification is still the same open item above — none of
 this round's fixes have been tested against a real build yet either.
