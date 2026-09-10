@@ -26,10 +26,12 @@ if [ -n "$APP_KEY" ]; then
   # Also persisted to /config/app_key, the same file/permissions 20-app-key itself uses for a
   # generated key - without this, clearing the option later leaves 20-app-key with neither an env
   # var nor a persisted file to fall back to, silently generating a *new* key and invalidating
-  # every existing session. chown/chmod set explicitly here (not left to 10-remap-user, which runs
-  # after this script) for the same reason 20-app-key sets them itself.
+  # every existing session. No chown needed here - unlike 20-app-key (which runs after
+  # 10-remap-user, so its chown is the final word on ownership), this script runs *before*
+  # 10-remap-user's own `chown -R appuser:appuser /config`, which will re-chown this file moments
+  # later regardless of what we set it to. chmod still matters - that recursive chown doesn't touch
+  # the mode bits.
   printf '%s' "$APP_KEY" >/config/app_key
-  chown appuser:appuser /config/app_key
   chmod 600 /config/app_key
   echo "[05-ha-options] APP_KEY set from add-on options, persisted to /config/app_key"
 fi

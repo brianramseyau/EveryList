@@ -63,6 +63,18 @@ describe('waitForActivation', () => {
 
 		await expect(promise).resolves.toBeUndefined();
 	});
+
+	it('resolves if the worker becomes redundant instead of activating (e.g. install failed)', async () => {
+		const worker = fakeWorker('installing') as ServiceWorker & {
+			fireStateChange: (state: ServiceWorkerState) => void;
+		};
+		const promise = waitForActivation(worker);
+
+		worker.fireStateChange('installed');
+		worker.fireStateChange('redundant');
+
+		await expect(promise).resolves.toBeUndefined();
+	});
 });
 
 describe('registerIngressShadowServiceWorker', () => {

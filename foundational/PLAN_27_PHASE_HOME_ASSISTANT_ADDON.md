@@ -312,9 +312,11 @@ before acting on it:
    attributes and a `<script>` body with no validation — attacker
    reachable (it's an HTTP header), even though normally
    Supervisor-generated. Fixed: `isValidIngressPath()` checks it against
-   Supervisor's real format (`^/api/hassio_ingress/[a-f0-9]+$`) before
-   rewriting anything; a non-match is treated exactly like no header at
-   all (unmodified passthrough), not sanitized/escaped.
+   Supervisor's real format (`^/api/hassio_ingress/[a-f0-9]+$`, case
+   insensitive) before rewriting anything; a non-match is treated exactly
+   like no header at all (unmodified passthrough), not sanitized/escaped
+   — and logged, since a present-but-rejected header would otherwise look
+   identical to "not behind Ingress at all."
 
 5. **`apiBaseUrl()` returning a relative path broke `realtime.ts`'s
    fallback.** `realtime.ts` did `apiBaseUrl() || window.location.origin`
@@ -387,6 +389,55 @@ actually renders (not blank) — possibly with one visible reload on the
 first open this session (the shadow-worker race) — then the golden path
 end to end inside the iframe, and that a second open in the same browser
 session loads immediately with no reload and no 404s.
+
+**Second Kilo review round (commit `01f0a54`)** — 7 more findings against
+the code above, none CRITICAL:
+
+- `ha-ingress-entry/+page.ts`'s `redirect(307, resolve('/'))` resolved
+  against this app's build-time base, which has no idea about the
+  random-per-install Ingress prefix baked in only at runtime — the
+  redirect would have taken the user out of the Ingress iframe entirely,
+  to the bare origin root, instead of `/lists` inside the proxy prefix.
+  The most consequential finding of this round; likely would have
+  reproduced as an apparent "blank/wrong page after the very first
+  redirect" even with every earlier fix in place. Fixed: prefix the
+  target with `ingressBase()` — `${ingressBase()}${resolve('/')}` — a
+  no-op outside ingress since `ingressBase()` is `''` there.
+- `ingress.ts`'s reload-once guard could loop forever if `sessionStorage`
+  is unavailable or `setItem` throws (privacy mode, quota): the old code
+  reloaded unconditionally on that catch, and a reload re-runs the same
+  code from scratch with no memory of having already reloaded. Fixed:
+  skip the reload entirely on that catch instead — losing the reload
+  optimization for that one session beats an infinite reload loop.
+- `waitForActivation` never resolved if the worker became `redundant`
+  (install failed, or a newer registration superseded it) instead of
+  reaching `activated` — an unresolved promise, silently doing nothing
+  further. Fixed: also resolve on `redundant`.
+- `isValidIngressPath`'s hex-charset assumption about Supervisor's real
+  token format is unverified beyond what live testing has shown so far —
+  a rejected header now logs a warning (`ingressPath` included) rather
+  than silently falling back to the same shell a request with no Ingress
+  header at all would get, so a format mismatch is diagnosable instead of
+  looking identical to "not behind Ingress."
+- `05-ha-options`'s explicit `chown` of `/config/app_key` was redundant
+  (and its comment backwards about why): this script runs *before*
+  `10-remap-user`'s own `chown -R appuser:appuser /config`, which
+  re-chowns the file moments later regardless — unlike `20-app-key`,
+  which runs *after* `10-remap-user` and so genuinely needs its own
+  chown. Removed the chown; kept the `chmod` (the recursive chown doesn't
+  touch mode bits) and corrected the comment.
+- A stale "Not exported" doc comment on `waitForActivation` (it is
+  exported, for testability) — reworded.
+- This doc's own quoted regex for `isValidIngressPath` omitted the `i`
+  flag the implementation actually uses — added the case-insensitive
+  note above.
+
+Live-instance verification is still the same open item above — none of
+this round's fixes have been tested against a real build yet either.
+`config.yaml`'s `image`/`version` still point at a pre-PR image tag, so
+none of this PR's code changes reach a running container until a fresh
+image is built (merge to `main` → `nightly` tag, or a version tag) and
+the add-on is pointed at it.
 
 ## Out of scope (future)
 

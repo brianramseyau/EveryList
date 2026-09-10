@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
+import { ingressBase } from '$lib/api/ingress';
 
 // Home Assistant Supervisor's Ingress proxy requests this exact path first (see
 // ha-addon/everylist/config.yaml's `ingress_entry`) - it needs to be a real route so SvelteKit's
@@ -13,5 +14,10 @@ import { resolve } from '$app/paths';
 export const prerender = false;
 
 export function load() {
-	throw redirect(307, resolve('/'));
+	// `resolve('/')` alone resolves against this app's own (empty) build-time base - it has no idea
+	// about the random-per-install Ingress prefix the browser's address bar is actually under
+	// (that's baked in at runtime, not build time - see ingress.ts). Prefixing it with
+	// `ingressBase()` keeps the client-side redirect inside that prefix; outside ingress
+	// `ingressBase()` is '' and this is unchanged.
+	throw redirect(307, `${ingressBase()}${resolve('/')}`);
 }

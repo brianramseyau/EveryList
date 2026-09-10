@@ -28,14 +28,16 @@ const RELOAD_ONCE_KEY = 'everylist:haIngressShadowSwReloaded';
 
 /** Resolves once `worker` reaches the `activated` state — i.e. after its `activate` handler's
  * `clients.claim()` has actually run (see the route this registers,
- * apps/api/start/routes.ts's `/_ha-ingress-shadow-sw.js`). Not exported — an implementation
- * detail of `registerIngressShadowServiceWorker` below, split out only so it's independently
- * testable without a real browser SW lifecycle. */
+ * apps/api/start/routes.ts's `/_ha-ingress-shadow-sw.js`). Exported only so it's independently
+ * testable without a real browser SW lifecycle — an implementation detail of
+ * `registerIngressShadowServiceWorker` below, not meant to be used elsewhere. Also resolves on
+ * `redundant` (install failed, or a newer registration superseded this one) so a failed worker
+ * can't leave the caller awaiting a state change that will never come. */
 export function waitForActivation(worker: ServiceWorker): Promise<void> {
 	if (worker.state === 'activated') return Promise.resolve();
 	return new Promise((resolve) => {
 		worker.addEventListener('statechange', function onStateChange() {
-			if (worker.state !== 'activated') return;
+			if (worker.state !== 'activated' && worker.state !== 'redundant') return;
 			worker.removeEventListener('statechange', onStateChange);
 			resolve();
 		});
@@ -97,13 +99,13 @@ export async function registerIngressShadowServiceWorker(
 	const worker = registration.installing ?? registration.waiting ?? registration.active;
 	if (worker) await waitForActivation(worker);
 
-	let alreadyReloaded = false;
 	try {
-		alreadyReloaded = window.sessionStorage.getItem(RELOAD_ONCE_KEY) === '1';
+		const alreadyReloaded = window.sessionStorage.getItem(RELOAD_ONCE_KEY) === '1';
 		window.sessionStorage.setItem(RELOAD_ONCE_KEY, '1');
+		if (!alreadyReloaded) reload();
 	} catch {
-		// sessionStorage unavailable (e.g. privacy mode) - reload anyway; it just won't be
-		// remembered for the next open in this same session.
+		// sessionStorage unavailable or full (e.g. privacy mode) - skip the reload rather than risk
+		// reloading on every call with no way to remember it already happened, which would loop
+		// forever since a full page reload re-runs this same code from scratch.
 	}
-	if (!alreadyReloaded) reload();
 }

@@ -14,6 +14,7 @@ import app from '@adonisjs/core/services/app'
 import { authThrottle, listsThrottle, passwordChangeThrottle } from '#start/limiter'
 import { readFile } from 'node:fs/promises'
 import { isValidIngressPath, rewriteHtmlForIngress } from '#services/ingress_service'
+import logger from '@adonisjs/core/services/logger'
 
 // Registers __transmit/events, __transmit/subscribe, and __transmit/unsubscribe
 // (see #start/transmit) before this file's own SPA catch-all route below. This
@@ -353,6 +354,12 @@ router.get('*', async ({ request, response }) => {
 
   const ingressPath = request.header('x-ingress-path')
   if (!ingressPath || !isValidIngressPath(ingressPath)) {
+    // A present-but-rejected header (as opposed to no header at all) means either a malicious
+    // request or Supervisor's real token format has drifted from what isValidIngressPath expects -
+    // worth a log line since the fallback silently serves the un-rewritten shell either way, which
+    // would otherwise look identical to "not behind Ingress at all" and be hard to diagnose.
+    if (ingressPath)
+      logger.warn({ ingressPath }, 'rejected x-ingress-path header, unrewritten shell served')
     return response.download(app.publicPath('200.html'))
   }
 
