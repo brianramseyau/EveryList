@@ -30,6 +30,14 @@ function toSettingsView(setting: BackupSetting): BackupSettingsDto {
  * Both routes are intentionally public: `status` only reveals whether any user has ever been
  * created (not who), and `store` re-checks that inside its own transaction before doing anything,
  * so it can never run twice.
+ *
+ * Accepted trade-off: unlike public/invite signup, `store` isn't gated by `PUBLIC_SIGNUP_ENABLED`
+ * or any other secret — this is deliberate (the wizard "should show regardless of if public
+ * signups are enabled or not"), but it does mean whoever reaches this endpoint first on a freshly
+ * deployed, still-unconfigured instance becomes its owner. Same first-run-takeover window as
+ * other self-hosted apps' initial setup wizards (e.g. Nextcloud, Ghost); the mitigation is
+ * operational, not code — complete setup immediately after deploying, before exposing the
+ * instance publicly.
  */
 export default class SetupController {
   async status({ response }: HttpContext) {
@@ -74,7 +82,14 @@ export default class SetupController {
         client: trx,
       })
 
-      return user
+      // Read/create/save the singleton row on the same transaction as the account and its
+      // starter lists, so a failure partway rolls everything back together instead of leaving
+      // a real account with no confirmed backup schedule.
+      const setting = await BackupSetting.current(trx)
+      setting.useTransaction(trx).merge(backup)
+      await setting.save()
+
+      return { user, setting }
     })
 
     if (!result) {
@@ -82,12 +97,14 @@ export default class SetupController {
       return response.conflict({ message: 'Setup has already been completed' })
     }
 
-    const user = result
-    const token = await User.accessTokens.create(user)
+    const { user, setting } = result
 
-    const setting = await BackupSetting.current()
-    setting.merge(backup)
-    await setting.save()
+    // Minting a login token can't run inside the transaction above — DbAccessTokensProvider
+    // always writes through its own connection, not an injected client — but by this point the
+    // account, starter lists, and backup settings are already durably committed, so a failure
+    // here only costs the caller a token (recoverable with a normal login), never a half-set-up
+    // instance.
+    const token = await User.accessTokens.create(user)
 
     logger.info({ userId: user.id }, 'completed initial setup')
 

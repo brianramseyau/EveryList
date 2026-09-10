@@ -143,6 +143,17 @@ describe('Setup +page.svelte', () => {
 	});
 
 	it('shows the API error message on failure', async () => {
+		vi.mocked(completeSetup).mockRejectedValue(new ApiError(422, 'Email already in use'));
+
+		render(SetupPage);
+		await fillAccountStep();
+		await page.getByRole('button', { name: 'Finish setup' }).click();
+
+		await expect.element(page.getByText('Email already in use')).toBeInTheDocument();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('redirects to /login on a 409 (setup already completed elsewhere)', async () => {
 		vi.mocked(completeSetup).mockRejectedValue(
 			new ApiError(409, 'Setup has already been completed')
 		);
@@ -151,8 +162,8 @@ describe('Setup +page.svelte', () => {
 		await fillAccountStep();
 		await page.getByRole('button', { name: 'Finish setup' }).click();
 
-		await expect.element(page.getByText('Setup has already been completed')).toBeInTheDocument();
-		expect(goto).not.toHaveBeenCalled();
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(goto).toHaveBeenCalledWith('/login', { replaceState: true });
 	});
 
 	it('shows a generic error message on failure without an ApiError', async () => {
