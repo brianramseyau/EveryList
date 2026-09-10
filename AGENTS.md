@@ -196,13 +196,16 @@ That second occurrence is what broke the earlier theory (below) and pointed at t
   correct and still in place; it closes a related but distinct race on the *update* path.
 - **Fix**: the list page's realtime handler (`routes/lists/[id]/+page.svelte`) now checks
   `hasPendingCreateForList('item', listId)` (`offline/sync-queue.ts`) before reloading on a `create`
-  event — if this list still has one of our own item creates queued (from the moment it's enqueued,
-  synchronously, before the request fires, until the flush that lands it is fully reconciled), the
+  event — if this list has one of our own item creates queued *and enqueued within the last 10s*, the
   broadcast is assumed to be our own in-flight create and the reload is skipped; the create's own
-  resolution already patches `items` directly once it lands. Verified with 15 consecutive local runs
-  of the full file post-fix (0 failures, up from the prior pass's 60 pre-fix runs that never
-  reproduced it at all) — plausible given this needs the broadcast to win a race against the same
-  origin server's own HTTP response, a narrower window locally than on CI's slower I/O.
+  resolution already patches `items` directly once it lands. The 10s cap (not "any pending create,
+  however old") matters: an offline create can stay queued far longer than the single request round
+  trip this is guarding against, and an unbounded list-wide suppression would silently drop a
+  genuinely concurrent create broadcast from another device on the same list for as long as this
+  client stayed offline (caught in review on the fix's own PR #218). Verified with 15 consecutive
+  local runs of the full file post-fix (0 failures, up from the prior pass's 60 pre-fix runs that
+  never reproduced it at all) — plausible given this needs the broadcast to win a race against the
+  same origin server's own HTTP response, a narrower window locally than on CI's slower I/O.
 
 **If this resurfaces:** check first whether `hasPendingCreateForList` is still called before the
 `create`-branch reload in the realtime handler — a regression there reproduces this exact failure

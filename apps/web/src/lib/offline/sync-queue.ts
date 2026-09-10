@@ -94,12 +94,24 @@ export async function enqueueConsolidated(
 	return { id, alreadyPending: pending.length > 0 };
 }
 
-/** True while a `create`/`attach` mutation for this list is still queued — from the moment it's
- * enqueued (synchronously, before the request fires) until the flush that lands it is fully
- * reconciled (the temp row deleted and the mutation dequeued). Lets a realtime `create` broadcast
- * for the same list recognize "this might be my own in-flight create" and skip a redundant reload
- * that would otherwise race the create's own resolution — see the realtime handler in
- * `routes/lists/[id]/+page.svelte` and AGENTS.md's sortable-prototype E2E flake writeup. */
+/** Bounds how long a queued create/attach can suppress a realtime reload for its list — see
+ * `hasPendingCreateForList` below. Matches `self-mutations.ts`'s own suppression window: the race
+ * this guards against (the create's realtime broadcast arriving before its own HTTP response)
+ * resolves in a single request round trip, not however long the mutation stays queued (which, for
+ * an offline create, could be arbitrarily long — see the WARNING this constant fixes). */
+const PENDING_CREATE_WINDOW_MS = 10_000;
+
+/** True while a `create`/`attach` mutation for this list was enqueued within the last
+ * `PENDING_CREATE_WINDOW_MS` and is still queued. Lets a realtime `create` broadcast for the same
+ * list recognize "this might be my own in-flight create" and skip a redundant reload that would
+ * otherwise race the create's own resolution — see the realtime handler in
+ * `routes/lists/[id]/+page.svelte` and AGENTS.md's sortable-prototype E2E flake writeup.
+ *
+ * Deliberately time-bounded rather than "any pending create for this list, however old": an
+ * offline create can stay queued far longer than the single request round trip this is guarding
+ * against, and a list-wide (not per-item) suppression that lasted the whole queued duration would
+ * silently drop a genuinely concurrent create broadcast from another device on the same list for
+ * as long as this client stayed offline. */
 export async function hasPendingCreateForList(
 	entityType: SyncEntityType,
 	listId: number
@@ -107,12 +119,14 @@ export async function hasPendingCreateForList(
 	const db = getDb();
 	if (!db) return false;
 
+	const cutoff = Date.now() - PENDING_CREATE_WINDOW_MS;
 	const pending = await db.syncQueue.where('status').equals('pending').toArray();
 	return pending.some(
 		(row) =>
 			row.entityType === entityType &&
 			(row.op === 'create' || row.op === 'attach') &&
-			row.payload?.listId === listId
+			row.payload?.listId === listId &&
+			row.createdAt >= cutoff
 	);
 }
 

@@ -423,4 +423,22 @@ describe('hasPendingCreateForList', () => {
 		expect(await hasPendingCreateForList('item', 8)).toBe(false);
 		expect(await hasPendingCreateForList('category', 7)).toBe(false);
 	});
+
+	it('is false once the create has been queued longer than the suppression window', async () => {
+		// A create that's been queued a long time (e.g. enqueued while offline) is past the single
+		// request round trip this suppression is meant to cover — treating it as still "maybe my
+		// own in-flight create" would keep dropping a genuinely concurrent create broadcast from
+		// another device on this list for as long as it stays queued.
+		const id = await enqueueMutation({
+			entityType: 'item',
+			op: 'create',
+			targetId: -1,
+			expectedVersion: null,
+			payload: { name: 'Bananas', listId: 7 },
+			url: '/api/v1/lists/7/items'
+		});
+		await updateMutation(id!, { createdAt: Date.now() - 10_001 });
+
+		expect(await hasPendingCreateForList('item', 7)).toBe(false);
+	});
 });

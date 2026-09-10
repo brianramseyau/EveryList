@@ -503,9 +503,12 @@
 				// A `create` broadcast can't be matched against `isSelfMutation` above — the
 				// creating client only learns the row's real id from its own request's response,
 				// by which point the broadcast (a separate SSE connection, no ordering guarantee
-				// against that response) may already have arrived. If this list still has one of
-				// our own item creates in flight, a reload here would race that create's own
-				// resolution: `fetchItems()` would merge the server's now-real row in alongside
+				// against that response) may already have arrived. If this list has one of our own
+				// item creates that's *recently* queued (see `hasPendingCreateForList`'s time cap —
+				// deliberately not "any pending create, however old," so a long-offline queued
+				// create doesn't suppress a genuinely concurrent create from another device on this
+				// list for the whole time it stays queued), a reload here would race that create's
+				// own resolution: `fetchItems()` would merge the server's now-real row in alongside
 				// the not-yet-deleted optimistic temp row, rendering the same item twice under two
 				// different ids until the next reload. Skip it — the in-flight create already
 				// patches `items` directly once it resolves. See AGENTS.md's sortable-prototype E2E
