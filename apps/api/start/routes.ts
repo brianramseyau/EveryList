@@ -39,10 +39,23 @@ router
       })
       .prefix('auth')
       .as('auth')
-      // The only unauthenticated endpoints on the API — the actual
+      // Unauthenticated (along with `setup` below) — the actual
       // brute-force/credential-stuffing/signup-spam surface. See
       // start/limiter.ts for why the SPA's authenticated traffic elsewhere
       // isn't throttled at all.
+      .use(authThrottle)
+
+    // First-run setup wizard — creates user id 1 and confirms initial server settings. Public
+    // like the `auth` group above (and shares its throttle): `status` only reveals whether any
+    // user has ever been created, and `store` re-checks that itself before acting, so it can
+    // never succeed twice. See setup_controller.ts.
+    router
+      .group(() => {
+        router.get('status', [controllers.Setup, 'status'])
+        router.post('/', [controllers.Setup, 'store'])
+      })
+      .prefix('setup')
+      .as('setup')
       .use(authThrottle)
 
     router

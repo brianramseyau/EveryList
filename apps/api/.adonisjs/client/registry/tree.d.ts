@@ -17,6 +17,12 @@ export interface ApiDefinition {
       reset: typeof routes['auth.password_reset.reset']
     }
   }
+  setup: {
+    setup: {
+      status: typeof routes['setup.setup.status']
+      store: typeof routes['setup.setup.store']
+    }
+  }
   profile: {
     profile: {
       show: typeof routes['profile.profile.show']

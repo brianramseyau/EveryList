@@ -48,6 +48,18 @@ const routes = {
     tokens: [{"old":"/api/v1/auth/reset-password","type":0,"val":"api","end":""},{"old":"/api/v1/auth/reset-password","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/reset-password","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/reset-password","type":0,"val":"reset-password","end":""}],
     types: placeholder as Registry['auth.password_reset.reset']['types'],
   },
+  'setup.setup.status': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/setup/status',
+    tokens: [{"old":"/api/v1/setup/status","type":0,"val":"api","end":""},{"old":"/api/v1/setup/status","type":0,"val":"v1","end":""},{"old":"/api/v1/setup/status","type":0,"val":"setup","end":""},{"old":"/api/v1/setup/status","type":0,"val":"status","end":""}],
+    types: placeholder as Registry['setup.setup.status']['types'],
+  },
+  'setup.setup.store': {
+    methods: ["POST"],
+    pattern: '/api/v1/setup',
+    tokens: [{"old":"/api/v1/setup","type":0,"val":"api","end":""},{"old":"/api/v1/setup","type":0,"val":"v1","end":""},{"old":"/api/v1/setup","type":0,"val":"setup","end":""}],
+    types: placeholder as Registry['setup.setup.store']['types'],
+  },
   'profile.profile.show': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/account/profile',
