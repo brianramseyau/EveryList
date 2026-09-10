@@ -37,6 +37,7 @@
 		setRememberListScrollPreference
 	} from '$lib/nav-direction';
 	import { fetchProfile, logout, updateProfile } from '$lib/api/auth';
+	import { pendingMutations } from '$lib/offline/sync-queue';
 	import { ApiError } from '$lib/api/client';
 	import { resetApp } from '$lib/pwa/reset';
 	import { checkForUpdate } from '$lib/pwa/update';
@@ -206,6 +207,16 @@
 	}
 
 	async function handleLogout() {
+		// Logging out purges the locally cached Dexie data (it's a single database shared across
+		// whoever's signed in on this device — see offline/db.ts's `clearLocalData`), so any
+		// still-queued offline edits would be lost with it. Confirm rather than silently dropping them.
+		const pending = await pendingMutations();
+		if (pending.length > 0) {
+			const ok = confirm(
+				`You have ${pending.length} change${pending.length === 1 ? '' : 's'} that haven't finished syncing yet. Log out now and lose ${pending.length === 1 ? 'it' : 'them'}?`
+			);
+			if (!ok) return;
+		}
 		await logout();
 		await goto(resolve('/login'));
 	}

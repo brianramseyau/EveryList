@@ -7,6 +7,7 @@ import {
 } from '$lib/offline/connectivity.svelte';
 import { stopShakeListening } from '$lib/shake';
 import { registerUndo, resetUndoForTesting } from '$lib/undo';
+import { getDb, resetDbForTesting } from '$lib/offline/db';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/auth', () => ({
@@ -95,7 +96,7 @@ describe('Settings +page.svelte', () => {
 		);
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		matchMediaSpy.mockRestore();
 		vi.unstubAllGlobals();
 		vi.clearAllMocks();
@@ -122,6 +123,10 @@ describe('Settings +page.svelte', () => {
 		stopShakeListening();
 		resetUndoForTesting();
 		resetConnectivityForTesting();
+		// This suite's logout tests write real rows into the syncQueue table (the page's
+		// pendingMutations() check hits the real Dexie db, unlike $lib/api/auth which is mocked
+		// above) — reset so a queued row from one test doesn't leak into the next.
+		await resetDbForTesting();
 	});
 
 	it('sets the document title', async () => {
@@ -148,8 +153,98 @@ describe('Settings +page.svelte', () => {
 
 		await page.getByRole('button', { name: 'Log out' }).click();
 
-		expect(logout).toHaveBeenCalled();
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(logout).toHaveBeenCalled();
+	});
+
+	it('confirms before logging out when a change is still queued, and honors cancel', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(logout).mockResolvedValue(undefined);
+		vi.mocked(goto).mockResolvedValue(undefined);
+		await getDb()!.syncQueue.add({
+			entityType: 'item',
+			op: 'update',
+			targetId: 1,
+			expectedVersion: 1,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x',
+			status: 'pending',
+			attempts: 0,
+			createdAt: Date.now()
+		});
+		const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Log out' }).click();
+
+		await expect.poll(() => confirmSpy.mock.calls.length).toBe(1);
+		expect(confirmSpy.mock.calls[0][0]).toMatch(/1 change that/);
+		expect(logout).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('pluralizes the confirmation prompt when multiple changes are queued', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(logout).mockResolvedValue(undefined);
+		vi.mocked(goto).mockResolvedValue(undefined);
+		const db = getDb()!;
+		await db.syncQueue.add({
+			entityType: 'item',
+			op: 'update',
+			targetId: 1,
+			expectedVersion: 1,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x',
+			status: 'pending',
+			attempts: 0,
+			createdAt: Date.now()
+		});
+		await db.syncQueue.add({
+			entityType: 'item',
+			op: 'update',
+			targetId: 2,
+			expectedVersion: 1,
+			payload: { name: 'Bread' },
+			url: '/api/v1/x',
+			status: 'pending',
+			attempts: 0,
+			createdAt: Date.now()
+		});
+		const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Log out' }).click();
+
+		await expect.poll(() => confirmSpy.mock.calls.length).toBe(1);
+		expect(confirmSpy.mock.calls[0][0]).toMatch(/2 changes that/);
+		expect(confirmSpy.mock.calls[0][0]).toMatch(/lose them\?/);
+	});
+
+	it('logs out anyway when the user confirms losing a queued change', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(logout).mockResolvedValue(undefined);
+		vi.mocked(goto).mockResolvedValue(undefined);
+		await getDb()!.syncQueue.add({
+			entityType: 'item',
+			op: 'update',
+			targetId: 1,
+			expectedVersion: 1,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x',
+			status: 'pending',
+			attempts: 0,
+			createdAt: Date.now()
+		});
+		vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Log out' }).click();
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(logout).toHaveBeenCalled();
 	});
 
 	it('shows build metadata once /api/v1/meta resolves', async () => {

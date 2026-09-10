@@ -194,11 +194,19 @@ export async function isRowDirty(entityType: SyncEntityType, entityId: number): 
 	}
 }
 
-/** Test-only: deletes the underlying database and drops the singleton so each spec starts clean. */
-export async function resetDbForTesting(): Promise<void> {
+/** Deletes the underlying database and drops the singleton, so the next `getDb()` call lazily
+ * rebuilds an empty one. The `everylist` database is a single global store not scoped per user
+ * (see the constructor above), so this must run on logout — otherwise a second user signing in
+ * on the same browser would see the previous user's cached lists/items and queued mutations. */
+export async function clearLocalData(): Promise<void> {
 	if (instance) {
 		instance.close();
 		await instance.delete();
 	}
 	instance = null;
+}
+
+/** Test-only alias, kept so existing specs read clearly at their call sites. */
+export async function resetDbForTesting(): Promise<void> {
+	await clearLocalData();
 }
