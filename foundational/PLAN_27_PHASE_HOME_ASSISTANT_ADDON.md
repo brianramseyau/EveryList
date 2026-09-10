@@ -220,6 +220,22 @@ updated `base-url.spec.ts` (ingress source takes priority over native).
 glue, per `vite.config.ts`), so its SW/install-prompt skip isn't unit
 tested — covered by the live-instance verification below instead.
 
+**Post-review fix (CI, this PR)**: the first version of
+`spa_fallback.spec.ts` called `client.get(...)` against
+`app.publicPath('200.html')` without creating it, passing locally only
+because a stray, untracked `apps/api/public/200.html` happened to already
+exist on disk from an earlier unrelated local build — `apps/api/.gitignore`
+excludes everything under `public/` except `.gitkeep` (it's
+`docker/Dockerfile`'s build output, copied in only for the production
+image), and no test job builds `apps/web` first, so CI never has that file
+and both new tests 404/500'd there. This was also the first test ever to
+exercise the SPA-fallback wildcard route's `response.download()` call at
+all — that line had no prior coverage either. Fixed: the test group's
+`group.each.setup` now writes its own `200.html` fixture and removes it in
+the returned teardown (the same setup/teardown-returns-cleanup pattern
+already used by `debug.spec.ts`/`alexa_oauth.spec.ts`), so the test is
+self-contained instead of depending on incidental local disk state.
+
 **Verification** (live instance, in addition to Phase 1's list): confirm
 the add-on now opens through the existing reverse-proxy path with no
 separate port; log in and exercise the golden path (create a list,
