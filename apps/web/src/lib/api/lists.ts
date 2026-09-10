@@ -28,9 +28,7 @@ export function fetchLists(): Promise<ListDto[]> {
 			// and flashes back in on every subsequent cache-first paint of this page, even
 			// though the in-memory result here is already correct.
 			const ids = new Set(lists.map((list) => list.id));
-			const staleIds = (await db.lists.toArray())
-				.map((row) => row.id)
-				.filter((id) => !ids.has(id));
+			const staleIds = (await db.lists.toArray()).map((row) => row.id).filter((id) => !ids.has(id));
 			if (staleIds.length > 0) await db.lists.bulkDelete(staleIds);
 		}
 		/* v8 ignore stop */
