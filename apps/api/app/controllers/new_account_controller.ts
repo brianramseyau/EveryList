@@ -4,28 +4,17 @@ import type { HttpContext } from '@adonisjs/core/http'
 import UserTransformer from '#transformers/user_transformer'
 import env from '#start/env'
 import { findActiveInvite } from '#services/invite_lookup'
-import { createOwnedList } from '#services/list_creation'
+import { createOwnedList, STARTER_LIST, TODOS_LIST } from '#services/list_creation'
 
 /**
- * Every new account starts with two lists so signup doesn't land on an empty
- * index, and so a non-shopping user isn't stuck with shopping-only features.
- * Color is orange-700 (not the brighter orange-500 swatch offered in the
- * color picker) since list.color is also used as category-heading text color
- * against the light "paper" background — orange-500 there measures a 2.57:1
- * contrast ratio, under WCAG AA's 4.5:1 minimum for text.
+ * Every new account starts with two lists (see #services/list_creation for the shared
+ * TODOS_LIST/STARTER_LIST constants) so signup doesn't land on an empty index, and so a
+ * non-shopping user isn't stuck with shopping-only features. TODOS_LIST is created *before*
+ * STARTER_LIST so it lands above "Shopping List" in the new user's list order (createOwnedList
+ * assigns each list the next ListMember.sortOrder — see #services/list_member_sort). Its
+ * shopping-oriented features are all off, and it's seeded with a few onboarding items that
+ * teach the core item interactions by describing them.
  */
-const STARTER_LIST = { name: 'Shopping List', icon: 'basket', color: '#c2410c' } as const
-
-/**
- * A first-run tutorial list, created *before* STARTER_LIST so it lands above
- * "Shopping List" in the new user's list order (createOwnedList assigns each
- * list the next ListMember.sortOrder — see #services/list_member_sort). Its
- * shopping-oriented features are all off, and it's seeded with a few
- * onboarding items that teach the core item interactions by describing them.
- * Color is blue-700, same AA-contrast reasoning as STARTER_LIST above.
- */
-const TODOS_LIST = { name: 'Todos', icon: 'formatListChecks', color: '#1d4ed8' } as const
-
 export default class NewAccountController {
   async store({ request, response, serialize, logger }: HttpContext) {
     const { fullName, email, password, inviteToken } = await request.validateUsing(signupValidator)

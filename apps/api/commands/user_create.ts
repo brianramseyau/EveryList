@@ -7,10 +7,6 @@ import vine from '@vinejs/vine'
 // hashing for the rest of the process. Loaded inside run(), after startApp
 // has booted the app.
 
-/** Same starter lists a real signup gets — see #controllers/new_account_controller. */
-const TODOS_LIST = { name: 'Todos', icon: 'formatListChecks', color: '#1d4ed8' } as const
-const STARTER_LIST = { name: 'Shopping List', icon: 'basket', color: '#c2410c' } as const
-
 const emailValidator = vine.compile(vine.string().trim().toLowerCase().email().maxLength(254))
 const passwordValidator = vine.compile(vine.string().minLength(8).maxLength(32))
 
@@ -91,7 +87,7 @@ export default class UserCreate extends BaseCommand {
 
     const { default: db } = await import('@adonisjs/lucid/services/db')
     const { default: User } = await import('#models/user')
-    const { createOwnedList } = await import('#services/list_creation')
+    const { createOwnedList, STARTER_LIST, TODOS_LIST } = await import('#services/list_creation')
 
     const email = await this.resolveEmail(User)
     if (email === null) return

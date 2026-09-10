@@ -9,6 +9,19 @@ import { nextListMemberSortOrder } from '#services/list_member_sort'
 import logger from '@adonisjs/core/services/logger'
 
 /**
+ * The two starter lists a new account gets — self-signup
+ * (#controllers/new_account_controller), first-run setup (#controllers/setup_controller),
+ * admin-provisioned users (#controllers/admin_users_controller), the `user:create` CLI
+ * (#commands/user_create), and the demo seeder (#commands/demo_seed) each create both.
+ *
+ * Color is orange-700/blue-700 (not the brighter 500 swatches offered in the color picker)
+ * since list.color is also used as category-heading text color against the light "paper"
+ * background — the 500 swatches measure under WCAG AA's 4.5:1 contrast minimum for text.
+ */
+export const TODOS_LIST = { name: 'Todos', icon: 'formatListChecks', color: '#1d4ed8' } as const
+export const STARTER_LIST = { name: 'Shopping List', icon: 'basket', color: '#c2410c' } as const
+
+/**
  * Short, self-descriptive onboarding tasks seeded only into a brand-new user's
  * "Todos" starter list (see #controllers/new_account_controller) — each one
  * teaches a real item interaction (check off, delete, edit, reorder) by
