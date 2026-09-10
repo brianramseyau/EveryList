@@ -91,6 +91,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/password_reset_controller').default['reset']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'setup.setup.status': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/setup/status'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/setup_controller').default['status']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/setup_controller').default['status']>>>
+    }
+  }
+  'setup.setup.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/setup'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/setup').setupValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/setup').setupValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/setup_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/setup_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'profile.profile.show': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/account/profile'

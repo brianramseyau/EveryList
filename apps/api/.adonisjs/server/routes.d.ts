@@ -11,6 +11,8 @@ export type ScannedRoutes = {
     'auth.access_tokens.store': { paramsTuple?: []; params?: {} }
     'auth.password_reset.forgot': { paramsTuple?: []; params?: {} }
     'auth.password_reset.reset': { paramsTuple?: []; params?: {} }
+    'setup.setup.status': { paramsTuple?: []; params?: {} }
+    'setup.setup.store': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'profile.profile.update': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
@@ -97,6 +99,7 @@ export type ScannedRoutes = {
   }
   GET: {
     'event_stream': { paramsTuple?: []; params?: {} }
+    'setup.setup.status': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'metas.show': { paramsTuple?: []; params?: {} }
     'debug.show': { paramsTuple?: []; params?: {} }
@@ -128,6 +131,7 @@ export type ScannedRoutes = {
   }
   HEAD: {
     'event_stream': { paramsTuple?: []; params?: {} }
+    'setup.setup.status': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'metas.show': { paramsTuple?: []; params?: {} }
     'debug.show': { paramsTuple?: []; params?: {} }
@@ -164,6 +168,7 @@ export type ScannedRoutes = {
     'auth.access_tokens.store': { paramsTuple?: []; params?: {} }
     'auth.password_reset.forgot': { paramsTuple?: []; params?: {} }
     'auth.password_reset.reset': { paramsTuple?: []; params?: {} }
+    'setup.setup.store': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.refresh': { paramsTuple?: []; params?: {} }
     'adminUsers.admin_users.store': { paramsTuple?: []; params?: {} }

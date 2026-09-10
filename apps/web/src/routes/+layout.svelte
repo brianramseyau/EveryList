@@ -9,6 +9,7 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import { getToken, syncAuthToNative, syncTokenToServiceWorker } from '$lib/api/token';
 	import { getServerUrl } from '$lib/api/server-url';
+	import { fetchSetupStatus } from '$lib/api/setup';
 	import { isRemoteClient } from '$lib/platform/desktop';
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
@@ -65,14 +66,34 @@
 	// resyncing (a full lists+items refetch) on every single item mutation across the app.
 	const DEADLINE_NOTIFICATIONS_RESYNC_INTERVAL_MS = 5 * 60 * 1000;
 
+	/**
+	 * A fresh instance with no user yet needs the first-run setup wizard before anything else —
+	 * see routes/setup/+page.svelte. Only checked while logged out (an existing session proves
+	 * setup already happened) and never from /setup itself (which does its own, more authoritative
+	 * check and would otherwise fight this redirect). Fails open on a network error, same
+	 * reasoning as login/signup's fetchMeta fallback — /setup and every other route re-validate
+	 * server-side regardless, so silently doing nothing here is safe.
+	 */
+	async function redirectToSetupIfNeeded() {
+		try {
+			const status = await fetchSetupStatus();
+			if (status.needsSetup) await goto(resolve('/setup'));
+		} catch {
+			// Fail open — see comment above.
+		}
+	}
+
 	onMount(() => {
 		// Native/desktop builds have no baked-in server address (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1,
 		// PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §1/§4) — gate here rather than on /login itself, since a
 		// fresh install also has no token, and every other API call (including login) needs
 		// somewhere real to point before it can work at all.
 		const serverSetupPath = resolve('/server-setup');
-		if (isRemoteClient() && !getServerUrl() && page.url.pathname !== serverSetupPath) {
+		const noServerConfigured = isRemoteClient() && !getServerUrl();
+		if (noServerConfigured && page.url.pathname !== serverSetupPath) {
 			void goto(serverSetupPath);
+		} else if (!getToken() && page.url.pathname !== resolve('/setup')) {
+			void redirectToSetupIfNeeded();
 		}
 		initTheme();
 		initAccent();
