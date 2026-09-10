@@ -7,20 +7,26 @@ SQLite database, nothing else to configure.
 ## Installation
 
 1. Start the add-on.
-2. Open EveryList either way:
-   - **Open Web UI** (the link on the add-on's Info tab, or
-     `http://<your-home-assistant>:3000/`) — a direct port, works
-     everywhere, including behind a reverse proxy that only forwards this
-     one extra port.
-   - **Ingress**, via the sidebar/panel Home Assistant offers for this
-     add-on — proxied entirely through Home Assistant's own domain, so a
-     reverse proxy fronting only Home Assistant itself (no separate port
-     to forward) still reaches it. One caveat: since EveryList is a
-     client-side app, refreshing the browser or opening a direct link to
-     a sub-page (e.g. a specific list) *while inside* the Ingress view can
-     land outside Home Assistant's proxied path and 404 — reopening
-     EveryList from Home Assistant always returns you to a working state.
-3. Create your account from the app's sign-up screen — the first account
+2. Open EveryList via **Ingress** — proxied entirely through Home
+   Assistant's own domain, so a reverse proxy fronting only Home Assistant
+   itself (no separate port to forward) still reaches it. This is the
+   default, on with no configuration. Two things worth knowing:
+   - Home Assistant offers a **"Show in sidebar"** toggle for any
+     Ingress-enabled add-on — Settings → Add-ons → EveryList → Info — to
+     pin EveryList in the sidebar instead of opening it from the Add-on
+     Store page each time.
+   - Since EveryList is a client-side app, refreshing the browser or
+     opening a direct link to a sub-page (e.g. a specific list) *while
+     inside* the Ingress view can land outside Home Assistant's proxied
+     path and 404 — reopening EveryList from Home Assistant always
+     returns you to a working state.
+3. Want direct access too (no Home Assistant in the loop at all — plain
+   LAN access, or an automation/script hitting the API directly)? The web
+   UI's port is **off by default**, specifically so it doesn't land on
+   port 3000 and collide with another common self-hosted app already
+   using it. Turn it on from Settings → Add-ons → EveryList → Network —
+   we suggest mapping it to **3333**, but any free port works.
+4. Create your account from the app's sign-up screen — the first account
    created becomes the instance owner.
 
 ## Options

@@ -236,6 +236,20 @@ the returned teardown (the same setup/teardown-returns-cleanup pattern
 already used by `debug.spec.ts`/`alexa_oauth.spec.ts`), so the test is
 self-contained instead of depending on incidental local disk state.
 
+**Port defaults (live-instance feedback, this PR)**: port 3000 collided
+with another common self-hosted app already running on the user's Home
+Assistant host, and with Ingress now the default way in, there's no
+reason to force a host port at all. `ha-addon/everylist/config.yaml`'s
+`ports: { 3000/tcp: }` is now `null` (an empty YAML value) — off by
+default, per Home Assistant's add-on port schema, but still
+user-toggleable from the add-on's Network settings for anyone who wants
+direct/LAN access with no Home Assistant in the loop; `DOCS.md` suggests
+**3333** as a non-colliding value if they turn it on. Also added
+`panel_icon: mdi:format-list-checks` — purely cosmetic, giving EveryList a
+real icon for the "Show in sidebar" toggle Home Assistant already offers
+natively for any Ingress-enabled add-on (no separate config needed to
+make that toggle appear, just to give it a good icon).
+
 **Verification** (live instance, in addition to Phase 1's list): confirm
 the add-on now opens through the existing reverse-proxy path with no
 separate port; log in and exercise the golden path (create a list,
