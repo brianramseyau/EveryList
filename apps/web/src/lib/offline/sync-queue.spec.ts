@@ -7,6 +7,7 @@ import {
 	enqueueMutation,
 	failedMutations,
 	findPendingMutation,
+	hasPendingCreateForList,
 	pendingMutations,
 	queueCounts,
 	retryMutation,
@@ -357,5 +358,69 @@ describe('retryMutation', () => {
 		expect(retried).toMatchObject({ id, status: 'pending', attempts: 0 });
 		expect(retried!.lastError).toBeUndefined();
 		expect(await failedMutations()).toHaveLength(0);
+	});
+});
+
+describe('hasPendingCreateForList', () => {
+	it('is true while a create for that list is still queued', async () => {
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'create',
+			targetId: -1,
+			expectedVersion: null,
+			payload: { name: 'Bananas', listId: 7 },
+			url: '/api/v1/lists/7/items'
+		});
+
+		expect(await hasPendingCreateForList('item', 7)).toBe(true);
+	});
+
+	it('is true for a queued attach, matching the same optimistic-temp-id mechanics', async () => {
+		await enqueueMutation({
+			entityType: 'favorite_item',
+			op: 'attach',
+			targetId: -1,
+			expectedVersion: null,
+			payload: { listId: 7 },
+			url: '/api/v1/lists/7/favorites'
+		});
+
+		expect(await hasPendingCreateForList('favorite_item', 7)).toBe(true);
+	});
+
+	it('is false once the create is dequeued', async () => {
+		const id = await enqueueMutation({
+			entityType: 'item',
+			op: 'create',
+			targetId: -1,
+			expectedVersion: null,
+			payload: { name: 'Bananas', listId: 7 },
+			url: '/api/v1/lists/7/items'
+		});
+		await dequeueMutation(id!);
+
+		expect(await hasPendingCreateForList('item', 7)).toBe(false);
+	});
+
+	it('is false for a different list, a different entity type, or a non-create op', async () => {
+		await enqueueMutation({
+			entityType: 'item',
+			op: 'create',
+			targetId: -1,
+			expectedVersion: null,
+			payload: { name: 'Bananas', listId: 7 },
+			url: '/api/v1/lists/7/items'
+		});
+		await enqueueMutation({
+			entityType: 'category',
+			op: 'update',
+			targetId: 3,
+			expectedVersion: 1,
+			payload: { listId: 7 },
+			url: '/api/v1/lists/7/categories/3'
+		});
+
+		expect(await hasPendingCreateForList('item', 8)).toBe(false);
+		expect(await hasPendingCreateForList('category', 7)).toBe(false);
 	});
 });

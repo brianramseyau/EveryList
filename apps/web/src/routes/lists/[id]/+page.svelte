@@ -24,6 +24,7 @@
 	import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
 	import { isRowDirty, type StoreFilter } from '$lib/offline/db';
 	import { isSelfMutation } from '$lib/offline/self-mutations';
+	import { hasPendingCreateForList } from '$lib/offline/sync-queue';
 	import { ApiError } from '$lib/api/client';
 	import { subscribeToList } from '$lib/realtime';
 	import { onConflict, onCreateRejected, onFlushOutcome } from '$lib/offline/flush';
@@ -498,13 +499,31 @@
 			// is suppressed — the optimistic update already reflects it, so
 			// reloading would just churn the DOM mid-gesture (see PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md).
 			if (isSelfMutation(event.entityType, event.entityId)) return;
-			// An unacked local edit on this exact row means the eventual flush response is
-			// authoritative, not this racing broadcast — suppress it (see PLAN_05_PHASE_OFFLINE_PWA.md §4).
-			void isRowDirty(event.entityType, event.entityId).then((dirty) => {
+			void (async () => {
+				// A `create` broadcast can't be matched against `isSelfMutation` above — the
+				// creating client only learns the row's real id from its own request's response,
+				// by which point the broadcast (a separate SSE connection, no ordering guarantee
+				// against that response) may already have arrived. If this list still has one of
+				// our own item creates in flight, a reload here would race that create's own
+				// resolution: `fetchItems()` would merge the server's now-real row in alongside
+				// the not-yet-deleted optimistic temp row, rendering the same item twice under two
+				// different ids until the next reload. Skip it — the in-flight create already
+				// patches `items` directly once it resolves. See AGENTS.md's sortable-prototype E2E
+				// flake writeup for the failure this reproduces.
+				if (
+					event.op === 'create' &&
+					event.entityType === 'item' &&
+					(await hasPendingCreateForList('item', listId))
+				) {
+					return;
+				}
+				// An unacked local edit on this exact row means the eventual flush response is
+				// authoritative, not this racing broadcast — suppress it (see PLAN_05_PHASE_OFFLINE_PWA.md §4).
+				const dirty = await isRowDirty(event.entityType, event.entityId);
 				// Silent auto-refresh: the removed "This list was updated" toast was the only
 				// previous effect, so re-run the load to keep the list fresh (PLAN_14_PHASE_SYNC_STATUS_OBSERVABILITY.md).
 				if (!dirty) void loadAll();
-			});
+			})();
 		});
 		// The offline flush loop's own conflict reconciliation (offline/flush.ts) can leave this
 		// page's in-memory `items`/etc. stale relative to the server's merged copy — there's no live

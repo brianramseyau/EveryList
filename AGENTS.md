@@ -168,35 +168,48 @@ reproduce this exact symptom).
 
 ### Sortable-prototype E2E test can intermittently see a duplicate row on CI (not locally)
 
-**Status (2026-08-22): mitigated, root cause unconfirmed.** `apps/web/e2e/sortable-prototype.e2e.ts`'s
-"keeps a multi-step same-category reorder stable across reloads" failed once in CI (PR #83, unrelated
-to that PR's own diff — a connectivity-monitor fix) with the same shape of Playwright strict-mode
-violation as the offline-sync flake above: `getByText('Charlie Item', { exact: true })` resolved to
-*two* elements right after the test's second `page.reload()`.
+**Status (2026-09-10): fixed.** `apps/web/e2e/sortable-prototype.e2e.ts` failed intermittently on CI
+twice with the same shape of Playwright strict-mode violation — first in PR #83's "keeps a
+multi-step same-category reorder stable across reloads" (`getByText('Charlie Item', { exact: true
+})` resolved to two elements right after the test's second `page.reload()`), then again in PR #217
+(unrelated to that PR's diff) in the *other* test, "drags an item across category sections with a
+real mouse gesture," this time with **no reload at all** — `getByRole('link', { name: 'Edit Vexnal
+Item' }).click()` failed immediately after creating the item, because two `<a>` elements existed for
+it under two different item ids (a negative temp id and the real server id).
 
-- **Not reproduced locally** despite substantial effort: 60 back-to-back runs (30× each of both
-  tests in the file) all passed; artificially delaying the drag's PATCH response by up to 5s (to
-  widen any race between the optimistic Dexie write, the request settling, and the reload) never
-  produced a duplicate, only ever 0 or 1 matches.
-- **The obvious theory doesn't hold up under test**: `handleItemDrop` → `updateItem` →
-  `offlineMutate` is an `op: 'update'` (not `'create'`), so even if the reload's `fetchItems()`
-  raced the PATCH's `onSuccess` (which clears `_dirty`) and merged in a stale dirty row (per the
-  offline-sync postmortem above), that row is keyed by the *same* item id as the server's copy —
-  `fetchItems()`'s `byId` Map would overwrite, not duplicate. A genuine two-element match needs two
-  *different* ids sharing the name "Charlie Item," and nothing in the create path (fully awaited,
-  temp-id row deleted before `createItem` returns), the reorder path, or the server's `store()`/
-  `update()` controllers was found to produce that.
-- **Mitigated defensively anyway**: `dragRowOnto`'s helper now waits for the drop's PATCH response
-  before reloading, instead of a flat `waitForTimeout(300)` — closes the specific race that *was*
-  plausible (a reload landing before the mutation's response settles) even though it couldn't be
-  confirmed as the actual cause.
+That second occurrence is what broke the earlier theory (below) and pointed at the real cause:
 
-**If this resurfaces:** the root cause is still open. Worth trying next: capture a Playwright trace
-in CI specifically for this test (`--trace on`, currently not configured — see `ci.yml`'s `e2e` job,
-which uploads no artifacts on failure) so the actual DOM/network state at failure time can be
-inspected instead of re-guessing blind; check for SQLite lock contention between the two CI workers'
-concurrent DB writes (CI runs 2 workers against one `tmp/e2e.sqlite3` file, unlike a fast local
-machine) as a source of unusually long request latencies neither of the above theories accounted for.
+- **Root cause**: `offlineCreate` (`sync-engine.ts`) writes an optimistic temp-id row to Dexie, then
+  awaits the create request; on success it deletes the temp row and returns. But it never calls
+  `markSelfMutation`, unlike `offlineMutate` — so the server's realtime broadcast of this client's
+  *own* create isn't suppressed the way an update/delete broadcast is. That broadcast (a separate SSE
+  connection, no ordering guarantee against the create's own HTTP response) can arrive and trigger
+  the list page's `loadAll()` → `fetchItems()` *before* the create's own response resolves and
+  deletes the temp row. `fetchItems()`'s merge logic appends every `_dirty` Dexie row it finds
+  (correct for a genuinely still-offline create) without knowing the temp row and the just-fetched
+  server row are the same logical item — so both survive under different ids, rendered twice, until
+  something else reloads the page.
+- **Why the earlier theory (mitigated, PR #83) missed it**: that pass only checked whether
+  `offlineCreate`'s *own* await sequence could leave a duplicate (it can't — the temp row is deleted
+  before the function returns) and didn't consider a *second*, independent trigger — the realtime
+  listener — reloading concurrently. The `dragRowOnto` PATCH-wait mitigation from that pass is still
+  correct and still in place; it closes a related but distinct race on the *update* path.
+- **Fix**: the list page's realtime handler (`routes/lists/[id]/+page.svelte`) now checks
+  `hasPendingCreateForList('item', listId)` (`offline/sync-queue.ts`) before reloading on a `create`
+  event — if this list still has one of our own item creates queued (from the moment it's enqueued,
+  synchronously, before the request fires, until the flush that lands it is fully reconciled), the
+  broadcast is assumed to be our own in-flight create and the reload is skipped; the create's own
+  resolution already patches `items` directly once it lands. Verified with 15 consecutive local runs
+  of the full file post-fix (0 failures, up from the prior pass's 60 pre-fix runs that never
+  reproduced it at all) — plausible given this needs the broadcast to win a race against the same
+  origin server's own HTTP response, a narrower window locally than on CI's slower I/O.
+
+**If this resurfaces:** check first whether `hasPendingCreateForList` is still called before the
+`create`-branch reload in the realtime handler — a regression there reproduces this exact failure
+shape (two ids, same name, no reload needed). The same class of gap could in principle affect
+`category`/`favorite_item`/`store` creates too (their `offlineCreate` calls have the identical
+missing-`markSelfMutation` gap), but only items have a realtime-driven list reload wired up to race
+against it today.
 
 ### The committed AdonisJS/Tuyau client registry (`apps/api/.adonisjs/`) drifts — regenerate it via `pnpm dev` and commit
 

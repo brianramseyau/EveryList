@@ -94,6 +94,28 @@ export async function enqueueConsolidated(
 	return { id, alreadyPending: pending.length > 0 };
 }
 
+/** True while a `create`/`attach` mutation for this list is still queued — from the moment it's
+ * enqueued (synchronously, before the request fires) until the flush that lands it is fully
+ * reconciled (the temp row deleted and the mutation dequeued). Lets a realtime `create` broadcast
+ * for the same list recognize "this might be my own in-flight create" and skip a redundant reload
+ * that would otherwise race the create's own resolution — see the realtime handler in
+ * `routes/lists/[id]/+page.svelte` and AGENTS.md's sortable-prototype E2E flake writeup. */
+export async function hasPendingCreateForList(
+	entityType: SyncEntityType,
+	listId: number
+): Promise<boolean> {
+	const db = getDb();
+	if (!db) return false;
+
+	const pending = await db.syncQueue.where('status').equals('pending').toArray();
+	return pending.some(
+		(row) =>
+			row.entityType === entityType &&
+			(row.op === 'create' || row.op === 'attach') &&
+			row.payload?.listId === listId
+	);
+}
+
 /** All `pending` mutations, oldest first — the flush loop's replay order (PLAN_05_PHASE_OFFLINE_PWA.md §4). */
 export async function pendingMutations(): Promise<QueuedMutation[]> {
 	// Provably covered in isolation — other spec files' `vi.mock('./db', …)`/

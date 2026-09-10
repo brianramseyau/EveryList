@@ -5,6 +5,7 @@ import {
 	enqueueMutation,
 	failedMutations,
 	findPendingMutation,
+	hasPendingCreateForList,
 	pendingMutations,
 	queueCounts,
 	retryMutation,
@@ -67,5 +68,9 @@ describe('without an IndexedDB implementation', () => {
 
 	it('retryMutation resolves without a database', async () => {
 		await expect(retryMutation(1)).resolves.toBeUndefined();
+	});
+
+	it('hasPendingCreateForList returns false', async () => {
+		await expect(hasPendingCreateForList('item', 5)).resolves.toBe(false);
 	});
 });
