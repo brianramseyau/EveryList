@@ -15,6 +15,8 @@ export interface AdminUserCreateRequest {
   fullName: string | null
   email: string
   password: string
+  /** Defaults to `true` server-side when omitted — see admin_users_controller.ts. */
+  createDefaultLists?: boolean
 }
 
 /** All fields optional — only the ones present are changed. Setting `password` revokes the

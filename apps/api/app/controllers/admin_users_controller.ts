@@ -3,6 +3,13 @@ import { DateTime } from 'luxon'
 import type { HttpContext } from '@adonisjs/core/http'
 import AdminUserTransformer from '#transformers/admin_user_transformer'
 import { adminCreateUserValidator, adminUpdateUserValidator } from '#validators/admin_user'
+import { createOwnedList } from '#services/list_creation'
+
+/** Same starter lists a real signup gets — see #controllers/new_account_controller and
+ * #controllers/setup_controller, which each keep their own copy of these for the same reason (no
+ * shared caller that would justify factoring these down to one). */
+const TODOS_LIST = { name: 'Todos', icon: 'formatListChecks', color: '#1d4ed8' } as const
+const STARTER_LIST = { name: 'Shopping List', icon: 'basket', color: '#c2410c' } as const
 
 /**
  * User management for the instance's primary account. There's no admin role in this app (see
@@ -29,18 +36,39 @@ export default class AdminUsersController {
     return ctx.serialize(AdminUserTransformer.transform(users))
   }
 
-  /** Creates a plain user record — no starter lists, unlike self-signup (new_account_controller.ts):
-   * this is provisioning a household member who'll join existing lists via invites, not a fresh
-   * account that needs somewhere to start. */
+  /** Creates a plain user record. Defaults to also creating the same starter lists a real
+   * signup gets (new_account_controller.ts) — an admin-created account that lands on an empty
+   * index is a bug users hit and had to be told to ignore, not a real "household member joining
+   * existing lists" case; `createDefaultLists: false` opts back out of that. */
   async store(ctx: HttpContext) {
     if (!this.requireAdmin(ctx)) return
-    const { fullName, email, password } = await ctx.request.validateUsing(adminCreateUserValidator)
+    const { fullName, email, password, createDefaultLists } =
+      await ctx.request.validateUsing(adminCreateUserValidator)
 
     // `disabledAt` explicitly null (rather than omitted) so the in-memory model returned below
     // has it hydrated — Lucid only populates attributes that were actually assigned, and this
     // response skips the extra round-trip a `.refresh()` would cost.
     const user = await User.create({ fullName, email, password, disabledAt: null })
-    ctx.logger.info({ userId: user.id }, 'admin created user')
+
+    if (createDefaultLists ?? true) {
+      await createOwnedList({
+        ownerId: user.id,
+        ...TODOS_LIST,
+        useCategories: false,
+        useShops: false,
+        useFavorites: false,
+        useRecent: false,
+        useQuantity: false,
+        usePrice: false,
+        seedStarterTodoItems: true,
+      })
+      await createOwnedList({ ownerId: user.id, ...STARTER_LIST, seedStarterCategories: true })
+    }
+
+    ctx.logger.info(
+      { userId: user.id, createDefaultLists: createDefaultLists ?? true },
+      'admin created user'
+    )
 
     return ctx.response.created(await ctx.serialize(AdminUserTransformer.transform(user)))
   }

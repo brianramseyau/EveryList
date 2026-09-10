@@ -135,7 +135,29 @@ describe('Admin users +page.svelte', () => {
 		expect(createAdminUser).toHaveBeenCalledWith({
 			fullName: 'New Guy',
 			email: 'new-guy@example.com',
-			password: 'password123'
+			password: 'password123',
+			createDefaultLists: true
+		});
+	});
+
+	it('unchecking "Create default lists" omits starter lists', async () => {
+		vi.mocked(fetchAdminUsers).mockResolvedValue([admin]);
+		const created = { ...other, fullName: 'New Guy', email: 'new-guy@example.com' };
+		vi.mocked(createAdminUser).mockResolvedValue(created);
+
+		render(AdminUsersPage);
+		await page.getByRole('button', { name: 'Add user' }).click();
+		await page.getByPlaceholder('Full name (optional)').fill('New Guy');
+		await page.getByPlaceholder('Email').fill('new-guy@example.com');
+		await page.getByPlaceholder('Password (8-32 characters)').fill('password123');
+		await page.getByRole('checkbox').click();
+		await page.getByRole('button', { name: 'Add user' }).click();
+
+		expect(createAdminUser).toHaveBeenCalledWith({
+			fullName: 'New Guy',
+			email: 'new-guy@example.com',
+			password: 'password123',
+			createDefaultLists: false
 		});
 	});
 
