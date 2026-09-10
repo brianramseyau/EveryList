@@ -157,7 +157,7 @@ describe('Settings +page.svelte', () => {
 		expect(logout).toHaveBeenCalled();
 	});
 
-	it('confirms before logging out when a change is still queued, and honors cancel', async () => {
+	it('shows an inline confirm before logging out when a change is still queued, and honors cancel', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(logout).mockResolvedValue(undefined);
 		vi.mocked(goto).mockResolvedValue(undefined);
@@ -172,19 +172,22 @@ describe('Settings +page.svelte', () => {
 			attempts: 0,
 			createdAt: Date.now()
 		});
-		const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
 
 		render(SettingsPage);
 
 		await page.getByRole('button', { name: 'Log out' }).click();
 
-		await expect.poll(() => confirmSpy.mock.calls.length).toBe(1);
-		expect(confirmSpy.mock.calls[0][0]).toMatch(/1 change that/);
+		await expect.element(page.getByText(/1 change that/)).toBeInTheDocument();
+		expect(logout).not.toHaveBeenCalled();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		await expect.element(page.getByRole('button', { name: 'Log out' })).toBeInTheDocument();
 		expect(logout).not.toHaveBeenCalled();
 		expect(goto).not.toHaveBeenCalled();
 	});
 
-	it('pluralizes the confirmation prompt when multiple changes are queued', async () => {
+	it('pluralizes the inline confirm when multiple changes are queued', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(logout).mockResolvedValue(undefined);
 		vi.mocked(goto).mockResolvedValue(undefined);
@@ -211,15 +214,37 @@ describe('Settings +page.svelte', () => {
 			attempts: 0,
 			createdAt: Date.now()
 		});
-		const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
 
 		render(SettingsPage);
 
 		await page.getByRole('button', { name: 'Log out' }).click();
 
-		await expect.poll(() => confirmSpy.mock.calls.length).toBe(1);
-		expect(confirmSpy.mock.calls[0][0]).toMatch(/2 changes that/);
-		expect(confirmSpy.mock.calls[0][0]).toMatch(/lose them\?/);
+		await expect.element(page.getByText(/2 changes that.*lose them/)).toBeInTheDocument();
+	});
+
+	it('counts already-failed (DLQ) mutations toward the confirm, not just pending ones', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(logout).mockResolvedValue(undefined);
+		vi.mocked(goto).mockResolvedValue(undefined);
+		await getDb()!.syncQueue.add({
+			entityType: 'item',
+			op: 'update',
+			targetId: 1,
+			expectedVersion: 1,
+			payload: { name: 'Milk' },
+			url: '/api/v1/x',
+			status: 'failed',
+			attempts: 5,
+			createdAt: Date.now(),
+			lastError: 'network error'
+		});
+
+		render(SettingsPage);
+
+		await page.getByRole('button', { name: 'Log out' }).click();
+
+		await expect.element(page.getByText(/1 change that/)).toBeInTheDocument();
+		expect(logout).not.toHaveBeenCalled();
 	});
 
 	it('logs out anyway when the user confirms losing a queued change', async () => {
@@ -237,11 +262,11 @@ describe('Settings +page.svelte', () => {
 			attempts: 0,
 			createdAt: Date.now()
 		});
-		vi.spyOn(window, 'confirm').mockReturnValue(true);
 
 		render(SettingsPage);
 
 		await page.getByRole('button', { name: 'Log out' }).click();
+		await page.getByRole('button', { name: 'Log out anyway' }).click();
 
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 		expect(logout).toHaveBeenCalled();
