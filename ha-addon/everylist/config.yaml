@@ -48,5 +48,9 @@ options:
   app_url: ""
   app_key: ""
 schema:
-  app_url: url?
+  # `str?`, not `url?` - the `?` only makes the *key* optional, not the value: HA's `url` schema
+  # type rejects an empty string as "not a valid URL", but "" is this option's actual, documented
+  # default (see DOCS.md - "leave it blank for a working zero-config install"). Confirmed live:
+  # `url?` broke a fresh install with "Invalid configuration - expected a URL."
+  app_url: str?
   app_key: password?

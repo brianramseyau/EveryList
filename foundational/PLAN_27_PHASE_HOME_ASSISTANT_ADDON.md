@@ -340,12 +340,22 @@ before acting on it:
    via the existing fallback.
 
 **Smaller fixes bundled in alongside these** (same files, low risk):
-`config.yaml`'s `app_url` schema type `str?` → `url?` (proper validation
-in the HA options UI); a `Vary: x-ingress-path` response header on the
-rewritten shell, since it's genuinely conditional on that header;
-`DOCS.md`'s Options section incorrectly implied automated backups live
-under Server settings — they have their own page (already correctly
+a `Vary: x-ingress-path` response header on the rewritten shell, since
+it's genuinely conditional on that header; `DOCS.md`'s Options section
+incorrectly implied automated backups live under Server settings — they
+have their own page (already correctly
 described in this same file's "Data & backups" section).
+
+**Post-review fix (live-instance testing, this PR)**: one Kilo suggestion
+that *was* initially applied turned out to be wrong in practice —
+`app_url`'s schema type `str?` → `url?`, meant to get proper URL
+validation in the HA options UI. `?` only makes the *key* optional, not
+the value: HA's `url` type rejects an empty string as "not a valid URL",
+but `""` is this option's actual, documented default (DOCS.md: "leave it
+blank for a working zero-config install"). Broke a fresh install
+immediately with "Invalid configuration - expected a URL." Reverted to
+`str?`, with a comment on that line explaining why, so this doesn't
+regress on a future "helpful" edit.
 
 **Findings checked and correctly not acted on**: CI's `bump-addon-version`
 job already explicitly checks out `ref: main` — not an "implicit target
