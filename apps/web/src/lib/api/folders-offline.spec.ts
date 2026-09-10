@@ -15,9 +15,9 @@ vi.mock('./client', () => ({
 	}
 }));
 
-const { apiGet, ApiError } = await import('./client');
+const { apiGet, apiDelete, ApiError } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { fetchFolders } = await import('./folders');
+const { fetchFolders, deleteFolder } = await import('./folders');
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -61,5 +61,27 @@ describe('fetchFolders (cache hydration)', () => {
 		vi.mocked(apiGet).mockRejectedValue(new ApiError(403, 'Forbidden'));
 
 		await expect(fetchFolders()).rejects.toThrow('Forbidden');
+	});
+
+	it('prunes a cached folder that the server no longer returns (deleted elsewhere)', async () => {
+		vi.mocked(apiGet).mockResolvedValue([folderRow(1, 'Home', 0), folderRow(2, 'Work', 1)]);
+		await fetchFolders();
+
+		vi.mocked(apiGet).mockResolvedValue([folderRow(1, 'Home', 0)]);
+		await fetchFolders();
+
+		expect(await getDb()!.folders.get(2)).toBeUndefined();
+	});
+});
+
+describe('deleteFolder', () => {
+	it('removes the cached row so it does not flash back in on the next cache-first paint', async () => {
+		vi.mocked(apiGet).mockResolvedValue([folderRow(1, 'Home', 0)]);
+		await fetchFolders();
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+
+		await deleteFolder(1);
+
+		expect(await getDb()!.folders.get(1)).toBeUndefined();
 	});
 });
