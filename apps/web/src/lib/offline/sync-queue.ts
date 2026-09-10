@@ -98,7 +98,18 @@ export async function enqueueConsolidated(
  * `hasPendingCreateForList` below. Matches `self-mutations.ts`'s own suppression window: the race
  * this guards against (the create's realtime broadcast arriving before its own HTTP response)
  * resolves in a single request round trip, not however long the mutation stays queued (which, for
- * an offline create, could be arbitrarily long — see the WARNING this constant fixes). */
+ * an offline create, could be arbitrarily long — see the WARNING this constant fixes).
+ *
+ * This is a deliberate, imperfect heuristic, not a precise fix — there's no id shared between a
+ * temp row and its eventual realtime broadcast to correlate them exactly (that would need a
+ * client-generated request id threaded through `broadcastSync` and `SyncEventDto`, a much larger
+ * change than this bug warrants). Any fixed window trades one direction of the original race for
+ * the other: too long, and a genuinely concurrent create from another device on this list can be
+ * silently dropped within the window (accepted below); too short, and an unusually slow (>10s) own
+ * create re-opens the exact race this exists to close. 10s is chosen as generous for a normal
+ * request round trip while still being a small fraction of how long an offline create can sit
+ * queued — narrowing the window doesn't eliminate the trade-off, only shifts which side is more
+ * likely to bite. */
 const PENDING_CREATE_WINDOW_MS = 10_000;
 
 /** True while a `create`/`attach` mutation for this list was enqueued within the last
