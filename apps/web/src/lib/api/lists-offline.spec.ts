@@ -15,9 +15,9 @@ vi.mock('./client', () => ({
 	}
 }));
 
-const { apiGet } = await import('./client');
+const { apiGet, apiDelete } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { fetchList, fetchLists } = await import('./lists');
+const { fetchList, fetchLists, deleteList } = await import('./lists');
 
 afterEach(async () => {
 	vi.clearAllMocks();
@@ -87,6 +87,28 @@ describe('fetchLists (cache hydration)', () => {
 		expect(result.map((list) => list.id)).toContain(3);
 		expect(result.map((list) => list.id)).toContain(4);
 		expect(result[result.length - 1].id).toBe(1);
+	});
+
+	it('prunes a cached list that the server no longer returns (deleted elsewhere)', async () => {
+		vi.mocked(apiGet).mockResolvedValue([listRow(1, 'Groceries'), listRow(2, 'Chores')]);
+		await fetchLists();
+
+		vi.mocked(apiGet).mockResolvedValue([listRow(1, 'Groceries')]);
+		await fetchLists();
+
+		expect(await getDb()!.lists.get(2)).toBeUndefined();
+	});
+});
+
+describe('deleteList', () => {
+	it('removes the cached row so it does not flash back in on the next cache-first paint', async () => {
+		vi.mocked(apiGet).mockResolvedValue([listRow(1, 'Groceries')]);
+		await fetchLists();
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+
+		await deleteList(1);
+
+		expect(await getDb()!.lists.get(1)).toBeUndefined();
 	});
 });
 
