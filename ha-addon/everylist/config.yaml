@@ -1,0 +1,28 @@
+---
+name: EveryList
+version: "0.0.0"
+slug: everylist
+description: Mobile-first, offline-first shopping/task lists — self-hosted, single container
+url: https://github.com/brianramseyau/EveryList
+image: ghcr.io/brianramseyau/everylist
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+ports:
+  3000/tcp: 3000
+ports_description:
+  3000/tcp: Web UI and API
+webui: http://[HOST]:[PORT:3000]/
+map:
+  - type: addon_config
+    path: /config
+    read_only: false
+options:
+  app_url: ""
+  app_key: ""
+schema:
+  app_url: str?
+  app_key: password?

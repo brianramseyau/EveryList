@@ -158,3 +158,30 @@ jobs:
         run: |
           tag="$(head -n1 <<< "${{ steps.meta.outputs.tags }}")"
           docker buildx imagetools inspect "$tag"
+
+  bump-addon-version:
+    name: Bump Home Assistant add-on version
+    needs: merge
+    # Stable release tags only - matches the `latest`/`vX` tag rules above, so the add-on
+    # always tracks the same stable release those do, never a prerelease.
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set ha-addon/everylist/config.yaml version to the tagged release
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/^version: .*/version: \"${VERSION}\"/" ha-addon/everylist/config.yaml
+
+      # Commits with the default GITHUB_TOKEN deliberately do not trigger further workflow
+      # runs (GitHub's own loop-prevention behavior) - this push to main will not retrigger
+      # this workflow's own `branches: [main]` rule, so there's no rebuild loop here.
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(ha-addon): bump add-on version to ${{ github.ref_name }}"
+          file_pattern: ha-addon/everylist/config.yaml

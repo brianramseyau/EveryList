@@ -1,0 +1,27 @@
+#!/command/with-contenv sh
+# Home Assistant Supervisor writes add-on options to /data/options.json inside
+# the container - it does not map them to env vars itself for an add-on that
+# just references a prebuilt image (see ha-addon/everylist/config.yaml). That
+# path only exists under Supervisor, so this is a no-op for plain
+# Docker/Compose/Unraid deployments - zero behavior change for anyone else.
+# Must run before 20-app-key/30-migrate so APP_URL/APP_KEY are already in the
+# environment by the time those scripts (and the app itself) read them.
+set -e
+
+OPTIONS_FILE=/data/options.json
+
+if [ ! -f "$OPTIONS_FILE" ]; then
+  exit 0
+fi
+
+APP_URL="$(jq -r '.app_url // empty' "$OPTIONS_FILE")"
+if [ -n "$APP_URL" ]; then
+  printf '%s' "$APP_URL" >/var/run/s6/container_environment/APP_URL
+  echo "[05-ha-options] APP_URL set from add-on options"
+fi
+
+APP_KEY="$(jq -r '.app_key // empty' "$OPTIONS_FILE")"
+if [ -n "$APP_KEY" ]; then
+  printf '%s' "$APP_KEY" >/var/run/s6/container_environment/APP_KEY
+  echo "[05-ha-options] APP_KEY set from add-on options"
+fi
