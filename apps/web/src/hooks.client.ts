@@ -14,9 +14,14 @@ import { ingressBase } from '$lib/api/ingress';
  * `reroute` only changes what the router uses to *match* a route — it does not touch the address
  * bar or `window.location`, so this is safe to run on every navigation, not just the first.
  * Outside Ingress `ingressBase()` is `''` and this is a no-op.
+ *
+ * SvelteKit resolves whatever this returns against the original URL (`new URL(returned, url)`),
+ * so `url.search`/`url.hash` must be carried over explicitly or they're silently dropped from the
+ * URL used for matching - this app reads query params (e.g. login's `?next=`,
+ * reset-password's `?token=`) off `page.url`, which is built from that same resolved URL.
  */
 export function reroute({ url }: { url: URL }): string | void {
 	const base = ingressBase();
 	if (!base || !url.pathname.startsWith(base)) return;
-	return url.pathname.slice(base.length) || '/';
+	return (url.pathname.slice(base.length) || '/') + url.search + url.hash;
 }

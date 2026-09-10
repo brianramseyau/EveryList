@@ -26,6 +26,17 @@ describe('hooks.client reroute', () => {
 		);
 	});
 
+	it('preserves the query string and hash when stripping the prefix', () => {
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+		expect(
+			reroute({
+				url: new URL(
+					'https://homeassistant.local/api/hassio_ingress/abc123/reset-password?token=xyz#section'
+				)
+			})
+		).toBe('/reset-password?token=xyz#section');
+	});
+
 	it('leaves a URL outside the Ingress prefix unchanged', () => {
 		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
 		expect(

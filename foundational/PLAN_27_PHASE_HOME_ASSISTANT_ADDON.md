@@ -473,6 +473,17 @@ fixes above:
   rejected, plus its length — enough to diagnose a real Supervisor format
   drift without echoing attacker-controlled content.
 
+**Fourth Kilo review round** — 1 finding, against `hooks.client.ts`
+above: `reroute` returned only the stripped pathname, dropping
+`url.search`/`url.hash`. SvelteKit resolves whatever `reroute` returns
+against the original URL, so a query string or hash on a prefixed
+Ingress URL would have been silently lost from the URL used for
+matching — concretely, `login`'s `?next=`, `signup`'s equivalent, and
+`reset-password`'s `?token=` all read their query params off `page.url`,
+which is built from that same resolved URL. Fixed: append `url.search +
+url.hash` to the returned pathname, matching the pattern SvelteKit's own
+`reroute` docs use for exactly this reason.
+
 Live-instance verification is still the same open item above — none of
 this round's fixes have been tested against a real build yet either.
 `config.yaml`'s `image`/`version` still point at a pre-PR image tag, so
