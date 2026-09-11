@@ -12,6 +12,9 @@ import router from '@adonisjs/core/services/router'
 import { controllers } from '#generated/controllers'
 import app from '@adonisjs/core/services/app'
 import { authThrottle, listsThrottle, passwordChangeThrottle } from '#start/limiter'
+import { readFile } from 'node:fs/promises'
+import { isValidIngressPath, rewriteHtmlForIngress } from '#services/ingress_service'
+import logger from '@adonisjs/core/services/logger'
 
 // Registers __transmit/events, __transmit/subscribe, and __transmit/unsubscribe
 // (see #start/transmit) before this file's own SPA catch-all route below. This
@@ -293,6 +296,44 @@ router
   .prefix('/api/v1')
 
 /**
+ * Fixes up Ingress requests neither of ingress_service.ts's HTML-text rewrites can reach:
+ * SvelteKit's compiled `app.js` looks up lazily-loaded route chunks (e.g. `nodes/0.js`, the root
+ * layout - needed for literally any page) via a root-absolute string baked in at build time, not
+ * HTML text. That request bypasses the Ingress prefix entirely and 404s at Home Assistant's own
+ * root, not this container - confirmed live, and not a deep-link edge case, since `nodes/0.js`
+ * blocks the very first page render. This worker's only job: for a same-origin request under
+ * `/_app/` that landed outside its own (Ingress-prefixed) scope, refetch it with the scope
+ * prepended instead. Registered from the bootstrap HTML itself (see rewriteHtmlForIngress) rather
+ * than from `+layout.svelte`, since `+layout.svelte` *is* `nodes/0.js` - it can't register in time
+ * to fix its own load failure.
+ *
+ * Registered before the `*` SPA fallback below - matchit (the route matcher) returns the first
+ * pattern in registration order that matches, with no static-vs-wildcard prioritization (see this
+ * file's own top comment on the __transmit routes for exactly this footgun), so this would never
+ * be reached if it came after the wildcard.
+ */
+router.get('/_ha-ingress-sw.js', ({ response }) => {
+  response.header('content-type', 'text/javascript; charset=utf-8')
+  return response.send(
+    `self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', (event) => {
+  const scope = new URL(self.registration.scope);
+  const reqUrl = new URL(event.request.url);
+  if (
+    reqUrl.origin === scope.origin &&
+    reqUrl.pathname.startsWith('/_app/') &&
+    !reqUrl.pathname.startsWith(scope.pathname)
+  ) {
+    const rewritten = scope.origin + scope.pathname.replace(/\\/$/, '') + reqUrl.pathname;
+    event.respondWith(fetch(new Request(rewritten, event.request)));
+  }
+});
+`
+  )
+})
+
+/**
  * SPA fallback: apps/web is built with adapter-static's `fallback: '200.html'`
  * (see apps/web/vite.config.ts) so routes with no known params at build time
  * (e.g. /lists/:id) aren't prerendered. Static files under public/ (prerendered
@@ -300,10 +341,57 @@ router
  * before routing — so this only ever fires for a path that isn't a real file,
  * letting SvelteKit's client-side router take over. A stray /api/v1/* miss
  * still 404s as JSON instead of getting the HTML shell.
+ *
+ * Also doubles as the Home Assistant add-on's Ingress entry point
+ * (ha-addon/everylist/config.yaml's `ingress_entry: /ha-ingress-entry` -
+ * apps/web/src/routes/ha-ingress-entry/ is a real route the client router
+ * recognizes post-hydration, but deliberately excluded from prerendering so
+ * it always falls through to here instead of the static middleware, which
+ * has no per-request customization hook). When Supervisor's ingress proxy
+ * is in front of this request (`x-ingress-path` header - stripped before
+ * reaching this container otherwise) and its value matches Supervisor's
+ * actual format, the shell gets rewritten so its root-absolute asset
+ * references resolve under that proxy's prefix instead of 404ing - see
+ * #services/ingress_service and foundational/PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
+ * No header, or a header that doesn't match the expected format (untrusted
+ * input - see isValidIngressPath) → byte-identical to the plain
+ * `response.download` this replaced; every other route (prerendered pages,
+ * /api/*) is untouched.
  */
-router.get('*', ({ request, response }) => {
+router.get('*', async ({ request, response }) => {
   if (request.url().startsWith('/api/')) {
     return response.notFound({ message: 'Not found' })
   }
-  return response.download(app.publicPath('200.html'))
+
+  // This response's bytes depend on a request header (x-ingress-path), not just the URL, and the
+  // Ingress branch below only sets `Vary` for that - a browser's *heuristic* freshness caching
+  // (kicking in whenever no explicit Cache-Control is present, based on this file's on-disk
+  // mtime - fixed at image-build time, so potentially "fresh" for a long time) doesn't consult
+  // `Vary` at all before deciding to skip the network entirely. That's exactly what produced a
+  // live "200 (from disk cache)" response still carrying pre-fix, un-rewritten asset paths well
+  // after the underlying file had already changed. `no-store` forces every request through to
+  // this handler, which is the whole point of a dynamic SPA-fallback route in the first place.
+  response.header('cache-control', 'no-store')
+
+  const ingressPath = request.header('x-ingress-path')
+  if (!ingressPath || !isValidIngressPath(ingressPath)) {
+    // A present-but-rejected header (as opposed to no header at all) means either a malicious
+    // request or Supervisor's real token format has drifted from what isValidIngressPath expects -
+    // worth a log line since the fallback silently serves the un-rewritten shell either way, which
+    // would otherwise look identical to "not behind Ingress at all" and be hard to diagnose. Never
+    // logs the header's own content, though - it's unvalidated attacker-reachable input on a
+    // public, unauthenticated, unthrottled route, so echoing it back verbatim would let any client
+    // inject arbitrary bytes into the log stream or pad it out on repeated requests.
+    if (ingressPath)
+      logger.warn(
+        { ingressPathLength: ingressPath.length },
+        'rejected x-ingress-path header, unrewritten shell served'
+      )
+    return response.download(app.publicPath('200.html'))
+  }
+
+  const html = await readFile(app.publicPath('200.html'), 'utf-8')
+  response.header('content-type', 'text/html; charset=utf-8')
+  response.header('vary', 'x-ingress-path')
+  return response.send(rewriteHtmlForIngress(html, ingressPath))
 })

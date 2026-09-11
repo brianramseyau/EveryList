@@ -11,6 +11,7 @@
 	import { getServerUrl } from '$lib/api/server-url';
 	import { fetchSetupStatus } from '$lib/api/setup';
 	import { isRemoteClient } from '$lib/platform/desktop';
+	import { isIngress, stripIngressPrefix } from '$lib/api/ingress';
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
 	import { initOrientation } from '$lib/orientation';
@@ -90,9 +91,14 @@
 		// somewhere real to point before it can work at all.
 		const serverSetupPath = resolve('/server-setup');
 		const noServerConfigured = isRemoteClient() && !getServerUrl();
-		if (noServerConfigured && page.url.pathname !== serverSetupPath) {
+		// page.url always reflects the real browser URL, Ingress prefix included - reroute() only
+		// changes what the router matches internally, never what page.url exposes - so compare
+		// against the prefix-stripped path, not page.url.pathname directly. See
+		// $lib/api/ingress.ts's stripIngressPrefix.
+		const currentPath = stripIngressPrefix(page.url.pathname);
+		if (noServerConfigured && currentPath !== serverSetupPath) {
 			void goto(serverSetupPath);
-		} else if (!getToken() && page.url.pathname !== resolve('/setup')) {
+		} else if (!getToken() && currentPath !== resolve('/setup')) {
 			void redirectToSetupIfNeeded();
 		}
 		initTheme();
@@ -157,7 +163,13 @@
 		startFlushLoop();
 		startConnectivityMonitor();
 		startBackgroundSync();
-		initInstallPrompt();
+		// Installing a PWA / registering the Service Worker pointed at Home Assistant's Ingress URL
+		// (a random, per-install token path Supervisor can rotate) isn't a coherent concept —
+		// skipped entirely under ingress, same reasoning as the native/desktop skip below, rather
+		// than trying to scope it. See PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
+		if (!isIngress()) {
+			initInstallPrompt();
+		}
 		// The Workbox service worker is meaningful for the browser/PWA build (offline caching,
 		// update prompts) but Capacitor's WebView already loads the bundle from local files —
 		// there's no real network layer for it to usefully intercept there, and registering one
@@ -166,7 +178,7 @@
 		// (PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §2/§4) — a Workbox precache over that loopback origin adds
 		// nothing and reintroduces the same stale-asset bug class. Skip it entirely on either
 		// rather than relying on it merely no-oping harmlessly.
-		if (!isRemoteClient()) {
+		if (!isRemoteClient() && !isIngress()) {
 			// Belt-and-suspenders for a device that logged in before the service worker's
 			// "Complete"/"Snooze" notification actions shipped: setToken/clearToken keep the mirror
 			// current from here on, but a token set before that point never went through them.
@@ -237,8 +249,14 @@
 	});
 
 	const navSections = ['/lists', '/settings'];
+	// page.url.pathname always includes the Ingress prefix (reroute() never changes what page.url
+	// exposes - see $lib/api/ingress.ts's stripIngressPrefix) - comparing it directly against these
+	// unprefixed sections meant the bottom nav never appeared on the very first load under Ingress,
+	// only "recovering" once an in-app link click happened to drop the prefix from the address bar
+	// as an unrelated side effect (a separate, still-open limitation - see DOCS.md).
 	const showNav = $derived(
-		loggedIn && navSections.some((section) => page.url.pathname.startsWith(section))
+		loggedIn &&
+			navSections.some((section) => stripIngressPrefix(page.url.pathname).startsWith(section))
 	);
 </script>
 

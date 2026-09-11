@@ -108,11 +108,14 @@ ARG APP_VERSION=nightly
 ARG GIT_SHA=unknown
 ARG BUILD_DATE=unknown
 
-# Install s6-overlay (curl/xz-utils are build-time-only, purged after).
+# Install s6-overlay (curl/xz-utils are build-time-only, purged after). jq is
+# kept at runtime - docker/root/etc/cont-init.d/05-ha-options uses it to read
+# Home Assistant Supervisor's /data/options.json, when present.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     xz-utils \
     ca-certificates \
+    jq \
     && ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
     amd64) S6_ARCH=x86_64 ;; \

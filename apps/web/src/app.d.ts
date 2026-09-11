@@ -27,6 +27,11 @@ declare global {
 			// $lib/notifications/electron.ts's timers keep running in the background.
 			setBackgroundRun: (enabled: boolean) => Promise<void>;
 		};
+		// Injected as an inline <script> by apps/api's SPA-fallback route (see
+		// #services/ingress_service on the API side) only when the request came through Home
+		// Assistant Supervisor's Ingress proxy — undefined everywhere else. See $lib/api/ingress.ts
+		// and PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
+		__EVERYLIST_INGRESS_BASE__?: string;
 	}
 }
 

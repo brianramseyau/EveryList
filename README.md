@@ -97,11 +97,15 @@ EveryList/
 ├── docker/              # production + dev Dockerfiles, Unraid template
 ├── branding/             # app icon source + generated exports, screenshots
 ├── alexa/                # Alexa custom skill deployment assets (interaction model, account linking)
+├── ha-addon/
+│   └── everylist/          # Home Assistant Add-on manifest (config.yaml, DOCS.md)
 └── foundational/
     └── PLAN_00_FOUNDATIONAL_PLAN.md     # single source of truth for scope & architecture
 ```
 
-The Home Assistant HACS integration lives in its own repo, [`everylist-hass`](https://github.com/brianramseyau/everylist-hass) — separate from this monorepo because HACS requires `custom_components/<domain>/` at the repo root and versions the integration via that repo's own GitHub releases.
+This repo also doubles as a Home Assistant *add-on repository* — `repository.yaml` at the repo root plus `ha-addon/everylist/` is all Supervisor needs to list EveryList in the Add-on Store; see [Home Assistant](#home-assistant) below.
+
+The Home Assistant HACS integration (a separate thing — a `todo.*` entity client against an existing EveryList server, not a way to run the server itself) lives in its own repo, [`everylist-hass`](https://github.com/brianramseyau/everylist-hass) — separate from this monorepo because HACS requires `custom_components/<domain>/` at the repo root and versions the integration via that repo's own GitHub releases.
 
 ## Getting started
 
@@ -183,6 +187,15 @@ Available image tags:
 | `vX.Y.Z` | Exact release, never moves |
 | `vX` | Latest release within major version `X` |
 | `latest` | Latest stable release |
+
+### Home Assistant
+
+[![Add repository to my Home Assistant][ha-badge]][ha-add-repo]
+
+EveryList is also available as a Home Assistant Add-on, for anyone already running Home Assistant OS/Supervised — same single-container image as the Docker/Unraid path above, no separate `docker run` needed. Click the badge, or add `https://github.com/brianramseyau/EveryList` under **Settings → Add-ons → Add-on Store → repositories** and install "EveryList" from there. See [`ha-addon/everylist/DOCS.md`](ha-addon/everylist/DOCS.md) for the add-on's options.
+
+[ha-badge]: https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg
+[ha-add-repo]: https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fbrianramseyau%2FEveryList
 
 ### Native apps (iOS/Android)
 

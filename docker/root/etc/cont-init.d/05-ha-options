@@ -1,0 +1,37 @@
+#!/command/with-contenv sh
+# Home Assistant Supervisor writes add-on options to /data/options.json inside
+# the container - it does not map them to env vars itself for an add-on that
+# just references a prebuilt image (see ha-addon/everylist/config.yaml). That
+# path only exists under Supervisor, so this is a no-op for plain
+# Docker/Compose/Unraid deployments - zero behavior change for anyone else.
+# Must run before 20-app-key/30-migrate so APP_URL/APP_KEY are already in the
+# environment by the time those scripts (and the app itself) read them.
+set -e
+
+OPTIONS_FILE=/data/options.json
+
+if [ ! -f "$OPTIONS_FILE" ]; then
+  exit 0
+fi
+
+APP_URL="$(jq -r '.app_url // empty' "$OPTIONS_FILE")"
+if [ -n "$APP_URL" ]; then
+  printf '%s' "$APP_URL" >/var/run/s6/container_environment/APP_URL
+  echo "[05-ha-options] APP_URL set from add-on options"
+fi
+
+APP_KEY="$(jq -r '.app_key // empty' "$OPTIONS_FILE")"
+if [ -n "$APP_KEY" ]; then
+  printf '%s' "$APP_KEY" >/var/run/s6/container_environment/APP_KEY
+  # Also persisted to /config/app_key, the same file/permissions 20-app-key itself uses for a
+  # generated key - without this, clearing the option later leaves 20-app-key with neither an env
+  # var nor a persisted file to fall back to, silently generating a *new* key and invalidating
+  # every existing session. No chown needed here - unlike 20-app-key (which runs after
+  # 10-remap-user, so its chown is the final word on ownership), this script runs *before*
+  # 10-remap-user's own `chown -R appuser:appuser /config`, which will re-chown this file moments
+  # later regardless of what we set it to. chmod still matters - that recursive chown doesn't touch
+  # the mode bits.
+  printf '%s' "$APP_KEY" >/config/app_key
+  chmod 600 /config/app_key
+  echo "[05-ha-options] APP_KEY set from add-on options, persisted to /config/app_key"
+fi

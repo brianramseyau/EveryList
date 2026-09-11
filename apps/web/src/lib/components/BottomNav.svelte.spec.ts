@@ -121,6 +121,35 @@ describe('BottomNav.svelte', () => {
 		expect(links[0]?.getAttribute('aria-current')).toBeNull();
 	});
 
+	it('marks the Lists link active under Ingress, where page.url.pathname carries the prefix', () => {
+		// page.url.pathname always includes the Ingress prefix - comparing it directly (instead of
+		// through stripIngressPrefix) meant no tab was ever marked active on the very first load
+		// under Ingress. See $lib/api/ingress.ts's stripIngressPrefix.
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+		state.pathname = '/api/hassio_ingress/abc123/lists';
+		const { container } = render(BottomNav);
+
+		const links = [...container.querySelectorAll('a')];
+		expect(links[0]?.getAttribute('aria-current')).toBe('page');
+		delete window.__EVERYLIST_INGRESS_BASE__;
+	});
+
+	it('remembers the list scroll position under Ingress too', () => {
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+		state.pathname = '/api/hassio_ingress/abc123/lists/5';
+		vi.spyOn(window, 'scrollY', 'get').mockReturnValue(250);
+		const { container } = render(BottomNav);
+
+		const link = container.querySelector('a')!;
+		const preventNav = (event: Event) => event.preventDefault();
+		document.addEventListener('click', preventNav, { capture: true });
+		link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		document.removeEventListener('click', preventNav, { capture: true });
+
+		expect(consumeListScroll(5)).toBe(250);
+		delete window.__EVERYLIST_INGRESS_BASE__;
+	});
+
 	it('shows the in-app badge fallback pill when the Badging API is unsupported', async () => {
 		state.pathname = '/lists';
 		state.badgingSupported = false;

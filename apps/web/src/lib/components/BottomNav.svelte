@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { getBadgeCount, isBadgingSupported, onBadgeCountChange } from '$lib/pwa/badge';
 	import { markSkipTransition, rememberListScroll } from '$lib/nav-direction';
+	import { stripIngressPrefix } from '$lib/api/ingress';
 
 	type NavKey = 'lists' | 'settings';
 
@@ -12,8 +13,12 @@
 		{ key: 'settings', label: 'Settings', match: '/settings' }
 	];
 
+	// page.url.pathname always includes the Ingress prefix - see $lib/api/ingress.ts's
+	// stripIngressPrefix for why comparing it directly here would never mark a tab active on the
+	// first load under Ingress.
 	function isActive(match: string): boolean {
-		return page.url.pathname === match || page.url.pathname.startsWith(`${match}/`);
+		const pathname = stripIngressPrefix(page.url.pathname);
+		return pathname === match || pathname.startsWith(`${match}/`);
 	}
 
 	// Tapping "Lists" from a list-detail screen (.../lists/<id>, exactly — not a sub-page like
@@ -22,7 +27,7 @@
 	// `+page.svelte`'s `returnToLists` — see nav-direction.ts's `rememberListScroll`.
 	function handleNavClick() {
 		markSkipTransition();
-		const match = /^\/lists\/(\d+)$/.exec(page.url.pathname);
+		const match = /^\/lists\/(\d+)$/.exec(stripIngressPrefix(page.url.pathname));
 		if (match) rememberListScroll(Number(match[1]), window.scrollY);
 	}
 
