@@ -1103,6 +1103,26 @@ describe('Settings +page.svelte', () => {
 		await expect.element(page.getByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
 	});
 
+	it('replaces update-check and reset with an explanatory note under Ingress', async () => {
+		// resetApp() unregisters every Service Worker for the origin, including the one Ingress
+		// depends on for correct asset loading (apps/api's /_ha-ingress-sw.js) - offering it here
+		// would let a user break the app trying to "fix" it. There's also no real Service Worker to
+		// check for an update against under Ingress at all. See $lib/api/ingress.ts.
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Troubleshooting')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Home Assistant manages updates for this add-on', { exact: false }))
+			.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Update' })).not.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
+
+		delete window.__EVERYLIST_INGRESS_BASE__;
+	});
+
 	it('shows the configured server URL and changing it clears the token, server URL, and navigates', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);

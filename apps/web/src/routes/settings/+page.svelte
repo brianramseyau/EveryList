@@ -49,6 +49,7 @@
 	} from '$lib/notifications/sync';
 	import { desktopInfo, isDesktop } from '$lib/platform/desktop';
 	import { checkForDesktopUpdate } from '$lib/platform/desktop-update';
+	import { isIngress } from '$lib/api/ingress';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
@@ -832,129 +833,145 @@
 			>
 				Troubleshooting
 			</h2>
-			<div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-				{#if isDesktopApp}
-					<!-- No service worker on desktop — this checks GitHub Releases instead and links to
+			{#if isIngress()}
+				<!-- Neither of these applies under Home Assistant Ingress: there's no real Service
+				     Worker registered here at all (see +layout.svelte - installing one pointed at a
+				     rotating per-install token URL isn't coherent), so "check for update" has nothing to
+				     check. Worse, resetApp() unregisters *every* Service Worker for the origin, including
+				     the one this app actually depends on under Ingress (apps/api's
+				     /_ha-ingress-sw.js, which rewrites requests SvelteKit's own compiled JS would
+				     otherwise send to the wrong, unprefixed URL - see
+				     foundational/PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md) - clicking Reset here would
+				     reintroduce the exact blank-page bug that took this long to fix. -->
+				<div class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+					Home Assistant manages updates for this add-on — check Settings → Add-ons → EveryList for
+					a new version. There's no separate app cache to reset here.
+				</div>
+			{:else}
+				<div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+					{#if isDesktopApp}
+						<!-- No service worker on desktop — this checks GitHub Releases instead and links to
 					     the download rather than updating in place (PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §8;
 					     unsigned macOS builds can't auto-update at all). -->
-					{#if desktopUpdateResult.status === 'up-to-date'}
-						<p
-							class="mb-3 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400"
-						>
-							You're on the latest version.
-						</p>
-					{:else if desktopUpdateResult.status === 'error'}
-						<p
-							class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-						>
-							{desktopUpdateResult.message}
-						</p>
-					{:else if desktopUpdateResult.status === 'update-available'}
-						{@const latestVersion = desktopUpdateResult.latestVersion}
-						{@const releaseUrl = desktopUpdateResult.url}
-						<p
-							class="mb-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-700 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
-						>
-							<span>{latestVersion}</span> is available —
-							<!-- releaseUrl is a GitHub Releases page from the desktop update check, not an
-						     app route — resolve() doesn't apply (same as NoteLink). -->
-							<!-- eslint-disable svelte/no-navigation-without-resolve -->
-							<a href={releaseUrl} target="_blank" rel="noopener noreferrer" class="underline"
-								>download it</a
+						{#if desktopUpdateResult.status === 'up-to-date'}
+							<p
+								class="mb-3 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400"
 							>
-							<!-- eslint-enable svelte/no-navigation-without-resolve -->
-							and reinstall.
-						</p>
+								You're on the latest version.
+							</p>
+						{:else if desktopUpdateResult.status === 'error'}
+							<p
+								class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+							>
+								{desktopUpdateResult.message}
+							</p>
+						{:else if desktopUpdateResult.status === 'update-available'}
+							{@const latestVersion = desktopUpdateResult.latestVersion}
+							{@const releaseUrl = desktopUpdateResult.url}
+							<p
+								class="mb-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-700 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
+							>
+								<span>{latestVersion}</span> is available —
+								<!-- releaseUrl is a GitHub Releases page from the desktop update check, not an
+						     app route — resolve() doesn't apply (same as NoteLink). -->
+								<!-- eslint-disable svelte/no-navigation-without-resolve -->
+								<a href={releaseUrl} target="_blank" rel="noopener noreferrer" class="underline"
+									>download it</a
+								>
+								<!-- eslint-enable svelte/no-navigation-without-resolve -->
+								and reinstall.
+							</p>
+						{/if}
+						<div class="flex items-center justify-between gap-4">
+							<span class="text-sm text-gray-600 dark:text-gray-300">
+								Check GitHub for a newer release of the app.
+							</span>
+							<button
+								type="button"
+								onclick={handleCheckForDesktopUpdate}
+								disabled={desktopUpdateResult.status === 'checking'}
+								class="w-28 shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-white hover:bg-primary-700 disabled:opacity-50"
+							>
+								{desktopUpdateResult.status === 'checking' ? 'Checking...' : 'Check'}
+							</button>
+						</div>
+					{:else}
+						{#if updateStatus === 'up-to-date'}
+							<p
+								class="mb-3 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400"
+							>
+								You're on the latest version.
+							</p>
+						{:else if updateStatus === 'unavailable'}
+							<p
+								class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+							>
+								Update check unavailable right now — try again in a moment.
+							</p>
+						{:else if updateStatus === 'updating'}
+							<p
+								class="mb-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-700 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
+							>
+								An update is ready — it will apply when the app refreshes.
+							</p>
+						{/if}
+						<div class="flex items-center justify-between gap-4">
+							<span class="text-sm text-gray-600 dark:text-gray-300">
+								Check for a newer version of the app right now, instead of waiting for it to update
+								on its own.
+							</span>
+							<button
+								type="button"
+								onclick={handleCheckForUpdate}
+								disabled={updateStatus === 'checking'}
+								class="w-28 shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-white hover:bg-primary-700 disabled:opacity-50"
+							>
+								{updateStatus === 'checking' ? 'Updating...' : 'Update'}
+							</button>
+						</div>
 					{/if}
-					<div class="flex items-center justify-between gap-4">
-						<span class="text-sm text-gray-600 dark:text-gray-300">
-							Check GitHub for a newer release of the app.
-						</span>
-						<button
-							type="button"
-							onclick={handleCheckForDesktopUpdate}
-							disabled={desktopUpdateResult.status === 'checking'}
-							class="w-28 shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-white hover:bg-primary-700 disabled:opacity-50"
-						>
-							{desktopUpdateResult.status === 'checking' ? 'Checking...' : 'Check'}
-						</button>
+				</div>
+				{#if confirmingReset}
+					<div
+						class="flex items-center justify-between gap-2 rounded-lg border border-red-200 px-4 py-3 text-sm dark:border-red-900"
+					>
+						<p class="text-red-600 dark:text-red-400">
+							This clears cached app data and reloads the app. Continue?
+						</p>
+						<div class="flex shrink-0 gap-2">
+							<button
+								type="button"
+								onclick={handleResetApp}
+								disabled={resetting}
+								class="w-28 rounded-lg border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+							>
+								Reset
+							</button>
+							<button
+								type="button"
+								onclick={() => (confirmingReset = false)}
+								disabled={resetting}
+								class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+							>
+								Cancel
+							</button>
+						</div>
 					</div>
 				{:else}
-					{#if updateStatus === 'up-to-date'}
-						<p
-							class="mb-3 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400"
-						>
-							You're on the latest version.
-						</p>
-					{:else if updateStatus === 'unavailable'}
-						<p
-							class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-						>
-							Update check unavailable right now — try again in a moment.
-						</p>
-					{:else if updateStatus === 'updating'}
-						<p
-							class="mb-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-700 dark:border-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
-						>
-							An update is ready — it will apply when the app refreshes.
-						</p>
-					{/if}
-					<div class="flex items-center justify-between gap-4">
+					<div class="flex items-center justify-between gap-4 px-4 py-3">
 						<span class="text-sm text-gray-600 dark:text-gray-300">
-							Check for a newer version of the app right now, instead of waiting for it to update on
-							its own.
+							If the app looks broken or stuck after an update, this clears cached app data and
+							reloads — the on-device fix for a home-screen install with no devtools access.
 						</span>
 						<button
 							type="button"
-							onclick={handleCheckForUpdate}
-							disabled={updateStatus === 'checking'}
-							class="w-28 shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-white hover:bg-primary-700 disabled:opacity-50"
-						>
-							{updateStatus === 'checking' ? 'Updating...' : 'Update'}
-						</button>
-					</div>
-				{/if}
-			</div>
-			{#if confirmingReset}
-				<div
-					class="flex items-center justify-between gap-2 rounded-lg border border-red-200 px-4 py-3 text-sm dark:border-red-900"
-				>
-					<p class="text-red-600 dark:text-red-400">
-						This clears cached app data and reloads the app. Continue?
-					</p>
-					<div class="flex shrink-0 gap-2">
-						<button
-							type="button"
-							onclick={handleResetApp}
-							disabled={resetting}
-							class="w-28 rounded-lg border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+							onclick={() => (confirmingReset = true)}
+							class="w-28 shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
 						>
 							Reset
 						</button>
-						<button
-							type="button"
-							onclick={() => (confirmingReset = false)}
-							disabled={resetting}
-							class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-						>
-							Cancel
-						</button>
 					</div>
-				</div>
-			{:else}
-				<div class="flex items-center justify-between gap-4 px-4 py-3">
-					<span class="text-sm text-gray-600 dark:text-gray-300">
-						If the app looks broken or stuck after an update, this clears cached app data and
-						reloads — the on-device fix for a home-screen install with no devtools access.
-					</span>
-					<button
-						type="button"
-						onclick={() => (confirmingReset = true)}
-						class="w-28 shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
-					>
-						Reset
-					</button>
-				</div>
+				{/if}
 			{/if}
 			{#if profile?.id === 1}
 				<a
