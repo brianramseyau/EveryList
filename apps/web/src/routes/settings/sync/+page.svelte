@@ -128,6 +128,7 @@
 				type="button"
 				size="xs"
 				disabled={refreshing || isIngress()}
+				aria-describedby={isIngress() ? 'refresh-now-ingress-note' : undefined}
 				title={isIngress()
 					? "Not available under Home Assistant's Ingress - a full reload here reloads the iframe from its original address, not this page (an Ingress/iframe limitation, not specific to this app)"
 					: undefined}
@@ -154,6 +155,13 @@
 			<span class="text-sm font-medium">Last successful sync</span>
 			<span class="text-sm text-gray-600 dark:text-gray-400">{lastSyncText}</span>
 		</div>
+		{#if isIngress()}
+			<p id="refresh-now-ingress-note" class="px-4 pb-3 text-xs text-gray-600 dark:text-gray-400">
+				Refresh now isn't available under Home Assistant's Ingress — a full reload here reloads the
+				iframe from its original address, not this page (an Ingress/iframe limitation, not specific
+				to this app).
+			</p>
+		{/if}
 	</section>
 
 	<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">

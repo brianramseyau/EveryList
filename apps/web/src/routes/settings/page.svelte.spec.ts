@@ -120,6 +120,7 @@ describe('Settings +page.svelte', () => {
 		window.localStorage.removeItem('everylist:rememberListScroll');
 		delete (window.DeviceMotionEvent as unknown as { requestPermission?: unknown })
 			.requestPermission;
+		delete window.__EVERYLIST_INGRESS_BASE__;
 		stopShakeListening();
 		resetUndoForTesting();
 		resetConnectivityForTesting();
@@ -1119,8 +1120,6 @@ describe('Settings +page.svelte', () => {
 			.toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Update' })).not.toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
-
-		delete window.__EVERYLIST_INGRESS_BASE__;
 	});
 
 	it('shows the configured server URL and changing it clears the token, server URL, and navigates', async () => {

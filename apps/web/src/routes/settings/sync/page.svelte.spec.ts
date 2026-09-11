@@ -52,6 +52,7 @@ describe('Sync status +page.svelte', () => {
 		vi.useRealTimers();
 		vi.clearAllMocks();
 		clearToken();
+		delete window.__EVERYLIST_INGRESS_BASE__;
 	});
 
 	it('redirects to /login when there is no token', async () => {
@@ -213,8 +214,13 @@ describe('Sync status +page.svelte', () => {
 
 		await expect.element(page.getByRole('button', { name: 'Refresh now' })).toBeDisabled();
 		expect(refreshApp).not.toHaveBeenCalled();
-
-		delete window.__EVERYLIST_INGRESS_BASE__;
+		await expect
+			.element(
+				page.getByText("Refresh now isn't available under Home Assistant's Ingress", {
+					exact: false
+				})
+			)
+			.toBeInTheDocument();
 	});
 
 	it('polls for updated counts on an interval while mounted', async () => {
