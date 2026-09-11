@@ -120,6 +120,7 @@ describe('Settings +page.svelte', () => {
 		window.localStorage.removeItem('everylist:rememberListScroll');
 		delete (window.DeviceMotionEvent as unknown as { requestPermission?: unknown })
 			.requestPermission;
+		delete window.__EVERYLIST_INGRESS_BASE__;
 		stopShakeListening();
 		resetUndoForTesting();
 		resetConnectivityForTesting();
@@ -1100,6 +1101,24 @@ describe('Settings +page.svelte', () => {
 		render(SettingsPage);
 
 		await expect.element(page.getByText('Troubleshooting')).not.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
+	});
+
+	it('replaces update-check and reset with an explanatory note under Ingress', async () => {
+		// resetApp() unregisters every Service Worker for the origin, including the one Ingress
+		// depends on for correct asset loading (apps/api's /_ha-ingress-sw.js) - offering it here
+		// would let a user break the app trying to "fix" it. There's also no real Service Worker to
+		// check for an update against under Ingress at all. See $lib/api/ingress.ts.
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Troubleshooting')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('Home Assistant manages updates for this add-on', { exact: false }))
+			.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Update' })).not.toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
 	});
 

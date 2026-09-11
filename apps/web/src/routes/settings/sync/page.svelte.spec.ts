@@ -52,6 +52,7 @@ describe('Sync status +page.svelte', () => {
 		vi.useRealTimers();
 		vi.clearAllMocks();
 		clearToken();
+		delete window.__EVERYLIST_INGRESS_BASE__;
 	});
 
 	it('redirects to /login when there is no token', async () => {
@@ -197,6 +198,29 @@ describe('Sync status +page.svelte', () => {
 
 		expect(refreshApp).toHaveBeenCalled();
 		await expect.element(page.getByRole('button', { name: 'Refreshing…' })).toBeDisabled();
+	});
+
+	it('disables the Refresh now button under Ingress instead of offering a button that reloads the wrong page', async () => {
+		// window.location.reload() under Home Assistant Ingress reloads the iframe from its
+		// original address (an Ingress/iframe limitation, not this app's), not the current page -
+		// offering this as a working "fix" would be a "press this button to break your browser"
+		// trap. See $lib/api/ingress.ts.
+		vi.mocked(queueCounts).mockResolvedValue({ pending: 0, failed: 0, conflict: 0 });
+		vi.mocked(pendingMutations).mockResolvedValue([]);
+		vi.mocked(failedMutations).mockResolvedValue([]);
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+
+		render(SyncStatusPage);
+
+		await expect.element(page.getByRole('button', { name: 'Refresh now' })).toBeDisabled();
+		expect(refreshApp).not.toHaveBeenCalled();
+		await expect
+			.element(
+				page.getByText("Refresh now isn't available under Home Assistant's Ingress", {
+					exact: false
+				})
+			)
+			.toBeInTheDocument();
 	});
 
 	it('polls for updated counts on an interval while mounted', async () => {
