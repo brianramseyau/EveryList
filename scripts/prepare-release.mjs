@@ -15,14 +15,18 @@
  * all of that.
  *
  * Usage:
+ *   git tag v1.5.0 && git push origin v1.5.0   # first - triggers docker-publish.yml
+ *   # wait for that to finish, then, on a release branch (not main):
  *   node scripts/prepare-release.mjs v1.5.0
  *
- * Run this on a release branch (not main), review the diff, then commit, push,
- * open a PR, and merge it like any other change. Once merged, tag *that*
- * commit on main and push the tag - that's what actually triggers
- * docker-publish.yml's build/publish:
- *   git checkout main && git pull
- *   git tag v1.5.0 && git push origin v1.5.0
+ * Tag first, script second - deliberately. ha-addon/everylist/config.yaml's `version` is the
+ * exact GHCR image tag Supervisor will pull, so it must never land on `main` ahead of that
+ * image actually existing; bumping it only after `docker-publish.yml` has published the tag
+ * closes that gap. Review the script's diff, then commit, push, open a PR, and merge it like
+ * any other change.
+ *
+ * Stable releases only (no "-rc"/"-beta" suffix) - a prerelease tag is never what
+ * config.yaml's `version` should point every add-on user's instance at.
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -31,14 +35,17 @@ import path from 'node:path'
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../..')
 
 const tag = process.argv[2]
-if (!tag || !/^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(tag)) {
-  console.error('Usage: node scripts/prepare-release.mjs vX.Y.Z[-prerelease]')
+if (!tag || !/^v\d+\.\d+\.\d+$/.test(tag)) {
+  console.error(
+    'Usage: node scripts/prepare-release.mjs vX.Y.Z (stable releases only, no -rc/-beta suffix)'
+  )
   process.exit(1)
 }
 const bareVersion = tag.slice(1)
 
 // Supervisor pulls this value verbatim as the Docker image tag to install, so it must keep
-// the "v" prefix - see the comment atop config.yaml.
+// the "v" prefix - see the comment atop config.yaml. Single-quoted to match this repo's
+// prettier config (singleQuote: true, which `pnpm format` already enforces on this file).
 const configPath = path.join(repoRoot, 'ha-addon/everylist/config.yaml')
 const config = readFileSync(configPath, 'utf8')
 const versionLine = /^version: .*/m
@@ -46,7 +53,7 @@ if (!versionLine.test(config)) {
   console.error(`Could not find a "version:" line in ${configPath}`)
   process.exit(1)
 }
-writeFileSync(configPath, config.replace(versionLine, `version: "${tag}"`))
+writeFileSync(configPath, config.replace(versionLine, `version: '${tag}'`))
 console.log(`Updated ${path.relative(repoRoot, configPath)} -> ${tag}`)
 
 // Every workspace's package.json "version" field - npm/electron-builder want a bare semver,
@@ -73,6 +80,4 @@ for (const relPath of packageJsonPaths) {
   console.log(`Updated ${relPath} -> ${bareVersion}`)
 }
 
-console.log(
-  `\nDone. Review the diff, then commit/PR/merge as usual, and once merged, tag that commit on main with ${tag}.`
-)
+console.log(`\nDone. Review the diff, then commit/PR/merge as usual.`)

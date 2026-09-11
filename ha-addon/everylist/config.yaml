@@ -1,9 +1,11 @@
 ---
 # `version` is not just a display string here - Supervisor pulls exactly
 # `ghcr.io/brianramseyau/everylist:<version>`, so this must always equal a real
-# tag actually published to GHCR (a vX.Y.Z release tag, "v" prefix included -
+# tag already published to GHCR (a vX.Y.Z release tag, "v" prefix included -
 # not the bare semver). `pnpm prepare-release vX.Y.Z` (scripts/prepare-release.mjs)
-# keeps this in sync with each release - run it locally before cutting a tag.
+# keeps this in sync with each release - run it (and merge its PR) only *after*
+# pushing that tag and letting docker-publish.yml finish, so this never advertises
+# a version whose image doesn't exist yet.
 name: EveryList
 version: 'v1.5.0'
 slug: everylist

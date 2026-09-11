@@ -22,13 +22,15 @@ name: Docker Publish
 # guarantee.
 #
 # ha-addon/everylist/config.yaml's `version` (the Home Assistant add-on's pinned image tag) is
-# bumped by hand as part of cutting each stable release, in the same branch/PR as the release
-# prep - not automated here. An earlier version of this workflow tried to bump it from a job
-# on this trigger, pushing straight to main after the tag; that always failed, since main's
-# required status checks only run on `pull_request` and a direct push (bot-authored or not)
-# can never satisfy them. Routing it through a bot-authored PR instead doesn't work either -
-# GitHub suppresses the `pull_request` event for anything created with the workflow's own
-# GITHUB_TOKEN, so those checks would never run and auto-merge would sit pending forever.
+# bumped by hand with `pnpm prepare-release` (scripts/prepare-release.mjs) - not automated
+# here. An earlier version of this workflow tried to bump it from a job on this trigger,
+# pushing straight to main after the tag; that always failed, since main's required status
+# checks only run on `pull_request` and a direct push (bot-authored or not) can never satisfy
+# them. Routing it through a bot-authored PR instead doesn't work either - GitHub suppresses
+# the `pull_request` event for anything created with the workflow's own GITHUB_TOKEN, so those
+# checks would never run and auto-merge would sit pending forever. Run the script (and merge
+# its PR) only *after* this workflow has finished publishing the tag's image - see the
+# script's own comment for why the order matters.
 #
 # Multi-arch (amd64 + arm64): each platform builds on its own *native* runner
 # (ubuntu-latest / ubuntu-24.04-arm) rather than cross-compiling one arch under QEMU
