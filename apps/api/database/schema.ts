@@ -461,16 +461,23 @@ export class SyncEventSchema extends BaseModel {
   declare payload: any | null
 }
 
+export class UserHassLinkSchema extends BaseModel {
+  static $columns = ['createdAt', 'haUsername', 'id', 'updatedAt', 'userId'] as const
+  $columns = UserHassLinkSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare haUsername: string
+  @column({ isPrimary: true })
+  declare id: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare userId: number
+}
+
 export class UserSchema extends BaseModel {
-  static $columns = [
-    'createdAt',
-    'disabledAt',
-    'email',
-    'fullName',
-    'id',
-    'password',
-    'updatedAt',
-  ] as const
+  static $columns = ['createdAt', 'disabledAt', 'email', 'fullName', 'id', 'password', 'updatedAt'] as const
   $columns = UserSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

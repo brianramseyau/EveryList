@@ -1,5 +1,13 @@
 import { test } from '@japa/runner'
-import { isValidIngressPath, rewriteHtmlForIngress } from '#services/ingress_service'
+import {
+  getValidatedRemoteUser,
+  isValidIngressPath,
+  rewriteHtmlForIngress,
+} from '#services/ingress_service'
+
+function fakeRequest(headers: Record<string, string>) {
+  return { header: (name: string) => headers[name] }
+}
 
 test.group('isValidIngressPath', () => {
   test("accepts Supervisor's real base64url token format", ({ assert }) => {
@@ -116,5 +124,67 @@ test.group('rewriteHtmlForIngress', () => {
     const rewritten = rewriteHtmlForIngress(html, '/prefix')
 
     assert.include(rewritten, 'href="./relative"')
+  })
+})
+
+test.group('getValidatedRemoteUser', () => {
+  test('parses the remote-user identity on a genuinely validated ingress request', ({ assert }) => {
+    const remoteUser = getValidatedRemoteUser(
+      fakeRequest({
+        'x-ingress-path': '/api/hassio_ingress/abc123',
+        'x-remote-user-id': '1',
+        'x-remote-user-name': 'alice',
+        'x-remote-user-display-name': 'Alice',
+      })
+    )
+
+    assert.deepEqual(remoteUser, { id: '1', username: 'alice', displayName: 'Alice' })
+  })
+
+  test('falls back to the username when no display name header is sent', ({ assert }) => {
+    const remoteUser = getValidatedRemoteUser(
+      fakeRequest({
+        'x-ingress-path': '/api/hassio_ingress/abc123',
+        'x-remote-user-id': '1',
+        'x-remote-user-name': 'alice',
+      })
+    )
+
+    assert.deepEqual(remoteUser, { id: '1', username: 'alice', displayName: 'alice' })
+  })
+
+  test('ignores the headers entirely when x-ingress-path is missing', ({ assert }) => {
+    // Anyone reaching this container directly through the add-on's optional port (bypassing
+    // Supervisor's Ingress proxy) could send these headers themselves — see the "Trust boundary"
+    // note in ingress_service.ts.
+    assert.isNull(
+      getValidatedRemoteUser(
+        fakeRequest({ 'x-remote-user-id': '1', 'x-remote-user-name': 'alice' })
+      )
+    )
+  })
+
+  test('ignores the headers when x-ingress-path fails validation', ({ assert }) => {
+    assert.isNull(
+      getValidatedRemoteUser(
+        fakeRequest({
+          'x-ingress-path': '/not/a/real/ingress/path',
+          'x-remote-user-id': '1',
+          'x-remote-user-name': 'alice',
+        })
+      )
+    )
+  })
+
+  test('returns null with no headers at all', ({ assert }) => {
+    assert.isNull(getValidatedRemoteUser(fakeRequest({})))
+  })
+
+  test('returns null when the ingress path is valid but Supervisor sent no session data', ({
+    assert,
+  }) => {
+    assert.isNull(
+      getValidatedRemoteUser(fakeRequest({ 'x-ingress-path': '/api/hassio_ingress/abc123' }))
+    )
   })
 })

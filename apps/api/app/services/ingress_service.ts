@@ -20,6 +20,44 @@ export function isValidIngressPath(path: string): boolean {
   return INGRESS_PATH_PATTERN.test(path)
 }
 
+export interface IngressRemoteUser {
+  id: string
+  username: string
+  displayName: string
+}
+
+/**
+ * Extracts the Home-Assistant-authenticated visitor's identity from Supervisor's own
+ * `X-Remote-User-Id` / `X-Remote-User-Name` / `X-Remote-User-Display-Name` headers — sent
+ * unconditionally by Supervisor on every Ingress-proxied request whenever session data exists (no
+ * add-on config flag required; confirmed against Supervisor's source,
+ * home-assistant/supervisor#4152 and `HEADER_REMOTE_USER_*` in `supervisor/const.py`), used to
+ * silently sign a linked user in with no login screen at all (`ha_auth_controller.ts`) and to
+ * offer one-click account linking (`ha_link_controller.ts`).
+ *
+ * These headers only mean anything when the request genuinely came through Supervisor's Ingress
+ * proxy — the add-on's optional direct port (`ha-addon/everylist/config.yaml`'s `ports:
+ * 3000/tcp`, off by default) reaches this container directly, bypassing Supervisor entirely, so a
+ * client on that path could send its own fake `X-Remote-User-Name` with nothing to stop it. Reuse
+ * the same validated-ingress-request check `isValidIngressPath` already exists for: only trust
+ * these headers when `x-ingress-path` is also present and matches Supervisor's real format,
+ * otherwise treat them as absent entirely — never partially trust them. See
+ * PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
+ */
+export function getValidatedRemoteUser(request: {
+  header(name: string): string | undefined
+}): IngressRemoteUser | null {
+  const ingressPath = request.header('x-ingress-path')
+  if (!ingressPath || !isValidIngressPath(ingressPath)) return null
+
+  const id = request.header('x-remote-user-id')
+  const username = request.header('x-remote-user-name')
+  const displayName = request.header('x-remote-user-display-name')
+  if (!id || !username) return null
+
+  return { id, username, displayName: displayName || username }
+}
+
 /**
  * Rewrites the SPA shell (`200.html`) so it works when Home Assistant Supervisor's Ingress proxy
  * serves it under a per-install, random token path prefix. Supervisor strips that prefix

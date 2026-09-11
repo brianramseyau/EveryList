@@ -11,7 +11,8 @@
 	import { getServerUrl } from '$lib/api/server-url';
 	import { fetchSetupStatus } from '$lib/api/setup';
 	import { isRemoteClient } from '$lib/platform/desktop';
-	import { isIngress, stripIngressPrefix } from '$lib/api/ingress';
+	import { isIngress, ingressBase, stripIngressPrefix } from '$lib/api/ingress';
+	import { loginWithHomeAssistantIdentity } from '$lib/api/auth';
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
 	import { initOrientation } from '$lib/orientation';
@@ -87,6 +88,31 @@
 		}
 	}
 
+	/**
+	 * Silent Home Assistant sign-in (PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md): Supervisor's
+	 * Ingress proxy already told the server who's looking at the page (see
+	 * ha_auth_controller.ts's loginImplicit) — if that HA username is linked to an EveryList
+	 * account, sign in with no login screen at all, the same no-prompt behavior other HA add-ons
+	 * (e.g. AdGuard Home) already have under Ingress. Returns whether it succeeded — the common
+	 * case (no detected identity, or detected but unlinked) isn't an error, just "nothing to do
+	 * here", so the caller falls through to its normal logged-out handling unchanged.
+	 */
+	async function attemptImplicitHaSignIn(): Promise<boolean> {
+		try {
+			await loginWithHomeAssistantIdentity();
+			refreshAuth();
+			syncBadge();
+			// ingressBase() + resolve('/lists') is always this app's own resolved path with the
+			// Ingress prefix prepended — safe, but not statically verifiable by the lint rule, same
+			// technique login/+page.svelte's own HA sign-in uses.
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			await goto(`${ingressBase()}${resolve('/lists')}`);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
 	onMount(() => {
 		// Native/desktop builds have no baked-in server address (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1,
 		// PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §1/§4) — gate here rather than on /login itself, since a
@@ -102,7 +128,13 @@
 		if (noServerConfigured && currentPath !== serverSetupPath) {
 			void goto(serverSetupPath);
 		} else if (!getToken() && currentPath !== resolve('/setup')) {
-			void redirectToSetupIfNeeded();
+			if (isIngress()) {
+				void attemptImplicitHaSignIn().then((signedIn) => {
+					if (!signedIn) void redirectToSetupIfNeeded();
+				});
+			} else {
+				void redirectToSetupIfNeeded();
+			}
 		}
 		initTheme();
 		initAccent();

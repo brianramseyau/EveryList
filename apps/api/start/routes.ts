@@ -39,6 +39,12 @@ router
         router.post('login', [controllers.AccessTokens, 'store'])
         router.post('forgot-password', [controllers.PasswordReset, 'forgot'])
         router.post('reset-password', [controllers.PasswordReset, 'reset'])
+        // Home Assistant Ingress sign-in (PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md) — both share
+        // this group's `authThrottle` below, important for `login-with-home-assistant`
+        // specifically, since a successful guess there is a guess against the user's real HA
+        // account password, not just an EveryList one.
+        router.post('login-with-home-assistant', [controllers.HaAuth, 'login'])
+        router.post('login-with-home-assistant-identity', [controllers.HaAuth, 'loginImplicit'])
       })
       .prefix('auth')
       .as('auth')
@@ -207,6 +213,17 @@ router
       // Settings → Alexa in the web app — login-session only, unlike the skill's own
       // `alexa/*` request-signature-verified group below (this is a normal browser request,
       // reusing the same `alexa_preferences` row `services/alexa/*` reads/writes).
+      .use(middleware.auth())
+
+    router
+      .group(() => {
+        router.get('/', [controllers.HaLink, 'show'])
+        router.patch('/', [controllers.HaLink, 'update'])
+      })
+      .prefix('ha-link')
+      .as('haLink')
+      // Settings → Home Assistant in the web app — the signed-in user's own account link. See
+      // PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
       .use(middleware.auth())
 
     // PAT-only self-introspection — a login session can't authenticate here

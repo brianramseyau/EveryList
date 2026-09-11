@@ -29,6 +29,26 @@ SQLite database, nothing else to configure.
 4. Create your account from the app's sign-up screen — the first account
    created becomes the instance owner.
 
+## Signing in with Home Assistant
+
+Once you have an EveryList account, you can link it to your Home Assistant
+username from **Settings → Home Assistant** (only shown when viewing
+EveryList through Ingress) so you don't need to remember a separate
+password:
+
+- **Automatic sign-in** — once linked, opening EveryList through the
+  Ingress panel while logged into Home Assistant as that user signs you in
+  immediately, with no login screen at all.
+- **Manual sign-in** — from the login screen, "Sign in with a different
+  Home Assistant account" lets you type a linked Home Assistant username
+  and password instead. Useful on a shared/kiosk browser where Home
+  Assistant is logged in as someone else.
+
+Linking is per-EveryList-account and opt-in — nobody is signed in this way
+until they link their own account. This doesn't enforce Home Assistant's
+own two-factor authentication, if you have it enabled on the linked
+account.
+
 ## Options
 
 Both options are optional — leave them blank for a working zero-config

@@ -12,6 +12,8 @@ const {
 	fetchProfile,
 	forgotPassword,
 	login,
+	loginWithHomeAssistant,
+	loginWithHomeAssistantIdentity,
 	logout,
 	resetPassword,
 	signup,
@@ -58,6 +60,32 @@ describe('auth', () => {
 
 		expect(apiPost).toHaveBeenCalledWith('/api/v1/auth/login', input);
 		expect(setToken).toHaveBeenCalledWith('tok-123');
+	});
+
+	it('loginWithHomeAssistant posts the HA credentials and stores the returned token', async () => {
+		vi.mocked(apiPost).mockResolvedValue(authResponse);
+
+		const input = { username: 'alice', password: 'secret' };
+		await expect(loginWithHomeAssistant(input)).resolves.toEqual(authResponse);
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/auth/login-with-home-assistant', input);
+		expect(setToken).toHaveBeenCalledWith('tok-123');
+	});
+
+	it('loginWithHomeAssistantIdentity posts with no body and stores the returned token', async () => {
+		vi.mocked(apiPost).mockResolvedValue(authResponse);
+
+		await expect(loginWithHomeAssistantIdentity()).resolves.toEqual(authResponse);
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/auth/login-with-home-assistant-identity');
+		expect(setToken).toHaveBeenCalledWith('tok-123');
+	});
+
+	it('loginWithHomeAssistantIdentity rejects without storing a token when there is no match', async () => {
+		vi.mocked(apiPost).mockRejectedValue(new Error('not linked'));
+
+		await expect(loginWithHomeAssistantIdentity()).rejects.toThrow('not linked');
+		expect(setToken).not.toHaveBeenCalled();
 	});
 
 	it('logout clears the token and purges the local db even if the request fails', async () => {
