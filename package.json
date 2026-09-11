@@ -1,7 +1,7 @@
 {
   "name": "everylist",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.5.0",
   "description": "EveryList — a narrower, sharper shopping-list PWA.",
   "license": "MIT",
   "type": "module",
@@ -19,6 +19,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "check": "node scripts/check.mjs",
+    "prepare-release": "node scripts/prepare-release.mjs",
     "db:migrate": "pnpm --filter @everylist/api db:migrate",
     "db:migrate:rollback": "pnpm --filter @everylist/api db:migrate:rollback",
     "db:migrate:status": "pnpm --filter @everylist/api db:migrate:status",
