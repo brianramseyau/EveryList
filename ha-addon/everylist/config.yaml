@@ -1,13 +1,13 @@
 ---
 # `version` is not just a display string here - Supervisor pulls exactly
 # `ghcr.io/brianramseyau/everylist:<version>`, so this must always equal a real
-# tag actually published to GHCR (a vX.Y.Z release tag, "v" prefix included -
-# not the bare semver). .github/workflows/docker-publish.yml's
-# `bump-addon-version` job keeps this in sync on every stable release tag -
-# this placeholder only matters until the very first tag after the Ingress
-# work (#224/#225/#226) ships, at which point that job overwrites it for good.
+# tag already published to GHCR (a vX.Y.Z release tag, "v" prefix included -
+# not the bare semver). `pnpm prepare-release vX.Y.Z` (scripts/prepare-release.mjs)
+# keeps this in sync with each release - run it (and merge its PR) only *after*
+# pushing that tag and letting docker-publish.yml finish, so this never advertises
+# a version whose image doesn't exist yet.
 name: EveryList
-version: "nightly"
+version: 'v1.5.0'
 slug: everylist
 description: Mobile-first, offline-first shopping/task lists — self-hosted, single container
 url: https://github.com/brianramseyau/EveryList
@@ -55,8 +55,8 @@ map:
     path: /config
     read_only: false
 options:
-  app_url: ""
-  app_key: ""
+  app_url: ''
+  app_key: ''
 schema:
   # `str?`, not `url?` - the `?` only makes the *key* optional, not the value: HA's `url` schema
   # type rejects an empty string as "not a valid URL", but "" is this option's actual, documented
