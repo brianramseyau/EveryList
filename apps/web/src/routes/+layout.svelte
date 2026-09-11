@@ -99,11 +99,7 @@
 		const currentPath = stripIngressPrefix(page.url.pathname);
 		if (noServerConfigured && currentPath !== serverSetupPath) {
 			void goto(serverSetupPath);
-		} else if (
-			!getToken() &&
-			currentPath !== resolve('/setup') &&
-			currentPath !== resolve('/')
-		) {
+		} else if (!getToken() && currentPath !== resolve('/setup') && currentPath !== resolve('/')) {
 			// "/" itself already runs this same check in its own `load` (routes/+page.ts) — skip it
 			// here to avoid firing the request twice on a plain anonymous visit to the splash.
 			void redirectToSetupIfNeeded();
