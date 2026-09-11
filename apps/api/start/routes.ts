@@ -11,7 +11,7 @@ import { middleware } from '#start/kernel'
 import router from '@adonisjs/core/services/router'
 import { controllers } from '#generated/controllers'
 import app from '@adonisjs/core/services/app'
-import { authThrottle, listsThrottle, passwordChangeThrottle } from '#start/limiter'
+import { authThrottle, haLinkThrottle, listsThrottle, passwordChangeThrottle } from '#start/limiter'
 import { readFile } from 'node:fs/promises'
 import { isValidIngressPath, rewriteHtmlForIngress } from '#services/ingress_service'
 import logger from '@adonisjs/core/services/logger'
@@ -217,17 +217,20 @@ router
 
     router
       .group(() => {
-        router.get('/', [controllers.HaLink, 'show'])
-        router.patch('/', [controllers.HaLink, 'update'])
+        router.get('/', [controllers.HaLink, 'show']).use(middleware.auth())
+        // haLinkThrottle only on the write, after middleware.auth() so it can key by user id
+        // (order matters — same explicit per-route ordering account/password's own
+        // passwordChangeThrottle uses below, rather than relying on group-vs-route-level
+        // ordering) — manually linking a username other than the caller's own detected identity
+        // verifies a real Home Assistant password (ha_link_controller.ts), the same
+        // credential-guessing surface passwordChangeThrottle exists for. The read above takes no
+        // caller-supplied credential and shouldn't share its budget. See start/limiter.ts and
+        // PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
+        router.patch('/', [controllers.HaLink, 'update']).use([middleware.auth(), haLinkThrottle])
       })
       .prefix('ha-link')
       .as('haLink')
-      // Settings → Home Assistant in the web app — the signed-in user's own account link.
-      // `authThrottle` here too (not just on the explicit login endpoint): manually linking a
-      // username other than the caller's own detected identity verifies a real Home Assistant
-      // password (ha_link_controller.ts), the same credential-guessing surface login-with-home-
-      // assistant is. See PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
-      .use([middleware.auth(), authThrottle])
+    // Settings → Home Assistant in the web app — the signed-in user's own account link.
 
     // PAT-only self-introspection — a login session can't authenticate here
     // (it has no per-list "grant" to report), so this sits outside the
