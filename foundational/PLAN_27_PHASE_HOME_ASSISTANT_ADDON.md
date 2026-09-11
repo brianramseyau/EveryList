@@ -902,8 +902,69 @@ lint rule or type-level guard against this - `page.url.pathname` is a
 completely valid, correctly-typed value to read, it's just the wrong
 one for anything that needs to know "which page are we logically on."
 
+## Post-live-testing follow-ups (full app walkthrough)
+
+A full click-through of the app under a working Ingress session (once it
+finally rendered) surfaced four more findings, on top of the blocker chain
+above:
+
+1. **PWA debug section's Update/Reset controls under Ingress.** Settings →
+   Troubleshooting's "check for update" always returns `'unavailable'`
+   under Ingress (`checkForUpdate()` requires a real Workbox SW
+   registration, which is deliberately skipped under Ingress — see the
+   blocker chain above), and "reset app" is actively dangerous there:
+   `resetApp()` → `clearAppCaches()` calls
+   `navigator.serviceWorker.getRegistrations()` and unregisters *every* SW
+   for the origin, including the essential `_ha-ingress-sw.js` fixup
+   worker — pressing it would silently reintroduce the blank-page bug.
+   Fixed: `apps/web/src/routes/settings/+page.svelte` now shows a plain
+   explanatory note under Ingress instead of the update/reset controls
+   ("Home Assistant manages updates for this add-on...").
+2. **Sync page's "Refresh now" button under Ingress.** `refreshApp()` is
+   `window.location.reload()`, which under Ingress reloads the iframe
+   from its original (frozen) `src`, not the current in-app page — this
+   is what produced the 404-and-stuck-browser report during testing.
+   Fixed (disable-only, not a real fix — see point 3): the button is
+   `disabled` under `isIngress()` with an explanatory `title`, rather
+   than shipping a "press this button to break your browser" trap.
+3. **Confirmed as an inherent Ingress/iframe limitation, not a bug:** a
+   full-page refresh at any in-app route always bounces back to the
+   iframe's original entry URL, because the iframe's `src` never changes
+   during client-side navigation — there's no URL for the browser to
+   refresh *back to*. Home Assistant's own AdGuard Home add-on
+   (`hassio-addons/addon-adguard-home`) exhibits the identical behavior.
+   Not planned to be fixed; users who need reliable deep-link refresh are
+   better served by the add-on's direct port (or a reverse proxy) instead
+   of Ingress.
+4. **Auth is not tied to Home Assistant's own login/users.** Investigated
+   two angles:
+   - Home Assistant's own developer docs
+     (developers.home-assistant.io) state that Ingress-embedded add-ons
+     are *expected* not to require their own separate login — the user is
+     already authenticated by Supervisor before the iframe is ever
+     loaded, so re-prompting for credentials is considered an anti-pattern,
+     not a compliance requirement to add auth.
+   - Separately, Home Assistant does offer an explicit opt-in mechanism
+     for add-ons that still want to gate their own login form against HA
+     accounts: `auth_api: true` in `config.yaml` enables a Supervisor
+     `/auth` endpoint that validates a submitted username/password (or
+     Basic Auth) against Home Assistant's real user accounts. This is
+     what `addon-adguard-home`'s `config.yaml` actually sets — it isn't
+     an automatic bypass, it's a credential-validation API an add-on's
+     *own* login form can call instead of maintaining a fully separate
+     user database. Adopting it here would mean adding a new login flow
+     that offers "sign in with your Home Assistant account" as an
+     option alongside the existing token-based login — a real feature,
+     not a small fix, so it's left for a future phase rather than bundled
+     into this Ingress-stabilization pass.
+
 ## Out of scope (future)
 
 Submitting to the official Home Assistant Community Add-ons repository (a
 much higher bar — code review, its own contribution guidelines — not
 needed for self-hosting via a personal add-on repository).
+
+Validating login against Home Assistant's own user accounts via the
+Supervisor `auth_api` endpoint (see point 4 above) — a genuine new login
+flow, scoped as a future enhancement rather than part of Ingress
+stabilization.
