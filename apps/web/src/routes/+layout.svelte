@@ -71,7 +71,10 @@
 	 * A fresh instance with no user yet needs the first-run setup wizard before anything else —
 	 * see routes/setup/+page.svelte. Only checked while logged out (an existing session proves
 	 * setup already happened) and never from /setup itself (which does its own, more authoritative
-	 * check and would otherwise fight this redirect). Fails open on a network error, same
+	 * check and would otherwise fight this redirect). Also runs on "/" even though routes/+page.ts's
+	 * own `load` already performs this same check there — a deliberate, cheap-enough duplicate
+	 * request that acts as a backstop if that `load` call ever times out or is skipped, rather than
+	 * leaving a fresh instance with no path to /setup at all. Fails open on a network error, same
 	 * reasoning as login/signup's fetchMeta fallback — /setup and every other route re-validate
 	 * server-side regardless, so silently doing nothing here is safe.
 	 */
