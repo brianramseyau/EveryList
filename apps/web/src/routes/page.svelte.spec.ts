@@ -20,11 +20,17 @@ describe('Home +page.svelte', () => {
 		clearToken();
 	});
 
-	it('shows a login link', async () => {
+	it('shows a login link once mounted', async () => {
 		render(HomePage);
 
 		await expect.element(page.getByRole('link', { name: 'Log in' })).toBeInTheDocument();
 	});
+
+	// The `mounted` flag itself (false until onMount, which prerendering never runs — see +page.ts)
+	// isn't observable from this browser-based component test: vitest-browser-svelte's `render`
+	// runs onMount synchronously as part of mounting, before this test ever gets a look at the
+	// pre-mount DOM. Covered instead by the live build/Playwright verification in the PR — a real
+	// prerendered `index.html` never contains the splash markup, only this loading placeholder.
 });
 
 describe('Home +page.ts load', () => {

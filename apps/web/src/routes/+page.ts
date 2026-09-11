@@ -4,22 +4,18 @@ import { getToken } from '$lib/api/token';
 import { ingressBase } from '$lib/api/ingress';
 import { fetchSetupStatus } from '$lib/api/setup';
 
-// Which of {splash, /lists, /setup} belongs here depends on live state (an existing session, a
-// live setup-status check) that a build-time prerender can't know — same reasoning as
-// setup/+page.ts's own prerender opt-out. Left prerendered, adapter-static bakes the anonymous
-// splash markup into a static index.html that AdonisJS's static middleware serves byte-for-byte
-// ahead of any JS: a signed-in visitor, or a fresh instance that needs /setup, would see that
-// splash paint first and only swap to the right destination once this `load` ran afterwards —
-// the same flash-before-redirect race /setup itself exists to avoid on the other side of the
-// split. Opting out routes "/" through the SPA fallback shell (200.html) instead, so nothing
-// paints until `load` (resolved before the page component ever mounts) has already decided.
-export const prerender = false;
-export const ssr = false;
-
+// Deliberately still prerendered (unlike setup/+page.ts): adapter-static's baked index.html for
+// "/" is what AdonisJS's static middleware serves for a bare GET / (see docker-smoke's `curl / |
+// grep EveryList` in .github/workflows/ci.yml) and, separately, what Capacitor's native local
+// server falls back to for any unmatched deep route (vite.config.ts's `paths.relative` comment) —
+// dropping prerendering here breaks both. The flash this route used to have (briefly showing the
+// real splash before redirecting) is instead solved in +page.svelte itself, which renders a
+// neutral loading placeholder — present in this prerendered HTML too — until this `load` (which
+// still reruns after hydration) has resolved.
+//
 // This route is a splash/setup landing for a logged-out visitor only — a signed-in user
-// belongs at /lists instead. Handled here in `load`, which SvelteKit resolves before the page
-// component is ever mounted, rather than in the component's own onMount, so a signed-in user
-// is routed straight to /lists instead of the splash briefly rendering first.
+// belongs at /lists instead. Handled here in `load` rather than the component's own onMount so
+// the redirect fires as soon as SvelteKit's router resolves it, without waiting on mount.
 //
 // `ingressBase()` prefix: this is the very first redirect a signed-in visitor hits on every
 // fresh load under Home Assistant Ingress — ha-ingress-entry/+page.ts redirects here first, and
@@ -31,14 +27,20 @@ export async function load() {
 	if (getToken()) throw redirect(307, `${ingressBase()}${resolve('/lists')}`);
 
 	// A fresh instance with no user yet needs the first-run setup wizard before this splash ever
-	// paints. Checked here (resolved before the component mounts) rather than relying solely on
-	// +layout.svelte's onMount, which races this exact page: the splash would render first and
-	// only swap to /setup once that async status check resolved afterwards. Fails open on error,
-	// same reasoning as the layout's own redirectToSetupIfNeeded — /setup and every other route
-	// re-validate server-side regardless, so silently falling through to the splash here is safe.
+	// shows. Bounded to 5s so a server that accepts the connection but never answers (or a
+	// native/desktop build with no server configured at all, see +layout.svelte's onMount) can't
+	// leave the loading placeholder spinning indefinitely — same fail-open reasoning as the
+	// layout's own redirectToSetupIfNeeded either way: /setup and every other route re-validate
+	// server-side regardless, so silently falling through to the splash here is safe.
 	let needsSetup = false;
 	try {
-		needsSetup = (await fetchSetupStatus()).needsSetup;
+		const status = await Promise.race([
+			fetchSetupStatus(),
+			new Promise<never>((_, reject) =>
+				setTimeout(() => reject(new Error('setup status check timed out')), 5000)
+			)
+		]);
+		needsSetup = status.needsSetup;
 	} catch {
 		// Fail open — see comment above.
 	}
