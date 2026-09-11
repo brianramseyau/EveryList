@@ -3,6 +3,7 @@ import {
   getValidatedRemoteUser,
   isGenuineIngressRequest,
   isValidIngressPath,
+  resolveTrustedIngressProxyIp,
   rewriteHtmlForIngress,
 } from '#services/ingress_service'
 
@@ -130,7 +131,38 @@ test.group('rewriteHtmlForIngress', () => {
   })
 })
 
+test.group('resolveTrustedIngressProxyIp', () => {
+  test('returns the real Supervisor IP in production regardless of any override', ({ assert }) => {
+    assert.equal(resolveTrustedIngressProxyIp(true, '127.0.0.1'), '172.30.32.2')
+  })
+
+  test('returns the real Supervisor IP outside production with no override set', ({ assert }) => {
+    assert.equal(resolveTrustedIngressProxyIp(false, undefined), '172.30.32.2')
+  })
+
+  test('honors the override outside production', ({ assert }) => {
+    assert.equal(resolveTrustedIngressProxyIp(false, '127.0.0.1'), '127.0.0.1')
+  })
+})
+
 test.group('getValidatedRemoteUser', () => {
+  test('matches an IPv4 peer reported in IPv4-mapped-IPv6 form', ({ assert }) => {
+    // Node reports an IPv4 peer as `::ffff:<ipv4>` on a dual-stack socket - a real Supervisor
+    // connection could arrive this way even though trustedIngressProxyIp() is a plain dotted-quad.
+    const remoteUser = getValidatedRemoteUser(
+      fakeRequest(
+        {
+          'x-ingress-path': '/api/hassio_ingress/abc123',
+          'x-remote-user-id': '1',
+          'x-remote-user-name': 'alice',
+        },
+        `::ffff:${SUPERVISOR_IP}`
+      )
+    )
+
+    assert.deepEqual(remoteUser, { id: '1', username: 'alice', displayName: 'alice' })
+  })
+
   test('parses the remote-user identity on a genuinely validated ingress request', ({ assert }) => {
     const remoteUser = getValidatedRemoteUser(
       fakeRequest({

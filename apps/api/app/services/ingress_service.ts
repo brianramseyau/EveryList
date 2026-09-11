@@ -1,3 +1,5 @@
+import app from '@adonisjs/core/services/app'
+
 /**
  * Matches Supervisor's actual `X-Ingress-Path` format (`/api/hassio_ingress/<token>`). The token
  * is base64url (mixed-case letters, digits, `-`/`_`, no padding) - confirmed against a real
@@ -41,12 +43,36 @@ export interface IngressRemoteUser {
  * username and mint itself a real access token - a full authentication bypass, not merely a
  * cosmetic asset-path concern the way an unchecked `x-ingress-path` is for `rewriteHtmlForIngress`
  * below (which only ever changes what asset prefix gets served back to whoever asked, granting no
- * new privilege either way). Overridable via `SUPERVISOR_INGRESS_PROXY_IP` purely so the test
- * suite can exercise this against its own loopback client instead of the real Docker network
- * address - never meant to be set in a real deployment.
+ * new privilege either way). Overridable via `SUPERVISOR_INGRESS_PROXY_IP`, but only outside
+ * production (`app.inProduction`) - purely so the test suite can exercise this against its own
+ * loopback client instead of the real Docker network address. Honoring this env var in a real
+ * deployment would mean an env var accidentally (or maliciously, via some other vector) set
+ * alongside `SUPERVISOR_TOKEN` could silently widen the one thing this whole check exists to pin
+ * down. Pulled apart from `app.inProduction` itself (a fixed, boot-time-computed getter this
+ * process can't flip mid-run) into a plain function of two inputs, so both branches are directly
+ * unit-testable without needing a second process actually booted in production mode.
  */
+export function resolveTrustedIngressProxyIp(
+  inProduction: boolean,
+  envOverride: string | undefined
+): string {
+  if (!inProduction && envOverride) return envOverride
+  return '172.30.32.2'
+}
+
 function trustedIngressProxyIp(): string {
-  return process.env.SUPERVISOR_INGRESS_PROXY_IP || '172.30.32.2'
+  return resolveTrustedIngressProxyIp(app.inProduction, process.env.SUPERVISOR_INGRESS_PROXY_IP)
+}
+
+/**
+ * Node reports an IPv4 peer as `::ffff:<ipv4>` on a dual-stack socket rather than the bare
+ * dotted-quad form - normalize it away before comparing, or a real Supervisor connection would
+ * never match `trustedIngressProxyIp()`'s plain IPv4 address and this feature would just silently
+ * never work in production.
+ */
+function normalizeIp(ip: string): string {
+  const IPV4_MAPPED_PREFIX = '::ffff:'
+  return ip.startsWith(IPV4_MAPPED_PREFIX) ? ip.slice(IPV4_MAPPED_PREFIX.length) : ip
 }
 
 /**
@@ -63,7 +89,7 @@ export function isGenuineIngressRequest(request: {
   header(name: string): string | undefined
   ip(): string
 }): boolean {
-  if (request.ip() !== trustedIngressProxyIp()) return false
+  if (normalizeIp(request.ip()) !== trustedIngressProxyIp()) return false
   const ingressPath = request.header('x-ingress-path')
   return Boolean(ingressPath && isValidIngressPath(ingressPath))
 }

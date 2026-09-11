@@ -1,5 +1,6 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
+import type { ApiClient } from '@japa/api-client'
 import UserHassLink from '#models/user_hass_link'
 import { supervisorAuthClient } from '#services/supervisor_auth_client'
 import { bodyData, signupAndGetUser } from './helpers.js'
@@ -8,6 +9,18 @@ type LinkBody = {
   linkedHaUsername: string | null
   detectedHaUsername: string | null
   detectedHaDisplayName: string | null
+}
+
+/** A genuinely-validated ingress request (trusted IP + valid x-ingress-path) whose detected
+ *  identity is deliberately someone other than `haUsername` being linked, so the request still
+ *  exercises the password-proof branch rather than the one-click-detected-identity branch. */
+function manualLinkRequest(client: ApiClient, token: string) {
+  return client
+    .patch('/api/v1/ha-link')
+    .header('Authorization', `Bearer ${token}`)
+    .header('x-ingress-path', '/api/hassio_ingress/abc123')
+    .header('x-remote-user-id', '999')
+    .header('x-remote-user-name', 'someone-else')
 }
 
 test.group('Home Assistant account link', (group) => {
@@ -96,13 +109,26 @@ test.group('Home Assistant account link', (group) => {
     })
   })
 
-  test('rejects manually linking a username with no password at all', async ({ client }) => {
+  test('rejects manually linking a username at all when the request is not genuinely from Ingress', async ({
+    client,
+  }) => {
+    // Without this, an authenticated EveryList user could hammer this branch from anywhere the
+    // server is reachable (e.g. the add-on's optional direct port) as an unthrottled credential
+    // oracle against real Home Assistant accounts.
     const owner = await signupAndGetUser(client)
+    supervisorAuthClient.validateCredentials = async () => true
 
     const response = await client
       .patch('/api/v1/ha-link')
       .header('Authorization', `Bearer ${owner.token}`)
-      .json({ haUsername: 'alice' })
+      .json({ haUsername: 'alice', password: 'whatever' })
+    response.assertStatus(403)
+  })
+
+  test('rejects manually linking a username with no password at all', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+
+    const response = await manualLinkRequest(client, owner.token).json({ haUsername: 'alice' })
     response.assertStatus(400)
   })
 
@@ -110,10 +136,10 @@ test.group('Home Assistant account link', (group) => {
     const owner = await signupAndGetUser(client)
     supervisorAuthClient.validateCredentials = async () => false
 
-    const response = await client
-      .patch('/api/v1/ha-link')
-      .header('Authorization', `Bearer ${owner.token}`)
-      .json({ haUsername: 'alice', password: 'wrong' })
+    const response = await manualLinkRequest(client, owner.token).json({
+      haUsername: 'alice',
+      password: 'wrong',
+    })
     response.assertStatus(401)
   })
 
@@ -125,10 +151,10 @@ test.group('Home Assistant account link', (group) => {
       throw new Error('SUPERVISOR_TOKEN is not set')
     }
 
-    const response = await client
-      .patch('/api/v1/ha-link')
-      .header('Authorization', `Bearer ${owner.token}`)
-      .json({ haUsername: 'alice', password: 'secret' })
+    const response = await manualLinkRequest(client, owner.token).json({
+      haUsername: 'alice',
+      password: 'secret',
+    })
     response.assertStatus(503)
   })
 
@@ -136,12 +162,32 @@ test.group('Home Assistant account link', (group) => {
     const owner = await signupAndGetUser(client)
     supervisorAuthClient.validateCredentials = async () => true
 
+    const response = await manualLinkRequest(client, owner.token).json({
+      haUsername: 'alice',
+      password: 'correct',
+    })
+    response.assertStatus(200)
+    assert.equal(bodyData<LinkBody>(response).linkedHaUsername, 'alice')
+  })
+
+  test('links manually with no detected identity at all, just a genuine ingress request', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    supervisorAuthClient.validateCredentials = async () => true
+
     const response = await client
       .patch('/api/v1/ha-link')
       .header('Authorization', `Bearer ${owner.token}`)
+      .header('x-ingress-path', '/api/hassio_ingress/abc123')
       .json({ haUsername: 'alice', password: 'correct' })
-    response.assertStatus(200)
-    assert.equal(bodyData<LinkBody>(response).linkedHaUsername, 'alice')
+
+    assert.deepEqual(bodyData<LinkBody>(response), {
+      linkedHaUsername: 'alice',
+      detectedHaUsername: null,
+      detectedHaDisplayName: null,
+    })
   })
 
   test('links, then unlinks, an already-detected identity', async ({ client, assert }) => {
@@ -213,10 +259,10 @@ test.group('Home Assistant account link', (group) => {
       .json({ haUsername: 'alice' })
 
     supervisorAuthClient.validateCredentials = async () => true
-    const response = await client
-      .patch('/api/v1/ha-link')
-      .header('Authorization', `Bearer ${owner.token}`)
-      .json({ haUsername: 'alice', password: 'whatever' })
+    const response = await manualLinkRequest(client, owner.token).json({
+      haUsername: 'alice',
+      password: 'whatever',
+    })
     response.assertStatus(400)
   })
 

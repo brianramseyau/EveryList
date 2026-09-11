@@ -1,5 +1,5 @@
 import UserHassLink from '#models/user_hass_link'
-import { getValidatedRemoteUser } from '#services/ingress_service'
+import { getValidatedRemoteUser, isGenuineIngressRequest } from '#services/ingress_service'
 import { supervisorAuthClient } from '#services/supervisor_auth_client'
 import { updateUserHassLinkValidator } from '#validators/user_hass_link'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -44,6 +44,15 @@ export default class HaLinkController {
     // other username requires proving it the other way, the same password check the explicit
     // sign-in endpoint uses.
     if (haUsername !== detected?.username) {
+      // Without this, an authenticated EveryList user (not just an Ingress visitor) could hammer
+      // this branch from anywhere the server is reachable — including the add-on's optional
+      // direct port — as an unthrottled credential-verification oracle against real Home
+      // Assistant accounts. The explicit sign-in endpoint already requires this same check.
+      if (!isGenuineIngressRequest(request)) {
+        return response.forbidden({
+          message: 'Linking a Home Assistant account is only available through the Ingress panel.',
+        })
+      }
       if (!password) {
         return response.badRequest({
           message: 'Enter that Home Assistant account’s password to link it.',

@@ -222,9 +222,12 @@ router
       })
       .prefix('ha-link')
       .as('haLink')
-      // Settings → Home Assistant in the web app — the signed-in user's own account link. See
-      // PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
-      .use(middleware.auth())
+      // Settings → Home Assistant in the web app — the signed-in user's own account link.
+      // `authThrottle` here too (not just on the explicit login endpoint): manually linking a
+      // username other than the caller's own detected identity verifies a real Home Assistant
+      // password (ha_link_controller.ts), the same credential-guessing surface login-with-home-
+      // assistant is. See PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
+      .use([middleware.auth(), authThrottle])
 
     // PAT-only self-introspection — a login session can't authenticate here
     // (it has no per-list "grant" to report), so this sits outside the
