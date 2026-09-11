@@ -80,4 +80,6 @@ for (const relPath of packageJsonPaths) {
   console.log(`Updated ${relPath} -> ${bareVersion}`)
 }
 
-console.log(`\nDone. Review the diff, then commit/PR/merge as usual.`)
+console.log(
+  `\nDone. Also update ha-addon/everylist/CHANGELOG.md with a "${tag}" entry (not scripted - it's prose).\nThen review the diff, commit/PR/merge as usual.`
+)
