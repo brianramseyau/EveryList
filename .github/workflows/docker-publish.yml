@@ -168,6 +168,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -180,10 +181,31 @@ jobs:
         run: |
           sed -i "s/^version: .*/version: \"${GITHUB_REF_NAME}\"/" ha-addon/everylist/config.yaml
 
-      # Commits with the default GITHUB_TOKEN deliberately do not trigger further workflow
-      # runs (GitHub's own loop-prevention behavior) - this push to main will not retrigger
-      # this workflow's own `branches: [main]` rule, so there's no rebuild loop here.
+      # main is a protected branch whose required status checks (ci.yml) only trigger on
+      # `pull_request` - a direct push, bot-authored or not, can never satisfy them and is
+      # always rejected (GH006). So this goes through a PR instead, same as any other change
+      # to this repo, with auto-merge so the release still finishes unattended once the
+      # (deterministic, one-line) change passes CI. Branch name includes the tag so re-running
+      # this job for the same tag (e.g. after a transient failure) reuses/updates one PR
+      # instead of erroring on an already-existing branch.
       - uses: stefanzweifel/git-auto-commit-action@v5
+        id: commit
         with:
           commit_message: "chore(ha-addon): bump add-on version to ${{ github.ref_name }}"
           file_pattern: ha-addon/everylist/config.yaml
+          create_branch: true
+          branch: "chore/bump-addon-version-${{ github.ref_name }}"
+          push_options: --force
+
+      - name: Open PR and enable auto-merge
+        if: steps.commit.outputs.changes_detected == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "chore/bump-addon-version-${{ github.ref_name }}" \
+            --title "chore(ha-addon): bump add-on version to ${{ github.ref_name }}" \
+            --body "Automated version bump for the Home Assistant add-on, triggered by the ${{ github.ref_name }} release tag." \
+            || true
+          gh pr merge "chore/bump-addon-version-${{ github.ref_name }}" --squash --auto --delete-branch
