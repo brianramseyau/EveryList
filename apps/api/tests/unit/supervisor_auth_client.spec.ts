@@ -46,6 +46,11 @@ test.group('supervisorAuthClient.validateCredentials', (group) => {
       username: 'alice',
       password: 'secret',
     })
+    // A hung Supervisor shouldn't stall a login request indefinitely — the request must carry an
+    // abort signal (a real timeout firing hits the same catch block as "throws when the request
+    // itself fails" below, since AbortSignal.timeout() makes fetch reject the same way any other
+    // network failure does).
+    assert.instanceOf(capturedInit?.signal, AbortSignal)
   })
 
   test('returns false on a 401 — invalid Home Assistant credentials', async ({ assert }) => {

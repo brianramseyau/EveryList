@@ -1,7 +1,7 @@
 import User from '#models/user'
 import UserHassLink from '#models/user_hass_link'
 import UserTransformer from '#transformers/user_transformer'
-import { getValidatedRemoteUser } from '#services/ingress_service'
+import { getValidatedRemoteUser, isGenuineIngressRequest } from '#services/ingress_service'
 import { supervisorAuthClient } from '#services/supervisor_auth_client'
 import { haLoginValidator } from '#validators/ha_auth'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -53,6 +53,16 @@ export default class HaAuthController {
 
   async login(ctx: HttpContext) {
     const { request, response, logger } = ctx
+    if (!isGenuineIngressRequest(request)) {
+      // Both PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md and DOCS.md scope this to Ingress only —
+      // without this check, this endpoint (a credential-validation oracle against the user's real
+      // Home Assistant password) would be reachable from anywhere the server itself is, not just
+      // through Home Assistant.
+      return response.forbidden({
+        message: 'Home Assistant sign-in is only available through the Ingress panel.',
+      })
+    }
+
     const { username, password } = await request.validateUsing(haLoginValidator)
 
     let valid: boolean

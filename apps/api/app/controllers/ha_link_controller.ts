@@ -1,5 +1,6 @@
 import UserHassLink from '#models/user_hass_link'
 import { getValidatedRemoteUser } from '#services/ingress_service'
+import { supervisorAuthClient } from '#services/supervisor_auth_client'
 import { updateUserHassLinkValidator } from '#validators/user_hass_link'
 import type { HttpContext } from '@adonisjs/core/http'
 
@@ -23,7 +24,7 @@ export default class HaLinkController {
 
   async update({ auth, request, response, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
-    const { haUsername } = await request.validateUsing(updateUserHassLinkValidator)
+    const { haUsername, password } = await request.validateUsing(updateUserHassLinkValidator)
     const detected = getValidatedRemoteUser(request)
 
     if (haUsername === null) {
@@ -33,6 +34,32 @@ export default class HaLinkController {
         detectedHaUsername: detected?.username ?? null,
         detectedHaDisplayName: detected?.displayName ?? null,
       })
+    }
+
+    // Linking with no proof at all would let anyone claim any Home Assistant username — including
+    // one a real HA user actually has — and, since implicit sign-in (ha_auth_controller.ts) looks
+    // up accounts purely by that username, silently receive that real user's future auto-logins
+    // into the squatter's own EveryList account instead. The one-click path already has proof
+    // (Supervisor itself just told us the caller *is* this HA user, `getValidatedRemoteUser`); any
+    // other username requires proving it the other way, the same password check the explicit
+    // sign-in endpoint uses.
+    if (haUsername !== detected?.username) {
+      if (!password) {
+        return response.badRequest({
+          message: 'Enter that Home Assistant account’s password to link it.',
+        })
+      }
+      let valid: boolean
+      try {
+        valid = await supervisorAuthClient.validateCredentials(haUsername, password)
+      } catch {
+        return response
+          .status(503)
+          .send({ message: 'Home Assistant sign-in is not available right now.' })
+      }
+      if (!valid) {
+        return response.unauthorized({ message: 'Invalid Home Assistant username or password.' })
+      }
     }
 
     const takenByAnotherUser = await UserHassLink.query()

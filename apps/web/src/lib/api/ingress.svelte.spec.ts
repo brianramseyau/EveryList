@@ -1,5 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { ingressBase, isIngress, stripIngressPrefix } from './ingress';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+	ingressBase,
+	isImplicitHaSignInSuppressed,
+	isIngress,
+	stripIngressPrefix,
+	suppressImplicitHaSignIn
+} from './ingress';
 
 // Runs in the "client" (real Chromium) project so `window` is the genuine
 // browser object, not a jsdom-less no-op — see ingress.spec.ts for the
@@ -50,5 +56,36 @@ describe('stripIngressPrefix', () => {
 	it('leaves a pathname outside the Ingress prefix unchanged', () => {
 		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
 		expect(stripIngressPrefix('/some-other-path')).toBe('/some-other-path');
+	});
+});
+
+describe('implicit HA sign-in suppression', () => {
+	afterEach(() => {
+		window.sessionStorage.removeItem('everylist:haImplicitSignInSuppressed');
+	});
+
+	it('is not suppressed by default', () => {
+		expect(isImplicitHaSignInSuppressed()).toBe(false);
+	});
+
+	it('is suppressed after suppressImplicitHaSignIn is called', () => {
+		suppressImplicitHaSignIn();
+		expect(isImplicitHaSignInSuppressed()).toBe(true);
+	});
+
+	it('suppressImplicitHaSignIn does not throw when storage is unavailable', () => {
+		const setItem = vi.spyOn(window.sessionStorage.__proto__, 'setItem').mockImplementation(() => {
+			throw new Error('storage disabled');
+		});
+		expect(() => suppressImplicitHaSignIn()).not.toThrow();
+		setItem.mockRestore();
+	});
+
+	it('isImplicitHaSignInSuppressed returns false when storage is unavailable', () => {
+		const getItem = vi.spyOn(window.sessionStorage.__proto__, 'getItem').mockImplementation(() => {
+			throw new Error('storage disabled');
+		});
+		expect(isImplicitHaSignInSuppressed()).toBe(false);
+		getItem.mockRestore();
 	});
 });

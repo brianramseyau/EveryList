@@ -2,6 +2,7 @@ import type { UserDto } from '@everylist/shared';
 import { apiGet, apiPatch, apiPost } from './client';
 import { clearToken, setToken } from './token';
 import { clearLocalData } from '../offline/db';
+import { isIngress, suppressImplicitHaSignIn } from './ingress';
 
 interface AuthResponse {
 	user: UserDto;
@@ -62,6 +63,9 @@ export async function logout(): Promise<void> {
 	} finally {
 		clearToken();
 		await clearLocalData();
+		// Otherwise a linked user's very next Ingress page load signs them right back in
+		// (+layout.svelte's attemptImplicitHaSignIn), making "log out" a no-op under Ingress.
+		if (isIngress()) suppressImplicitHaSignIn();
 	}
 }
 

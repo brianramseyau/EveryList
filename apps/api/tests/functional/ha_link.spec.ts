@@ -1,6 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import UserHassLink from '#models/user_hass_link'
+import { supervisorAuthClient } from '#services/supervisor_auth_client'
 import { bodyData, signupAndGetUser } from './helpers.js'
 
 type LinkBody = {
@@ -11,6 +12,25 @@ type LinkBody = {
 
 test.group('Home Assistant account link', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  // getValidatedRemoteUser only trusts X-Remote-User-* headers from Supervisor's fixed proxy IP -
+  // the functional test client's real peer address is the loopback address below, not Supervisor's
+  // real one, so tests that want their ingress headers actually trusted must override it.
+  const originalTrustedIp = process.env.SUPERVISOR_INGRESS_PROXY_IP
+  group.each.setup(() => {
+    process.env.SUPERVISOR_INGRESS_PROXY_IP = '127.0.0.1'
+    return () => {
+      if (originalTrustedIp === undefined) delete process.env.SUPERVISOR_INGRESS_PROXY_IP
+      else process.env.SUPERVISOR_INGRESS_PROXY_IP = originalTrustedIp
+    }
+  })
+
+  group.each.setup(() => {
+    const original = supervisorAuthClient.validateCredentials
+    return () => {
+      supervisorAuthClient.validateCredentials = original
+    }
+  })
 
   test('requires authentication', async ({ client }) => {
     const show = await client.get('/api/v1/ha-link')
@@ -55,12 +75,84 @@ test.group('Home Assistant account link', (group) => {
     })
   })
 
-  test('links, then unlinks, a Home Assistant username manually', async ({ client, assert }) => {
+  test('one-click links the currently detected identity, with no password needed', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+
+    const response = await client
+      .patch('/api/v1/ha-link')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .header('x-ingress-path', '/api/hassio_ingress/abc123')
+      .header('x-remote-user-id', '1')
+      .header('x-remote-user-name', 'alice')
+      .json({ haUsername: 'alice' })
+
+    assert.deepEqual(bodyData<LinkBody>(response), {
+      linkedHaUsername: 'alice',
+      detectedHaUsername: 'alice',
+      detectedHaDisplayName: 'alice',
+    })
+  })
+
+  test('rejects manually linking a username with no password at all', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+
+    const response = await client
+      .patch('/api/v1/ha-link')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ haUsername: 'alice' })
+    response.assertStatus(400)
+  })
+
+  test('rejects manually linking with a wrong Home Assistant password', async ({ client }) => {
+    const owner = await signupAndGetUser(client)
+    supervisorAuthClient.validateCredentials = async () => false
+
+    const response = await client
+      .patch('/api/v1/ha-link')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ haUsername: 'alice', password: 'wrong' })
+    response.assertStatus(401)
+  })
+
+  test('surfaces Supervisor being unavailable while manually linking, distinct from a wrong password', async ({
+    client,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    supervisorAuthClient.validateCredentials = async () => {
+      throw new Error('SUPERVISOR_TOKEN is not set')
+    }
+
+    const response = await client
+      .patch('/api/v1/ha-link')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ haUsername: 'alice', password: 'secret' })
+    response.assertStatus(503)
+  })
+
+  test('links manually with a correct Home Assistant password', async ({ client, assert }) => {
+    const owner = await signupAndGetUser(client)
+    supervisorAuthClient.validateCredentials = async () => true
+
+    const response = await client
+      .patch('/api/v1/ha-link')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ haUsername: 'alice', password: 'correct' })
+    response.assertStatus(200)
+    assert.equal(bodyData<LinkBody>(response).linkedHaUsername, 'alice')
+  })
+
+  test('links, then unlinks, an already-detected identity', async ({ client, assert }) => {
     const owner = await signupAndGetUser(client)
 
     const link = await client
       .patch('/api/v1/ha-link')
       .header('Authorization', `Bearer ${owner.token}`)
+      .header('x-ingress-path', '/api/hassio_ingress/abc123')
+      .header('x-remote-user-id', '1')
+      .header('x-remote-user-name', 'alice')
       .json({ haUsername: 'alice' })
     link.assertStatus(200)
     assert.equal(bodyData<LinkBody>(link).linkedHaUsername, 'alice')
@@ -80,24 +172,6 @@ test.group('Home Assistant account link', (group) => {
     assert.isNull(await UserHassLink.findBy('userId', owner.id))
   })
 
-  test('one-click links the detected identity', async ({ client, assert }) => {
-    const owner = await signupAndGetUser(client)
-
-    const response = await client
-      .patch('/api/v1/ha-link')
-      .header('Authorization', `Bearer ${owner.token}`)
-      .header('x-ingress-path', '/api/hassio_ingress/abc123')
-      .header('x-remote-user-id', '1')
-      .header('x-remote-user-name', 'alice')
-      .json({ haUsername: 'alice' })
-
-    assert.deepEqual(bodyData<LinkBody>(response), {
-      linkedHaUsername: 'alice',
-      detectedHaUsername: 'alice',
-      detectedHaDisplayName: 'alice',
-    })
-  })
-
   test('unlinking still reports a currently-detected identity, if any', async ({
     client,
     assert,
@@ -106,6 +180,9 @@ test.group('Home Assistant account link', (group) => {
     await client
       .patch('/api/v1/ha-link')
       .header('Authorization', `Bearer ${owner.token}`)
+      .header('x-ingress-path', '/api/hassio_ingress/abc123')
+      .header('x-remote-user-id', '1')
+      .header('x-remote-user-name', 'alice')
       .json({ haUsername: 'alice' })
 
     const response = await client
@@ -130,12 +207,16 @@ test.group('Home Assistant account link', (group) => {
     await client
       .patch('/api/v1/ha-link')
       .header('Authorization', `Bearer ${other.token}`)
+      .header('x-ingress-path', '/api/hassio_ingress/abc123')
+      .header('x-remote-user-id', '1')
+      .header('x-remote-user-name', 'alice')
       .json({ haUsername: 'alice' })
 
+    supervisorAuthClient.validateCredentials = async () => true
     const response = await client
       .patch('/api/v1/ha-link')
       .header('Authorization', `Bearer ${owner.token}`)
-      .json({ haUsername: 'alice' })
+      .json({ haUsername: 'alice', password: 'whatever' })
     response.assertStatus(400)
   })
 
@@ -147,11 +228,17 @@ test.group('Home Assistant account link', (group) => {
     await client
       .patch('/api/v1/ha-link')
       .header('Authorization', `Bearer ${owner.token}`)
+      .header('x-ingress-path', '/api/hassio_ingress/abc123')
+      .header('x-remote-user-id', '1')
+      .header('x-remote-user-name', 'alice')
       .json({ haUsername: 'alice' })
 
     const response = await client
       .patch('/api/v1/ha-link')
       .header('Authorization', `Bearer ${owner.token}`)
+      .header('x-ingress-path', '/api/hassio_ingress/abc123')
+      .header('x-remote-user-id', '1')
+      .header('x-remote-user-name', 'alice')
       .json({ haUsername: 'alice' })
     response.assertStatus(200)
     assert.equal(bodyData<LinkBody>(response).linkedHaUsername, 'alice')

@@ -27,6 +27,48 @@ export interface IngressRemoteUser {
 }
 
 /**
+ * Supervisor's own Ingress proxy always connects from this fixed internal address on the add-on's
+ * private `hassio` Docker network - documented directly by Home Assistant as the mechanism add-ons
+ * MUST use to distinguish genuine Ingress traffic from anything else reaching the same port
+ * (developers.home-assistant.io/docs/add-ons/presentation - "Only connections from 172.30.32.2
+ * must be allowed. You should deny access to all other IP addresses.", with a sample nginx config
+ * doing exactly `allow 172.30.32.2; deny all;`). `x-ingress-path` and the `X-Remote-User-*`
+ * headers below are otherwise just attacker-controlled HTTP headers - Supervisor sets them when
+ * proxying, but nothing stops a client reaching this container some other way from setting the
+ * exact same headers itself. This add-on's optional direct port (`ha-addon/everylist/config.yaml`)
+ * listens on the *same* container port `ingress_port` names, so without this IP check, enabling
+ * that port would let any client on it forge a valid-looking `x-ingress-path` plus a linked HA
+ * username and mint itself a real access token - a full authentication bypass, not merely a
+ * cosmetic asset-path concern the way an unchecked `x-ingress-path` is for `rewriteHtmlForIngress`
+ * below (which only ever changes what asset prefix gets served back to whoever asked, granting no
+ * new privilege either way). Overridable via `SUPERVISOR_INGRESS_PROXY_IP` purely so the test
+ * suite can exercise this against its own loopback client instead of the real Docker network
+ * address - never meant to be set in a real deployment.
+ */
+function trustedIngressProxyIp(): string {
+  return process.env.SUPERVISOR_INGRESS_PROXY_IP || '172.30.32.2'
+}
+
+/**
+ * True when a request both originates from Supervisor's fixed Ingress proxy address and carries a
+ * validly-formatted `x-ingress-path` — i.e. this is genuinely an Ingress-proxied request, whether
+ * or not it also carries a specific visitor's `X-Remote-User-*` identity (see
+ * `getValidatedRemoteUser` below for that stronger check). Used to scope the explicit
+ * `auth_api`-backed sign-in (`ha_auth_controller.ts#login`) to Ingress only, matching what
+ * PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md and DOCS.md both say about it — without this, that
+ * endpoint (a credential-validation oracle against the user's real Home Assistant password) would
+ * be reachable from anywhere the server itself is reachable, not just through Home Assistant.
+ */
+export function isGenuineIngressRequest(request: {
+  header(name: string): string | undefined
+  ip(): string
+}): boolean {
+  if (request.ip() !== trustedIngressProxyIp()) return false
+  const ingressPath = request.header('x-ingress-path')
+  return Boolean(ingressPath && isValidIngressPath(ingressPath))
+}
+
+/**
  * Extracts the Home-Assistant-authenticated visitor's identity from Supervisor's own
  * `X-Remote-User-Id` / `X-Remote-User-Name` / `X-Remote-User-Display-Name` headers — sent
  * unconditionally by Supervisor on every Ingress-proxied request whenever session data exists (no
@@ -36,19 +78,22 @@ export interface IngressRemoteUser {
  * offer one-click account linking (`ha_link_controller.ts`).
  *
  * These headers only mean anything when the request genuinely came through Supervisor's Ingress
- * proxy — the add-on's optional direct port (`ha-addon/everylist/config.yaml`'s `ports:
- * 3000/tcp`, off by default) reaches this container directly, bypassing Supervisor entirely, so a
- * client on that path could send its own fake `X-Remote-User-Name` with nothing to stop it. Reuse
- * the same validated-ingress-request check `isValidIngressPath` already exists for: only trust
- * these headers when `x-ingress-path` is also present and matches Supervisor's real format,
- * otherwise treat them as absent entirely — never partially trust them. See
+ * proxy. Two independent checks gate that, both required:
+ *   - The request's source IP must be Supervisor's own fixed proxy address (see
+ *     `trustedIngressProxyIp` above) - the only check that actually distinguishes a real
+ *     Supervisor-proxied request from one a client sent directly (e.g. via the add-on's optional
+ *     direct port, which shares the same container port).
+ *   - `x-ingress-path` must also be present and match Supervisor's real format
+ *     (`isValidIngressPath`) - kept as a second check (not a substitute for the IP check, which a
+ *     forged header can't satisfy) since it's cheap and already validated elsewhere.
+ * Either failing means treating the headers as absent entirely — never partially trust them. See
  * PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
  */
 export function getValidatedRemoteUser(request: {
   header(name: string): string | undefined
+  ip(): string
 }): IngressRemoteUser | null {
-  const ingressPath = request.header('x-ingress-path')
-  if (!ingressPath || !isValidIngressPath(ingressPath)) return null
+  if (!isGenuineIngressRequest(request)) return null
 
   const id = request.header('x-remote-user-id')
   const username = request.header('x-remote-user-name')

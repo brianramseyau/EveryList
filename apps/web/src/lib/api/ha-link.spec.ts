@@ -37,4 +37,14 @@ describe('ha-link', () => {
 		await expect(updateHaLink({ haUsername: null })).resolves.toEqual(unlinked);
 		expect(apiPatch).toHaveBeenCalledWith('/api/v1/ha-link', { haUsername: null });
 	});
+
+	it('updateHaLink passes a password through for manual linking', async () => {
+		vi.mocked(apiPatch).mockResolvedValue(linkResponse);
+
+		await updateHaLink({ haUsername: 'alice', password: 'secret' });
+		expect(apiPatch).toHaveBeenCalledWith('/api/v1/ha-link', {
+			haUsername: 'alice',
+			password: 'secret'
+		});
+	});
 });

@@ -76,7 +76,7 @@ describe('Home Assistant +page.svelte', () => {
 			.not.toBeInTheDocument();
 	});
 
-	it('offers one-click linking when an identity is detected but not yet linked', async () => {
+	it('offers one-click linking (no password needed) when an identity is detected but not yet linked', async () => {
 		vi.mocked(fetchHaLink).mockResolvedValue(
 			link({ detectedHaUsername: 'alice', detectedHaDisplayName: 'Alice' })
 		);
@@ -93,7 +93,7 @@ describe('Home Assistant +page.svelte', () => {
 		await expect.element(page.getByText('Home Assistant identifies you as')).toBeInTheDocument();
 		await page.getByRole('button', { name: 'Link this account' }).click();
 
-		expect(updateHaLink).toHaveBeenCalledWith({ haUsername: 'alice' });
+		expect(updateHaLink).toHaveBeenCalledWith({ haUsername: 'alice', password: undefined });
 		await expect.element(page.getByText('alice')).toBeInTheDocument();
 	});
 
@@ -113,15 +113,29 @@ describe('Home Assistant +page.svelte', () => {
 			.not.toBeInTheDocument();
 	});
 
-	it('links a username typed in manually', async () => {
+	it('requires both a username and a password before the manual Link button is enabled', async () => {
+		render(HaSettingsPage);
+
+		const linkButton = page.getByRole('button', { name: 'Link' });
+		await expect.element(linkButton).toBeDisabled();
+
+		await page.getByLabelText('Home Assistant username').fill('bob');
+		await expect.element(linkButton).toBeDisabled();
+
+		await page.getByLabelText('Home Assistant password').fill('secret');
+		await expect.element(linkButton).toBeEnabled();
+	});
+
+	it('links a username typed in manually with its password', async () => {
 		vi.mocked(updateHaLink).mockResolvedValue(link({ linkedHaUsername: 'bob' }));
 
 		render(HaSettingsPage);
 
-		await page.getByLabelText('Or link a specific Home Assistant username manually').fill('bob');
+		await page.getByLabelText('Home Assistant username').fill('bob');
+		await page.getByLabelText('Home Assistant password').fill('secret');
 		await page.getByRole('button', { name: 'Link' }).click();
 
-		expect(updateHaLink).toHaveBeenCalledWith({ haUsername: 'bob' });
+		expect(updateHaLink).toHaveBeenCalledWith({ haUsername: 'bob', password: 'secret' });
 		await expect.element(page.getByText('bob')).toBeInTheDocument();
 	});
 
@@ -133,7 +147,7 @@ describe('Home Assistant +page.svelte', () => {
 		await expect.element(page.getByRole('button', { name: 'Unlink' })).toBeInTheDocument();
 		await page.getByRole('button', { name: 'Unlink' }).click();
 
-		expect(updateHaLink).toHaveBeenCalledWith({ haUsername: null });
+		expect(updateHaLink).toHaveBeenCalledWith({ haUsername: null, password: undefined });
 		await expect.element(page.getByText('Not linked')).toBeInTheDocument();
 	});
 
@@ -142,7 +156,8 @@ describe('Home Assistant +page.svelte', () => {
 
 		render(HaSettingsPage);
 
-		await page.getByLabelText('Or link a specific Home Assistant username manually').fill('bob');
+		await page.getByLabelText('Home Assistant username').fill('bob');
+		await page.getByLabelText('Home Assistant password').fill('secret');
 		await page.getByRole('button', { name: 'Link' }).click();
 
 		await expect
@@ -160,7 +175,8 @@ describe('Home Assistant +page.svelte', () => {
 
 		render(HaSettingsPage);
 
-		await page.getByLabelText('Or link a specific Home Assistant username manually').fill('bob');
+		await page.getByLabelText('Home Assistant username').fill('bob');
+		await page.getByLabelText('Home Assistant password').fill('secret');
 		await page.getByRole('button', { name: 'Link' }).click();
 
 		await expect

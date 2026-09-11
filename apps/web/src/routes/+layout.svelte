@@ -11,7 +11,12 @@
 	import { getServerUrl } from '$lib/api/server-url';
 	import { fetchSetupStatus } from '$lib/api/setup';
 	import { isRemoteClient } from '$lib/platform/desktop';
-	import { isIngress, ingressBase, stripIngressPrefix } from '$lib/api/ingress';
+	import {
+		isIngress,
+		ingressBase,
+		isImplicitHaSignInSuppressed,
+		stripIngressPrefix
+	} from '$lib/api/ingress';
 	import { loginWithHomeAssistantIdentity } from '$lib/api/auth';
 	import { initTheme } from '$lib/theme';
 	import { initAccent } from '$lib/accent';
@@ -95,9 +100,12 @@
 	 * account, sign in with no login screen at all, the same no-prompt behavior other HA add-ons
 	 * (e.g. AdGuard Home) already have under Ingress. Returns whether it succeeded — the common
 	 * case (no detected identity, or detected but unlinked) isn't an error, just "nothing to do
-	 * here", so the caller falls through to its normal logged-out handling unchanged.
+	 * here", so the caller falls through to its normal logged-out handling unchanged. Skipped
+	 * entirely once `logout()` has suppressed it for this session — otherwise a linked user's very
+	 * next page load would sign them right back in, making "log out" a no-op under Ingress.
 	 */
 	async function attemptImplicitHaSignIn(): Promise<boolean> {
+		if (isImplicitHaSignInSuppressed()) return false;
 		try {
 			await loginWithHomeAssistantIdentity();
 			refreshAuth();

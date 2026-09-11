@@ -1,12 +1,15 @@
 import { test } from '@japa/runner'
 import {
   getValidatedRemoteUser,
+  isGenuineIngressRequest,
   isValidIngressPath,
   rewriteHtmlForIngress,
 } from '#services/ingress_service'
 
-function fakeRequest(headers: Record<string, string>) {
-  return { header: (name: string) => headers[name] }
+const SUPERVISOR_IP = '172.30.32.2'
+
+function fakeRequest(headers: Record<string, string>, ip = SUPERVISOR_IP) {
+  return { header: (name: string) => headers[name], ip: () => ip }
 }
 
 test.group('isValidIngressPath', () => {
@@ -185,6 +188,74 @@ test.group('getValidatedRemoteUser', () => {
   }) => {
     assert.isNull(
       getValidatedRemoteUser(fakeRequest({ 'x-ingress-path': '/api/hassio_ingress/abc123' }))
+    )
+  })
+
+  test("rejects a request not from Supervisor's fixed proxy IP, even with otherwise-valid headers", ({
+    assert,
+  }) => {
+    // This is the actual attack the "trust boundary" doc comment describes: the add-on's optional
+    // direct port shares the same container port Ingress traffic arrives on, so a client on that
+    // port could send a perfectly valid-looking x-ingress-path and X-Remote-User-Name itself. The
+    // source IP is the only thing that can't be forged this way.
+    assert.isNull(
+      getValidatedRemoteUser(
+        fakeRequest(
+          {
+            'x-ingress-path': '/api/hassio_ingress/abc123',
+            'x-remote-user-id': '1',
+            'x-remote-user-name': 'alice',
+          },
+          '203.0.113.7'
+        )
+      )
+    )
+  })
+})
+
+test.group('isGenuineIngressRequest', (group) => {
+  const original = process.env.SUPERVISOR_INGRESS_PROXY_IP
+  group.each.teardown(() => {
+    if (original === undefined) delete process.env.SUPERVISOR_INGRESS_PROXY_IP
+    else process.env.SUPERVISOR_INGRESS_PROXY_IP = original
+  })
+
+  test('SUPERVISOR_INGRESS_PROXY_IP overrides the trusted IP, for the test suite only', ({
+    assert,
+  }) => {
+    process.env.SUPERVISOR_INGRESS_PROXY_IP = '127.0.0.1'
+    assert.isTrue(
+      isGenuineIngressRequest(
+        fakeRequest({ 'x-ingress-path': '/api/hassio_ingress/abc123' }, '127.0.0.1')
+      )
+    )
+    // The real production default no longer matches once overridden.
+    assert.isFalse(
+      isGenuineIngressRequest(fakeRequest({ 'x-ingress-path': '/api/hassio_ingress/abc123' }))
+    )
+  })
+
+  test('true for a request from the trusted proxy IP with a valid ingress path', ({ assert }) => {
+    assert.isTrue(
+      isGenuineIngressRequest(fakeRequest({ 'x-ingress-path': '/api/hassio_ingress/abc123' }))
+    )
+  })
+
+  test('false from a non-Supervisor source IP', ({ assert }) => {
+    assert.isFalse(
+      isGenuineIngressRequest(
+        fakeRequest({ 'x-ingress-path': '/api/hassio_ingress/abc123' }, '203.0.113.7')
+      )
+    )
+  })
+
+  test('false with no ingress path at all', ({ assert }) => {
+    assert.isFalse(isGenuineIngressRequest(fakeRequest({})))
+  })
+
+  test('false with a malformed ingress path', ({ assert }) => {
+    assert.isFalse(
+      isGenuineIngressRequest(fakeRequest({ 'x-ingress-path': '/not/a/real/ingress/path' }))
     )
   })
 })

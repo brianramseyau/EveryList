@@ -12,6 +12,7 @@
 
 	let link = $state<HaLinkDto | null>(null);
 	let manualUsername = $state('');
+	let manualPassword = $state('');
 	let loading = $state(true);
 	let saving = $state(false);
 	let error = $state<string | null>(null);
@@ -36,12 +37,13 @@
 		void load();
 	});
 
-	async function setLink(haUsername: string | null) {
+	async function setLink(haUsername: string | null, password?: string) {
 		saving = true;
 		try {
-			link = await updateHaLink({ haUsername });
+			link = await updateHaLink({ haUsername, password });
 			error = null;
 			manualUsername = '';
+			manualPassword = '';
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to update Home Assistant settings.';
 		} finally {
@@ -105,7 +107,7 @@
 				<div
 					class="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700"
 				>
-					<span class="text-sm">Sign in with a different EveryList password instead</span>
+					<span class="text-sm">Remove this Home Assistant account link</span>
 					<Button
 						type="button"
 						size="xs"
@@ -121,20 +123,30 @@
 		</section>
 
 		<section class="flex flex-col gap-2">
-			<Label for="manual-ha-username" class="text-xs text-gray-500 dark:text-gray-400">
-				Or link a specific Home Assistant username manually
-			</Label>
-			<div class="flex gap-2">
+			<span class="text-xs text-gray-500 dark:text-gray-400">
+				Or link a specific Home Assistant account with its username and password
+			</span>
+			<div class="flex flex-col gap-2">
+				<Label for="manual-ha-username" class="sr-only">Home Assistant username</Label>
 				<Input
 					id="manual-ha-username"
 					type="text"
 					bind:value={manualUsername}
 					placeholder="Home Assistant username"
+					autocomplete="off"
+				/>
+				<Label for="manual-ha-password" class="sr-only">Home Assistant password</Label>
+				<Input
+					id="manual-ha-password"
+					type="password"
+					bind:value={manualPassword}
+					placeholder="Home Assistant password"
+					autocomplete="off"
 				/>
 				<Button
 					type="button"
-					disabled={saving || !manualUsername.trim()}
-					onclick={() => void setLink(manualUsername.trim())}
+					disabled={saving || !manualUsername.trim() || !manualPassword}
+					onclick={() => void setLink(manualUsername.trim(), manualPassword)}
 				>
 					Link
 				</Button>

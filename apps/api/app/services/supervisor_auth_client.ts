@@ -8,6 +8,11 @@ import logger from '@adonisjs/core/services/logger'
  */
 export class SupervisorAuthUnavailableError extends Error {}
 
+/** A hung Supervisor (rather than one that responds with an error) shouldn't stall a login
+ *  request indefinitely — same reasoning as any other outbound call on a request path a user is
+ *  actively waiting on. */
+const SUPERVISOR_AUTH_TIMEOUT_MS = 5_000
+
 /**
  * Validates a submitted username/password against Home Assistant's own user accounts via
  * Supervisor's internal `auth_api` (`ha-addon/everylist/config.yaml`'s `auth_api: true` — the
@@ -48,6 +53,7 @@ export const supervisorAuthClient = {
         // Never log `password` — same reasoning as authentik_client.ts never logging an
         // authorization code or access token.
         body: JSON.stringify({ username, password }),
+        signal: AbortSignal.timeout(SUPERVISOR_AUTH_TIMEOUT_MS),
       })
     } catch (error) {
       logger.warn({ err: error }, 'Supervisor auth_api request failed')
