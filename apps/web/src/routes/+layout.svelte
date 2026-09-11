@@ -70,9 +70,11 @@
 	/**
 	 * A fresh instance with no user yet needs the first-run setup wizard before anything else —
 	 * see routes/setup/+page.svelte. Only checked while logged out (an existing session proves
-	 * setup already happened) and never from /setup or / themselves (both do this same check
-	 * more authoritatively in their own `load`, and would otherwise fight this redirect or just
-	 * duplicate its request). Fails open on a network error, same
+	 * setup already happened) and never from /setup itself (which does its own, more authoritative
+	 * check and would otherwise fight this redirect). Also runs on "/" even though routes/+page.ts's
+	 * own `load` already performs this same check there — a deliberate, cheap-enough duplicate
+	 * request that acts as a backstop if that `load` call ever times out or is skipped, rather than
+	 * leaving a fresh instance with no path to /setup at all. Fails open on a network error, same
 	 * reasoning as login/signup's fetchMeta fallback — /setup and every other route re-validate
 	 * server-side regardless, so silently doing nothing here is safe.
 	 */
@@ -99,9 +101,7 @@
 		const currentPath = stripIngressPrefix(page.url.pathname);
 		if (noServerConfigured && currentPath !== serverSetupPath) {
 			void goto(serverSetupPath);
-		} else if (!getToken() && currentPath !== resolve('/setup') && currentPath !== resolve('/')) {
-			// "/" itself already runs this same check in its own `load` (routes/+page.ts) — skip it
-			// here to avoid firing the request twice on a plain anonymous visit to the splash.
+		} else if (!getToken() && currentPath !== resolve('/setup')) {
 			void redirectToSetupIfNeeded();
 		}
 		initTheme();
