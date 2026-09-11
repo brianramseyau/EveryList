@@ -42,6 +42,14 @@ ingress: true
 ingress_port: 3000
 ingress_entry: /ha-ingress-entry
 panel_icon: mdi:format-list-checks
+# Grants access to Supervisor's internal `/auth` endpoint, which validates a submitted
+# username/password against Home Assistant's own user accounts (the same flag
+# addon-adguard-home sets for its own "sign in with Home Assistant" form) - lets a user link an
+# EveryList account to their HA username and sign in with it instead of a separate EveryList
+# password. See foundational/PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md. Unrelated to (and not required
+# for) the silent implicit sign-in Ingress already supports unconditionally via Supervisor's
+# X-Remote-User-* headers.
+auth_api: true
 map:
   - type: addon_config
     path: /config

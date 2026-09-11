@@ -1,3 +1,5 @@
+import app from '@adonisjs/core/services/app'
+
 /**
  * Matches Supervisor's actual `X-Ingress-Path` format (`/api/hassio_ingress/<token>`). The token
  * is base64url (mixed-case letters, digits, `-`/`_`, no padding) - confirmed against a real
@@ -18,6 +20,113 @@ const INGRESS_PATH_PATTERN = /^\/api\/hassio_ingress\/[A-Za-z0-9_-]+$/
 
 export function isValidIngressPath(path: string): boolean {
   return INGRESS_PATH_PATTERN.test(path)
+}
+
+export interface IngressRemoteUser {
+  id: string
+  username: string
+  displayName: string
+}
+
+/**
+ * Supervisor's own Ingress proxy always connects from this fixed internal address on the add-on's
+ * private `hassio` Docker network - documented directly by Home Assistant as the mechanism add-ons
+ * MUST use to distinguish genuine Ingress traffic from anything else reaching the same port
+ * (developers.home-assistant.io/docs/add-ons/presentation - "Only connections from 172.30.32.2
+ * must be allowed. You should deny access to all other IP addresses.", with a sample nginx config
+ * doing exactly `allow 172.30.32.2; deny all;`). `x-ingress-path` and the `X-Remote-User-*`
+ * headers below are otherwise just attacker-controlled HTTP headers - Supervisor sets them when
+ * proxying, but nothing stops a client reaching this container some other way from setting the
+ * exact same headers itself. This add-on's optional direct port (`ha-addon/everylist/config.yaml`)
+ * listens on the *same* container port `ingress_port` names, so without this IP check, enabling
+ * that port would let any client on it forge a valid-looking `x-ingress-path` plus a linked HA
+ * username and mint itself a real access token - a full authentication bypass, not merely a
+ * cosmetic asset-path concern the way an unchecked `x-ingress-path` is for `rewriteHtmlForIngress`
+ * below (which only ever changes what asset prefix gets served back to whoever asked, granting no
+ * new privilege either way). Overridable via `SUPERVISOR_INGRESS_PROXY_IP`, but only outside
+ * production (`app.inProduction`) - purely so the test suite can exercise this against its own
+ * loopback client instead of the real Docker network address. Honoring this env var in a real
+ * deployment would mean an env var accidentally (or maliciously, via some other vector) set
+ * alongside `SUPERVISOR_TOKEN` could silently widen the one thing this whole check exists to pin
+ * down. Pulled apart from `app.inProduction` itself (a fixed, boot-time-computed getter this
+ * process can't flip mid-run) into a plain function of two inputs, so both branches are directly
+ * unit-testable without needing a second process actually booted in production mode.
+ */
+export function resolveTrustedIngressProxyIp(
+  inProduction: boolean,
+  envOverride: string | undefined
+): string {
+  if (!inProduction && envOverride) return envOverride
+  return '172.30.32.2'
+}
+
+function trustedIngressProxyIp(): string {
+  return resolveTrustedIngressProxyIp(app.inProduction, process.env.SUPERVISOR_INGRESS_PROXY_IP)
+}
+
+/**
+ * Node reports an IPv4 peer as `::ffff:<ipv4>` on a dual-stack socket rather than the bare
+ * dotted-quad form - normalize it away before comparing, or a real Supervisor connection would
+ * never match `trustedIngressProxyIp()`'s plain IPv4 address and this feature would just silently
+ * never work in production.
+ */
+function normalizeIp(ip: string): string {
+  const IPV4_MAPPED_PREFIX = '::ffff:'
+  return ip.startsWith(IPV4_MAPPED_PREFIX) ? ip.slice(IPV4_MAPPED_PREFIX.length) : ip
+}
+
+/**
+ * True when a request both originates from Supervisor's fixed Ingress proxy address and carries a
+ * validly-formatted `x-ingress-path` — i.e. this is genuinely an Ingress-proxied request, whether
+ * or not it also carries a specific visitor's `X-Remote-User-*` identity (see
+ * `getValidatedRemoteUser` below for that stronger check). Used to scope the explicit
+ * `auth_api`-backed sign-in (`ha_auth_controller.ts#login`) to Ingress only, matching what
+ * PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md and DOCS.md both say about it — without this, that
+ * endpoint (a credential-validation oracle against the user's real Home Assistant password) would
+ * be reachable from anywhere the server itself is reachable, not just through Home Assistant.
+ */
+export function isGenuineIngressRequest(request: {
+  header(name: string): string | undefined
+  ip(): string
+}): boolean {
+  if (normalizeIp(request.ip()) !== trustedIngressProxyIp()) return false
+  const ingressPath = request.header('x-ingress-path')
+  return Boolean(ingressPath && isValidIngressPath(ingressPath))
+}
+
+/**
+ * Extracts the Home-Assistant-authenticated visitor's identity from Supervisor's own
+ * `X-Remote-User-Id` / `X-Remote-User-Name` / `X-Remote-User-Display-Name` headers — sent
+ * unconditionally by Supervisor on every Ingress-proxied request whenever session data exists (no
+ * add-on config flag required; confirmed against Supervisor's source,
+ * home-assistant/supervisor#4152 and `HEADER_REMOTE_USER_*` in `supervisor/const.py`), used to
+ * silently sign a linked user in with no login screen at all (`ha_auth_controller.ts`) and to
+ * offer one-click account linking (`ha_link_controller.ts`).
+ *
+ * These headers only mean anything when the request genuinely came through Supervisor's Ingress
+ * proxy. Two independent checks gate that, both required:
+ *   - The request's source IP must be Supervisor's own fixed proxy address (see
+ *     `trustedIngressProxyIp` above) - the only check that actually distinguishes a real
+ *     Supervisor-proxied request from one a client sent directly (e.g. via the add-on's optional
+ *     direct port, which shares the same container port).
+ *   - `x-ingress-path` must also be present and match Supervisor's real format
+ *     (`isValidIngressPath`) - kept as a second check (not a substitute for the IP check, which a
+ *     forged header can't satisfy) since it's cheap and already validated elsewhere.
+ * Either failing means treating the headers as absent entirely — never partially trust them. See
+ * PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
+ */
+export function getValidatedRemoteUser(request: {
+  header(name: string): string | undefined
+  ip(): string
+}): IngressRemoteUser | null {
+  if (!isGenuineIngressRequest(request)) return null
+
+  const id = request.header('x-remote-user-id')
+  const username = request.header('x-remote-user-name')
+  const displayName = request.header('x-remote-user-display-name')
+  if (!id || !username) return null
+
+  return { id, username, displayName: displayName || username }
 }
 
 /**

@@ -246,6 +246,20 @@ export interface AlexaPreferenceDto {
   showChecked?: boolean
 }
 
+/** The signed-in user's Home Assistant account link — one row per user, readable/writable from
+ *  Settings → Home Assistant in the web app, only meaningful under the HA add-on's Ingress panel.
+ *  See PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md. */
+export interface HaLinkDto {
+  /** The HA username currently linked to this account, or `null` if unlinked. */
+  linkedHaUsername: string | null
+  /** The HA username Supervisor's Ingress proxy reports for the current visitor (from
+   *  `X-Remote-User-Name`), or `null` outside Ingress / with no HA session. Lets Settings offer
+   *  one-click linking without the user typing anything. */
+  detectedHaUsername: string | null
+  /** The same visitor's HA display name, for showing a friendlier "sign in as ___?" prompt. */
+  detectedHaDisplayName: string | null
+}
+
 /** The app→native-widget handoff payload carried over the `everylist://widget-config` deep link
  *  (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). The web app mints a list-scoped PAT, then hands the token plus the granted
  *  list ids and the configured server URL to the Android widget so it can call the API directly —

@@ -824,6 +824,15 @@
 				<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
 			</a>
 		{/if}
+		{#if isIngress()}
+			<a
+				href={resolve('/settings/home-assistant')}
+				class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+			>
+				<span>Home Assistant</span>
+				<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
+			</a>
+		{/if}
 	</section>
 
 	{#if !isNative}

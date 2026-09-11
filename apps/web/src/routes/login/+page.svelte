@@ -6,14 +6,26 @@
 	import { resolve } from '$app/paths';
 	import type { ResolvedPathname } from '$app/types';
 	import { Button, Label, Input, Helper } from 'flowbite-svelte';
-	import { login } from '$lib/api/auth';
+	import { login, loginWithHomeAssistant } from '$lib/api/auth';
 	import { fetchMeta } from '$lib/api/meta';
 	import { ApiError } from '$lib/api/client';
+	import { isIngress, ingressBase } from '$lib/api/ingress';
 
 	let email = $state('');
 	let password = $state('');
 	let error = $state<string | null>(null);
 	let submitting = $state(false);
+
+	// Only matters once +layout.svelte's own silent implicit sign-in has already run and found no
+	// match (see attemptImplicitHaSignIn there) — by the time anyone sees this page under Ingress,
+	// they're either unlinked or a different household member than whoever Home Assistant
+	// currently has logged in on this browser. Hidden, not shown-and-disabled, until toggled —
+	// most visits here are the ordinary EveryList login.
+	let showHaForm = $state(false);
+	let haUsername = $state('');
+	let haPassword = $state('');
+	let haError = $state<string | null>(null);
+	let haSubmitting = $state(false);
 	// Defaults to shown: a failed meta fetch shouldn't hide a legitimate signup
 	// flow, and the API itself still enforces the real check on submit either way.
 	let publicSignupEnabled = $state(true);
@@ -64,6 +76,21 @@
 			submitting = false;
 		}
 	}
+
+	async function handleHaSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		haError = null;
+		haSubmitting = true;
+		try {
+			await loginWithHomeAssistant({ username: haUsername, password: haPassword });
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			await goto(`${ingressBase()}${resolve('/lists')}`);
+		} catch (err) {
+			haError = err instanceof ApiError ? err.message : 'Something went wrong. Please try again.';
+		} finally {
+			haSubmitting = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -108,5 +135,53 @@
 			Don't have an account?
 			<a href={signupHref} class="text-primary-700 underline dark:text-primary-400">Sign up</a>
 		</p>
+	{/if}
+
+	{#if isIngress()}
+		{#if !showHaForm}
+			<button
+				type="button"
+				class="text-sm text-primary-700 underline dark:text-primary-400"
+				onclick={() => (showHaForm = true)}
+			>
+				Sign in with a different Home Assistant account
+			</button>
+		{:else}
+			<form
+				class="flex flex-col gap-4 border-t border-gray-200 pt-4 dark:border-gray-700"
+				onsubmit={handleHaSubmit}
+			>
+				<p class="text-sm text-gray-600 dark:text-gray-300">
+					Sign in with the username and password of a Home Assistant account already linked to an
+					EveryList account from Settings.
+				</p>
+				<div>
+					<Label for="ha-username" class="mb-2">Home Assistant username</Label>
+					<Input
+						id="ha-username"
+						type="text"
+						bind:value={haUsername}
+						required
+						autocomplete="username"
+					/>
+				</div>
+				<div>
+					<Label for="ha-password" class="mb-2">Home Assistant password</Label>
+					<Input
+						id="ha-password"
+						type="password"
+						bind:value={haPassword}
+						required
+						autocomplete="current-password"
+					/>
+				</div>
+				{#if haError}
+					<Helper class="text-red-600 dark:text-red-400">{haError}</Helper>
+				{/if}
+				<Button type="submit" disabled={haSubmitting} color="alternative">
+					{haSubmitting ? 'Signing in…' : 'Sign in with Home Assistant'}
+				</Button>
+			</form>
+		{/if}
 	{/if}
 </main>

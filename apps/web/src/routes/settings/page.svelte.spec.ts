@@ -1122,6 +1122,23 @@ describe('Settings +page.svelte', () => {
 		await expect.element(page.getByRole('button', { name: 'Reset' })).not.toBeInTheDocument();
 	});
 
+	it('hides the Home Assistant settings link outside Ingress', async () => {
+		render(SettingsPage);
+
+		await expect
+			.element(page.getByRole('link', { name: 'Home Assistant' }))
+			.not.toBeInTheDocument();
+	});
+
+	it('shows the Home Assistant settings link under Ingress', async () => {
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+
+		render(SettingsPage);
+
+		const link = page.getByRole('link', { name: 'Home Assistant' }).element() as HTMLAnchorElement;
+		expect(link.getAttribute('href')).toBe('/settings/home-assistant');
+	});
+
 	it('shows the configured server URL and changing it clears the token, server URL, and navigates', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);

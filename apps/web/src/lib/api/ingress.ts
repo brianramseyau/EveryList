@@ -24,6 +24,37 @@ export function isIngress(): boolean {
 	return ingressBase() !== '';
 }
 
+const IMPLICIT_HA_SIGN_IN_SUPPRESSED_KEY = 'everylist:haImplicitSignInSuppressed';
+
+/**
+ * Marks this browser session as "don't silently sign back in" — set by `logout()` when a linked
+ * user explicitly logs out under Ingress, so `+layout.svelte`'s implicit sign-in
+ * (`attemptImplicitHaSignIn`) doesn't immediately reclaim the session on the very next Ingress
+ * page load, which would otherwise make "log out" a no-op for anyone whose HA account is linked.
+ * `sessionStorage`, not `localStorage`: the suppression only needs to survive this tab/session,
+ * the same durability choice `ingress_service.ts`'s SW-reload-once flag already uses for a similar
+ * "only matters for the current session" case.
+ */
+export function suppressImplicitHaSignIn(): void {
+	if (!hasWindow()) return;
+	try {
+		window.sessionStorage.setItem(IMPLICIT_HA_SIGN_IN_SUPPRESSED_KEY, '1');
+	} catch {
+		// Storage unavailable (private browsing, etc.) — implicit sign-in staying re-enabled is a
+		// minor inconvenience, not worth failing logout over.
+	}
+}
+
+/** See `suppressImplicitHaSignIn` above. */
+export function isImplicitHaSignInSuppressed(): boolean {
+	if (!hasWindow()) return false;
+	try {
+		return window.sessionStorage.getItem(IMPLICIT_HA_SIGN_IN_SUPPRESSED_KEY) === '1';
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Strips the Ingress prefix (if any) from a pathname, collapsing any doubled slash Supervisor's
  * own Ingress panel can produce (see hooks.ts's `reroute`, which uses this same logic to decide

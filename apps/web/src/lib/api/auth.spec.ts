@@ -3,15 +3,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('./client', () => ({ apiPost: vi.fn(), apiGet: vi.fn(), apiPatch: vi.fn() }));
 vi.mock('./token', () => ({ setToken: vi.fn(), clearToken: vi.fn() }));
 vi.mock('../offline/db', () => ({ clearLocalData: vi.fn() }));
+vi.mock('./ingress', () => ({ isIngress: vi.fn(), suppressImplicitHaSignIn: vi.fn() }));
 
 const { apiPost, apiGet, apiPatch } = await import('./client');
 const { setToken, clearToken } = await import('./token');
 const { clearLocalData } = await import('../offline/db');
+const { isIngress, suppressImplicitHaSignIn } = await import('./ingress');
 const {
 	changePassword,
 	fetchProfile,
 	forgotPassword,
 	login,
+	loginWithHomeAssistant,
+	loginWithHomeAssistantIdentity,
 	logout,
 	resetPassword,
 	signup,
@@ -60,6 +64,32 @@ describe('auth', () => {
 		expect(setToken).toHaveBeenCalledWith('tok-123');
 	});
 
+	it('loginWithHomeAssistant posts the HA credentials and stores the returned token', async () => {
+		vi.mocked(apiPost).mockResolvedValue(authResponse);
+
+		const input = { username: 'alice', password: 'secret' };
+		await expect(loginWithHomeAssistant(input)).resolves.toEqual(authResponse);
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/auth/login-with-home-assistant', input);
+		expect(setToken).toHaveBeenCalledWith('tok-123');
+	});
+
+	it('loginWithHomeAssistantIdentity posts with no body and stores the returned token', async () => {
+		vi.mocked(apiPost).mockResolvedValue(authResponse);
+
+		await expect(loginWithHomeAssistantIdentity()).resolves.toEqual(authResponse);
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/auth/login-with-home-assistant-identity');
+		expect(setToken).toHaveBeenCalledWith('tok-123');
+	});
+
+	it('loginWithHomeAssistantIdentity rejects without storing a token when there is no match', async () => {
+		vi.mocked(apiPost).mockRejectedValue(new Error('not linked'));
+
+		await expect(loginWithHomeAssistantIdentity()).rejects.toThrow('not linked');
+		expect(setToken).not.toHaveBeenCalled();
+	});
+
 	it('logout clears the token and purges the local db even if the request fails', async () => {
 		vi.mocked(apiPost).mockRejectedValue(new Error('network error'));
 
@@ -72,11 +102,22 @@ describe('auth', () => {
 
 	it('logout clears the token and purges the local db on success too', async () => {
 		vi.mocked(apiPost).mockResolvedValue(undefined);
+		vi.mocked(isIngress).mockReturnValue(false);
 
 		await logout();
 
 		expect(clearToken).toHaveBeenCalled();
 		expect(clearLocalData).toHaveBeenCalled();
+		expect(suppressImplicitHaSignIn).not.toHaveBeenCalled();
+	});
+
+	it('logout also suppresses implicit Home Assistant sign-in under Ingress', async () => {
+		vi.mocked(apiPost).mockResolvedValue(undefined);
+		vi.mocked(isIngress).mockReturnValue(true);
+
+		await logout();
+
+		expect(suppressImplicitHaSignIn).toHaveBeenCalled();
 	});
 
 	it('fetchProfile GETs the current account', () => {

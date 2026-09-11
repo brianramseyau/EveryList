@@ -6,11 +6,11 @@ import { ApiError } from '$lib/api/client';
 const mockPageState = vi.hoisted(() => ({ url: { searchParams: new URLSearchParams() } }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/state', () => ({ page: mockPageState }));
-vi.mock('$lib/api/auth', () => ({ login: vi.fn() }));
+vi.mock('$lib/api/auth', () => ({ login: vi.fn(), loginWithHomeAssistant: vi.fn() }));
 vi.mock('$lib/api/meta', () => ({ fetchMeta: vi.fn() }));
 
 const { goto } = await import('$app/navigation');
-const { login } = await import('$lib/api/auth');
+const { login, loginWithHomeAssistant } = await import('$lib/api/auth');
 const { fetchMeta } = await import('$lib/api/meta');
 const LoginPage = (await import('./+page.svelte')).default;
 
@@ -28,6 +28,7 @@ describe('Login +page.svelte', () => {
 
 	afterEach(() => {
 		vi.clearAllMocks();
+		delete window.__EVERYLIST_INGRESS_BASE__;
 	});
 
 	it('logs in and navigates to /lists', async () => {
@@ -141,6 +142,77 @@ describe('Login +page.svelte', () => {
 		await page.getByLabelText('Email').fill('a@example.com');
 		await page.getByLabelText('Password').fill('wrong-password');
 		await page.getByRole('button', { name: 'Log in' }).click();
+
+		await expect
+			.element(page.getByText('Something went wrong. Please try again.'))
+			.toBeInTheDocument();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('hides the "sign in with a different Home Assistant account" option outside Ingress', async () => {
+		render(LoginPage);
+
+		await expect
+			.element(page.getByText('Sign in with a different Home Assistant account'))
+			.not.toBeInTheDocument();
+	});
+
+	it('reveals the Home Assistant form under Ingress, signs in, and navigates with the ingress prefix', async () => {
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+		vi.mocked(loginWithHomeAssistant).mockResolvedValue({
+			user: {
+				id: 1,
+				email: 'a@example.com',
+				fullName: null,
+				initials: 'A',
+				createdAt: '2026-08-01T00:00:00.000Z',
+				updatedAt: null
+			},
+			token: 'tok'
+		});
+
+		render(LoginPage);
+
+		await page.getByText('Sign in with a different Home Assistant account').click();
+		await page.getByLabelText('Home Assistant username').fill('alice');
+		await page.getByLabelText('Home Assistant password').fill('secret');
+		await page.getByRole('button', { name: 'Sign in with Home Assistant' }).click();
+
+		await expect.poll(() => vi.mocked(loginWithHomeAssistant).mock.calls.length).toBe(1);
+		expect(loginWithHomeAssistant).toHaveBeenCalledWith({ username: 'alice', password: 'secret' });
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(goto).toHaveBeenCalledWith('/api/hassio_ingress/abc123/lists');
+	});
+
+	it('shows the API error message when the Home Assistant sign-in fails', async () => {
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+		vi.mocked(loginWithHomeAssistant).mockRejectedValue(
+			new ApiError(401, 'Invalid Home Assistant username or password.')
+		);
+
+		render(LoginPage);
+
+		await page.getByText('Sign in with a different Home Assistant account').click();
+		await page.getByLabelText('Home Assistant username').fill('alice');
+		await page.getByLabelText('Home Assistant password').fill('wrong');
+		await page.getByRole('button', { name: 'Sign in with Home Assistant' }).click();
+
+		await expect
+			.element(page.getByText('Invalid Home Assistant username or password.'))
+			.toBeInTheDocument();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('shows a generic error message when the Home Assistant sign-in fails without an ApiError', async () => {
+		window.__EVERYLIST_INGRESS_BASE__ = '/api/hassio_ingress/abc123';
+		vi.mocked(loginWithHomeAssistant).mockRejectedValue(new TypeError('network down'));
+
+		render(LoginPage);
+
+		await page.getByText('Sign in with a different Home Assistant account').click();
+		await page.getByLabelText('Home Assistant username').fill('alice');
+		await page.getByLabelText('Home Assistant password').fill('secret');
+		await page.getByRole('button', { name: 'Sign in with Home Assistant' }).click();
 
 		await expect
 			.element(page.getByText('Something went wrong. Please try again.'))

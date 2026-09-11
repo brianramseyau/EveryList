@@ -71,3 +71,19 @@ export const passwordChangeThrottle = limiter.define('accountPassword', (ctx) =>
   const key = ctx.auth.user?.id ?? ctx.request.ip()
   return limiter.allowRequests(10).every('1 minute').usingKey(String(key))
 })
+
+/**
+ * Applied to `PATCH ha-link` only (not the `GET` alongside it, which takes no caller-supplied
+ * credential and shouldn't share a budget with it) — the manual-linking path there checks a
+ * caller-supplied Home Assistant password via `auth_api` (`ha_link_controller.ts`), the same
+ * password-oracle shape `passwordChangeThrottle` above exists for. Keyed by user id rather than IP
+ * for the same reason: the threat model is "an attacker who already has a stolen EveryList session
+ * token is now guessing a *different* system's (Home Assistant's) password with it" — an IP-keyed
+ * limit would also cap this account's own legitimate `GET ha-link` reads and, in an IPv4-scarce/NAT
+ * environment, several unrelated accounts sharing an address.
+ */
+export const haLinkThrottle = limiter.define('haLink', (ctx) => {
+  if (app.inTest) return limiter.noLimit()
+  const key = ctx.auth.user?.id ?? ctx.request.ip()
+  return limiter.allowRequests(10).every('1 minute').usingKey(String(key))
+})

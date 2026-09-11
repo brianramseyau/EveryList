@@ -958,13 +958,55 @@ above:
      not a small fix, so it's left for a future phase rather than bundled
      into this Ingress-stabilization pass.
 
+## Sign in with Home Assistant (implicit SSO + `auth_api`)
+
+Built as a follow-up phase once Ingress itself was confirmed working live
+(#224/#225/#226) — the deferred `auth_api` finding above, expanded during
+planning after noticing some other HA add-ons (e.g. AdGuard Home) skip
+their own login screen under Ingress entirely.
+
+That turned out to be a second, distinct, genuinely documented mechanism,
+confirmed against Supervisor's own source rather than assumed: every
+Ingress-proxied request carries `X-Remote-User-Id` / `X-Remote-User-Name` /
+`X-Remote-User-Display-Name` headers identifying the Home-Assistant-
+authenticated visitor, added unconditionally by Supervisor whenever session
+data exists — no add-on config flag required
+([home-assistant/supervisor#4152](https://github.com/home-assistant/supervisor/pull/4152),
+`HEADER_REMOTE_USER_*` in `supervisor/const.py`).
+
+Two sign-in paths, one linking table (`user_hass_links` — a per-user
+opt-in row, not a column on `users`), both scoped to viewing EveryList
+through Ingress:
+
+1. **Implicit sign-in** — if the visitor's HA username is already linked,
+   sign them in silently on page load, no form at all
+   (`ha_auth_controller.ts#loginImplicit`, called from
+   `+layout.svelte`'s `attemptImplicitHaSignIn`).
+2. **Explicit sign-in** — a username/password form, validated against HA's
+   real accounts via `auth_api` (`supervisor_auth_client.ts`,
+   `ha_auth_controller.ts#login`) — for a shared/kiosk browser where the
+   active HA session belongs to someone other than the EveryList account
+   being signed into. Also how a first link gets proven when there's no
+   automatically-detected identity to link one-click.
+
+Trust boundary: the remote-user headers only mean anything on a request
+that genuinely came through Supervisor's Ingress proxy — the add-on's
+optional direct port bypasses Supervisor entirely, so
+`getValidatedRemoteUser()` (`ingress_service.ts`) only trusts them when
+`x-ingress-path` is also present and passes `isValidIngressPath`, reusing
+that existing validated-ingress-request check rather than trusting the
+headers on their own.
+
+Caveat, documented in `DOCS.md` rather than solved: neither path enforces
+Home Assistant's own two-factor authentication.
+
 ## Out of scope (future)
 
 Submitting to the official Home Assistant Community Add-ons repository (a
 much higher bar — code review, its own contribution guidelines — not
 needed for self-hosting via a personal add-on repository).
 
-Validating login against Home Assistant's own user accounts via the
-Supervisor `auth_api` endpoint (see point 4 above) — a genuine new login
-flow, scoped as a future enhancement rather than part of Ingress
-stabilization.
+Either Home-Assistant-backed sign-in path (see above) working outside
+Ingress — e.g. via the optional direct port. Both are deliberately scoped
+to Ingress only; direct-port access keeps using EveryList's own
+email/password login.
