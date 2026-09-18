@@ -7,13 +7,18 @@
 	import { getToken } from '$lib/api/token';
 	import { bulkImportCategories } from '$lib/api/categories';
 	import { ApiError } from '$lib/api/client';
+	import { createDirtyGuard } from '$lib/dirty-guard.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	const listId = $derived(Number(page.params.id));
 
 	let pasteText = $state('');
 	let importing = $state(false);
 	let error = $state<string | null>(null);
+	let saved = $state(false);
+
+	const dirtyGuard = createDirtyGuard(() => !saved && pasteText.trim() !== '');
 
 	onMount(() => {
 		if (!getToken()) {
@@ -30,6 +35,7 @@
 		importing = true;
 		try {
 			await bulkImportCategories(listId, pasteText);
+			saved = true;
 			await goto(resolve('/lists/[id]/categories', { id: String(listId) }));
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to import categories.';
@@ -37,6 +43,16 @@
 		}
 	}
 </script>
+
+<svelte:window onbeforeunload={dirtyGuard.beforeunload} />
+
+{#if dirtyGuard.open}
+	<ConfirmDialog
+		message="You have unsaved pasted categories. Discard them?"
+		onConfirm={dirtyGuard.confirmDiscard}
+		onCancel={dirtyGuard.cancelDiscard}
+	/>
+{/if}
 
 <main
 	class="mx-auto flex h-dvh app-max-w flex-col gap-4 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"

@@ -1,14 +1,33 @@
 import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import type { BeforeNavigate } from '@sveltejs/kit';
 import type { ItemDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 import { markListOrigin } from '$lib/nav-direction';
 
+const beforeNavigateHandlers: Array<(navigation: BeforeNavigate) => void> = [];
+
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn(),
+	beforeNavigate: (handler: (navigation: BeforeNavigate) => void) => {
+		beforeNavigateHandlers.push(handler);
+	}
+}));
 vi.mock('$lib/api/items', () => ({ importItems: vi.fn() }));
+
+function makeNavigation(to: string | null): BeforeNavigate {
+	return {
+		from: null,
+		to: to ? { url: new URL(to, 'http://localhost') } : null,
+		type: 'link',
+		willUnload: false,
+		complete: Promise.resolve(),
+		cancel: vi.fn()
+	} as unknown as BeforeNavigate;
+}
 
 const { importItems } = await import('$lib/api/items');
 const { goto } = await import('$app/navigation');
@@ -41,6 +60,7 @@ describe('Paste Items +page.svelte', () => {
 	beforeEach(() => {
 		setToken('test-token');
 		vi.mocked(goto).mockResolvedValue(undefined);
+		beforeNavigateHandlers.length = 0;
 	});
 
 	afterEach(() => {
@@ -134,6 +154,50 @@ describe('Paste Items +page.svelte', () => {
 
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 		expect(goto).toHaveBeenCalledWith('/lists/1');
+	});
+
+	it('prompts before discarding unsaved pasted text, and keeps it on cancel', async () => {
+		render(ImportPage);
+		await page.getByPlaceholder('One item per line, or paste an AnyList list').fill('Milk');
+
+		const handler = beforeNavigateHandlers.at(-1)!;
+		const navigation = makeNavigation('/lists/1');
+		handler(navigation);
+
+		expect(navigation.cancel).toHaveBeenCalled();
+		await expect
+			.element(page.getByText('You have unsaved pasted items. Discard them?'))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+		await expect
+			.element(page.getByPlaceholder('One item per line, or paste an AnyList list'))
+			.toHaveValue('Milk');
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('navigates away once discarding pasted text is confirmed', async () => {
+		render(ImportPage);
+		await page.getByPlaceholder('One item per line, or paste an AnyList list').fill('Milk');
+
+		const handler = beforeNavigateHandlers.at(-1)!;
+		handler(makeNavigation('/lists/1'));
+		await page.getByRole('button', { name: 'Discard' }).click();
+
+		expect(goto).toHaveBeenCalledTimes(1);
+	});
+
+	it('warns before an actual tab close/refresh only while the paste draft is dirty', async () => {
+		render(ImportPage);
+
+		const clean = new Event('beforeunload', { cancelable: true });
+		window.dispatchEvent(clean);
+		expect(clean.defaultPrevented).toBe(false);
+
+		await page.getByPlaceholder('One item per line, or paste an AnyList list').fill('Milk');
+		const dirty = new Event('beforeunload', { cancelable: true });
+		window.dispatchEvent(dirty);
+		expect(dirty.defaultPrevented).toBe(true);
 	});
 
 	it('goes back in history instead when this page was reached from the list', async () => {
