@@ -203,17 +203,29 @@
 			return;
 		}
 		cameFromList = consumeListOrigin();
-		void loadAll();
+	});
+
+	// Loads (or reloads) whenever the route's itemId changes, not just once on mount —
+	// SvelteKit reuses this mounted component for a same-route navigation between two different
+	// items (e.g. +layout.svelte's onTap/onReschedule landing here for a *different* item while
+	// this page is already open on one), and without this `item` would keep showing the previous
+	// item's data indefinitely instead of loading the new one.
+	$effect(() => {
+		if (getToken()) void loadAll();
 	});
 
 	// Reacts to the `reschedule` search param directly, rather than only checking it once inside
-	// loadAll()'s onMount — the deadline notification's Reschedule action navigates here with
-	// `?reschedule=1` (see +layout.svelte's onReschedule / push-sw.js), but if the app is already
-	// sitting on this exact item route, SvelteKit reuses the mounted component for a search-param-
-	// only navigation and neither onMount nor loadAll() re-run, so a param-only check confined to
-	// loadAll() would silently never open the overlay for that case.
+	// loadAll() — the deadline notification's Reschedule action navigates here with `?reschedule=1`
+	// (see +layout.svelte's onReschedule / push-sw.js), but if the app is already sitting on this
+	// exact item route, SvelteKit reuses the mounted component for a search-param-only navigation,
+	// so a param-only check confined to loadAll() would silently never open the overlay for that
+	// case. Guarded on `item.id === itemId`, not just `item?.deadline`, so a same-route navigation
+	// to a *different* item (itemId already updated, but the previous item's `loadAll()` hasn't
+	// resolved yet) can't briefly open the overlay against stale, mismatched item data.
 	$effect(() => {
-		if (item?.deadline && page.url.searchParams.get('reschedule')) rescheduleOpen = true;
+		if (item?.id === itemId && item.deadline && page.url.searchParams.get('reschedule')) {
+			rescheduleOpen = true;
+		}
 	});
 
 	// Prefers a real `history.back()` over pushing a fresh navigation back to

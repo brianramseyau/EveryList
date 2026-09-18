@@ -280,7 +280,7 @@ describe('RescheduleOverlay.svelte', () => {
 		expect(document.activeElement).toBe(middle);
 	});
 
-	it('does nothing on Tab when every button is disabled mid-save', async () => {
+	it('holds focus on the dialog itself when Tab is pressed with every button disabled mid-save', async () => {
 		const onClose = vi.fn();
 		let resolveUpdate!: () => void;
 		vi.mocked(updateItem).mockReturnValue(
@@ -296,9 +296,12 @@ describe('RescheduleOverlay.svelte', () => {
 		});
 
 		await page.getByRole('button', { name: /Tomorrow/ }).click();
-		// Every button (including Cancel) is disabled while saving, so no focusable element
-		// exists for Tab to wrap between — exercises that guard without throwing.
-		expect(() => tab()).not.toThrow();
+		// Every button (including Cancel) is disabled while saving — the click that started the
+		// save already blurred it back to `body`, so without the dialog itself catching focus here,
+		// this Tab would otherwise walk straight into the page behind the modal.
+		tab();
+
+		expect(document.activeElement).toBe(page.getByRole('alertdialog').element());
 
 		resolveUpdate();
 		await Promise.resolve();

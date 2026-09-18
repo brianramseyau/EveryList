@@ -69,7 +69,16 @@
 		const focusable = dialogEl.querySelectorAll<HTMLElement>(
 			'button:not([disabled]), input:not([disabled])'
 		);
-		if (focusable.length === 0) return;
+		if (focusable.length === 0) {
+			// Every button (including Cancel) disables itself while saving, so there's nothing to
+			// wrap Tab between — but the click that started the save already blurred the (now
+			// disabled) button back to `body`, so without this a Tab here would walk straight into
+			// the page behind the dialog. Holding focus on the dialog itself keeps it trapped for
+			// that window.
+			event.preventDefault();
+			dialogEl.focus();
+			return;
+		}
 		const first = focusable[0];
 		const last = focusable[focusable.length - 1];
 		if (event.shiftKey && document.activeElement === first) {
@@ -119,6 +128,7 @@
 <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 print:hidden">
 	<div
 		bind:this={dialogEl}
+		tabindex="-1"
 		class="flex w-full max-w-sm flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800"
 		role="alertdialog"
 		aria-modal="true"
