@@ -20,10 +20,12 @@
 		resyncDeadlineNotifications
 	} from '$lib/notifications/sync';
 	import { consumeListOrigin } from '$lib/nav-direction';
+	import { createDirtyGuard } from '$lib/dirty-guard.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import ItemFields from '$lib/components/ItemFields.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Loader from '$lib/components/Loader.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	const listId = $derived(Number(page.params.id));
 	const itemId = $derived(Number(page.params.itemId));
@@ -71,6 +73,38 @@
 	let draftDeadlineDate = $state('');
 	let draftDeadlineTime = $state('');
 
+	// Snapshot of the draft fields as loaded, for the dirty check below —
+	// plain (non-reactive) since it's only written once, right after the
+	// draft fields it's compared against.
+	let originalDraft: {
+		name: string;
+		quantity: string;
+		notes: string;
+		price: string;
+		categoryId: number | null;
+		storeId: number | null;
+		deadlineDate: string;
+		deadlineTime: string;
+	} | null = null;
+	let saved = $state(false);
+
+	const isDirty = $derived.by(() => {
+		const original = originalDraft;
+		if (saved || !original) return false;
+		return (
+			draftName !== original.name ||
+			draftQuantity !== original.quantity ||
+			draftNotes !== original.notes ||
+			draftPrice !== original.price ||
+			draftCategoryId !== original.categoryId ||
+			draftStoreId !== original.storeId ||
+			draftDeadlineDate !== original.deadlineDate ||
+			draftDeadlineTime !== original.deadlineTime
+		);
+	});
+
+	const dirtyGuard = createDirtyGuard(() => isDirty);
+
 	// Offline-first: an item opened from the list-detail page is already in
 	// Dexie, so this reads locally first (works with zero network, matching
 	// every other list-scoped screen) and only falls back to a full list
@@ -112,6 +146,16 @@
 				const deadline = item.deadline ? splitDeadline(item.deadline) : null;
 				draftDeadlineDate = deadline?.date ?? '';
 				draftDeadlineTime = deadline?.time ?? '';
+				originalDraft = {
+					name: draftName,
+					quantity: draftQuantity,
+					notes: draftNotes,
+					price: draftPrice,
+					categoryId: draftCategoryId,
+					storeId: draftStoreId,
+					deadlineDate: draftDeadlineDate,
+					deadlineTime: draftDeadlineTime
+				};
 				error = null;
 			} else {
 				error = 'Item not found.';
@@ -176,6 +220,7 @@
 			// syncDeadlineNotifications) — long enough that a near-term deadline can pass, and its
 			// notification silently never get scheduled at all, before any of those triggers fire.
 			if (getDeadlineNotificationsPreference()) void resyncDeadlineNotifications();
+			saved = true;
 			await returnToList();
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to save item.';
@@ -188,10 +233,21 @@
 		moving = true;
 		try {
 			await moveItemToList(listId, itemId, draftMoveTargetId);
+			// The item now belongs to the destination list server-side — an
+			// unsaved draft here is stale regardless, and letting the guard
+			// intercept this goto() would leave the user stuck on this now-wrong
+			// list/item pairing if they chose Cancel.
+			saved = true;
 			await goto(resolve('/lists/[id]', { id: String(draftMoveTargetId) }));
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to move item.';
 			moving = false;
+			// The move itself may have already succeeded server-side before this
+			// goto() rejected — either way, the page is still mounted and further
+			// edits here are unverified against whichever list the item now
+			// actually belongs to, so re-arm the guard rather than leave it
+			// permanently bypassed.
+			saved = false;
 		}
 	}
 
@@ -234,6 +290,16 @@
 		}
 	}
 </script>
+
+<svelte:window onbeforeunload={dirtyGuard.beforeunload} />
+
+{#if dirtyGuard.open}
+	<ConfirmDialog
+		message="You have unsaved changes to this item. Discard them?"
+		onConfirm={dirtyGuard.confirmDiscard}
+		onCancel={dirtyGuard.cancelDiscard}
+	/>
+{/if}
 
 <main
 	class="mx-auto flex app-max-w flex-col gap-4 px-8 pt-[max(env(safe-area-inset-top),2rem)] pb-8"

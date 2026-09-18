@@ -1,13 +1,21 @@
 import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import type { BeforeNavigate } from '@sveltejs/kit';
 import type { CategoryDto, FavoriteItemDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 import { markListOrigin } from '$lib/nav-direction';
 
+const beforeNavigateHandlers: Array<(navigation: BeforeNavigate) => void> = [];
+
 vi.mock('$app/state', () => ({ page: { params: { id: '1', itemId: '100' } } }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn(),
+	beforeNavigate: (handler: (navigation: BeforeNavigate) => void) => {
+		beforeNavigateHandlers.push(handler);
+	}
+}));
 vi.mock('$lib/api/lists', () => ({ fetchList: vi.fn(), fetchLists: vi.fn() }));
 vi.mock('$lib/api/categories', () => ({ fetchCategories: vi.fn() }));
 vi.mock('$lib/api/items', () => ({
@@ -107,6 +115,17 @@ function makeFavorite(
 	};
 }
 
+function makeNavigation(to: string | null): BeforeNavigate {
+	return {
+		from: null,
+		to: to ? { url: new URL(to, 'http://localhost') } : null,
+		type: 'link',
+		willUnload: false,
+		complete: Promise.resolve(),
+		cancel: vi.fn()
+	} as unknown as BeforeNavigate;
+}
+
 function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): ItemDto {
 	return {
 		listId: 1,
@@ -140,6 +159,7 @@ describe('Item detail +page.svelte', () => {
 		vi.mocked(goto).mockResolvedValue(undefined);
 		vi.mocked(getDeadlineNotificationsPreference).mockReturnValue(false);
 		vi.mocked(resyncDeadlineNotifications).mockResolvedValue(undefined);
+		beforeNavigateHandlers.length = 0;
 	});
 
 	afterEach(async () => {
@@ -916,6 +936,79 @@ describe('Item detail +page.svelte', () => {
 		await page.getByRole('button', { name: 'Move' }).click();
 
 		await expect.element(page.getByText('No edit access to that list')).toBeInTheDocument();
+	});
+
+	it('prompts before discarding an unsaved edit, and keeps the draft on cancel', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+		await page.getByLabelText('Notes (optional)').fill('Check they are ripe');
+
+		const handler = beforeNavigateHandlers.at(-1)!;
+		const navigation = makeNavigation('/lists/1');
+		handler(navigation);
+
+		expect(navigation.cancel).toHaveBeenCalled();
+		await expect
+			.element(page.getByText('You have unsaved changes to this item. Discard them?'))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+		await expect
+			.element(page.getByLabelText('Notes (optional)'))
+			.toHaveValue('Check they are ripe');
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('navigates away once discarding the edit is confirmed', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+		await page.getByLabelText('Notes (optional)').fill('Check they are ripe');
+
+		const handler = beforeNavigateHandlers.at(-1)!;
+		handler(makeNavigation('/lists/1'));
+		await page.getByRole('button', { name: 'Discard' }).click();
+
+		expect(goto).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not prompt when leaving after a successful save', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+		await page.getByLabelText('Notes (optional)').fill('Check they are ripe');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		const handler = beforeNavigateHandlers.at(-1)!;
+		const navigation = makeNavigation('/lists/1');
+		handler(navigation);
+		expect(navigation.cancel).not.toHaveBeenCalled();
+	});
+
+	it('warns before an actual tab close/refresh only while the item draft is dirty', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		const clean = new Event('beforeunload', { cancelable: true });
+		window.dispatchEvent(clean);
+		expect(clean.defaultPrevented).toBe(false);
+
+		await page.getByLabelText('Notes (optional)').fill('Check they are ripe');
+		const dirty = new Event('beforeunload', { cancelable: true });
+		window.dispatchEvent(dirty);
+		expect(dirty.defaultPrevented).toBe(true);
 	});
 
 	it('disables move-to-list while the server is unavailable', async () => {

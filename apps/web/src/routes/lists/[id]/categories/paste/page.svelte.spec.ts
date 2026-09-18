@@ -1,13 +1,32 @@
 import { page } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import type { BeforeNavigate } from '@sveltejs/kit';
 import type { CategoryDto } from '@everylist/shared';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
 
+const beforeNavigateHandlers: Array<(navigation: BeforeNavigate) => void> = [];
+
 vi.mock('$app/state', () => ({ page: { params: { id: '1' } } }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn(),
+	beforeNavigate: (handler: (navigation: BeforeNavigate) => void) => {
+		beforeNavigateHandlers.push(handler);
+	}
+}));
 vi.mock('$lib/api/categories', () => ({ bulkImportCategories: vi.fn() }));
+
+function makeNavigation(to: string | null): BeforeNavigate {
+	return {
+		from: null,
+		to: to ? { url: new URL(to, 'http://localhost') } : null,
+		type: 'link',
+		willUnload: false,
+		complete: Promise.resolve(),
+		cancel: vi.fn()
+	} as unknown as BeforeNavigate;
+}
 
 const { bulkImportCategories } = await import('$lib/api/categories');
 const { goto } = await import('$app/navigation');
@@ -35,6 +54,7 @@ describe('Paste Categories +page.svelte', () => {
 	beforeEach(() => {
 		setToken('test-token');
 		vi.mocked(goto).mockResolvedValue(undefined);
+		beforeNavigateHandlers.length = 0;
 	});
 
 	afterEach(() => {
@@ -113,6 +133,64 @@ describe('Paste Categories +page.svelte', () => {
 		await page.getByRole('button', { name: 'Save' }).click();
 
 		await expect.element(page.getByText('Could not parse categories')).toBeInTheDocument();
+	});
+
+	it('prompts before discarding unsaved pasted text, and keeps it on cancel', async () => {
+		render(PastePage);
+		await page.getByPlaceholder('One category per line').fill('Produce');
+
+		const handler = beforeNavigateHandlers.at(-1)!;
+		const navigation = makeNavigation('/lists/1/categories');
+		handler(navigation);
+
+		expect(navigation.cancel).toHaveBeenCalled();
+		await expect
+			.element(page.getByText('You have unsaved pasted categories. Discard them?'))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+		await expect.element(page.getByPlaceholder('One category per line')).toHaveValue('Produce');
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('navigates away once discarding is confirmed', async () => {
+		render(PastePage);
+		await page.getByPlaceholder('One category per line').fill('Produce');
+
+		const handler = beforeNavigateHandlers.at(-1)!;
+		handler(makeNavigation('/lists/1/categories'));
+		await page.getByRole('button', { name: 'Discard' }).click();
+
+		expect(goto).toHaveBeenCalledTimes(1);
+	});
+
+	it('warns before an actual tab close/refresh only while the paste draft is dirty', async () => {
+		render(PastePage);
+
+		const clean = new Event('beforeunload', { cancelable: true });
+		window.dispatchEvent(clean);
+		expect(clean.defaultPrevented).toBe(false);
+
+		await page.getByPlaceholder('One category per line').fill('Produce');
+		const dirty = new Event('beforeunload', { cancelable: true });
+		window.dispatchEvent(dirty);
+		expect(dirty.defaultPrevented).toBe(true);
+	});
+
+	it('does not prompt when leaving after a successful save', async () => {
+		vi.mocked(bulkImportCategories).mockResolvedValue([
+			makeCategory({ id: 10, name: 'Produce', icon: 'fruitCherries' })
+		]);
+
+		render(PastePage);
+		await page.getByPlaceholder('One category per line').fill('Produce');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		const handler = beforeNavigateHandlers.at(-1)!;
+		const navigation = makeNavigation('/lists/1/categories');
+		handler(navigation);
+		expect(navigation.cancel).not.toHaveBeenCalled();
 	});
 
 	it('links Cancel back to the categories list', async () => {
