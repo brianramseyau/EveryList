@@ -29,12 +29,13 @@ import java.util.concurrent.Executors;
  *  handler already does for the PWA build (auth via a mirrored token, a direct PATCH, no window
  *  opened) — see {@link AuthPrefs}.
  *
- *  "Reschedule" (native.ts's `SNOOZE_ACTION_ID`, kept as the string id `"snooze"` for continuity
- *  with already-scheduled notifications) is also registered `foreground: false` so the OS still
- *  routes it here rather than to {@link MainActivity} — but unlike Complete, it needs UI (a
- *  choice of shortcuts, not a fixed +1hr offset), so this receiver just launches
- *  {@link RescheduleActivity} instead of handling it directly, the same "instant popup, no full
- *  app launch" trick {@link QuickAddActivity} already uses for the widget's "+" button. */
+ *  "Reschedule" (native.ts's `SNOOZE_ACTION_ID`) is also registered `foreground: false`, but it
+ *  needs UI (a choice of shortcuts, not a fixed +1hr offset) — the patch gives it its own special
+ *  case that launches {@link RescheduleActivity} directly via `PendingIntent.getActivity()`
+ *  instead of routing through this receiver at all. A BroadcastReceiver calling `startActivity()`
+ *  on tap is exactly the "notification trampoline" pattern Android 12+'s background-activity-
+ *  launch restrictions block, which an earlier version of this class hit in practice. So this
+ *  receiver only ever sees `"complete"`. */
 public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
 
     private static final String FALLBACK_CHANNEL_ID = "deadline_action_fallback";
@@ -110,8 +111,6 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
                 HttpJson.request(
                     "PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token, body.toString()
                 );
-            } else if ("snooze".equals(actionId)) {
-                launchReschedulePopup(context, listId, itemId, notificationJson);
             }
         } catch (IOException | org.json.JSONException | RuntimeException e) {
             // RuntimeException here is deliberately broad: this runs on a background thread with
@@ -121,19 +120,6 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
             android.util.Log.e("EveryList", "Deadline action " + actionId + " failed for item " + itemId, e);
             showFallbackNotification(context);
         }
-    }
-
-    /** Launches {@link RescheduleActivity} — a floating popup, not the full app — carrying enough
-     *  of the original notification for it to re-fetch the item's live deadline and reschedule a
-     *  follow-up notification itself. `FLAG_ACTIVITY_NEW_TASK` is required since this runs from a
-     *  BroadcastReceiver context with no existing Activity task to attach to. */
-    private void launchReschedulePopup(Context context, long listId, long itemId, String notificationJson) {
-        Intent intent = new Intent(context, RescheduleActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        intent.putExtra(RescheduleActivity.EXTRA_LIST_ID, listId);
-        intent.putExtra(RescheduleActivity.EXTRA_ITEM_ID, itemId);
-        intent.putExtra(RescheduleActivity.EXTRA_NOTIFICATION_JSON, notificationJson);
-        context.startActivity(intent);
     }
 
     /** Mirrors push-sw.js's `patchItem` catch branch — the triggering notification is already

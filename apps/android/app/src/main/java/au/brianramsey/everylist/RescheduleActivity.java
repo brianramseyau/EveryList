@@ -34,21 +34,27 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
 
-/** The deadline notification's "Reschedule" action popup — launched by
- *  {@link DeadlineNotificationActionReceiver} instead of that receiver PATCHing an instant +1hr
+/** The deadline notification's "Reschedule" action popup — launched directly by a patched
+ *  {@code @capacitor/local-notifications} (see {@code patches/@capacitor__local-notifications.patch})
+ *  via `PendingIntent.getActivity()` straight from the tap, instead of PATCHing an instant +1hr
  *  snooze itself, so the user gets a choice of shortcuts (1 hour, tomorrow, this weekend, next
- *  week, a custom date/time) rather than a fixed offset. Styled as a floating card
+ *  week, a custom date/time) rather than a fixed offset. Must be launched this way rather than via
+ *  {@link DeadlineNotificationActionReceiver} calling {@code startActivity()} — a BroadcastReceiver
+ *  starting an Activity on tap is exactly the "notification trampoline" pattern Android 12+'s
+ *  background-activity-launch restrictions block. Styled as a floating card
  *  (AppTheme.WidgetDialog), same "instant popup over whatever's on screen" pattern as the widget's
  *  "+" quick-add popup (QuickAddActivity) — cold-launching the whole Capacitor WebView just to
  *  show this picker would be slow and would lose the "background action" feel the deadline
  *  notification's other action (Complete) already has. Authenticates with the app's own mirrored
- *  session token ({@link AuthPrefs}), same as the receiver that launches it — not
+ *  session token ({@link AuthPrefs}), same as {@link DeadlineNotificationActionReceiver} — not
  *  {@link WidgetPrefs}'s separately-scoped widget PAT. */
 public class RescheduleActivity extends Activity {
 
-    static final String EXTRA_LIST_ID = "au.brianramsey.everylist.EXTRA_LIST_ID";
-    static final String EXTRA_ITEM_ID = "au.brianramsey.everylist.EXTRA_ITEM_ID";
-    static final String EXTRA_NOTIFICATION_JSON = "au.brianramsey.everylist.EXTRA_NOTIFICATION_JSON";
+    // Matches @capacitor/local-notifications' own NOTIFICATION_OBJ_INTENT_KEY constant value
+    // (LocalNotificationManager.kt — note the upstream typo, "Notfication") — the patch builds
+    // this Activity's launch Intent directly (see the patch file), reusing that same key rather
+    // than introducing a separate one.
+    private static final String EXTRA_NOTIFICATION_JSON = "LocalNotficationObject";
 
     private static final String JS_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
 
@@ -69,6 +75,7 @@ public class RescheduleActivity extends Activity {
     private Button weekendButton;
     private Button nextWeekButton;
     private Button customButton;
+    private View content;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,17 +83,31 @@ public class RescheduleActivity extends Activity {
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
         setContentView(R.layout.reschedule);
 
-        listId = getIntent().getLongExtra(EXTRA_LIST_ID, -1L);
-        itemId = getIntent().getLongExtra(EXTRA_ITEM_ID, -1L);
         notificationJson = getIntent().getStringExtra(EXTRA_NOTIFICATION_JSON);
         token = AuthPrefs.getToken(this);
         serverUrl = AuthPrefs.getServerUrl(this);
 
-        if (listId <= 0 || itemId <= 0 || token == null || serverUrl == null) {
+        try {
+            JSObject notification = new JSObject(notificationJson);
+            JSONObject extra = notification.getJSONObject("extra");
+            listId = extra.getLong("listId");
+            itemId = extra.getLong("itemId");
+        } catch (Exception e) {
+            // Malformed/missing payload — nothing sensible to retry, same reasoning as
+            // DeadlineNotificationActionReceiver's identical guard.
+            android.util.Log.e("EveryList", "Reschedule popup: couldn't parse notification payload", e);
+            showFallbackNotification();
             finish();
             return;
         }
 
+        if (listId <= 0 || itemId <= 0 || token == null || serverUrl == null) {
+            showFallbackNotification();
+            finish();
+            return;
+        }
+
+        content = findViewById(R.id.reschedule_scroll);
         oneHourButton = findViewById(R.id.reschedule_one_hour);
         tomorrowButton = findViewById(R.id.reschedule_tomorrow);
         weekendButton = findViewById(R.id.reschedule_weekend);
@@ -153,7 +174,16 @@ public class RescheduleActivity extends Activity {
         customButton.setEnabled(true);
     }
 
+    // Both pickers hide `content` while shown and restore it on cancel — this floating card's own
+    // background (see reschedule.xml) would otherwise stay visible, dimmed, behind the picker's own
+    // narrower dialog window, showing through around its edges since the two windows are sized and
+    // gravitated independently. They also force their own window back to WRAP_CONTENT after
+    // showing: since neither picker is given an explicit theme, each resolves its window theme from
+    // this Activity's own (AppTheme.WidgetDialog), inheriting its windowMinWidthMajor/Minor="90%" —
+    // stretching the picker's window wider than the fixed-width Material content laid out inside it
+    // expects, leaving a blank strip of window background exposed next to the header.
     private void showCustomPicker() {
+        content.setVisibility(View.INVISIBLE);
         Calendar seed = Calendar.getInstance();
         DatePickerDialog dateDialog = new DatePickerDialog(
             this,
@@ -162,7 +192,16 @@ public class RescheduleActivity extends Activity {
             seed.get(Calendar.MONTH),
             seed.get(Calendar.DAY_OF_MONTH)
         );
+        dateDialog.setOnCancelListener(d -> content.setVisibility(View.VISIBLE));
         dateDialog.show();
+        shrinkToWrapContent(dateDialog);
+    }
+
+    private void shrinkToWrapContent(android.app.Dialog dialog) {
+        WindowManager.LayoutParams params = dialog.getWindow().getAttributes();
+        params.width = WindowManager.LayoutParams.WRAP_CONTENT;
+        params.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        dialog.getWindow().setAttributes(params);
     }
 
     private void showCustomTimePicker(int year, int month, int dayOfMonth) {
@@ -180,7 +219,9 @@ public class RescheduleActivity extends Activity {
         // so the negative button applies the date alone instead of just dismissing.
         timeDialog.setButton(DialogInterface.BUTTON_NEGATIVE, getString(R.string.reschedule_no_time),
             (dialog, which) -> applyShortcut(datePart));
+        timeDialog.setOnCancelListener(d -> content.setVisibility(View.VISIBLE));
         timeDialog.show();
+        shrinkToWrapContent(timeDialog);
     }
 
     private void applyShortcut(String nextDeadline) {
