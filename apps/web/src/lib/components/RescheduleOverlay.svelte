@@ -81,10 +81,16 @@
 		}
 		const first = focusable[0];
 		const last = focusable[focusable.length - 1];
-		if (event.shiftKey && document.activeElement === first) {
+		// `dialogEl` counts as both edges too: a failed save re-enables these buttons but leaves
+		// focus parked on the dialog itself (see the empty-focusable branch above), and without
+		// this only forward Tab from there would be trapped — Shift+Tab would move to whatever's
+		// before the dialog in the page behind it, since `dialogEl` matches neither `first` nor
+		// `last` on its own.
+		const active = document.activeElement;
+		if (event.shiftKey && (active === first || active === dialogEl)) {
 			event.preventDefault();
 			last.focus();
-		} else if (!event.shiftKey && document.activeElement === last) {
+		} else if (!event.shiftKey && (active === last || active === dialogEl)) {
 			event.preventDefault();
 			first.focus();
 		}

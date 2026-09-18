@@ -307,4 +307,37 @@ describe('RescheduleOverlay.svelte', () => {
 		await Promise.resolve();
 		await Promise.resolve();
 	});
+
+	it('still traps Shift+Tab from the dialog itself after a failed save re-enables the buttons', async () => {
+		let rejectUpdate!: (reason: unknown) => void;
+		vi.mocked(updateItem).mockReturnValue(
+			new Promise((_resolve, reject) => {
+				rejectUpdate = reject;
+			})
+		);
+		render(RescheduleOverlay, {
+			listId: 1,
+			itemId: 1,
+			deadline: '2026-09-06T09:00',
+			onClose: vi.fn()
+		});
+
+		await page.getByRole('button', { name: /Tomorrow/ }).click();
+		tab(); // parks focus on the dialog itself while every button is disabled
+
+		rejectUpdate(new Error('network error'));
+		await Promise.resolve();
+		await Promise.resolve();
+		await expect
+			.element(page.getByText("Couldn't reschedule the item. Try again."))
+			.toBeInTheDocument();
+		// Buttons are re-enabled again now, but focus is still parked on the dialog itself — without
+		// treating that as both edges, Shift+Tab from here would escape into the page behind it.
+		expect(document.activeElement).toBe(page.getByRole('alertdialog').element());
+
+		const last = page.getByRole('button', { name: 'Cancel' }).element() as HTMLElement;
+		tab(true);
+
+		expect(document.activeElement).toBe(last);
+	});
 });

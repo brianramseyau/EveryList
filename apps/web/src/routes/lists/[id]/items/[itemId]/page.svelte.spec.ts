@@ -9,12 +9,21 @@ import { markListOrigin } from '$lib/nav-direction';
 
 const beforeNavigateHandlers: Array<(navigation: BeforeNavigate) => void> = [];
 
+// Only `params` is reactive ($state, plain strings only) — needed so a test can simulate
+// SvelteKit reusing this mounted component for a same-route navigation to a different item
+// (see the reactive reload-on-itemId-change effect in +page.svelte). `url` stays a plain,
+// reassignable field: wrapping a `URL` instance itself in `$state`'s deep proxy broke it badly
+// enough to hang the whole test run, so this file compiles with rune support (see vite.config.ts's
+// `src/**/*.svelte.{test,spec}.{ts,js}` pattern) but only `params` opts into it.
+const pageParams = $state({ id: '1', itemId: '100' });
 const pageMock: {
-	params: { id: string; itemId: string };
+	readonly params: { id: string; itemId: string };
 	url: URL;
 	state: Record<string, unknown>;
 } = {
-	params: { id: '1', itemId: '100' },
+	get params() {
+		return pageParams;
+	},
 	url: new URL('https://everylist.example/lists/1/items/100'),
 	state: {}
 };
@@ -159,6 +168,8 @@ function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): I
 
 describe('Item detail +page.svelte', () => {
 	beforeEach(() => {
+		pageParams.id = '1';
+		pageParams.itemId = '100';
 		pageMock.url = new URL('https://everylist.example/lists/1/items/100');
 		pageMock.state = {};
 		setToken('test-token');
@@ -233,6 +244,79 @@ describe('Item detail +page.svelte', () => {
 
 		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
 		expect(fetchItems).toHaveBeenCalledWith(1);
+	});
+
+	it('reloads the item when the route navigates to a different item without remounting', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		await db.items.put(makeItem({ id: 200, name: 'Apples' }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		// SvelteKit reuses this mounted component for a same-route navigation to a different item
+		// (e.g. +layout.svelte's onTap/onReschedule) rather than remounting it.
+		pageParams.itemId = '200';
+
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Apples');
+	});
+
+	it('discards a stale response from a superseded item load instead of overwriting the current one', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		await db.items.put(makeItem({ id: 200, name: 'Apples' }));
+
+		// fetchList is part of every load's Promise.all — holding its first call open simulates a
+		// slow response for item 100's load, which the item-200 navigation below then supersedes.
+		let resolveFirstFetchList!: (value: ListDto) => void;
+		vi.mocked(fetchList).mockReturnValueOnce(
+			new Promise((resolve) => {
+				resolveFirstFetchList = resolve;
+			})
+		);
+
+		render(ItemDetailPage);
+		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(1);
+
+		pageParams.itemId = '200';
+		// The second (item-200) load's own fetchList call resolves immediately (the default mock),
+		// so it completes and renders well before the first, now-stale one is let through below.
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Apples');
+
+		resolveFirstFetchList(list);
+		await Promise.resolve();
+		await Promise.resolve();
+
+		// Item 100's stale response must not have clobbered item 200's already-rendered data.
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Apples');
+	});
+
+	it('discards a stale error from a superseded item load instead of clobbering the current one', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		await db.items.put(makeItem({ id: 200, name: 'Apples' }));
+
+		let rejectFirstFetchList!: (reason: unknown) => void;
+		vi.mocked(fetchList).mockReturnValueOnce(
+			new Promise((_resolve, reject) => {
+				rejectFirstFetchList = reject;
+			})
+		);
+
+		render(ItemDetailPage);
+		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(1);
+
+		pageParams.itemId = '200';
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Apples');
+
+		rejectFirstFetchList(new Error('network error'));
+		await Promise.resolve();
+		await Promise.resolve();
+
+		// Item 100's stale failure must not surface as this page's error, or a request that's still
+		// in flight (or already succeeded) would appear to have failed.
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Apples');
+		expect(page.getByText('Failed to load item.').elements()).toHaveLength(0);
 	});
 
 	it('shows "Item not found." when the item exists in neither the cache nor the list', async () => {

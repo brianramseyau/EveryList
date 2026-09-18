@@ -148,6 +148,18 @@
 	}
 
 	async function loadAll() {
+		// Captured up front so a response can be checked against the route that's current *when it
+		// resolves*, not just when it was requested — loadAll() now reruns on every itemId/listId
+		// change (see the $effect below), so a same-route navigation to a different item while an
+		// earlier load is still in flight can otherwise let a slower, now-stale response overwrite
+		// `item`/the drafts after a faster, newer one already populated them for the item actually
+		// being shown. Any response whose route no longer matches the current one is discarded
+		// entirely (including its error, and without touching `loading`) rather than applied — the
+		// load that's still current owns those either way.
+		const requestListId = listId;
+		const requestItemId = itemId;
+		const isStale = () => requestListId !== listId || requestItemId !== itemId;
+
 		loading = true;
 		try {
 			const [listResult, itemResult, categoriesResult, storesResult, favoritesResult, listsResult] =
@@ -159,6 +171,7 @@
 					fetchFavorites(listId),
 					fetchLists()
 				]);
+			if (isStale()) return;
 			list = listResult;
 			item = itemResult;
 			categories = categoriesResult;
@@ -191,9 +204,10 @@
 				error = 'Item not found.';
 			}
 		} catch (err) {
+			if (isStale()) return;
 			error = err instanceof ApiError ? err.message : 'Failed to load item.';
 		} finally {
-			loading = false;
+			if (!isStale()) loading = false;
 		}
 	}
 
