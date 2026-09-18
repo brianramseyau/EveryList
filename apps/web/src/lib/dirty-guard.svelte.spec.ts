@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BeforeNavigate } from '@sveltejs/kit';
 
 const beforeNavigateHandlers: Array<(navigation: BeforeNavigate) => void> = [];
@@ -16,11 +16,13 @@ const { goto } = await import('$app/navigation');
 function makeNavigation(overrides: {
 	type: BeforeNavigate['type'];
 	to: string | null;
+	delta?: number;
 }): BeforeNavigate {
 	return {
 		from: null,
 		to: overrides.to ? { url: new URL(overrides.to) } : null,
 		type: overrides.type,
+		delta: overrides.type === 'popstate' ? (overrides.delta ?? -1) : undefined,
 		willUnload: false,
 		complete: Promise.resolve(),
 		cancel: vi.fn()
@@ -28,8 +30,12 @@ function makeNavigation(overrides: {
 }
 
 describe('createDirtyGuard', () => {
-	it('leaves a clean navigation alone', () => {
+	beforeEach(() => {
 		beforeNavigateHandlers.length = 0;
+		vi.mocked(goto).mockClear();
+	});
+
+	it('leaves a clean navigation alone', () => {
 		const guard = createDirtyGuard(() => false);
 		const handler = beforeNavigateHandlers.at(-1)!;
 		const navigation = makeNavigation({ type: 'link', to: 'http://x/lists' });
@@ -41,7 +47,6 @@ describe('createDirtyGuard', () => {
 	});
 
 	it('ignores a leaving navigation so the native beforeunload prompt handles it instead', () => {
-		beforeNavigateHandlers.length = 0;
 		const guard = createDirtyGuard(() => true);
 		const handler = beforeNavigateHandlers.at(-1)!;
 		const navigation = makeNavigation({ type: 'leave', to: null });
@@ -53,7 +58,6 @@ describe('createDirtyGuard', () => {
 	});
 
 	it('cancels a dirty in-app navigation and opens the confirm prompt', () => {
-		beforeNavigateHandlers.length = 0;
 		const guard = createDirtyGuard(() => true);
 		const handler = beforeNavigateHandlers.at(-1)!;
 		const navigation = makeNavigation({ type: 'link', to: 'http://x/lists' });
@@ -64,21 +68,27 @@ describe('createDirtyGuard', () => {
 		expect(guard.open).toBe(true);
 	});
 
-	it('ignores further navigations once a prompt is already pending', () => {
-		beforeNavigateHandlers.length = 0;
+	it('still cancels a second navigation attempt while a prompt is already pending, and re-targets it', () => {
 		const guard = createDirtyGuard(() => true);
 		const handler = beforeNavigateHandlers.at(-1)!;
-		handler(makeNavigation({ type: 'link', to: 'http://x/lists' }));
+		const first = makeNavigation({ type: 'link', to: 'http://x/lists' });
+		handler(first);
+		expect(first.cancel).toHaveBeenCalled();
 
-		const second = makeNavigation({ type: 'popstate', to: 'http://x/other' });
+		// e.g. the user presses Back a second time while the prompt is already open
+		// (the back link stays focused, so a stray Enter re-fires it) — this must be
+		// cancelled too, not let through just because an earlier attempt is pending.
+		const second = makeNavigation({ type: 'link', to: 'http://x/other' });
 		handler(second);
 
-		expect(second.cancel).not.toHaveBeenCalled();
+		expect(second.cancel).toHaveBeenCalled();
 		expect(guard.open).toBe(true);
+
+		guard.confirmDiscard();
+		expect(goto).toHaveBeenCalledWith(new URL('http://x/other'));
 	});
 
 	it('opens the prompt for a dirty navigation with no resolved target', () => {
-		beforeNavigateHandlers.length = 0;
 		const guard = createDirtyGuard(() => true);
 		const handler = beforeNavigateHandlers.at(-1)!;
 		const navigation = makeNavigation({ type: 'popstate', to: null });
@@ -90,7 +100,6 @@ describe('createDirtyGuard', () => {
 	});
 
 	it('cancelDiscard closes the prompt and leaves the draft in place', () => {
-		beforeNavigateHandlers.length = 0;
 		const guard = createDirtyGuard(() => true);
 		const handler = beforeNavigateHandlers.at(-1)!;
 		handler(makeNavigation({ type: 'link', to: 'http://x/lists' }));
@@ -102,8 +111,6 @@ describe('createDirtyGuard', () => {
 	});
 
 	it('confirmDiscard navigates to the pending target and re-arms for the next navigation', () => {
-		beforeNavigateHandlers.length = 0;
-		vi.mocked(goto).mockClear();
 		const guard = createDirtyGuard(() => true);
 		const handler = beforeNavigateHandlers.at(-1)!;
 		const targetUrl = 'http://x/lists';
@@ -127,9 +134,21 @@ describe('createDirtyGuard', () => {
 		expect(later.cancel).toHaveBeenCalled();
 	});
 
+	it('confirmDiscard re-issues a popstate as history.go(delta) instead of pushing via goto', () => {
+		const historyGoSpy = vi.spyOn(window.history, 'go').mockImplementation(() => {});
+		const guard = createDirtyGuard(() => true);
+		const handler = beforeNavigateHandlers.at(-1)!;
+		handler(makeNavigation({ type: 'popstate', to: 'http://x/lists', delta: -1 }));
+
+		guard.confirmDiscard();
+
+		expect(historyGoSpy).toHaveBeenCalledWith(-1);
+		expect(goto).not.toHaveBeenCalled();
+
+		historyGoSpy.mockRestore();
+	});
+
 	it('confirmDiscard is a no-op when there is no pending navigation', () => {
-		beforeNavigateHandlers.length = 0;
-		vi.mocked(goto).mockClear();
 		const guard = createDirtyGuard(() => false);
 
 		guard.confirmDiscard();

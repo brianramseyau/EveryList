@@ -200,6 +200,20 @@ describe('Paste Items +page.svelte', () => {
 		expect(dirty.defaultPrevented).toBe(true);
 	});
 
+	it('does not prompt when leaving after a successful save', async () => {
+		vi.mocked(importItems).mockResolvedValue([makeItem({ id: 400, name: 'Milk' })]);
+
+		render(ImportPage);
+		await page.getByPlaceholder('One item per line, or paste an AnyList list').fill('Milk');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		const handler = beforeNavigateHandlers.at(-1)!;
+		const navigation = makeNavigation('/lists/1');
+		handler(navigation);
+		expect(navigation.cancel).not.toHaveBeenCalled();
+	});
+
 	it('goes back in history instead when this page was reached from the list', async () => {
 		const historyBackSpy = vi.spyOn(window.history, 'back').mockImplementation(() => {});
 		markListOrigin();

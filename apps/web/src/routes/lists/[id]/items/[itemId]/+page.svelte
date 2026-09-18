@@ -233,6 +233,11 @@
 		moving = true;
 		try {
 			await moveItemToList(listId, itemId, draftMoveTargetId);
+			// The item now belongs to the destination list server-side — an
+			// unsaved draft here is stale regardless, and letting the guard
+			// intercept this goto() would leave the user stuck on this now-wrong
+			// list/item pairing if they chose Cancel.
+			saved = true;
 			await goto(resolve('/lists/[id]', { id: String(draftMoveTargetId) }));
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to move item.';

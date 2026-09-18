@@ -177,6 +177,22 @@ describe('Paste Categories +page.svelte', () => {
 		expect(dirty.defaultPrevented).toBe(true);
 	});
 
+	it('does not prompt when leaving after a successful save', async () => {
+		vi.mocked(bulkImportCategories).mockResolvedValue([
+			makeCategory({ id: 10, name: 'Produce', icon: 'fruitCherries' })
+		]);
+
+		render(PastePage);
+		await page.getByPlaceholder('One category per line').fill('Produce');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		const handler = beforeNavigateHandlers.at(-1)!;
+		const navigation = makeNavigation('/lists/1/categories');
+		handler(navigation);
+		expect(navigation.cancel).not.toHaveBeenCalled();
+	});
+
 	it('links Cancel back to the categories list', async () => {
 		render(PastePage);
 

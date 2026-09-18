@@ -8,7 +8,11 @@ import { expect, test } from '@playwright/test';
 test('prompts before discarding an unsaved item edit, and keeps the draft on cancel', async ({
 	page
 }) => {
-	const email = `e2e-${Date.now()}@example.com`;
+	const email = `e2e-unsaved-item-${Date.now()}@example.com`;
+	const patchRequests: string[] = [];
+	page.on('request', (request) => {
+		if (request.method() === 'PATCH') patchRequests.push(request.url());
+	});
 
 	await page.goto('/signup');
 	await page.waitForLoadState('networkidle');
@@ -52,10 +56,11 @@ test('prompts before discarding an unsaved item edit, and keeps the draft on can
 
 	await page.getByRole('link', { name: 'Edit Tent' }).click();
 	await expect(page.getByLabel('Notes')).toHaveValue('');
+	expect(patchRequests).toHaveLength(0);
 });
 
 test('prompts before discarding unsaved pasted items', async ({ page }) => {
-	const email = `e2e-${Date.now()}@example.com`;
+	const email = `e2e-unsaved-paste-${Date.now()}@example.com`;
 
 	await page.goto('/signup');
 	await page.waitForLoadState('networkidle');

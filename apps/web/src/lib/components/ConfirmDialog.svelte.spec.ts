@@ -64,4 +64,82 @@ describe('ConfirmDialog.svelte', () => {
 
 		expect(onCancel).not.toHaveBeenCalled();
 	});
+
+	it('calls onCancel on an outside click', async () => {
+		const onCancel = vi.fn();
+		render(ConfirmDialog, { message: 'Discard?', onConfirm: vi.fn(), onCancel });
+
+		document.body.click();
+
+		expect(onCancel).toHaveBeenCalledOnce();
+	});
+
+	it('does not call onCancel when clicking inside the dialog', async () => {
+		const onCancel = vi.fn();
+		render(ConfirmDialog, { message: 'Discard?', onConfirm: vi.fn(), onCancel });
+
+		await page.getByText('Discard?').click();
+
+		expect(onCancel).not.toHaveBeenCalled();
+	});
+
+	it('moves initial focus to the Cancel button', async () => {
+		render(ConfirmDialog, { message: 'Discard?', onConfirm: vi.fn(), onCancel: vi.fn() });
+
+		await expect.element(page.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+	});
+
+	it('restores focus to the previously-focused element once closed', async () => {
+		const trigger = document.createElement('button');
+		trigger.textContent = 'Back';
+		document.body.appendChild(trigger);
+		trigger.focus();
+
+		const screen = render(ConfirmDialog, {
+			message: 'Discard?',
+			onConfirm: vi.fn(),
+			onCancel: vi.fn()
+		});
+		await expect.element(page.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+
+		screen.unmount();
+		expect(document.activeElement).toBe(trigger);
+
+		trigger.remove();
+	});
+
+	it('wraps Tab from the confirm button back to Cancel', async () => {
+		render(ConfirmDialog, { message: 'Discard?', onConfirm: vi.fn(), onCancel: vi.fn() });
+
+		await page.getByRole('button', { name: 'Discard' }).element().focus();
+		document.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+		);
+
+		await expect.element(page.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+	});
+
+	it('leaves a plain Tab from the cancel button to the browser default (no forced wrap)', async () => {
+		render(ConfirmDialog, { message: 'Discard?', onConfirm: vi.fn(), onCancel: vi.fn() });
+
+		await expect.element(page.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+		document.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+		);
+
+		// Neither the shiftKey+cancel nor the !shiftKey+confirm branch matches from here,
+		// so the handler leaves focus alone rather than forcing it onto either button.
+		await expect.element(page.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+	});
+
+	it('wraps Shift+Tab from the cancel button to the confirm button', async () => {
+		render(ConfirmDialog, { message: 'Discard?', onConfirm: vi.fn(), onCancel: vi.fn() });
+
+		await expect.element(page.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+		document.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+		);
+
+		await expect.element(page.getByRole('button', { name: 'Discard' })).toHaveFocus();
+	});
 });
