@@ -225,4 +225,83 @@ describe('RescheduleOverlay.svelte', () => {
 		document.body.click();
 		expect(onClose).toHaveBeenCalledOnce();
 	});
+
+	function tab(shiftKey = false) {
+		document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true }));
+	}
+
+	it('wraps Tab from the last focusable element back to the first', async () => {
+		render(RescheduleOverlay, {
+			listId: 1,
+			itemId: 1,
+			deadline: '2026-09-06T09:00',
+			onClose: vi.fn()
+		});
+
+		const first = page.getByRole('button', { name: /1 hour/ }).element() as HTMLElement;
+		const last = page.getByRole('button', { name: 'Cancel' }).element() as HTMLElement;
+		last.focus();
+
+		tab();
+
+		expect(document.activeElement).toBe(first);
+	});
+
+	it('wraps Shift+Tab from the first focusable element back to the last', async () => {
+		render(RescheduleOverlay, {
+			listId: 1,
+			itemId: 1,
+			deadline: '2026-09-06T09:00',
+			onClose: vi.fn()
+		});
+
+		const first = page.getByRole('button', { name: /1 hour/ }).element() as HTMLElement;
+		const last = page.getByRole('button', { name: 'Cancel' }).element() as HTMLElement;
+		first.focus();
+
+		tab(true);
+
+		expect(document.activeElement).toBe(last);
+	});
+
+	it('leaves Tab alone (native behavior) when focus is on a middle element', async () => {
+		render(RescheduleOverlay, {
+			listId: 1,
+			itemId: 1,
+			deadline: '2026-09-06T09:00',
+			onClose: vi.fn()
+		});
+
+		const middle = page.getByRole('button', { name: /Tomorrow/ }).element() as HTMLElement;
+		middle.focus();
+
+		tab();
+
+		expect(document.activeElement).toBe(middle);
+	});
+
+	it('does nothing on Tab when every button is disabled mid-save', async () => {
+		const onClose = vi.fn();
+		let resolveUpdate!: () => void;
+		vi.mocked(updateItem).mockReturnValue(
+			new Promise((resolve) => {
+				resolveUpdate = () => resolve(undefined);
+			})
+		);
+		render(RescheduleOverlay, {
+			listId: 1,
+			itemId: 1,
+			deadline: '2026-09-06T09:00',
+			onClose
+		});
+
+		await page.getByRole('button', { name: /Tomorrow/ }).click();
+		// Every button (including Cancel) is disabled while saving, so no focusable element
+		// exists for Tab to wrap between — exercises that guard without throwing.
+		expect(() => tab()).not.toThrow();
+
+		resolveUpdate();
+		await Promise.resolve();
+		await Promise.resolve();
+	});
 });

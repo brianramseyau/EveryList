@@ -105,6 +105,12 @@ describe('thisWeekendDeadline', () => {
 		// Sunday 2026-09-06.
 		expect(thisWeekendDeadline('2026-09-01', new Date(2026, 8, 6, 10, 0))).toBe('2026-09-06');
 	});
+
+	it("floors at now when today's time-of-day has already passed", () => {
+		// NOW is Saturday 15:00 — reapplying the deadline's 09:00 time-of-day onto today would
+		// otherwise land six hours in the past.
+		expect(thisWeekendDeadline('2026-09-01T09:00', NOW)).toBe('2026-09-05T15:00');
+	});
 });
 
 describe('nextWeekDeadline', () => {

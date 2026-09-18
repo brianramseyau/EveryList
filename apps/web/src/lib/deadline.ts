@@ -111,14 +111,19 @@ export function addHoursToDeadline(
 
 /** Applies a computed local `Date` back onto a deadline, keeping the original's time-of-day when
  * it had one and falling back to date-only otherwise — the shared tail end of the three
- * reschedule shortcuts below. */
-function withSameTimeOfDay(deadline: string, target: Date): string {
+ * reschedule shortcuts below. A timed result is floored at `now`: "This weekend" computed on a
+ * Saturday/Sunday targets *today*, so re-applying a deadline's already-passed time-of-day would
+ * otherwise produce a result already in the past — the item would immediately re-show as overdue
+ * instead of actually being deferred, the same failure mode `addHoursToDeadline` already guards
+ * against. A date-only result needs no such floor: it's due by the end of that day regardless of
+ * the current time, so today is never "in the past" for one. */
+function withSameTimeOfDay(deadline: string, target: Date, now: Date): string {
 	if (!hasTime(deadline)) return todayLocalIso(target);
 	const { time } = splitDeadline(deadline);
 	const [hour, minute] = time.split(':').map(Number);
 	const at = new Date(target);
 	at.setHours(hour, minute, 0, 0);
-	return formatLocalMinuteIso(at);
+	return formatLocalMinuteIso(at > now ? at : now);
 }
 
 /**
@@ -128,7 +133,7 @@ function withSameTimeOfDay(deadline: string, target: Date): string {
 export function tomorrowDeadline(deadline: string, now: Date = new Date()): string {
 	const tomorrow = new Date(now);
 	tomorrow.setDate(tomorrow.getDate() + 1);
-	return withSameTimeOfDay(deadline, tomorrow);
+	return withSameTimeOfDay(deadline, tomorrow, now);
 }
 
 /**
@@ -140,7 +145,7 @@ export function thisWeekendDeadline(deadline: string, now: Date = new Date()): s
 	const daysUntilSaturday = dayOfWeek === 0 || dayOfWeek === 6 ? 0 : 6 - dayOfWeek;
 	const target = new Date(now);
 	target.setDate(target.getDate() + daysUntilSaturday);
-	return withSameTimeOfDay(deadline, target);
+	return withSameTimeOfDay(deadline, target, now);
 }
 
 /**
@@ -152,7 +157,7 @@ export function nextWeekDeadline(deadline: string, now: Date = new Date()): stri
 	const daysUntilNextMonday = (8 - dayOfWeek) % 7 || 7;
 	const target = new Date(now);
 	target.setDate(target.getDate() + daysUntilNextMonday);
-	return withSameTimeOfDay(deadline, target);
+	return withSameTimeOfDay(deadline, target, now);
 }
 
 export interface DeadlineChip {

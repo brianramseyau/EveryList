@@ -93,8 +93,22 @@
 	// so a refresh or back-navigation doesn't reopen it.
 	let rescheduleOpen = $state(false);
 
-	function closeReschedule() {
+	// `newDeadline` is set only on a successful reschedule (undefined on cancel/Escape/outside-
+	// click) — without feeding it back into `item` and the drafts here, this page's own state
+	// would still show the pre-reschedule deadline, and a later Save would silently send that
+	// stale value right back over the change the overlay just made.
+	function closeReschedule(newDeadline?: string) {
 		rescheduleOpen = false;
+		// `item` and `originalDraft` are always set together, by loadAll() — this overlay can only
+		// ever be open once that's happened (see the $effect below), so there's no case where one
+		// is set without the other.
+		if (newDeadline !== undefined && item && originalDraft) {
+			item = { ...item, deadline: newDeadline };
+			const { date, time } = splitDeadline(newDeadline);
+			draftDeadlineDate = date;
+			draftDeadlineTime = time;
+			originalDraft = { ...originalDraft, deadlineDate: date, deadlineTime: time };
+		}
 		// Always the current page's own URL with one query param removed — safe, but not
 		// statically verifiable by the lint rule (see +layout.svelte's own goto() for the same
 		// technique).
@@ -173,7 +187,6 @@
 					deadlineTime: draftDeadlineTime
 				};
 				error = null;
-				if (item.deadline && page.url.searchParams.get('reschedule')) rescheduleOpen = true;
 			} else {
 				error = 'Item not found.';
 			}
@@ -191,6 +204,16 @@
 		}
 		cameFromList = consumeListOrigin();
 		void loadAll();
+	});
+
+	// Reacts to the `reschedule` search param directly, rather than only checking it once inside
+	// loadAll()'s onMount — the deadline notification's Reschedule action navigates here with
+	// `?reschedule=1` (see +layout.svelte's onReschedule / push-sw.js), but if the app is already
+	// sitting on this exact item route, SvelteKit reuses the mounted component for a search-param-
+	// only navigation and neither onMount nor loadAll() re-run, so a param-only check confined to
+	// loadAll() would silently never open the overlay for that case.
+	$effect(() => {
+		if (item?.deadline && page.url.searchParams.get('reschedule')) rescheduleOpen = true;
 	});
 
 	// Prefers a real `history.back()` over pushing a fresh navigation back to

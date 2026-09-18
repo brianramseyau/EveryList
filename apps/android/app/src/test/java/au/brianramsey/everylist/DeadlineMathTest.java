@@ -101,6 +101,13 @@ public class DeadlineMathTest {
     }
 
     @Test
+    public void thisWeekendFloorsAtNowWhenTodaysTimeHasAlreadyPassed() {
+        // NOW is Saturday 15:00 — reapplying the deadline's 09:00 time-of-day onto today would
+        // otherwise land six hours in the past.
+        assertEquals("2026-09-05T15:00", DeadlineMath.thisWeekendDeadline("2026-09-01T09:00", NOW));
+    }
+
+    @Test
     public void nextWeekLandsOnNextMondayFromAWeekday() {
         assertEquals("2026-09-07T14:30", DeadlineMath.nextWeekDeadline("2026-09-01T14:30", NOW));
     }

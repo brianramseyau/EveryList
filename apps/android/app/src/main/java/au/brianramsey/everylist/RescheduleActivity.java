@@ -50,12 +50,6 @@ import java.util.TimeZone;
  *  {@link WidgetPrefs}'s separately-scoped widget PAT. */
 public class RescheduleActivity extends Activity {
 
-    // Matches @capacitor/local-notifications' own NOTIFICATION_OBJ_INTENT_KEY constant value
-    // (LocalNotificationManager.kt — note the upstream typo, "Notfication") — the patch builds
-    // this Activity's launch Intent directly (see the patch file), reusing that same key rather
-    // than introducing a separate one.
-    private static final String EXTRA_NOTIFICATION_JSON = "LocalNotficationObject";
-
     private static final String JS_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -75,6 +69,7 @@ public class RescheduleActivity extends Activity {
     private Button weekendButton;
     private Button nextWeekButton;
     private Button customButton;
+    private Button cancelButton;
     private View content;
 
     @Override
@@ -83,7 +78,10 @@ public class RescheduleActivity extends Activity {
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
         setContentView(R.layout.reschedule);
 
-        notificationJson = getIntent().getStringExtra(EXTRA_NOTIFICATION_JSON);
+        // Reuses the plugin's own extra key rather than a hardcoded copy, so a future upstream
+        // rename fails this at compile time instead of silently falling through to the fallback
+        // notification below.
+        notificationJson = getIntent().getStringExtra(LocalNotificationManager.NOTIFICATION_OBJ_INTENT_KEY);
         token = AuthPrefs.getToken(this);
         serverUrl = AuthPrefs.getServerUrl(this);
 
@@ -92,6 +90,19 @@ public class RescheduleActivity extends Activity {
             JSONObject extra = notification.getJSONObject("extra");
             listId = extra.getLong("listId");
             itemId = extra.getLong("itemId");
+
+            // Mirrors DeadlineNotificationActionReceiver's own up-front cancel/forget for
+            // "Complete" — this Activity now launches straight from the tap instead of via that
+            // receiver (see the class doc comment), so nothing else dismisses the triggering
+            // notification; without this it would linger, showing its old deadline/actions,
+            // until whatever new deadline is picked here next comes due.
+            int notificationId = notification.getInt("id");
+            NotificationManagerCompat.from(this).cancel(notificationId);
+            NotificationStorage storage = new NotificationStorage(this);
+            LocalNotification existing = storage.getSavedNotification(String.valueOf(notificationId));
+            if (LocalNotificationManager.Companion.isSafeToForget(existing)) {
+                storage.deleteNotification(String.valueOf(notificationId));
+            }
         } catch (Exception e) {
             // Malformed/missing payload — nothing sensible to retry, same reasoning as
             // DeadlineNotificationActionReceiver's identical guard.
@@ -113,7 +124,7 @@ public class RescheduleActivity extends Activity {
         weekendButton = findViewById(R.id.reschedule_weekend);
         nextWeekButton = findViewById(R.id.reschedule_next_week);
         customButton = findViewById(R.id.reschedule_custom);
-        Button cancelButton = findViewById(R.id.reschedule_cancel);
+        cancelButton = findViewById(R.id.reschedule_cancel);
 
         cancelButton.setOnClickListener(v -> finish());
         tomorrowButton.setOnClickListener(v -> applyShortcut(DeadlineMath.tomorrowDeadline(liveDeadline, new Date())));
@@ -143,7 +154,12 @@ public class RescheduleActivity extends Activity {
                     return;
                 }
                 mainHandler.post(() -> onDeadlineLoaded(deadline));
-            } catch (IOException | org.json.JSONException e) {
+            } catch (IOException | org.json.JSONException | RuntimeException e) {
+                // RuntimeException here is deliberately broad, matching
+                // DeadlineNotificationActionReceiver#handleAction's own reasoning: this runs on a
+                // bare background thread with no UncaughtExceptionHandler, so anything unchecked
+                // that escapes crashes the app process instead of degrading to the fallback
+                // notification below.
                 android.util.Log.e("EveryList", "Reschedule popup: failed to load item " + itemId, e);
                 mainHandler.post(() -> {
                     showFallbackNotification();
@@ -231,7 +247,8 @@ public class RescheduleActivity extends Activity {
                 JSONObject body = new JSONObject();
                 body.put("deadline", nextDeadline);
                 HttpJson.request("PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token, body.toString());
-            } catch (IOException | org.json.JSONException e) {
+            } catch (IOException | org.json.JSONException | RuntimeException e) {
+                // See loadDeadline()'s identical catch for why RuntimeException is included here.
                 android.util.Log.e("EveryList", "Reschedule popup: failed to update item " + itemId, e);
                 mainHandler.post(() -> {
                     showFallbackNotification();
@@ -261,6 +278,10 @@ public class RescheduleActivity extends Activity {
         weekendButton.setEnabled(enabled);
         nextWeekButton.setEnabled(enabled);
         customButton.setEnabled(enabled);
+        // Otherwise tapping Cancel while a shortcut's PATCH is in flight finishes the Activity
+        // right away, but the request lands (and reschedules the follow-up notification) anyway a
+        // moment later — matching the web overlay, which disables its own Cancel while saving.
+        cancelButton.setEnabled(enabled);
     }
 
     private static final String FALLBACK_CHANNEL_ID = "deadline_action_fallback";

@@ -29,7 +29,11 @@
 		listId: number;
 		itemId: number;
 		deadline: string;
-		onClose: () => void;
+		// Called with the new deadline after a successful reschedule, or with no argument on
+		// cancel/Escape/outside-click — the caller (the item page) needs the new value to update
+		// its own `item`/drafts, or a later Save would silently send the stale pre-reschedule
+		// deadline right back over this change.
+		onClose: (newDeadline?: string) => void;
 	} = $props();
 
 	let dialogEl: HTMLDivElement | undefined = $state();
@@ -53,7 +57,28 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape' && !saving) onClose();
+		if (event.key === 'Escape' && !saving) {
+			onClose();
+			return;
+		}
+		// Unlike ConfirmDialog (always exactly two focusable elements, wrapped by identity), this
+		// dialog's focusable set varies with mode (shortcut buttons + Custom, or Back/date/
+		// time/Apply) and with `saving`/loading disabling buttons — so this queries the live set on
+		// every Tab instead of caching it, and wraps between whichever elements are first/last.
+		if (event.key !== 'Tab' || !dialogEl) return;
+		const focusable = dialogEl.querySelectorAll<HTMLElement>(
+			'button:not([disabled]), input:not([disabled])'
+		);
+		if (focusable.length === 0) return;
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
 	}
 
 	// Only ever invoked from the shortcut/Apply buttons below, both of which disable themselves
@@ -64,7 +89,7 @@
 		try {
 			await updateItem(listId, itemId, { deadline: nextDeadline });
 			if (getDeadlineNotificationsPreference()) void resyncDeadlineNotifications();
-			onClose();
+			onClose(nextDeadline);
 		} catch {
 			error = "Couldn't reschedule the item. Try again.";
 			saving = false;
@@ -166,7 +191,7 @@
 				type="button"
 				class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
 				disabled={saving}
-				onclick={onClose}
+				onclick={() => onClose()}
 			>
 				Cancel
 			</button>

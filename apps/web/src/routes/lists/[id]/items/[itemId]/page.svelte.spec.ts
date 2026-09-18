@@ -495,6 +495,30 @@ describe('Item detail +page.svelte', () => {
 		});
 	});
 
+	it('feeds the rescheduled deadline back into the form, so a later Save does not revert it', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+		pageMock.url = new URL('https://everylist.example/lists/1/items/100?reschedule=1');
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await page.getByRole('button', { name: /Tomorrow/ }).click();
+		await expect.element(page.getByText('Reschedule')).not.toBeInTheDocument();
+
+		const [, , rescheduleBody] = vi.mocked(updateItem).mock.calls[0];
+		const newDeadline = (rescheduleBody as { deadline: string }).deadline;
+		await expect.element(page.getByLabelText('Time (optional)')).toHaveValue(newDeadline.slice(11));
+
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(
+			1,
+			100,
+			expect.objectContaining({ deadline: newDeadline })
+		);
+	});
+
 	it('does not open the reschedule overlay for a plain visit', async () => {
 		const db = getDb()!;
 		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));

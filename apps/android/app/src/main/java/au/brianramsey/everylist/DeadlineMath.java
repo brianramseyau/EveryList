@@ -68,7 +68,7 @@ final class DeadlineMath {
         Calendar target = Calendar.getInstance();
         target.setTime(now);
         target.add(Calendar.DAY_OF_MONTH, 1);
-        return withSameTimeOfDay(deadline, target);
+        return withSameTimeOfDay(deadline, target, now);
     }
 
     /** Mirrors deadline.ts's `thisWeekendDeadline`. */
@@ -80,7 +80,7 @@ final class DeadlineMath {
             ? 0
             : Calendar.SATURDAY - dayOfWeek;
         target.add(Calendar.DAY_OF_MONTH, daysUntilSaturday);
-        return withSameTimeOfDay(deadline, target);
+        return withSameTimeOfDay(deadline, target, now);
     }
 
     /** Mirrors deadline.ts's `nextWeekDeadline`. */
@@ -91,13 +91,13 @@ final class DeadlineMath {
         int daysUntilNextMonday = (9 - dayOfWeek) % 7;
         if (daysUntilNextMonday == 0) daysUntilNextMonday = 7;
         target.add(Calendar.DAY_OF_MONTH, daysUntilNextMonday);
-        return withSameTimeOfDay(deadline, target);
+        return withSameTimeOfDay(deadline, target, now);
     }
 
     /** Applies `target`'s date back onto `deadline`, keeping the original's time-of-day when it
-     *  had one and falling back to date-only otherwise — mirrors deadline.ts's
-     *  `withSameTimeOfDay`. */
-    private static String withSameTimeOfDay(String deadline, Calendar target) {
+     *  had one and falling back to date-only otherwise, floored at `now` — mirrors deadline.ts's
+     *  `withSameTimeOfDay` (see its own doc comment for why the floor is needed). */
+    private static String withSameTimeOfDay(String deadline, Calendar target, Date now) {
         boolean hasTime = deadline.length() > 10;
         if (!hasTime) {
             return String.format(
@@ -112,6 +112,9 @@ final class DeadlineMath {
         String[] timeFields = deadline.substring(11).split(":");
         target.set(Calendar.HOUR_OF_DAY, Integer.parseInt(timeFields[0]));
         target.set(Calendar.MINUTE, Integer.parseInt(timeFields[1]));
+        target.set(Calendar.SECOND, 0);
+        target.set(Calendar.MILLISECOND, 0);
+        if (target.getTime().before(now)) target.setTime(now);
         return String.format(
             Locale.US,
             "%04d-%02d-%02dT%02d:%02d",
