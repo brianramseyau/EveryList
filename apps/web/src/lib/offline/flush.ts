@@ -123,6 +123,13 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 			? mutation.url
 			: `${mutation.url}?expectedVersion=${mutation.expectedVersion}`;
 	await apiDelete(url);
+	// Sub-tasks have no restore/recently-deleted UI (PLAN_29_PHASE_SUBTASKS.md) — unlike
+	// every other entity here, their delete is a hard delete, so the local row is removed
+	// outright rather than left in place with `_dirty` cleared.
+	if (mutation.entityType === 'sub_item') {
+		await table.delete(mutation.targetId);
+		return;
+	}
 	await table.update(mutation.targetId, { _dirty: false });
 }
 
@@ -158,7 +165,7 @@ async function replayReset(mutation: QueuedMutation): Promise<void> {
  * enqueue through `tableForEntity` — a narrower slice of `SyncEntityType` (which also covers
  * `list`, never queued client-side, and `store_category_order`, queued only via `reorder` and
  * replayed by `replayReorder` above instead of this generic dispatch, see PLAN_05_PHASE_OFFLINE_PWA.md §1). */
-type QueueableEntityType = 'category' | 'item' | 'favorite_item' | 'store';
+type QueueableEntityType = 'category' | 'item' | 'sub_item' | 'favorite_item' | 'store';
 
 function tableForEntity(entityType: QueueableEntityType) {
 	// Provably covered in isolation — other spec files' `vi.mock('./db', …)`
@@ -172,6 +179,8 @@ function tableForEntity(entityType: QueueableEntityType) {
 			return db.categories;
 		case 'item':
 			return db.items;
+		case 'sub_item':
+			return db.subItems;
 		case 'favorite_item':
 			return db.favoriteItems;
 		case 'store':

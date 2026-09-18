@@ -33,4 +33,5 @@ export const controllers = {
   ServerConfig: () => import('#controllers/server_config_controller'),
   Setup: () => import('#controllers/setup_controller'),
   Stores: () => import('#controllers/stores_controller'),
+  SubItems: () => import('#controllers/sub_items_controller'),
 }

@@ -70,6 +70,9 @@ type ListFeatureFields = Partial<{
 	usePrice: boolean;
 	/** Defaults off server-side — see ListDto's doc comment. */
 	useDeadline: boolean;
+	useSubtasks: boolean;
+	/** Defaults off server-side — see ListDto's doc comment. */
+	useSubtaskAutoComplete: boolean;
 	showStoreInList: boolean;
 	showPriceInList: boolean;
 	itemSortOrder: 'ranked' | 'alphabetical' | 'deadline';

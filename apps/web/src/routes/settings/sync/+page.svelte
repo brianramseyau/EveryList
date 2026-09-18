@@ -84,6 +84,7 @@
 
 	const entityLabel: Record<QueuedMutation['entityType'], string> = {
 		item: 'item',
+		sub_item: 'sub-task',
 		category: 'category',
 		store: 'store',
 		favorite_item: 'favorite item',

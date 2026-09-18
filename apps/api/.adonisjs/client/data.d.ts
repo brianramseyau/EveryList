@@ -18,6 +18,7 @@ import type MemberCandidateTransformer from '#transformers/member_candidate_tran
 import type PersonalAccessTokenTransformer from '#transformers/personal_access_token_transformer'
 import type StoreCategoryOrderTransformer from '#transformers/store_category_order_transformer'
 import type StoreTransformer from '#transformers/store_transformer'
+import type SubItemTransformer from '#transformers/sub_item_transformer'
 import type UserTransformer from '#transformers/user_transformer'
 
 export namespace Data {
@@ -72,6 +73,10 @@ export namespace Data {
   export type Store = InferData<StoreTransformer>
   export namespace Store {
     export type Variants = InferVariants<StoreTransformer>
+  }
+  export type SubItem = InferData<SubItemTransformer>
+  export namespace SubItem {
+    export type Variants = InferVariants<SubItemTransformer>
   }
   export type User = InferData<UserTransformer>
   export namespace User {

@@ -1,10 +1,11 @@
 import { ItemSchema } from '#database/schema'
-import { belongsTo, column } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import { belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
+import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import List from '#models/list'
 import Category from '#models/category'
 import Store from '#models/store'
 import User from '#models/user'
+import SubItem from '#models/sub_item'
 
 export default class Item extends ItemSchema {
   // SQLite has no native boolean type — better-sqlite3 round-trips this
@@ -23,4 +24,7 @@ export default class Item extends ItemSchema {
 
   @belongsTo(() => User, { foreignKey: 'createdBy' })
   declare creator: BelongsTo<typeof User>
+
+  @hasMany(() => SubItem, { foreignKey: 'itemId' })
+  declare subItems: HasMany<typeof SubItem>
 }

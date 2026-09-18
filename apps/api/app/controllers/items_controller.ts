@@ -26,6 +26,11 @@ import {
   remainingCapacity,
 } from '#services/unchecked_limit'
 import {
+  SUBTASKS_INCOMPLETE,
+  subtasksIncompleteMessage,
+  countOpenSubtasks,
+} from '#services/subtask_completion'
+import {
   hasVersionConflict,
   parseExpectedVersion,
   reportVersionConflict,
@@ -79,7 +84,10 @@ async function nextSortOrder(
 // other devices). Kept in sync with the frontend's copy rather than shared, since one is
 // TypeScript-in-a-Node-service and the other TypeScript-in-a-Vite-bundle with no shared runtime
 // package between them for a five-line pure function.
-function computeMidpointSortOrder(before: number | undefined, after: number | undefined): number {
+export function computeMidpointSortOrder(
+  before: number | undefined,
+  after: number | undefined
+): number {
   if (before === undefined && after === undefined) return 0
   if (before === undefined) return after! - 1
   if (after === undefined) return before + 1
@@ -112,7 +120,10 @@ export default class ItemsController {
     const list = await ListPolicy.requireList(user, params.listId, 'viewer')
 
     const includeChecked = request.input('includeChecked', 'true') !== 'false'
-    const query = Item.query().where('listId', list.id).whereNull('deletedAt')
+    const query = Item.query()
+      .where('listId', list.id)
+      .whereNull('deletedAt')
+      .preload('subItems', (subItemsQuery) => subItemsQuery.orderBy('sortOrder', 'asc'))
     if (!includeChecked) query.where('checked', false)
 
     const items = await query.orderBy('sortOrder', 'asc')
@@ -443,6 +454,19 @@ export default class ItemsController {
         message: limitReachedMessageForUncheck(list),
         code: UNCHECKED_LIMIT_REACHED,
       })
+    }
+
+    // Sub-tasks (PLAN_29_PHASE_SUBTASKS.md): a parent item can't be checked off
+    // while it still has open sub-tasks — same shape as the open-item limit
+    // above, a dedicated code the frontend routes to its own toast.
+    if (checked === true && !item.checked && list.useSubtasks) {
+      const openCount = await countOpenSubtasks(item.id)
+      if (openCount > 0) {
+        return response.badRequest({
+          message: subtasksIncompleteMessage(openCount),
+          code: SUBTASKS_INCOMPLETE,
+        })
+      }
     }
 
     const previousCategoryId = item.categoryId

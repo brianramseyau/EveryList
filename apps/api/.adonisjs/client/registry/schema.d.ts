@@ -643,6 +643,66 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/items_controller').default['purge']>>>
     }
   }
+  'lists.sub_items.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/lists/:listId/items/:itemId/subtasks'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; itemId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/sub_items_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/sub_items_controller').default['index']>>>
+    }
+  }
+  'lists.sub_items.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/lists/:listId/items/:itemId/subtasks'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/sub_item').createSubItemValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { listId: ParamValue; itemId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/sub_item').createSubItemValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/sub_items_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/sub_items_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.sub_items.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/sub_item').updateSubItemValidator)>>
+      paramsTuple: [ParamValue, ParamValue, ParamValue]
+      params: { listId: ParamValue; itemId: ParamValue; subtaskId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/sub_item').updateSubItemValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/sub_items_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/sub_items_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.sub_items.move': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId/move'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/sub_item').moveSubItemValidator)>>
+      paramsTuple: [ParamValue, ParamValue, ParamValue]
+      params: { listId: ParamValue; itemId: ParamValue; subtaskId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/sub_item').moveSubItemValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/sub_items_controller').default['move']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/sub_items_controller').default['move']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'lists.sub_items.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue, ParamValue]
+      params: { listId: ParamValue; itemId: ParamValue; subtaskId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/sub_items_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/sub_items_controller').default['destroy']>>>
+    }
+  }
   'lists.category_learnings.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/lists/:listId/category-learnings'

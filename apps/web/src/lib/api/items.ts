@@ -1,4 +1,4 @@
-import type { CategorizeSuggestionDto, ItemDto } from '@everylist/shared';
+import type { CategorizeSuggestionDto, ItemDto, SubItemDto } from '@everylist/shared';
 import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared';
 /* v8 ignore start */
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
@@ -7,6 +7,38 @@ import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';
 import { dequeueMutation, findPendingMutation } from '$lib/offline/sync-queue';
 import { withCacheFallback } from './cache-fallback';
 /* v8 ignore stop */
+
+/**
+ * Patches each item's nested `subItems` with whatever this device has queued but not yet
+ * flushed on the separate `subItems` table — sub-tasks live in their own Dexie table
+ * (`sub-items.ts`'s `updateSubItem`/`deleteSubItem`/`createSubItem`), not inside the `items`
+ * table's row, so neither `db.items`'s cached copy nor a fresh server response ever reflects an
+ * unsynced sub-task edit on its own. Without this, an offline sub-task check would flash back to
+ * unchecked the next time anything re-reads items (another `fetchItems` call, or a fully offline
+ * reload reading `getCachedItems`) until the edit actually flushes. A dirty row overrides the
+ * matching id (including one the item's own array doesn't have yet — an offline-created sub-task,
+ * whose temp id never came from the server); nothing removes one, since `deleteSubItem`'s
+ * optimistic apply already hard-deletes the Dexie row immediately rather than flagging it dirty.
+ */
+async function mergeDirtySubItems(db: EveryListDB, items: ItemDto[]): Promise<ItemDto[]> {
+	const dirtySubItems = await db.subItems.filter((subItem) => subItem._dirty === true).toArray();
+	if (dirtySubItems.length === 0) return items;
+
+	const dirtyByItemId = new Map<number, SubItemDto[]>();
+	for (const subItem of dirtySubItems) {
+		const forItem = dirtyByItemId.get(subItem.itemId) ?? [];
+		forItem.push(subItem);
+		dirtyByItemId.set(subItem.itemId, forItem);
+	}
+
+	return items.map((item) => {
+		const dirty = dirtyByItemId.get(item.id);
+		if (!dirty) return item;
+		const subById = new Map((item.subItems ?? []).map((subItem) => [subItem.id, subItem]));
+		for (const subItem of dirty) subById.set(subItem.id, subItem);
+		return { ...item, subItems: [...subById.values()] };
+	});
+}
 
 /** This list's cached items, sorted the same way the network response is — read directly from
  * Dexie with no network round trip. Already includes any unacked local edits (`_dirty` rows live
@@ -17,7 +49,8 @@ export async function getCachedItems(listId: number): Promise<ItemDto[] | undefi
 	const db = getDb();
 	if (!db) return undefined;
 	const rows = await db.items.filter((item) => item.listId === listId && !item.deletedAt).toArray();
-	return rows.sort((a, b) => a.sortOrder - b.sortOrder);
+	rows.sort((a, b) => a.sortOrder - b.sortOrder);
+	return mergeDirtySubItems(db, rows);
 }
 
 export async function fetchItems(listId: number): Promise<ItemDto[]> {
@@ -37,6 +70,22 @@ export async function fetchItems(listId: number): Promise<ItemDto[]> {
 			const toPut = items.filter((_item, index) => !existing[index]?._dirty);
 			if (toPut.length > 0) await db.items.bulkPut(toPut);
 
+			// Same caching, one level down: sub-tasks arrive nested in each item's `subItems`
+			// here, but `sub-items.ts`'s offline helpers read/write them from their own flat
+			// `subItems` table (see `mergeDirtySubItems` above for why) — without this, that
+			// table is never populated for a sub-task that already existed before this device
+			// ever edited it, and any offline edit on it enqueues the same `expectedVersion: 0`
+			// footgun the comment above already covers for items.
+			const allSubItems = items.flatMap((item) => item.subItems ?? []);
+			if (allSubItems.length > 0) {
+				const subItemIds = allSubItems.map((subItem) => subItem.id);
+				const existingSubItems = await db.subItems.bulkGet(subItemIds);
+				const subItemsToPut = allSubItems.filter(
+					(_subItem, index) => !existingSubItems[index]?._dirty
+				);
+				if (subItemsToPut.length > 0) await db.subItems.bulkPut(subItemsToPut);
+			}
+
 			// Merge local optimistic edits into the result so they survive a re-fetch (e.g. navigating
 			// back to the list while still offline, where the network/cache response predates the edit).
 			// A dirty local row overrides the server's copy, a locally-created (temp-id) row is appended,
@@ -51,7 +100,7 @@ export async function fetchItems(listId: number): Promise<ItemDto[]> {
 				if (row.deletedAt) byId.delete(row.id);
 				else byId.set(row.id, row);
 			}
-			return [...byId.values()];
+			return mergeDirtySubItems(db, [...byId.values()]);
 		},
 		() => getCachedItems(listId)
 	);

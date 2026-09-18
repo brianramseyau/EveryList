@@ -31,6 +31,18 @@ export interface ListDto {
    *  treat a missing/undefined value as OFF, and gate reads with
    *  `useDeadline === true`. See PLAN_24_PHASE_ITEM_DEADLINES.md. */
   useDeadline?: boolean
+  /** Whether items on this list can carry their own checklist of sub-tasks.
+   *  Defaults to `false` server-side, like useDeadline above — a todos-style
+   *  feature that doesn't fit a shopping list. Treat a missing/undefined
+   *  value as OFF, and gate reads with `useSubtasks === true`. See
+   *  PLAN_29_PHASE_SUBTASKS.md. */
+  useSubtasks?: boolean
+  /** Whether checking off an item's last open sub-task automatically checks
+   *  the item itself. Same INVERTED "missing = false" convention as
+   *  useDeadline above — a behavior change, not just visibility, so it
+   *  doesn't silently kick in for existing lists. Gate reads with
+   *  `useSubtaskAutoComplete === true`. */
+  useSubtaskAutoComplete?: boolean
   /** Display-only, independent of useShops/usePrice — same "missing = true" convention. */
   showStoreInList?: boolean
   showPriceInList?: boolean
@@ -93,6 +105,23 @@ export interface ItemDto {
   createdAt: string
   updatedAt: string | null
   deletedAt: string | null
+  version: number
+  /** Present only when the fetch preloaded sub-tasks (the list index fetch
+   *  does; a single-item mutation response does not). See
+   *  PLAN_29_PHASE_SUBTASKS.md. */
+  subItems?: SubItemDto[]
+}
+
+export interface SubItemDto {
+  id: number
+  itemId: number
+  name: string
+  checked: boolean
+  checkedAt: string | null
+  sortOrder: number
+  createdBy: number
+  createdAt: string
+  updatedAt: string | null
   version: number
 }
 
@@ -306,7 +335,14 @@ export interface BackupSettingsStateDto {
 }
 
 export interface SyncEventDto {
-  entityType: 'list' | 'category' | 'item' | 'favorite_item' | 'store' | 'store_category_order'
+  entityType:
+    | 'list'
+    | 'category'
+    | 'item'
+    | 'sub_item'
+    | 'favorite_item'
+    | 'store'
+    | 'store_category_order'
   entityId: number
   op: 'create' | 'update' | 'delete' | 'purge'
   payload: Record<string, unknown> | null

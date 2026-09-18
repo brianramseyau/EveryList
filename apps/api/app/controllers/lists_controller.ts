@@ -110,6 +110,8 @@ export default class ListsController {
       useQuantity: payload.useQuantity,
       usePrice: payload.usePrice,
       useDeadline: payload.useDeadline,
+      useSubtasks: payload.useSubtasks,
+      useSubtaskAutoComplete: payload.useSubtaskAutoComplete,
       showStoreInList: payload.showStoreInList,
       showPriceInList: payload.showPriceInList,
       itemSortOrder: payload.itemSortOrder,

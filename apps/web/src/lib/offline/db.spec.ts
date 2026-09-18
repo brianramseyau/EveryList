@@ -36,6 +36,7 @@ describe('getDb', () => {
 				'selectedStore',
 				'stores',
 				'storeCategoryOrders',
+				'subItems',
 				'syncQueue'
 			].sort()
 		);

@@ -21,6 +21,8 @@ export default class ListTransformer extends BaseTransformer<List> {
         'useQuantity',
         'usePrice',
         'useDeadline',
+        'useSubtasks',
+        'useSubtaskAutoComplete',
         'showStoreInList',
         'showPriceInList',
         'itemSortOrder',
