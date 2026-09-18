@@ -9,9 +9,19 @@ import { markListOrigin } from '$lib/nav-direction';
 
 const beforeNavigateHandlers: Array<(navigation: BeforeNavigate) => void> = [];
 
-vi.mock('$app/state', () => ({ page: { params: { id: '1', itemId: '100' } } }));
+const pageMock: {
+	params: { id: string; itemId: string };
+	url: URL;
+	state: Record<string, unknown>;
+} = {
+	params: { id: '1', itemId: '100' },
+	url: new URL('https://everylist.example/lists/1/items/100'),
+	state: {}
+};
+vi.mock('$app/state', () => ({ page: pageMock }));
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn(),
+	replaceState: vi.fn(),
 	beforeNavigate: (handler: (navigation: BeforeNavigate) => void) => {
 		beforeNavigateHandlers.push(handler);
 	}
@@ -43,7 +53,7 @@ const { fetchCategories } = await import('$lib/api/categories');
 const { fetchItems, updateItem, moveItemToList } = await import('$lib/api/items');
 const { fetchStores } = await import('$lib/api/stores');
 const { fetchFavorites, createFavorite, deleteFavorite } = await import('$lib/api/favorites');
-const { goto } = await import('$app/navigation');
+const { goto, replaceState } = await import('$app/navigation');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { getDeadlineNotificationsPreference, resyncDeadlineNotifications } =
 	await import('$lib/notifications/sync');
@@ -149,6 +159,8 @@ function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): I
 
 describe('Item detail +page.svelte', () => {
 	beforeEach(() => {
+		pageMock.url = new URL('https://everylist.example/lists/1/items/100');
+		pageMock.state = {};
 		setToken('test-token');
 		vi.mocked(fetchList).mockResolvedValue(list);
 		vi.mocked(fetchLists).mockResolvedValue([list]);
@@ -457,6 +469,53 @@ describe('Item detail +page.svelte', () => {
 
 		await page.getByRole('button', { name: 'Save' }).click();
 		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ deadline: null }));
+	});
+
+	it('opens the reschedule overlay when reached via ?reschedule=1', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+		pageMock.url = new URL('https://everylist.example/lists/1/items/100?reschedule=1');
+
+		render(ItemDetailPage);
+
+		await expect.element(page.getByText('Reschedule')).toBeInTheDocument();
+	});
+
+	it('reschedules the item for this list/item id via the overlay', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+		pageMock.url = new URL('https://everylist.example/lists/1/items/100?reschedule=1');
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await page.getByRole('button', { name: /Tomorrow/ }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(1, 100, {
+			deadline: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T17:30$/)
+		});
+	});
+
+	it('does not open the reschedule overlay for a plain visit', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+
+		render(ItemDetailPage);
+
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+		expect(page.getByText('Reschedule').elements()).toHaveLength(0);
+	});
+
+	it('strips the reschedule query param on close, so it does not reopen on refresh', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+		pageMock.url = new URL('https://everylist.example/lists/1/items/100?reschedule=1');
+
+		render(ItemDetailPage);
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		expect(replaceState).toHaveBeenCalled();
+		const [urlArg] = vi.mocked(replaceState).mock.calls[0];
+		expect(String(urlArg)).not.toContain('reschedule');
 	});
 
 	it('saves via the form submit event, not just the header Save button', async () => {

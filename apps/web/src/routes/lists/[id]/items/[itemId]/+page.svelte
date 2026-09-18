@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { Button, Label, Select } from 'flowbite-svelte';
@@ -26,6 +26,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Loader from '$lib/components/Loader.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import RescheduleOverlay from '$lib/components/RescheduleOverlay.svelte';
 
 	const listId = $derived(Number(page.params.id));
 	const itemId = $derived(Number(page.params.itemId));
@@ -87,6 +88,21 @@
 		deadlineTime: string;
 	} | null = null;
 	let saved = $state(false);
+	// Opened when this page is reached via the deadline notification's "Reschedule" action
+	// (push-sw.js / native.ts navigate here with `?reschedule=1`) — stripped from the URL on close
+	// so a refresh or back-navigation doesn't reopen it.
+	let rescheduleOpen = $state(false);
+
+	function closeReschedule() {
+		rescheduleOpen = false;
+		// Always the current page's own URL with one query param removed — safe, but not
+		// statically verifiable by the lint rule (see +layout.svelte's own goto() for the same
+		// technique).
+		const url = new URL(page.url);
+		url.searchParams.delete('reschedule');
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		replaceState(url, page.state);
+	}
 
 	const isDirty = $derived.by(() => {
 		const original = originalDraft;
@@ -157,6 +173,7 @@
 					deadlineTime: draftDeadlineTime
 				};
 				error = null;
+				if (item.deadline && page.url.searchParams.get('reschedule')) rescheduleOpen = true;
 			} else {
 				error = 'Item not found.';
 			}
@@ -299,6 +316,10 @@
 		onConfirm={dirtyGuard.confirmDiscard}
 		onCancel={dirtyGuard.cancelDiscard}
 	/>
+{/if}
+
+{#if rescheduleOpen && item?.deadline}
+	<RescheduleOverlay {listId} {itemId} deadline={item.deadline} onClose={closeReschedule} />
 {/if}
 
 <main

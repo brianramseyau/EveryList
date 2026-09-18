@@ -1,4 +1,5 @@
 import type { ItemDto, ListDto } from '@everylist/shared';
+import { Capacitor } from '@capacitor/core';
 // Provably covered in isolation — see badge.ts's identical note for why a
 // direct native-plugin import is v8-ignored: the growing number of
 // `vi.mock('$lib/notifications/native', …)` partial mocks across the suite
@@ -7,9 +8,8 @@ import type { ItemDto, ListDto } from '@everylist/shared';
 /* v8 ignore start */
 import { LocalNotifications } from '@capacitor/local-notifications';
 /* v8 ignore stop */
-import { addHoursToDeadline } from '$lib/deadline';
-import { fetchItems, updateItem } from '$lib/api/items';
-import { computeScheduledDeadlines, notificationBody, triggerDate } from './scheduled-deadlines';
+import { updateItem } from '$lib/api/items';
+import { computeScheduledDeadlines } from './scheduled-deadlines';
 
 /** Tags every notification this module schedules, so cancel logic below only ever touches
  * its own notifications — not some future feature's unrelated `@capacitor/local-notifications`
@@ -132,15 +132,19 @@ export async function cancelAllNativeDeadlineNotifications(): Promise<void> {
 	await LocalNotifications.cancel({ notifications: ours.map(({ id }) => ({ id })) });
 }
 
-/** Declares the "Complete"/"Snooze" buttons a deadline notification's expanded actions area
+/** Declares the "Complete"/"Reschedule" buttons a deadline notification's expanded actions area
  * offers (iOS's `UNNotificationCategory`, Android's `NotificationCompat.Action`) — must run on
  * every app launch, not just once, since iOS discards the registration between sessions. Safe to
  * call before permission is granted or before any notification is scheduled.
  *
- * `foreground: false` on both actions keeps them handled entirely in the background (iOS's
- * `UNNotificationAction` launches the app to the foreground unless told otherwise) — the plain
- * tap-to-open action has no such flag and always opens the app, which is the behavior wanted for
- * it (see `listenForNativeDeadlineActions`'s `onTap`). */
+ * `foreground: false` on "Complete" keeps it handled entirely in the background (iOS's
+ * `UNNotificationAction` launches the app to the foreground unless told otherwise). "Reschedule"
+ * needs to show the shortcut-picker overlay (`RescheduleOverlay.svelte`), which needs the app
+ * foregrounded — but only *here*, on iOS: on Android, `foreground: false` is what makes the OS
+ * route the tap to `DeadlineNotificationActionReceiver`/`RescheduleActivity` instead (a patched
+ * copy of `@capacitor/local-notifications` — see `patches/`), which is the faster, no-app-launch
+ * popup and must stay that way. The plain tap-to-open action has no such flag and always opens
+ * the app, which is the behavior wanted for it (see `listenForNativeDeadlineActions`'s `onTap`). */
 export async function registerNativeDeadlineActionTypes(): Promise<void> {
 	await LocalNotifications.registerActionTypes({
 		types: [
@@ -148,7 +152,11 @@ export async function registerNativeDeadlineActionTypes(): Promise<void> {
 				id: ACTION_TYPE_ID,
 				actions: [
 					{ id: COMPLETE_ACTION_ID, title: 'Complete', foreground: false },
-					{ id: SNOOZE_ACTION_ID, title: 'Snooze 1 hr', foreground: false }
+					{
+						id: SNOOZE_ACTION_ID,
+						title: 'Reschedule',
+						foreground: Capacitor.getPlatform() === 'ios'
+					}
 				]
 			}
 		]
@@ -162,54 +170,33 @@ async function completeFromNotification(listId: number, itemId: number): Promise
 	await LocalNotifications.cancel({ notifications: [{ id: itemId }] });
 }
 
-/** Pushes the item's deadline forward an hour and reschedules its notification to match — a
- * single-item reschedule rather than a full resync, since every other item's due state is
- * unaffected by this one snooze. */
-async function snoozeFromNotification(listId: number, itemId: number): Promise<void> {
-	const items = await fetchItems(listId);
-	const item = items.find((candidate) => candidate.id === itemId);
-	if (!item?.deadline) return;
-
-	const deadline = addHoursToDeadline(item.deadline, 1);
-	await updateItem(listId, itemId, { deadline });
-	await LocalNotifications.schedule({
-		notifications: [
-			{
-				id: itemId,
-				title: item.name,
-				body: notificationBody(item.notes),
-				schedule: { at: triggerDate(deadline) },
-				actionTypeId: ACTION_TYPE_ID,
-				extra: { listId, itemId, source: SOURCE, deadline }
-			}
-		]
-	});
-}
-
-/** Wires the "Complete"/"Snooze" notification actions to their effect, and a plain tap on the
- * notification body to `onTap`, so the caller can navigate to the specific list/item the
- * notification was about (the OS opens the app either way — this only decides where inside it
- * to go). Call once at app launch (native platforms only). Ignores notifications from some
- * other, unrelated `@capacitor/local-notifications` consumer (see `isOwnNotification`). */
+/** Wires the "Complete" notification action to its effect, and a plain tap on the notification
+ * body (`onTap`) or the "Reschedule" action (`onReschedule`) to navigating to the specific
+ * list/item the notification was about (the OS opens the app either way — this only decides
+ * where inside it to go; `onReschedule`'s caller is expected to land on the item with the
+ * reschedule overlay open, e.g. via a `?reschedule=1` query param). Call once at app launch
+ * (native platforms only). Ignores notifications from some other, unrelated
+ * `@capacitor/local-notifications` consumer (see `isOwnNotification`). In practice `onReschedule`
+ * only ever fires on iOS — Android bypasses this JS listener entirely for that action, see
+ * `registerNativeDeadlineActionTypes`. */
 export function listenForNativeDeadlineActions(
-	onTap: (listId: number, itemId: number) => void
+	onTap: (listId: number, itemId: number) => void,
+	onReschedule: (listId: number, itemId: number) => void
 ): ReturnType<typeof LocalNotifications.addListener> {
 	return LocalNotifications.addListener('localNotificationActionPerformed', (performed) => {
 		if (!isOwnNotification(performed.notification)) return;
 		const extra = performed.notification.extra as { listId: number; itemId: number };
 
 		// Fire-and-forget by necessity (this listener callback isn't awaited by the plugin), but
-		// still caught: an uncaught rejection here (a network failure, `LocalNotifications.cancel`/
-		// `schedule` throwing) would otherwise surface as nothing more than a silently no-op'd
-		// action, with no trace of why.
+		// still caught: an uncaught rejection here (a network failure, `LocalNotifications.cancel`
+		// throwing) would otherwise surface as nothing more than a silently no-op'd action, with no
+		// trace of why.
 		if (performed.actionId === COMPLETE_ACTION_ID) {
 			void completeFromNotification(extra.listId, extra.itemId).catch((error: unknown) => {
 				console.error('Failed to complete item from notification action', error);
 			});
 		} else if (performed.actionId === SNOOZE_ACTION_ID) {
-			void snoozeFromNotification(extra.listId, extra.itemId).catch((error: unknown) => {
-				console.error('Failed to snooze item from notification action', error);
-			});
+			onReschedule(extra.listId, extra.itemId);
 		} else if (performed.actionId === TAP_ACTION_ID) {
 			onTap(extra.listId, extra.itemId);
 		}
