@@ -88,7 +88,14 @@ jobs:
       - name: Build web bundle and sync into the native Android project
         run: pnpm --filter @everylist/web run cap:sync
 
+      # packages: 'platform-tools' - the action's own default ('tools platform-tools') installs
+      # the long-deprecated standalone `tools` package, which Google has stopped serving from the
+      # SDK repository; sdkmanager now fails outright trying to fetch it. AGP pulls whatever
+      # platform/build-tools versions it actually needs on its own. See
+      # https://github.com/android-actions/setup-android/issues/537
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - uses: actions/setup-java@v4
         with:
@@ -141,7 +148,10 @@ jobs:
       - name: Build web bundle and sync into the native Android project
         run: pnpm --filter @everylist/web run cap:sync
 
+      # packages: 'platform-tools' - see the same step's comment in build-android-debug above.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - uses: actions/setup-java@v4
         with:
