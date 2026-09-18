@@ -169,15 +169,31 @@
 			// Must run every launch (not just once) since iOS discards the action-type registration
 			// between sessions — see registerNativeDeadlineActionTypes's own note.
 			void registerNativeDeadlineActionTypes();
-			notificationActionHandle = listenForNativeDeadlineActions((listId, itemId) => {
-				// A stale notification tapped after logout/session expiry would otherwise navigate
-				// straight into the item editor, which redirects to /login without preserving the
-				// destination — same reasoning as the appUrlOpen deep-link guard below.
-				if (!loggedIn) return;
-				void goto(
-					resolve('/lists/[id]/items/[itemId]', { id: String(listId), itemId: String(itemId) })
-				);
-			});
+			notificationActionHandle = listenForNativeDeadlineActions(
+				(listId, itemId) => {
+					// A stale notification tapped after logout/session expiry would otherwise navigate
+					// straight into the item editor, which redirects to /login without preserving the
+					// destination — same reasoning as the appUrlOpen deep-link guard below.
+					if (!loggedIn) return;
+					void goto(
+						resolve('/lists/[id]/items/[itemId]', { id: String(listId), itemId: String(itemId) })
+					);
+				},
+				(listId, itemId) => {
+					// iOS-only in practice (see registerNativeDeadlineActionTypes) — Android's
+					// "Reschedule" action never reaches this JS listener at all.
+					if (!loggedIn) return;
+					// The `?reschedule=1` suffix is always appended to this app's own resolved item
+					// route — safe, but not statically verifiable by the lint rule, same technique
+					// ingressBase()'s own goto() above uses.
+					const itemPath = resolve('/lists/[id]/items/[itemId]', {
+						id: String(listId),
+						itemId: String(itemId)
+					});
+					// eslint-disable-next-line svelte/no-navigation-without-resolve
+					void goto(`${itemPath}?reschedule=1`);
+				}
+			);
 			resumeHandle = App.addListener('resume', () => syncDeadlineNotifications());
 			deepLinkHandle = App.addListener('appUrlOpen', ({ url }) => {
 				if (!loggedIn) return;

@@ -82,19 +82,15 @@ export function formatDeadline(deadline: string, locale?: string): string {
 }
 
 /**
- * The notification "Snooze" action's target deadline — the given deadline's effective time (a
- * date-only deadline has no time of its own, so it's based off 9am, matching
+ * The reschedule overlay's "1 hour" shortcut — the given deadline's effective time (a date-only
+ * deadline has no time of its own, so it's based off 9am, matching
  * `scheduled-deadlines.ts#triggerDate`'s local-notification trigger) plus `hours`, or `now` plus
  * `hours` if that's later. That fallback matters because a notification can sit unread for a
- * while before Snooze is tapped: without it, "+1hr" off an already-passed deadline (or a
+ * while before it's rescheduled: without it, "+1hr" off an already-passed deadline (or a
  * date-only one whose Web Push notification fires near midnight) would still land in the past,
  * so the item would immediately re-show as overdue instead of actually being deferred. Always
- * returns a datetime deadline, even from a date-only input, since snoozing inherently pins it to
- * a time.
- *
- * Duplicated verbatim (never bundled/imported) in `static/push-sw.js`'s own `addHoursToDeadline`
- * for the Web Push notification-action path — keep both in sync, see
- * `deadline-sw-parity.spec.ts`, which pins them to the same outputs.
+ * returns a datetime deadline, even from a date-only input, since this shortcut is only offered
+ * when the deadline already has a time (see `RescheduleOverlay.svelte`).
  */
 export function addHoursToDeadline(
 	deadline: string,
@@ -111,6 +107,57 @@ export function addHoursToDeadline(
 	earliest.setHours(earliest.getHours() + hours);
 
 	return formatLocalMinuteIso(at > earliest ? at : earliest);
+}
+
+/** Applies a computed local `Date` back onto a deadline, keeping the original's time-of-day when
+ * it had one and falling back to date-only otherwise — the shared tail end of the three
+ * reschedule shortcuts below. A timed result is floored at `now`: "This weekend" computed on a
+ * Saturday/Sunday targets *today*, so re-applying a deadline's already-passed time-of-day would
+ * otherwise produce a result already in the past — the item would immediately re-show as overdue
+ * instead of actually being deferred, the same failure mode `addHoursToDeadline` already guards
+ * against. A date-only result needs no such floor: it's due by the end of that day regardless of
+ * the current time, so today is never "in the past" for one. */
+function withSameTimeOfDay(deadline: string, target: Date, now: Date): string {
+	if (!hasTime(deadline)) return todayLocalIso(target);
+	const { time } = splitDeadline(deadline);
+	const [hour, minute] = time.split(':').map(Number);
+	const at = new Date(target);
+	at.setHours(hour, minute, 0, 0);
+	return formatLocalMinuteIso(at > now ? at : now);
+}
+
+/**
+ * The reschedule overlay's "Tomorrow" shortcut — tomorrow's calendar date relative to `now`,
+ * keeping the deadline's time-of-day if it had one.
+ */
+export function tomorrowDeadline(deadline: string, now: Date = new Date()): string {
+	const tomorrow = new Date(now);
+	tomorrow.setDate(tomorrow.getDate() + 1);
+	return withSameTimeOfDay(deadline, tomorrow, now);
+}
+
+/**
+ * The reschedule overlay's "This weekend" shortcut — the coming Saturday, or today if today is
+ * already Saturday or Sunday, keeping the deadline's time-of-day if it had one.
+ */
+export function thisWeekendDeadline(deadline: string, now: Date = new Date()): string {
+	const dayOfWeek = now.getDay(); // 0 = Sunday .. 6 = Saturday
+	const daysUntilSaturday = dayOfWeek === 0 || dayOfWeek === 6 ? 0 : 6 - dayOfWeek;
+	const target = new Date(now);
+	target.setDate(target.getDate() + daysUntilSaturday);
+	return withSameTimeOfDay(deadline, target, now);
+}
+
+/**
+ * The reschedule overlay's "Next week" shortcut — next Monday, always a future date even if
+ * today is already Monday, keeping the deadline's time-of-day if it had one.
+ */
+export function nextWeekDeadline(deadline: string, now: Date = new Date()): string {
+	const dayOfWeek = now.getDay(); // 0 = Sunday .. 6 = Saturday
+	const daysUntilNextMonday = (8 - dayOfWeek) % 7 || 7;
+	const target = new Date(now);
+	target.setDate(target.getDate() + daysUntilNextMonday);
+	return withSameTimeOfDay(deadline, target, now);
 }
 
 export interface DeadlineChip {

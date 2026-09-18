@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A reschedule shortcut row's own fill — a hairline-bordered card like
+     widget_config_section_background, but with a ripple so each option gives touch feedback
+     (these are individually tappable, unlike that section's plain static container). -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/widget_pill_fill">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <corners android:radius="12dp" />
+            <stroke android:width="1dp" android:color="@color/widget_border" />
+        </shape>
+    </item>
+</ripple>

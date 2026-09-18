@@ -48,6 +48,18 @@ const routes = {
     tokens: [{"old":"/api/v1/auth/reset-password","type":0,"val":"api","end":""},{"old":"/api/v1/auth/reset-password","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/reset-password","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/reset-password","type":0,"val":"reset-password","end":""}],
     types: placeholder as Registry['auth.password_reset.reset']['types'],
   },
+  'auth.ha_auth.login': {
+    methods: ["POST"],
+    pattern: '/api/v1/auth/login-with-home-assistant',
+    tokens: [{"old":"/api/v1/auth/login-with-home-assistant","type":0,"val":"api","end":""},{"old":"/api/v1/auth/login-with-home-assistant","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/login-with-home-assistant","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/login-with-home-assistant","type":0,"val":"login-with-home-assistant","end":""}],
+    types: placeholder as Registry['auth.ha_auth.login']['types'],
+  },
+  'auth.ha_auth.login_implicit': {
+    methods: ["POST"],
+    pattern: '/api/v1/auth/login-with-home-assistant-identity',
+    tokens: [{"old":"/api/v1/auth/login-with-home-assistant-identity","type":0,"val":"api","end":""},{"old":"/api/v1/auth/login-with-home-assistant-identity","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/login-with-home-assistant-identity","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/login-with-home-assistant-identity","type":0,"val":"login-with-home-assistant-identity","end":""}],
+    types: placeholder as Registry['auth.ha_auth.login_implicit']['types'],
+  },
   'setup.setup.status': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/setup/status',
@@ -455,6 +467,18 @@ const routes = {
     pattern: '/api/v1/alexa/preferences',
     tokens: [{"old":"/api/v1/alexa/preferences","type":0,"val":"api","end":""},{"old":"/api/v1/alexa/preferences","type":0,"val":"v1","end":""},{"old":"/api/v1/alexa/preferences","type":0,"val":"alexa","end":""},{"old":"/api/v1/alexa/preferences","type":0,"val":"preferences","end":""}],
     types: placeholder as Registry['alexaPreferences.alexa_preferences.update']['types'],
+  },
+  'haLink.ha_link.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/ha-link',
+    tokens: [{"old":"/api/v1/ha-link","type":0,"val":"api","end":""},{"old":"/api/v1/ha-link","type":0,"val":"v1","end":""},{"old":"/api/v1/ha-link","type":0,"val":"ha-link","end":""}],
+    types: placeholder as Registry['haLink.ha_link.show']['types'],
+  },
+  'haLink.ha_link.update': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/ha-link',
+    tokens: [{"old":"/api/v1/ha-link","type":0,"val":"api","end":""},{"old":"/api/v1/ha-link","type":0,"val":"v1","end":""},{"old":"/api/v1/ha-link","type":0,"val":"ha-link","end":""}],
+    types: placeholder as Registry['haLink.ha_link.update']['types'],
   },
   'personal_access_tokens.me': {
     methods: ["GET","HEAD"],

@@ -9,9 +9,28 @@ import { markListOrigin } from '$lib/nav-direction';
 
 const beforeNavigateHandlers: Array<(navigation: BeforeNavigate) => void> = [];
 
-vi.mock('$app/state', () => ({ page: { params: { id: '1', itemId: '100' } } }));
+// Only `params` is reactive ($state, plain strings only) — needed so a test can simulate
+// SvelteKit reusing this mounted component for a same-route navigation to a different item
+// (see the reactive reload-on-itemId-change effect in +page.svelte). `url` stays a plain,
+// reassignable field: wrapping a `URL` instance itself in `$state`'s deep proxy broke it badly
+// enough to hang the whole test run, so this file compiles with rune support (see vite.config.ts's
+// `src/**/*.svelte.{test,spec}.{ts,js}` pattern) but only `params` opts into it.
+const pageParams = $state({ id: '1', itemId: '100' });
+const pageMock: {
+	readonly params: { id: string; itemId: string };
+	url: URL;
+	state: Record<string, unknown>;
+} = {
+	get params() {
+		return pageParams;
+	},
+	url: new URL('https://everylist.example/lists/1/items/100'),
+	state: {}
+};
+vi.mock('$app/state', () => ({ page: pageMock }));
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn(),
+	replaceState: vi.fn(),
 	beforeNavigate: (handler: (navigation: BeforeNavigate) => void) => {
 		beforeNavigateHandlers.push(handler);
 	}
@@ -43,7 +62,7 @@ const { fetchCategories } = await import('$lib/api/categories');
 const { fetchItems, updateItem, moveItemToList } = await import('$lib/api/items');
 const { fetchStores } = await import('$lib/api/stores');
 const { fetchFavorites, createFavorite, deleteFavorite } = await import('$lib/api/favorites');
-const { goto } = await import('$app/navigation');
+const { goto, replaceState } = await import('$app/navigation');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { getDeadlineNotificationsPreference, resyncDeadlineNotifications } =
 	await import('$lib/notifications/sync');
@@ -149,6 +168,10 @@ function makeItem(overrides: Partial<ItemDto> & Pick<ItemDto, 'id' | 'name'>): I
 
 describe('Item detail +page.svelte', () => {
 	beforeEach(() => {
+		pageParams.id = '1';
+		pageParams.itemId = '100';
+		pageMock.url = new URL('https://everylist.example/lists/1/items/100');
+		pageMock.state = {};
 		setToken('test-token');
 		vi.mocked(fetchList).mockResolvedValue(list);
 		vi.mocked(fetchLists).mockResolvedValue([list]);
@@ -221,6 +244,79 @@ describe('Item detail +page.svelte', () => {
 
 		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
 		expect(fetchItems).toHaveBeenCalledWith(1);
+	});
+
+	it('reloads the item when the route navigates to a different item without remounting', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		await db.items.put(makeItem({ id: 200, name: 'Apples' }));
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		// SvelteKit reuses this mounted component for a same-route navigation to a different item
+		// (e.g. +layout.svelte's onTap/onReschedule) rather than remounting it.
+		pageParams.itemId = '200';
+
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Apples');
+	});
+
+	it('discards a stale response from a superseded item load instead of overwriting the current one', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		await db.items.put(makeItem({ id: 200, name: 'Apples' }));
+
+		// fetchList is part of every load's Promise.all — holding its first call open simulates a
+		// slow response for item 100's load, which the item-200 navigation below then supersedes.
+		let resolveFirstFetchList!: (value: ListDto) => void;
+		vi.mocked(fetchList).mockReturnValueOnce(
+			new Promise((resolve) => {
+				resolveFirstFetchList = resolve;
+			})
+		);
+
+		render(ItemDetailPage);
+		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(1);
+
+		pageParams.itemId = '200';
+		// The second (item-200) load's own fetchList call resolves immediately (the default mock),
+		// so it completes and renders well before the first, now-stale one is let through below.
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Apples');
+
+		resolveFirstFetchList(list);
+		await Promise.resolve();
+		await Promise.resolve();
+
+		// Item 100's stale response must not have clobbered item 200's already-rendered data.
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Apples');
+	});
+
+	it('discards a stale error from a superseded item load instead of clobbering the current one', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		await db.items.put(makeItem({ id: 200, name: 'Apples' }));
+
+		let rejectFirstFetchList!: (reason: unknown) => void;
+		vi.mocked(fetchList).mockReturnValueOnce(
+			new Promise((_resolve, reject) => {
+				rejectFirstFetchList = reject;
+			})
+		);
+
+		render(ItemDetailPage);
+		await expect.poll(() => vi.mocked(fetchList).mock.calls.length).toBe(1);
+
+		pageParams.itemId = '200';
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Apples');
+
+		rejectFirstFetchList(new Error('network error'));
+		await Promise.resolve();
+		await Promise.resolve();
+
+		// Item 100's stale failure must not surface as this page's error, or a request that's still
+		// in flight (or already succeeded) would appear to have failed.
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Apples');
+		expect(page.getByText('Failed to load item.').elements()).toHaveLength(0);
 	});
 
 	it('shows "Item not found." when the item exists in neither the cache nor the list', async () => {
@@ -457,6 +553,77 @@ describe('Item detail +page.svelte', () => {
 
 		await page.getByRole('button', { name: 'Save' }).click();
 		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ deadline: null }));
+	});
+
+	it('opens the reschedule overlay when reached via ?reschedule=1', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+		pageMock.url = new URL('https://everylist.example/lists/1/items/100?reschedule=1');
+
+		render(ItemDetailPage);
+
+		await expect.element(page.getByText('Reschedule')).toBeInTheDocument();
+	});
+
+	it('reschedules the item for this list/item id via the overlay', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+		pageMock.url = new URL('https://everylist.example/lists/1/items/100?reschedule=1');
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await page.getByRole('button', { name: /Tomorrow/ }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(1, 100, {
+			deadline: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T17:30$/)
+		});
+	});
+
+	it('feeds the rescheduled deadline back into the form, so a later Save does not revert it', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+		pageMock.url = new URL('https://everylist.example/lists/1/items/100?reschedule=1');
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await page.getByRole('button', { name: /Tomorrow/ }).click();
+		await expect.element(page.getByText('Reschedule')).not.toBeInTheDocument();
+
+		const [, , rescheduleBody] = vi.mocked(updateItem).mock.calls[0];
+		const newDeadline = (rescheduleBody as { deadline: string }).deadline;
+		await expect.element(page.getByLabelText('Time (optional)')).toHaveValue(newDeadline.slice(11));
+
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(
+			1,
+			100,
+			expect.objectContaining({ deadline: newDeadline })
+		);
+	});
+
+	it('does not open the reschedule overlay for a plain visit', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+
+		render(ItemDetailPage);
+
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+		expect(page.getByText('Reschedule').elements()).toHaveLength(0);
+	});
+
+	it('strips the reschedule query param on close, so it does not reopen on refresh', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));
+		pageMock.url = new URL('https://everylist.example/lists/1/items/100?reschedule=1');
+
+		render(ItemDetailPage);
+		await page.getByRole('button', { name: 'Cancel' }).click();
+
+		expect(replaceState).toHaveBeenCalled();
+		const [urlArg] = vi.mocked(replaceState).mock.calls[0];
+		expect(String(urlArg)).not.toContain('reschedule');
 	});
 
 	it('saves via the form submit event, not just the header Save button', async () => {

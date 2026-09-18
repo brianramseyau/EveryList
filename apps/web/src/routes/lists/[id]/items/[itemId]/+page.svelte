@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { Button, Label, Select } from 'flowbite-svelte';
@@ -26,6 +26,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Loader from '$lib/components/Loader.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import RescheduleOverlay from '$lib/components/RescheduleOverlay.svelte';
 
 	const listId = $derived(Number(page.params.id));
 	const itemId = $derived(Number(page.params.itemId));
@@ -87,6 +88,35 @@
 		deadlineTime: string;
 	} | null = null;
 	let saved = $state(false);
+	// Opened when this page is reached via the deadline notification's "Reschedule" action
+	// (push-sw.js / native.ts navigate here with `?reschedule=1`) — stripped from the URL on close
+	// so a refresh or back-navigation doesn't reopen it.
+	let rescheduleOpen = $state(false);
+
+	// `newDeadline` is set only on a successful reschedule (undefined on cancel/Escape/outside-
+	// click) — without feeding it back into `item` and the drafts here, this page's own state
+	// would still show the pre-reschedule deadline, and a later Save would silently send that
+	// stale value right back over the change the overlay just made.
+	function closeReschedule(newDeadline?: string) {
+		rescheduleOpen = false;
+		// `item` and `originalDraft` are always set together, by loadAll() — this overlay can only
+		// ever be open once that's happened (see the $effect below), so there's no case where one
+		// is set without the other.
+		if (newDeadline !== undefined && item && originalDraft) {
+			item = { ...item, deadline: newDeadline };
+			const { date, time } = splitDeadline(newDeadline);
+			draftDeadlineDate = date;
+			draftDeadlineTime = time;
+			originalDraft = { ...originalDraft, deadlineDate: date, deadlineTime: time };
+		}
+		// Always the current page's own URL with one query param removed — safe, but not
+		// statically verifiable by the lint rule (see +layout.svelte's own goto() for the same
+		// technique).
+		const url = new URL(page.url);
+		url.searchParams.delete('reschedule');
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		replaceState(url, page.state);
+	}
 
 	const isDirty = $derived.by(() => {
 		const original = originalDraft;
@@ -118,6 +148,18 @@
 	}
 
 	async function loadAll() {
+		// Captured up front so a response can be checked against the route that's current *when it
+		// resolves*, not just when it was requested — loadAll() now reruns on every itemId/listId
+		// change (see the $effect below), so a same-route navigation to a different item while an
+		// earlier load is still in flight can otherwise let a slower, now-stale response overwrite
+		// `item`/the drafts after a faster, newer one already populated them for the item actually
+		// being shown. Any response whose route no longer matches the current one is discarded
+		// entirely (including its error, and without touching `loading`) rather than applied — the
+		// load that's still current owns those either way.
+		const requestListId = listId;
+		const requestItemId = itemId;
+		const isStale = () => requestListId !== listId || requestItemId !== itemId;
+
 		loading = true;
 		try {
 			const [listResult, itemResult, categoriesResult, storesResult, favoritesResult, listsResult] =
@@ -129,6 +171,7 @@
 					fetchFavorites(listId),
 					fetchLists()
 				]);
+			if (isStale()) return;
 			list = listResult;
 			item = itemResult;
 			categories = categoriesResult;
@@ -161,9 +204,10 @@
 				error = 'Item not found.';
 			}
 		} catch (err) {
+			if (isStale()) return;
 			error = err instanceof ApiError ? err.message : 'Failed to load item.';
 		} finally {
-			loading = false;
+			if (!isStale()) loading = false;
 		}
 	}
 
@@ -173,7 +217,29 @@
 			return;
 		}
 		cameFromList = consumeListOrigin();
-		void loadAll();
+	});
+
+	// Loads (or reloads) whenever the route's itemId changes, not just once on mount —
+	// SvelteKit reuses this mounted component for a same-route navigation between two different
+	// items (e.g. +layout.svelte's onTap/onReschedule landing here for a *different* item while
+	// this page is already open on one), and without this `item` would keep showing the previous
+	// item's data indefinitely instead of loading the new one.
+	$effect(() => {
+		if (getToken()) void loadAll();
+	});
+
+	// Reacts to the `reschedule` search param directly, rather than only checking it once inside
+	// loadAll() — the deadline notification's Reschedule action navigates here with `?reschedule=1`
+	// (see +layout.svelte's onReschedule / push-sw.js), but if the app is already sitting on this
+	// exact item route, SvelteKit reuses the mounted component for a search-param-only navigation,
+	// so a param-only check confined to loadAll() would silently never open the overlay for that
+	// case. Guarded on `item.id === itemId`, not just `item?.deadline`, so a same-route navigation
+	// to a *different* item (itemId already updated, but the previous item's `loadAll()` hasn't
+	// resolved yet) can't briefly open the overlay against stale, mismatched item data.
+	$effect(() => {
+		if (item?.id === itemId && item.deadline && page.url.searchParams.get('reschedule')) {
+			rescheduleOpen = true;
+		}
 	});
 
 	// Prefers a real `history.back()` over pushing a fresh navigation back to
@@ -299,6 +365,10 @@
 		onConfirm={dirtyGuard.confirmDiscard}
 		onCancel={dirtyGuard.cancelDiscard}
 	/>
+{/if}
+
+{#if rescheduleOpen && item?.deadline}
+	<RescheduleOverlay {listId} {itemId} deadline={item.deadline} onClose={closeReschedule} />
 {/if}
 
 <main

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The deadline notification's "Reschedule" action popup (RescheduleActivity). Same floating-card
+     pattern (AppTheme.WidgetDialog) as the widget's "+" quick-add popup (QuickAddActivity/
+     quick_add.xml), so tapping Reschedule reads as an instant popup rather than a full app launch —
+     see RescheduleActivity's own doc comment for why this exists as a separate native Activity
+     instead of just foregrounding the WebView. -->
+<au.brianramsey.everylist.MaxHeightScrollView
+    android:id="@+id/reschedule_scroll"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/widget_config_card_background"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/reschedule_title"
+            android:textColor="@color/widget_ink"
+            android:textSize="19sp"
+            android:textStyle="bold" />
+
+        <!-- Options start disabled and get enabled once the item's live deadline has loaded (see
+             RescheduleActivity#loadDeadline) — the shortcuts need it to know whether to offer "1
+             hour" and to compute each target date. -->
+        <LinearLayout
+            android:id="@+id/reschedule_options"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="16dp">
+
+            <Button
+                android:id="@+id/reschedule_one_hour"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/reschedule_option_background"
+                android:text="@string/reschedule_one_hour"
+                android:textAllCaps="false"
+                android:textColor="@color/widget_ink"
+                android:gravity="start|center_vertical"
+                android:paddingHorizontal="14dp"
+                android:enabled="false"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/reschedule_tomorrow"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/reschedule_option_background"
+                android:text="@string/reschedule_tomorrow"
+                android:textAllCaps="false"
+                android:textColor="@color/widget_ink"
+                android:gravity="start|center_vertical"
+                android:paddingHorizontal="14dp"
+                android:enabled="false" />
+
+            <Button
+                android:id="@+id/reschedule_weekend"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/reschedule_option_background"
+                android:text="@string/reschedule_weekend"
+                android:textAllCaps="false"
+                android:textColor="@color/widget_ink"
+                android:gravity="start|center_vertical"
+                android:paddingHorizontal="14dp"
+                android:enabled="false" />
+
+            <Button
+                android:id="@+id/reschedule_next_week"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/reschedule_option_background"
+                android:text="@string/reschedule_next_week"
+                android:textAllCaps="false"
+                android:textColor="@color/widget_ink"
+                android:gravity="start|center_vertical"
+                android:paddingHorizontal="14dp"
+                android:enabled="false" />
+
+            <Button
+                android:id="@+id/reschedule_custom"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:background="@drawable/reschedule_option_background"
+                android:text="@string/reschedule_custom"
+                android:textAllCaps="false"
+                android:textColor="@color/widget_ink"
+                android:gravity="start|center_vertical"
+                android:paddingHorizontal="14dp"
+                android:enabled="false" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/reschedule_cancel"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="16dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:text="@string/reschedule_cancel"
+            android:textAllCaps="false"
+            android:textColor="@color/widget_muted"
+            android:textStyle="bold" />
+    </LinearLayout>
+</au.brianramsey.everylist.MaxHeightScrollView>

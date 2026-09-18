@@ -16,6 +16,10 @@ export interface ApiDefinition {
       forgot: typeof routes['auth.password_reset.forgot']
       reset: typeof routes['auth.password_reset.reset']
     }
+    haAuth: {
+      login: typeof routes['auth.ha_auth.login']
+      loginImplicit: typeof routes['auth.ha_auth.login_implicit']
+    }
   }
   setup: {
     setup: {
@@ -133,6 +137,12 @@ export interface ApiDefinition {
     alexaPreferences: {
       show: typeof routes['alexaPreferences.alexa_preferences.show']
       update: typeof routes['alexaPreferences.alexa_preferences.update']
+    }
+  }
+  haLink: {
+    haLink: {
+      show: typeof routes['haLink.ha_link.show']
+      update: typeof routes['haLink.ha_link.update']
     }
   }
   personalAccessTokens: {

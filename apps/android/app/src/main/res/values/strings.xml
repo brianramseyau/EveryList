@@ -36,4 +36,14 @@
     <string name="quick_add_hint">Add an item…</string>
     <string name="quick_add_save">Add</string>
     <string name="quick_add_failed">Couldn’t add that — is the server reachable?</string>
+
+    <!-- Reschedule popup (deadline notification's "Reschedule" action) -->
+    <string name="reschedule_title">Reschedule</string>
+    <string name="reschedule_one_hour">1 hour</string>
+    <string name="reschedule_tomorrow">Tomorrow</string>
+    <string name="reschedule_weekend">This weekend</string>
+    <string name="reschedule_next_week">Next week</string>
+    <string name="reschedule_custom">Custom…</string>
+    <string name="reschedule_no_time">No time</string>
+    <string name="reschedule_cancel">Cancel</string>
 </resources>

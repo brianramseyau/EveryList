@@ -20,8 +20,11 @@ vi.mock('$lib/api/items', () => ({
 	updateItem: vi.fn()
 }));
 
+const capacitorMock = vi.hoisted(() => ({ getPlatform: vi.fn(() => 'android') }));
+vi.mock('@capacitor/core', () => ({ Capacitor: capacitorMock }));
+
 const { LocalNotifications } = await import('@capacitor/local-notifications');
-const { fetchItems, updateItem } = await import('$lib/api/items');
+const { updateItem } = await import('$lib/api/items');
 const {
 	requestNativeNotificationPermission,
 	syncNativeDeadlineNotifications,
@@ -270,7 +273,13 @@ describe('cancelAllNativeDeadlineNotifications', () => {
 });
 
 describe('registerNativeDeadlineActionTypes', () => {
-	it('registers the Complete/Snooze action type', async () => {
+	afterEach(() => {
+		capacitorMock.getPlatform.mockReturnValue('android');
+	});
+
+	it('registers the Complete/Reschedule action type, Reschedule kept background on Android', async () => {
+		capacitorMock.getPlatform.mockReturnValue('android');
+
 		await registerNativeDeadlineActionTypes();
 
 		expect(LocalNotifications.registerActionTypes).toHaveBeenCalledWith({
@@ -279,7 +288,25 @@ describe('registerNativeDeadlineActionTypes', () => {
 					id: 'deadline',
 					actions: [
 						{ id: 'complete', title: 'Complete', foreground: false },
-						{ id: 'snooze', title: 'Snooze 1 hr', foreground: false }
+						{ id: 'snooze', title: 'Reschedule', foreground: false }
+					]
+				}
+			]
+		});
+	});
+
+	it('registers Reschedule as a foreground action on iOS, so the overlay can be shown', async () => {
+		capacitorMock.getPlatform.mockReturnValue('ios');
+
+		await registerNativeDeadlineActionTypes();
+
+		expect(LocalNotifications.registerActionTypes).toHaveBeenCalledWith({
+			types: [
+				{
+					id: 'deadline',
+					actions: [
+						{ id: 'complete', title: 'Complete', foreground: false },
+						{ id: 'snooze', title: 'Reschedule', foreground: true }
 					]
 				}
 			]
@@ -288,18 +315,6 @@ describe('registerNativeDeadlineActionTypes', () => {
 });
 
 describe('listenForNativeDeadlineActions', () => {
-	// snoozeFromNotification calls addHoursToDeadline with no explicit `now`, i.e. the real clock —
-	// pinned here so its now-vs-deadline fallback (see deadline.spec.ts) doesn't make these
-	// assertions dependent on the actual wall-clock time a CI run happens to execute at.
-	beforeEach(() => {
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date(2026, 8, 5, 12, 0));
-	});
-
-	afterEach(() => {
-		vi.useRealTimers();
-	});
-
 	function performedNotification(overrides: { source?: string } = {}) {
 		return {
 			id: 1,
@@ -312,9 +327,10 @@ describe('listenForNativeDeadlineActions', () => {
 	async function fireAction(
 		actionId: string,
 		notification = performedNotification(),
-		onTap: (listId: number, itemId: number) => void = () => {}
+		onTap: (listId: number, itemId: number) => void = () => {},
+		onReschedule: (listId: number, itemId: number) => void = () => {}
 	) {
-		listenForNativeDeadlineActions(onTap);
+		listenForNativeDeadlineActions(onTap, onReschedule);
 		const handler = vi.mocked(LocalNotifications.addListener).mock.calls[0][1] as (
 			action: unknown
 		) => void;
@@ -333,35 +349,13 @@ describe('listenForNativeDeadlineActions', () => {
 		expect(LocalNotifications.cancel).toHaveBeenCalledWith({ notifications: [{ id: 1 }] });
 	});
 
-	it('pushes the deadline forward an hour and reschedules on "snooze"', async () => {
-		const item = makeItem({ id: 1, deadline: '2026-09-06T09:00' });
-		vi.mocked(fetchItems).mockResolvedValue([item]);
-		vi.mocked(updateItem).mockResolvedValue(undefined);
+	it('routes "snooze" (Reschedule) to onReschedule rather than mutating the item directly', async () => {
+		const onReschedule = vi.fn();
 
-		await fireAction('snooze');
+		await fireAction('snooze', performedNotification(), () => {}, onReschedule);
 
-		expect(updateItem).toHaveBeenCalledWith(1, 1, { deadline: '2026-09-06T10:00' });
-		expect(LocalNotifications.schedule).toHaveBeenCalledWith({
-			notifications: [
-				{
-					id: 1,
-					title: 'Return library book',
-					body: '',
-					schedule: { at: new Date(2026, 8, 6, 10, 0) },
-					actionTypeId: 'deadline',
-					extra: { listId: 1, itemId: 1, source: 'deadline', deadline: '2026-09-06T10:00' }
-				}
-			]
-		});
-	});
-
-	it('does nothing on "snooze" when the item has since lost its deadline (or was deleted)', async () => {
-		vi.mocked(fetchItems).mockResolvedValue([makeItem({ id: 1, deadline: null })]);
-
-		await fireAction('snooze');
-
+		expect(onReschedule).toHaveBeenCalledWith(1, 1);
 		expect(updateItem).not.toHaveBeenCalled();
-		expect(LocalNotifications.schedule).not.toHaveBeenCalled();
 	});
 
 	it('logs rather than throwing when "complete" fails (e.g. a network error)', async () => {
@@ -378,20 +372,6 @@ describe('listenForNativeDeadlineActions', () => {
 		consoleError.mockRestore();
 	});
 
-	it('logs rather than throwing when "snooze" fails (e.g. a network error)', async () => {
-		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const failure = new Error('network error');
-		vi.mocked(fetchItems).mockRejectedValue(failure);
-
-		await fireAction('snooze');
-
-		expect(consoleError).toHaveBeenCalledWith(
-			'Failed to snooze item from notification action',
-			failure
-		);
-		consoleError.mockRestore();
-	});
-
 	it('ignores an action on a notification from some other feature', async () => {
 		await fireAction('complete', performedNotification({ source: 'something-else' }));
 
@@ -402,7 +382,6 @@ describe('listenForNativeDeadlineActions', () => {
 		await fireAction('tap');
 
 		expect(updateItem).not.toHaveBeenCalled();
-		expect(fetchItems).not.toHaveBeenCalled();
 	});
 
 	it("routes the plain tap-to-open action to the notification's list/item via onTap", async () => {
@@ -424,11 +403,12 @@ describe('listenForNativeDeadlineActions', () => {
 
 	it('ignores an action id matching none of "complete"/"snooze"/"tap"', async () => {
 		const onTap = vi.fn();
+		const onReschedule = vi.fn();
 
-		await fireAction('something-unrecognized', performedNotification(), onTap);
+		await fireAction('something-unrecognized', performedNotification(), onTap, onReschedule);
 
 		expect(onTap).not.toHaveBeenCalled();
+		expect(onReschedule).not.toHaveBeenCalled();
 		expect(updateItem).not.toHaveBeenCalled();
-		expect(fetchItems).not.toHaveBeenCalled();
 	});
 });

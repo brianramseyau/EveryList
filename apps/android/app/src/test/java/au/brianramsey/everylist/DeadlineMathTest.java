@@ -59,4 +59,64 @@ public class DeadlineMathTest {
             DeadlineMath.addHoursToDeadline("2026-09-06T09:00", 1, new Date(2026 - 1900, 8, 5, 15, 0))
         );
     }
+
+    // NOW is 2026-09-05 15:00 — a Saturday — matching deadline.spec.ts's fixture for the same
+    // three shortcuts.
+    private static final Date NOW = new Date(2026 - 1900, 8, 5, 15, 0, 0);
+
+    @Test
+    public void tomorrowKeepsTheTimeOfDayOnTomorrowsDate() {
+        assertEquals("2026-09-06T14:30", DeadlineMath.tomorrowDeadline("2026-09-01T14:30", NOW));
+    }
+
+    @Test
+    public void tomorrowStaysDateOnlyForADateOnlyDeadline() {
+        assertEquals("2026-09-06", DeadlineMath.tomorrowDeadline("2026-09-01", NOW));
+    }
+
+    @Test
+    public void tomorrowRollsOverMonthYearBoundaries() {
+        assertEquals(
+            "2027-01-01T09:00",
+            DeadlineMath.tomorrowDeadline("2026-12-31T09:00", new Date(2026 - 1900, 11, 31, 12, 0))
+        );
+    }
+
+    @Test
+    public void thisWeekendLandsOnTheComingSaturdayFromAWeekday() {
+        // Tuesday 2026-09-08 -> Saturday 2026-09-12.
+        assertEquals(
+            "2026-09-12T14:30",
+            DeadlineMath.thisWeekendDeadline("2026-09-01T14:30", new Date(2026 - 1900, 8, 8, 10, 0))
+        );
+    }
+
+    @Test
+    public void thisWeekendIsTodayWhenTodayIsAlreadySaturdayOrSunday() {
+        assertEquals("2026-09-05", DeadlineMath.thisWeekendDeadline("2026-09-01", NOW));
+        assertEquals(
+            "2026-09-06",
+            DeadlineMath.thisWeekendDeadline("2026-09-01", new Date(2026 - 1900, 8, 6, 10, 0))
+        );
+    }
+
+    @Test
+    public void thisWeekendFloorsAtNowWhenTodaysTimeHasAlreadyPassed() {
+        // NOW is Saturday 15:00 — reapplying the deadline's 09:00 time-of-day onto today would
+        // otherwise land six hours in the past.
+        assertEquals("2026-09-05T15:00", DeadlineMath.thisWeekendDeadline("2026-09-01T09:00", NOW));
+    }
+
+    @Test
+    public void nextWeekLandsOnNextMondayFromAWeekday() {
+        assertEquals("2026-09-07T14:30", DeadlineMath.nextWeekDeadline("2026-09-01T14:30", NOW));
+    }
+
+    @Test
+    public void nextWeekSkipsTodayEvenWhenTodayIsAlreadyMonday() {
+        assertEquals(
+            "2026-09-14",
+            DeadlineMath.nextWeekDeadline("2026-09-01", new Date(2026 - 1900, 8, 7, 10, 0))
+        );
+    }
 }

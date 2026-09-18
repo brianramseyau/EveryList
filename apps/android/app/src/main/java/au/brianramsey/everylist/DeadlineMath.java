@@ -4,14 +4,14 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 
-/** Mirrors two functions shared by apps/web/src/lib/deadline.ts (`addHoursToDeadline`) and
- *  apps/web/src/lib/notifications/scheduled-deadlines.ts (`triggerDate`) — `addHoursToDeadline`
- *  is already duplicated once in apps/web/static/push-sw.js (pinned to the original by
- *  deadline-sw-parity.spec.ts) for the same reason this copy exists:
- *  {@link DeadlineNotificationActionReceiver} runs outside the WebView/JS bundle entirely, so it
- *  can't import either original. Keep all copies in sync — naive local-time math, no timezone
- *  handling, matching the others. See DeadlineMathTest for parity test vectors pinned to the same
- *  ones deadline.spec.ts/scheduled-deadlines.spec.ts use. */
+/** Mirrors functions from apps/web/src/lib/deadline.ts (`addHoursToDeadline`,
+ *  `tomorrowDeadline`, `thisWeekendDeadline`, `nextWeekDeadline`) and
+ *  apps/web/src/lib/notifications/scheduled-deadlines.ts (`triggerDate`) — needed here because
+ *  {@link DeadlineNotificationActionReceiver} and {@link RescheduleActivity} run outside the
+ *  WebView/JS bundle entirely, so they can't import either original. Keep all copies in sync —
+ *  naive local-time math, no timezone handling, matching the others. See DeadlineMathTest for
+ *  parity test vectors pinned to the same ones deadline.spec.ts/scheduled-deadlines.spec.ts
+ *  use. */
 final class DeadlineMath {
 
     private DeadlineMath() {}
@@ -52,6 +52,69 @@ final class DeadlineMath {
 
         Calendar target = at.after(earliest) ? at : earliest;
 
+        return String.format(
+            Locale.US,
+            "%04d-%02d-%02dT%02d:%02d",
+            target.get(Calendar.YEAR),
+            target.get(Calendar.MONTH) + 1,
+            target.get(Calendar.DAY_OF_MONTH),
+            target.get(Calendar.HOUR_OF_DAY),
+            target.get(Calendar.MINUTE)
+        );
+    }
+
+    /** Mirrors deadline.ts's `tomorrowDeadline`. */
+    static String tomorrowDeadline(String deadline, Date now) {
+        Calendar target = Calendar.getInstance();
+        target.setTime(now);
+        target.add(Calendar.DAY_OF_MONTH, 1);
+        return withSameTimeOfDay(deadline, target, now);
+    }
+
+    /** Mirrors deadline.ts's `thisWeekendDeadline`. */
+    static String thisWeekendDeadline(String deadline, Date now) {
+        Calendar target = Calendar.getInstance();
+        target.setTime(now);
+        int dayOfWeek = target.get(Calendar.DAY_OF_WEEK); // SUNDAY=1 .. SATURDAY=7
+        int daysUntilSaturday = (dayOfWeek == Calendar.SUNDAY || dayOfWeek == Calendar.SATURDAY)
+            ? 0
+            : Calendar.SATURDAY - dayOfWeek;
+        target.add(Calendar.DAY_OF_MONTH, daysUntilSaturday);
+        return withSameTimeOfDay(deadline, target, now);
+    }
+
+    /** Mirrors deadline.ts's `nextWeekDeadline`. */
+    static String nextWeekDeadline(String deadline, Date now) {
+        Calendar target = Calendar.getInstance();
+        target.setTime(now);
+        int dayOfWeek = target.get(Calendar.DAY_OF_WEEK); // SUNDAY=1 .. SATURDAY=7
+        int daysUntilNextMonday = (9 - dayOfWeek) % 7;
+        if (daysUntilNextMonday == 0) daysUntilNextMonday = 7;
+        target.add(Calendar.DAY_OF_MONTH, daysUntilNextMonday);
+        return withSameTimeOfDay(deadline, target, now);
+    }
+
+    /** Applies `target`'s date back onto `deadline`, keeping the original's time-of-day when it
+     *  had one and falling back to date-only otherwise, floored at `now` — mirrors deadline.ts's
+     *  `withSameTimeOfDay` (see its own doc comment for why the floor is needed). */
+    private static String withSameTimeOfDay(String deadline, Calendar target, Date now) {
+        boolean hasTime = deadline.length() > 10;
+        if (!hasTime) {
+            return String.format(
+                Locale.US,
+                "%04d-%02d-%02d",
+                target.get(Calendar.YEAR),
+                target.get(Calendar.MONTH) + 1,
+                target.get(Calendar.DAY_OF_MONTH)
+            );
+        }
+
+        String[] timeFields = deadline.substring(11).split(":");
+        target.set(Calendar.HOUR_OF_DAY, Integer.parseInt(timeFields[0]));
+        target.set(Calendar.MINUTE, Integer.parseInt(timeFields[1]));
+        target.set(Calendar.SECOND, 0);
+        target.set(Calendar.MILLISECOND, 0);
+        if (target.getTime().before(now)) target.setTime(now);
         return String.format(
             Locale.US,
             "%04d-%02d-%02dT%02d:%02d",

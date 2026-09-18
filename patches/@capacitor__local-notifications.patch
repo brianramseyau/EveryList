@@ -1,8 +1,8 @@
 diff --git a/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/LocalNotificationManager.kt b/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/LocalNotificationManager.kt
-index 72c31a70c95449b9a8dafd754d4a34c89c4abc1e..4fb7be841bbf9067540edbeeece50e75ff2040a3 100644
+index 72c31a70c95449b9a8dafd754d4a34c89c4abc1e..7251e5ca506a4857b63a0d298cfdadba27730a8e 100644
 --- a/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/LocalNotificationManager.kt
 +++ b/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/LocalNotificationManager.kt
-@@ -251,13 +251,37 @@ class LocalNotificationManager(
+@@ -251,13 +251,61 @@ class LocalNotificationManager(
          if (actionTypeId != null) {
              val actionGroup = storage.getActionGroup(actionTypeId)
              for (notificationAction in actionGroup) {
@@ -19,7 +19,31 @@ index 72c31a70c95449b9a8dafd754d4a34c89c4abc1e..4fb7be841bbf9067540edbeeece50e75
 +                // background receiver instead — the stock behavior here unconditionally used
 +                // PendingIntent.getActivity for every action, silently ignoring `foreground` on
 +                // Android even though it's honored on iOS.
-+                val actionPendingIntent = if (notificationAction.foreground == false) {
++                //
++                // EVERYLIST_RESCHEDULE_ACTION_ID is a special case of that: it's also
++                // `foreground == false` (so the OS still routes the tap away from MainActivity —
++                // see registerNativeDeadlineActionTypes's own comment on why that flag has to stay
++                // false there), but it needs to show its own popup Activity rather than truly
++                // acting in the background. A BroadcastReceiver can't itself call startActivity()
++                // on Android 12+ — that's exactly the "notification trampoline" pattern background-
++                // activity-launch restrictions block (confirmed via logcat: "Background activity
++                // launch blocked!" when DeadlineNotificationActionReceiver tried it). Building the
++                // PendingIntent.getActivity() here instead, directly from the tap, is what makes
++                // Android grant its usual notification-triggered BAL exemption, the same as the
++                // `foreground == true` branch below already relies on.
++                val actionPendingIntent = if (notificationAction.foreground == false &&
++                    notificationAction.id == EVERYLIST_RESCHEDULE_ACTION_ID) {
++                    val rescheduleIntent = Intent()
++                    rescheduleIntent.setClassName(context, EVERYLIST_RESCHEDULE_ACTIVITY)
++                    rescheduleIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
++                    rescheduleIntent.putExtra(NOTIFICATION_OBJ_INTENT_KEY, localNotification.source)
++                    PendingIntent.getActivity(
++                        context,
++                        id + (notificationAction.id?.hashCode() ?: 0),
++                        rescheduleIntent,
++                        flags
++                    )
++                } else if (notificationAction.foreground == false) {
 +                    val backgroundIntent = Intent()
 +                    backgroundIntent.setClassName(context, EVERYLIST_BACKGROUND_ACTION_RECEIVER)
 +                    backgroundIntent.putExtra(NOTIFICATION_INTENT_KEY, id)
@@ -47,7 +71,7 @@ index 72c31a70c95449b9a8dafd754d4a34c89c4abc1e..4fb7be841bbf9067540edbeeece50e75
                  val actionBuilder = NotificationCompat.Action.Builder(
                      R.drawable.ic_transparent,
                      notificationAction.title,
-@@ -510,6 +534,11 @@ class LocalNotificationManager(
+@@ -510,6 +558,18 @@ class LocalNotificationManager(
  
          private const val DEFAULT_PRESS_ACTION = "tap"
  
@@ -55,6 +79,13 @@ index 72c31a70c95449b9a8dafd754d4a34c89c4abc1e..4fb7be841bbf9067540edbeeece50e75
 +        // patched copy of a third-party plugin doesn't need to depend on the app's own package.
 +        private const val EVERYLIST_BACKGROUND_ACTION_RECEIVER =
 +            "au.brianramsey.everylist.DeadlineNotificationActionReceiver"
++
++        // EveryList patch: the deadline notification's "Reschedule" action id (native.ts's
++        // SNOOZE_ACTION_ID) and the popup Activity it launches directly — see this action id's
++        // special case above in createActionIntents().
++        private const val EVERYLIST_RESCHEDULE_ACTION_ID = "snooze"
++        private const val EVERYLIST_RESCHEDULE_ACTIVITY =
++            "au.brianramsey.everylist.RescheduleActivity"
 +
          private var defaultSoundID = AssetUtil.RESOURCE_ID_ZERO_VALUE
          private var defaultSmallIconID = AssetUtil.RESOURCE_ID_ZERO_VALUE

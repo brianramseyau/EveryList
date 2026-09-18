@@ -96,15 +96,29 @@
             android:taskAffinity=""
             android:theme="@style/AppTheme.WidgetDialog" />
 
-        <!-- Handles the deadline notification's "Complete"/"Snooze 1 hr" actions entirely in the
-             background (the patched @capacitor/local-notifications — see patches/ — routes any
-             action registered with `foreground: false` here by explicit component name instead of
-             launching MainActivity). Not exported: only ever reached via that explicit
-             PendingIntent, never resolved by an external intent-filter match, same reasoning as
-             QuickAddActivity above. -->
+        <!-- Handles the deadline notification's "Complete" action entirely in the background (the
+             patched @capacitor/local-notifications — see patches/ — routes it here by explicit
+             component name instead of launching MainActivity). "Reschedule" is registered the
+             same `foreground: false` way but launches RescheduleActivity below directly via its
+             own PendingIntent.getActivity(), not through this receiver — see RescheduleActivity's
+             and this receiver's own class doc comments for why. Not exported: only ever reached
+             via that explicit PendingIntent, never resolved by an external intent-filter match,
+             same reasoning as QuickAddActivity above. -->
         <receiver
             android:name=".DeadlineNotificationActionReceiver"
             android:exported="false" />
+
+        <!-- The deadline notification's "Reschedule" action popup, launched directly from the tap
+             via the patched local-notifications plugin's own PendingIntent.getActivity() (see
+             patches/ and RescheduleActivity's class doc comment). Same
+             taskAffinity/excludeFromRecents/dialog-theme/not-exported rationale as QuickAddActivity
+             above — a momentary popup, not a real destination. -->
+        <activity
+            android:name=".RescheduleActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/AppTheme.WidgetDialog" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

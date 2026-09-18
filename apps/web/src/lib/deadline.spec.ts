@@ -7,12 +7,15 @@ import {
 	hasTime,
 	isDueToday,
 	isOverdue,
+	nextWeekDeadline,
 	nowLocalMinuteIso,
 	splitDeadline,
-	todayLocalIso
+	thisWeekendDeadline,
+	todayLocalIso,
+	tomorrowDeadline
 } from './deadline';
 
-/** A fixed local instant: 2026-09-05 15:00 local time. */
+/** A fixed local instant: 2026-09-05 15:00 local time — a Saturday. */
 const NOW = new Date(2026, 8, 5, 15, 0, 0);
 
 afterEach(() => {
@@ -69,6 +72,56 @@ describe('addHoursToDeadline', () => {
 		expect(addHoursToDeadline('2026-09-06T09:00', 1, new Date(2026, 8, 5, 15, 0))).toBe(
 			'2026-09-06T10:00'
 		);
+	});
+});
+
+describe('tomorrowDeadline', () => {
+	it("keeps a datetime deadline's time-of-day on tomorrow's date", () => {
+		expect(tomorrowDeadline('2026-09-01T14:30', NOW)).toBe('2026-09-06T14:30');
+	});
+
+	it('stays date-only for a date-only deadline', () => {
+		expect(tomorrowDeadline('2026-09-01', NOW)).toBe('2026-09-06');
+	});
+
+	it('rolls over month/year boundaries', () => {
+		expect(tomorrowDeadline('2026-12-31T09:00', new Date(2026, 11, 31, 12, 0))).toBe(
+			'2027-01-01T09:00'
+		);
+	});
+});
+
+describe('thisWeekendDeadline', () => {
+	it('lands on the coming Saturday from a weekday', () => {
+		// Tuesday 2026-09-08 -> Saturday 2026-09-12.
+		expect(thisWeekendDeadline('2026-09-01T14:30', new Date(2026, 8, 8, 10, 0))).toBe(
+			'2026-09-12T14:30'
+		);
+	});
+
+	it('is today when today is already Saturday or Sunday', () => {
+		// NOW is a Saturday.
+		expect(thisWeekendDeadline('2026-09-01', NOW)).toBe('2026-09-05');
+		// Sunday 2026-09-06.
+		expect(thisWeekendDeadline('2026-09-01', new Date(2026, 8, 6, 10, 0))).toBe('2026-09-06');
+	});
+
+	it("floors at now when today's time-of-day has already passed", () => {
+		// NOW is Saturday 15:00 — reapplying the deadline's 09:00 time-of-day onto today would
+		// otherwise land six hours in the past.
+		expect(thisWeekendDeadline('2026-09-01T09:00', NOW)).toBe('2026-09-05T15:00');
+	});
+});
+
+describe('nextWeekDeadline', () => {
+	it('lands on next Monday from a weekday', () => {
+		// Saturday NOW -> Monday 2026-09-07.
+		expect(nextWeekDeadline('2026-09-01T14:30', NOW)).toBe('2026-09-07T14:30');
+	});
+
+	it('skips today even when today is already Monday', () => {
+		// Monday 2026-09-07 -> Monday 2026-09-14, not today.
+		expect(nextWeekDeadline('2026-09-01', new Date(2026, 8, 7, 10, 0))).toBe('2026-09-14');
 	});
 });
 
