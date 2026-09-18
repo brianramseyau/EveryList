@@ -91,6 +91,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/password_reset_controller').default['reset']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'auth.ha_auth.login': {
+    methods: ["POST"]
+    pattern: '/api/v1/auth/login-with-home-assistant'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/ha_auth').haLoginValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/ha_auth').haLoginValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/ha_auth_controller').default['login']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/ha_auth_controller').default['login']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'auth.ha_auth.login_implicit': {
+    methods: ["POST"]
+    pattern: '/api/v1/auth/login-with-home-assistant-identity'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/ha_auth_controller').default['loginImplicit']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/ha_auth_controller').default['loginImplicit']>>>
+    }
+  }
   'setup.setup.status': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/setup/status'
@@ -905,6 +929,30 @@ export interface Registry {
       query: ExtractQuery<InferInput<(typeof import('#validators/alexa_preference').updateAlexaPreferenceValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/alexa_preferences_controller').default['update']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/alexa_preferences_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'haLink.ha_link.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/ha-link'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/ha_link_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/ha_link_controller').default['show']>>>
+    }
+  }
+  'haLink.ha_link.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/ha-link'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/user_hass_link').updateUserHassLinkValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/user_hass_link').updateUserHassLinkValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/ha_link_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/ha_link_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
   'personal_access_tokens.me': {

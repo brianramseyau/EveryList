@@ -11,6 +11,8 @@ export type ScannedRoutes = {
     'auth.access_tokens.store': { paramsTuple?: []; params?: {} }
     'auth.password_reset.forgot': { paramsTuple?: []; params?: {} }
     'auth.password_reset.reset': { paramsTuple?: []; params?: {} }
+    'auth.ha_auth.login': { paramsTuple?: []; params?: {} }
+    'auth.ha_auth.login_implicit': { paramsTuple?: []; params?: {} }
     'setup.setup.status': { paramsTuple?: []; params?: {} }
     'setup.setup.store': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
@@ -79,6 +81,8 @@ export type ScannedRoutes = {
     'tokens.personal_access_tokens.destroy': { paramsTuple: [ParamValue]; params: {'tokenId': ParamValue} }
     'alexaPreferences.alexa_preferences.show': { paramsTuple?: []; params?: {} }
     'alexaPreferences.alexa_preferences.update': { paramsTuple?: []; params?: {} }
+    'haLink.ha_link.show': { paramsTuple?: []; params?: {} }
+    'haLink.ha_link.update': { paramsTuple?: []; params?: {} }
     'personal_access_tokens.me': { paramsTuple?: []; params?: {} }
     'alexa.alexa': { paramsTuple?: []; params?: {} }
     'alexa.alexa_oauth.token': { paramsTuple?: []; params?: {} }
@@ -123,6 +127,7 @@ export type ScannedRoutes = {
     'lists.list_invites.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'tokens.personal_access_tokens.index': { paramsTuple?: []; params?: {} }
     'alexaPreferences.alexa_preferences.show': { paramsTuple?: []; params?: {} }
+    'haLink.ha_link.show': { paramsTuple?: []; params?: {} }
     'personal_access_tokens.me': { paramsTuple?: []; params?: {} }
     'alexa.alexa_icons.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
@@ -156,6 +161,7 @@ export type ScannedRoutes = {
     'lists.list_invites.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'tokens.personal_access_tokens.index': { paramsTuple?: []; params?: {} }
     'alexaPreferences.alexa_preferences.show': { paramsTuple?: []; params?: {} }
+    'haLink.ha_link.show': { paramsTuple?: []; params?: {} }
     'personal_access_tokens.me': { paramsTuple?: []; params?: {} }
     'alexa.alexa_icons.show': { paramsTuple: [ParamValue]; params: {'name': ParamValue} }
     'invite_accept.preview': { paramsTuple: [ParamValue]; params: {'token': ParamValue} }
@@ -172,6 +178,8 @@ export type ScannedRoutes = {
     'auth.access_tokens.store': { paramsTuple?: []; params?: {} }
     'auth.password_reset.forgot': { paramsTuple?: []; params?: {} }
     'auth.password_reset.reset': { paramsTuple?: []; params?: {} }
+    'auth.ha_auth.login': { paramsTuple?: []; params?: {} }
+    'auth.ha_auth.login_implicit': { paramsTuple?: []; params?: {} }
     'setup.setup.store': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.refresh': { paramsTuple?: []; params?: {} }
@@ -214,6 +222,7 @@ export type ScannedRoutes = {
     'lists.list_members.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'memberId': ParamValue} }
     'tokens.personal_access_tokens.update': { paramsTuple: [ParamValue]; params: {'tokenId': ParamValue} }
     'alexaPreferences.alexa_preferences.update': { paramsTuple?: []; params?: {} }
+    'haLink.ha_link.update': { paramsTuple?: []; params?: {} }
     'stores.stores.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'stores.stores.reorder_categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'backupSettings.backup_settings.update': { paramsTuple?: []; params?: {} }
