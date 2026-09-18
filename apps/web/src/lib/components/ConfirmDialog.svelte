@@ -68,6 +68,7 @@
 		class="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800"
 		role="alertdialog"
 		aria-modal="true"
+		aria-label="Confirm"
 		aria-describedby={messageId}
 	>
 		<p id={messageId} class="text-gray-700 dark:text-gray-200">{message}</p>

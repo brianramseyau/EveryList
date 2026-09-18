@@ -242,6 +242,12 @@
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to move item.';
 			moving = false;
+			// The move itself may have already succeeded server-side before this
+			// goto() rejected — either way, the page is still mounted and further
+			// edits here are unverified against whichever list the item now
+			// actually belongs to, so re-arm the guard rather than leave it
+			// permanently bypassed.
+			saved = false;
 		}
 	}
 

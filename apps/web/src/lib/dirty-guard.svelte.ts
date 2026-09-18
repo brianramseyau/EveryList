@@ -12,7 +12,7 @@ import type { BeforeNavigate } from '@sveltejs/kit';
 // the native beforeunload prompt instead of deferring to it.
 export function createDirtyGuard(isDirty: () => boolean) {
 	let open = $state(false);
-	let pending: { url: URL; type: BeforeNavigate['type']; delta: number | null } | null = null;
+	let pending: { url: URL; type: BeforeNavigate['type']; delta: number | undefined } | null = null;
 	// Set right before the confirmed navigation below, so that call's own
 	// beforeNavigate re-entry (isDirty() is still true at that point — nothing
 	// has cleared the draft yet) doesn't intercept and cancel itself.
@@ -33,7 +33,7 @@ export function createDirtyGuard(isDirty: () => boolean) {
 			pending = {
 				url: navigation.to.url,
 				type: navigation.type,
-				delta: navigation.type === 'popstate' ? navigation.delta : null
+				delta: navigation.type === 'popstate' ? navigation.delta : undefined
 			};
 		}
 		open = true;
@@ -45,7 +45,7 @@ export function createDirtyGuard(isDirty: () => boolean) {
 		pending = null;
 		if (!target) return;
 		bypassNext = true;
-		if (target.type === 'popstate' && target.delta !== null) {
+		if (target.type === 'popstate' && typeof target.delta === 'number') {
 			// Re-issues the same back/forward traversal instead of goto()'s
 			// pushState — a push would leave this page's history entry on the
 			// stack (the next Back lands right back on it) and skip the
