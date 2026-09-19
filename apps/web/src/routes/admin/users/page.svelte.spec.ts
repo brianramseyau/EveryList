@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { setToken, clearToken } from '$lib/api/token';
 import { ApiError } from '$lib/api/client';
+import { PendingChangesError } from '$lib/api/impersonation-errors';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/admin-users', () => ({
@@ -438,5 +439,15 @@ describe('Admin users +page.svelte', () => {
 
 		await expect.element(page.getByText('Grace Hopper')).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Impersonate' })).not.toBeInTheDocument();
+	});
+
+	it('shows the pending-changes message when unsynced changes block impersonation', async () => {
+		vi.mocked(fetchAdminUsers).mockResolvedValue([admin, other]);
+		vi.mocked(startImpersonation).mockRejectedValue(new PendingChangesError());
+
+		render(AdminUsersPage);
+		await page.getByRole('button', { name: 'Impersonate' }).click();
+
+		await expect.element(page.getByText(/unsynced changes/)).toBeInTheDocument();
 	});
 });

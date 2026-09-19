@@ -11,6 +11,7 @@
 		updateAdminUser
 	} from '$lib/api/admin-users';
 	import { startImpersonation } from '$lib/api/impersonation.svelte';
+	import { PendingChangesError } from '$lib/api/impersonation-errors';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -165,7 +166,10 @@
 			await startImpersonation({ id: user.id, label: displayName(user) });
 			await goto(resolve('/'));
 		} catch (err) {
-			error = err instanceof ApiError ? err.message : 'Failed to impersonate user.';
+			error =
+				err instanceof ApiError || err instanceof PendingChangesError
+					? err.message
+					: 'Failed to impersonate user.';
 		} finally {
 			rowBusyId = null;
 		}

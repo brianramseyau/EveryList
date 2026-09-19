@@ -17,6 +17,12 @@ import type { ListRole } from '#models/list_member'
  * written verbatim by `store` below (the only place this app ever mints
  * one) — trusted to be well-formed rather than defensively re-validated.
  */
+/** An impersonation session is view-only: minting or re-scoping a non-expiring PAT from inside it
+ * would outlive the 1-hour token. */
+function forbidImpersonated(response: HttpContext['response']) {
+  return response.forbidden({ message: 'Not available while impersonating a user.' })
+}
+
 function decodeGrants(token: AccessToken): { listId: number; role: ListRole }[] {
   return token.abilities.map((ability) => {
     const [, id, role] = ability.split(':')
@@ -46,6 +52,7 @@ export default class PersonalAccessTokensController {
   /** Mints a token scoped to every list in `listIds` — minting requires being an owner of all of them. */
   async store({ auth, request, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
+    if (user.isImpersonated) return forbidImpersonated(response)
     const payload = await request.validateUsing(createPersonalAccessTokenValidator)
     const listIds = [...new Set(payload.listIds)]
 
@@ -90,6 +97,7 @@ export default class PersonalAccessTokensController {
    */
   async update({ auth, params, request, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
+    if (user.isImpersonated) return forbidImpersonated(response)
     const existing = await User.personalAccessTokens.find(user, params.tokenId)
     if (!existing) {
       return response.notFound({ message: 'Token not found' })

@@ -3,6 +3,7 @@ import type { ApiClient } from '@japa/api-client'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { AdminUserDto, ListDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
+import db from '@adonisjs/lucid/services/db'
 import User from '#models/user'
 import { bodyData, signupAndGetUser } from './helpers.js'
 
@@ -423,5 +424,100 @@ test.group('Admin user management', (group) => {
     await client.get('/api/v1/lists').header('Authorization', `Bearer ${other.token}`)
     const third = await stamp()
     assert.isTrue(third!.toMillis() > stale.toMillis() + 60_000)
+  })
+
+  test('a PAT merely named "impersonation" is not treated as an impersonation session', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const list = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'L' })
+    const listId = bodyData<ListDto>(list).id
+    const pat = await client
+      .post('/api/v1/tokens')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'impersonation', listIds: [listId], role: 'editor' })
+    pat.assertStatus(201)
+
+    await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${(pat.body().data as { token: string }).token}`)
+
+    const row = await User.findOrFail(owner.id)
+    assert.isNotNull(row.lastSeenAt)
+  })
+
+  test('an impersonation session cannot mint or re-scope PATs, or change the password', async ({
+    client,
+  }) => {
+    const admin = await signupAndGetUser(client)
+    const other = await signupAndGetUser(client)
+    const list = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${other.token}`)
+      .json({ name: 'L' })
+    const listId = bodyData<ListDto>(list).id
+    const existing = await client
+      .post('/api/v1/tokens')
+      .header('Authorization', `Bearer ${other.token}`)
+      .json({ name: 'ha', listIds: [listId], role: 'editor' })
+    const imp = await client
+      .post(`/api/v1/admin/users/${other.id}/impersonate`)
+      .header('Authorization', `Bearer ${admin.token}`)
+    const token = imp.body().data.token as string
+
+    const mint = await client
+      .post('/api/v1/tokens')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'x', listIds: [listId], role: 'editor' })
+    mint.assertStatus(403)
+
+    const rescope = await client
+      .patch(`/api/v1/tokens/${(existing.body().data as { id: string | number }).id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ listIds: [listId], role: 'viewer' })
+    rescope.assertStatus(403)
+
+    const password = await client
+      .patch('/api/v1/account/password')
+      .header('Authorization', `Bearer ${token}`)
+      .json({
+        currentPassword: PASSWORD,
+        password: 'newpassword123',
+        passwordConfirmation: 'newpassword123',
+      })
+    password.assertStatus(403)
+
+    // Ending the session revokes the token.
+    const logout = await client
+      .post('/api/v1/account/logout')
+      .header('Authorization', `Bearer ${token}`)
+    logout.assertStatus(200)
+    const after = await client
+      .get('/api/v1/account/profile')
+      .header('Authorization', `Bearer ${token}`)
+    after.assertStatus(401)
+  })
+
+  test('a failing last-seen write is logged, not turned into a failed request', async ({
+    client,
+    assert,
+  }) => {
+    const other = await signupAndGetUser(client)
+    // Inside this test's rolled-back transaction, so the schema change never leaks out.
+    await db.rawQuery('ALTER TABLE users DROP COLUMN last_seen_at')
+
+    const response = await client
+      .get('/api/v1/lists')
+      .header('Authorization', `Bearer ${other.token}`)
+    response.assertStatus(200)
+    assert.isDefined(other.id)
+  })
+
+  test('a user with no access token is not impersonated', ({ assert }) => {
+    assert.isFalse(new User().isImpersonated)
   })
 })

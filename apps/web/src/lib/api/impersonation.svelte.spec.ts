@@ -1,20 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getToken, setToken, clearToken } from './token';
+import { PendingChangesError } from './impersonation-errors';
 
 vi.mock('./client', () => ({ apiPost: vi.fn() }));
 vi.mock('./admin-users', () => ({ impersonateAdminUser: vi.fn() }));
 vi.mock('../offline/db', () => ({ clearLocalData: vi.fn() }));
+vi.mock('../offline/sync-queue', () => ({ queueCounts: vi.fn() }));
 
 const { apiPost } = await import('./client');
 const { impersonateAdminUser } = await import('./admin-users');
 const { clearLocalData } = await import('../offline/db');
-const { impersonatedLabel, startImpersonation, stopImpersonation } =
+const { queueCounts } = await import('../offline/sync-queue');
+const { impersonatedLabel, reconcileImpersonation, startImpersonation, stopImpersonation } =
 	await import('./impersonation.svelte');
 
 const target = { id: 2, label: 'Grace Hopper' };
 
 describe('impersonation', () => {
 	beforeEach(() => {
+		vi.mocked(queueCounts).mockResolvedValue({ pending: 0, failed: 0, conflict: 0 });
 		setToken('admin-token');
 		vi.mocked(impersonateAdminUser).mockResolvedValue({
 			user: {} as never,
@@ -85,5 +89,38 @@ describe('impersonation', () => {
 		setToken('someone-elses-token');
 
 		expect(impersonatedLabel()).toBeNull();
+	});
+
+	it.each([
+		['pending', { pending: 1, failed: 0, conflict: 0 }],
+		['failed', { pending: 0, failed: 1, conflict: 0 }],
+		['conflicted', { pending: 0, failed: 0, conflict: 1 }]
+	])('refuses to start while %s changes are queued', async (_label, counts) => {
+		vi.mocked(queueCounts).mockResolvedValue(counts);
+
+		await expect(startImpersonation(target)).rejects.toBeInstanceOf(PendingChangesError);
+		expect(clearLocalData).not.toHaveBeenCalled();
+		expect(getToken()).toBe('admin-token');
+	});
+
+	it('drops the stored admin token once the impersonation token is no longer live', async () => {
+		await startImpersonation(target);
+		clearToken(); // e.g. a 401 on the expired 1-hour token
+
+		reconcileImpersonation();
+
+		expect(window.localStorage.getItem('everylist:impersonation')).toBeNull();
+	});
+
+	it('keeps the stored record while the impersonation token is still live', async () => {
+		await startImpersonation(target);
+
+		reconcileImpersonation();
+
+		expect(window.localStorage.getItem('everylist:impersonation')).not.toBeNull();
+	});
+
+	it('does nothing when there is nothing to reconcile', () => {
+		expect(() => reconcileImpersonation()).not.toThrow();
 	});
 });

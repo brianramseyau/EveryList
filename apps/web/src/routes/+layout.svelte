@@ -8,6 +8,7 @@
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { getToken, syncAuthToNative, syncTokenToServiceWorker } from '$lib/api/token';
+	import { reconcileImpersonation } from '$lib/api/impersonation.svelte';
 	import { getServerUrl } from '$lib/api/server-url';
 	import { fetchSetupStatus } from '$lib/api/setup';
 	import { isRemoteClient } from '$lib/platform/desktop';
@@ -50,6 +51,7 @@
 
 	function refreshAuth() {
 		loggedIn = Boolean(getToken());
+		reconcileImpersonation();
 	}
 
 	function syncBadge() {

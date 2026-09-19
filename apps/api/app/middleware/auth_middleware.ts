@@ -38,14 +38,19 @@ export default class AuthMiddleware {
         !user.lastSeenAt ||
         now.diff(user.lastSeenAt, 'seconds').seconds >= LAST_SEEN_WRITE_INTERVAL_SECONDS
       ) {
-        // Query-builder update rather than `user.save()` so `updatedAt` isn't bumped too. The
-        // builder skips the model's column `prepare`, so format the way the dialect (and thus
-        // a normal model save) would.
-        await db
-          .from('users')
-          .where('id', user.id)
-          .update({ last_seen_at: now.toFormat(db.connection().dialect.dateTimeFormat) })
-        user.lastSeenAt = now
+        try {
+          // Query-builder update rather than `user.save()` so `updatedAt` isn't bumped too. The
+          // builder skips the model's column `prepare`, so format the way the dialect (and thus
+          // a normal model save) would.
+          await db
+            .from('users')
+            .where('id', user.id)
+            .update({ last_seen_at: now.toFormat(db.connection().dialect.dateTimeFormat) })
+          user.lastSeenAt = now
+        } catch (error) {
+          // Best-effort bookkeeping: a failed write must never turn a valid request into a 500.
+          ctx.logger.warn({ err: error, userId: user.id }, 'failed to record last seen')
+        }
       }
     }
 

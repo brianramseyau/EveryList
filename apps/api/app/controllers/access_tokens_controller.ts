@@ -33,6 +33,7 @@ export default class AccessTokensController {
     if (user.currentAccessToken) {
       await User.accessTokens.delete(user, user.currentAccessToken.identifier)
       logger.debug({ userId: user.id }, 'logout: access token revoked')
+      if (user.isImpersonated) logger.warn({ userId: user.id }, 'admin impersonation ended')
     }
 
     return {

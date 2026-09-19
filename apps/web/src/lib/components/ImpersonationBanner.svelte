@@ -9,10 +9,13 @@
 		busy = true;
 		try {
 			await stopImpersonation();
-			await goto(resolve('/admin/users'));
+		} catch (err) {
+			// The admin session is already restored by this point; only cache cleanup can fail.
+			console.error('Failed to fully clean up after impersonation', err);
 		} finally {
 			busy = false;
 		}
+		await goto(resolve('/admin/users'));
 	}
 </script>
 

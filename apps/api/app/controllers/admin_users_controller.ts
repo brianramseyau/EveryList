@@ -146,8 +146,9 @@ export default class AdminUsersController {
 
   /** Issues a short-lived login token for the target user so the primary account can see the
    * app as they do. The token is a normal login-bucket token (so every route accepts it)
-   * named `impersonation`, which the auth middleware uses to keep it from bumping the
-   * target's `lastSeenAt` and `refresh` uses to refuse rotating it into a long-lived one. */
+   * carrying the `impersonated` ability, which the auth middleware uses to keep it from bumping the
+   * target's `lastSeenAt`, and which `refresh`, PAT minting and password change use to refuse
+   * turning a view-only session into anything longer-lived or credential-changing. */
   async impersonate(ctx: HttpContext) {
     const admin = this.requireAdmin(ctx)
     if (!admin) return
@@ -162,8 +163,8 @@ export default class AdminUsersController {
       })
     }
 
-    const token = await User.accessTokens.create(target, ['*'], {
-      name: User.IMPERSONATION_TOKEN_NAME,
+    const token = await User.accessTokens.create(target, [User.IMPERSONATION_ABILITY], {
+      name: 'impersonation',
       expiresIn: '1 hour',
     })
     ctx.logger.warn({ adminId: admin.id, userId: target.id }, 'admin impersonation started')

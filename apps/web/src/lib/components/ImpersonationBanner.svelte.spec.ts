@@ -36,4 +36,17 @@ describe('ImpersonationBanner.svelte', () => {
 		expect(stopImpersonation).toHaveBeenCalled();
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 	});
+
+	it('still navigates away when cleanup fails after the admin session is restored', async () => {
+		vi.mocked(impersonatedLabel).mockReturnValue('Grace Hopper');
+		vi.mocked(stopImpersonation).mockRejectedValue(new Error('idb blocked'));
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		render(ImpersonationBanner);
+		await page.getByRole('button', { name: 'Exit' }).click();
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(consoleError).toHaveBeenCalled();
+		consoleError.mockRestore();
+	});
 });
