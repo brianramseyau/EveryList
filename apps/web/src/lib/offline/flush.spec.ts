@@ -346,7 +346,23 @@ describe('flushQueue', () => {
 			name: 'Sweep',
 			listId: 1
 		});
+		// Not chained onto the create inline: a separate queued delete, so a transient failure of
+		// it can never re-run the (non-idempotent) create.
+		expect(apiPost).toHaveBeenCalledTimes(1);
+		const queued = await pendingMutations();
+		expect(queued).toHaveLength(1);
+		expect(queued[0]).toMatchObject({
+			entityType: 'sub_item',
+			op: 'delete',
+			targetId: 77,
+			url: '/api/v1/lists/1/items/5/subtasks/77'
+		});
+
+		await flushQueue();
+
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/5/subtasks/77');
+		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(await pendingMutations()).toHaveLength(0);
 	});
 
 	it('keeps a sub-task whose temp row is still present when its create replays', async () => {

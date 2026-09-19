@@ -52,6 +52,26 @@ describe('createSubItem (Dexie available)', () => {
 	});
 });
 
+describe('createSubItem — deleted while its request is in flight', () => {
+	it('queues a delete for the server copy when the temp row is removed before the POST resolves', async () => {
+		const db = getDb()!;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			// The user deletes the still-temp row while the POST is in flight.
+			const [row] = await db.subItems.toArray();
+			await deleteSubItem(1, 5, row!.id);
+			return { id: 42, itemId: 5, name: 'Sweep', version: 1 };
+		});
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+
+		await createSubItem(1, 5, 'Sweep');
+
+		await vi.waitFor(() =>
+			expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/5/subtasks/42')
+		);
+		expect(await db.subItems.toArray()).toEqual([]);
+	});
+});
+
 describe('updateSubItem (Dexie available)', () => {
 	const baseSubItem = {
 		id: 9,

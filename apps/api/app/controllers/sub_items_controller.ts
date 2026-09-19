@@ -86,7 +86,10 @@ export default class SubItemsController {
     // inserted in one transaction so a parent completed on another device between the
     // request's earlier awaits and the insert can't slip an open sub-task underneath it.
     const subItem = await db.transaction(async (trx) => {
-      const freshItem = await Item.query({ client: trx }).where('id', item.id).firstOrFail()
+      const freshItem = await Item.query({ client: trx })
+        .where('id', item.id)
+        .whereNull('deletedAt')
+        .firstOrFail()
       if (freshItem.checked) return null
       return SubItem.create(
         {

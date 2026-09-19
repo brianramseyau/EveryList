@@ -5,7 +5,13 @@ import { getDb, removeCachedSubItem, type QueuedMutation } from './db';
 // this import statement (a `vi.mock`-related artifact — see the identical class of issue
 // documented on $lib/api/selected-store.ts) rather than to any real code in this file.
 /* v8 ignore start */
-import { dequeueMutation, enqueueMutation, pendingMutations, updateMutation } from './sync-queue';
+import {
+	dequeueMutation,
+	enqueueDeleteForDiscardedCreate,
+	enqueueMutation,
+	pendingMutations,
+	updateMutation
+} from './sync-queue';
 /* v8 ignore stop */
 
 const BASE_DELAY_MS = 2000;
@@ -89,7 +95,9 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 		const deletedBeforeSync =
 			mutation.entityType === 'sub_item' && (await table.get(mutation.targetId)) === undefined;
 		await table.delete(mutation.targetId);
-		if (deletedBeforeSync) await apiDelete(`${mutation.url}/${created.id}`);
+		if (deletedBeforeSync) {
+			await enqueueDeleteForDiscardedCreate(mutation.entityType, mutation.url, created.id);
+		}
 		return;
 	}
 	if (mutation.op === 'reorder') {

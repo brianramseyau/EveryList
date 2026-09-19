@@ -1,7 +1,13 @@
 import type { Table } from 'dexie';
 import { ApiError } from '$lib/api/client';
 import { getDb, type EveryListDB, type SyncEntityType } from './db';
-import { dequeueMutation, enqueueConsolidated, enqueueMutation } from './sync-queue';
+import {
+	dequeueMutation,
+	enqueueConsolidated,
+	enqueueDeleteForDiscardedCreate,
+	enqueueMutation
+} from './sync-queue';
+import { flushQueue } from './flush';
 import { markSelfMutation } from './self-mutations';
 
 let tempIdCounter = 0;
@@ -36,6 +42,10 @@ export interface OfflineCreateOptions<T> {
 	/** The request path to replay from the flush loop if this create doesn't resolve immediately. */
 	url: string;
 	request: () => Promise<T>;
+	/** When set, a row the user deletes locally while this create is still in flight isn't left
+	 * behind on the server: once the create lands and its temp row is found gone, a delete for the
+	 * server's new row (`<url>/<id>`) is queued. */
+	deleteIfDiscarded?: boolean;
 }
 
 /**
@@ -68,8 +78,17 @@ export async function offlineCreate<T>(opts: OfflineCreateOptions<T>): Promise<T
 
 	try {
 		const result = await opts.request();
+		const discarded = opts.deleteIfDiscarded === true && (await table.get(tempId)) === undefined;
 		await table.delete(tempId);
 		if (queueId !== undefined) await dequeueMutation(queueId);
+		if (discarded) {
+			await enqueueDeleteForDiscardedCreate(
+				opts.entityType,
+				opts.url,
+				(result as { id: number }).id
+			);
+			void flushQueue();
+		}
 		return result;
 	} catch (err) {
 		if (err instanceof ApiError) {

@@ -39,6 +39,7 @@ export async function createSubItem(
 			_localId: String(tempId),
 			_dirty: true
 		}),
+		deleteIfDiscarded: true,
 		request: () => apiPost<SubItemDto>(`/api/v1/lists/${listId}/items/${itemId}/subtasks`, { name })
 	});
 }
@@ -99,8 +100,9 @@ export async function deleteSubItem(
 ): Promise<void> {
 	// A sub-task created offline that hasn't flushed yet only exists locally (negative temp id) —
 	// there's nothing on the server to delete *yet*, so drop the local row and leave the queued
-	// create alone: the flush loop notices the temp row is gone once the create lands and deletes
-	// the server's copy (see flush.ts's `replay`). Cancelling the create here instead would lose
+	// create alone: whichever path lands the create (`offlineCreate` when it's already in flight, the flush
+	// loop's `replay` otherwise) notices the temp row is gone and queues a delete for the server's
+	// copy. Cancelling the create here instead would lose
 	// the delete whenever its POST was already in flight.
 	if (subtaskId < 0) {
 		await getDb()?.subItems.delete(subtaskId);
