@@ -153,6 +153,18 @@ router
         router.post(':listId/items/:itemId/restore', [controllers.Items, 'restore'])
         router.delete(':listId/items/:itemId/purge', [controllers.Items, 'purge'])
 
+        router.get(':listId/items/:itemId/subtasks', [controllers.SubItems, 'index'])
+        router.post(':listId/items/:itemId/subtasks', [controllers.SubItems, 'store'])
+        router.patch(':listId/items/:itemId/subtasks/:subtaskId', [controllers.SubItems, 'update'])
+        router.patch(':listId/items/:itemId/subtasks/:subtaskId/move', [
+          controllers.SubItems,
+          'move',
+        ])
+        router.delete(':listId/items/:itemId/subtasks/:subtaskId', [
+          controllers.SubItems,
+          'destroy',
+        ])
+
         router.get(':listId/category-learnings', [controllers.CategoryLearnings, 'index'])
 
         router.get(':listId/stores', [controllers.Stores, 'index'])

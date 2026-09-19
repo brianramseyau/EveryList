@@ -324,6 +324,36 @@ const routes = {
     tokens: [{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":1,"val":"itemId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/purge","type":0,"val":"purge","end":""}],
     types: placeholder as Registry['lists.items.purge']['types'],
   },
+  'lists.sub_items.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/lists/:listId/items/:itemId/subtasks',
+    tokens: [{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":1,"val":"itemId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":0,"val":"subtasks","end":""}],
+    types: placeholder as Registry['lists.sub_items.index']['types'],
+  },
+  'lists.sub_items.store': {
+    methods: ["POST"],
+    pattern: '/api/v1/lists/:listId/items/:itemId/subtasks',
+    tokens: [{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":1,"val":"itemId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks","type":0,"val":"subtasks","end":""}],
+    types: placeholder as Registry['lists.sub_items.store']['types'],
+  },
+  'lists.sub_items.update': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId',
+    tokens: [{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":1,"val":"itemId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":0,"val":"subtasks","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":1,"val":"subtaskId","end":""}],
+    types: placeholder as Registry['lists.sub_items.update']['types'],
+  },
+  'lists.sub_items.move': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId/move',
+    tokens: [{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId/move","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId/move","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId/move","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId/move","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId/move","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId/move","type":1,"val":"itemId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId/move","type":0,"val":"subtasks","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId/move","type":1,"val":"subtaskId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId/move","type":0,"val":"move","end":""}],
+    types: placeholder as Registry['lists.sub_items.move']['types'],
+  },
+  'lists.sub_items.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId',
+    tokens: [{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":0,"val":"api","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":0,"val":"v1","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":0,"val":"lists","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":1,"val":"listId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":0,"val":"items","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":1,"val":"itemId","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":0,"val":"subtasks","end":""},{"old":"/api/v1/lists/:listId/items/:itemId/subtasks/:subtaskId","type":1,"val":"subtaskId","end":""}],
+    types: placeholder as Registry['lists.sub_items.destroy']['types'],
+  },
   'lists.category_learnings.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/lists/:listId/category-learnings',

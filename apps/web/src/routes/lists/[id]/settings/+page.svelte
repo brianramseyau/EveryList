@@ -102,6 +102,8 @@
 			useQuantity: boolean;
 			usePrice: boolean;
 			useDeadline: boolean;
+			useSubtasks: boolean;
+			useSubtaskAutoComplete: boolean;
 			showStoreInList: boolean;
 			showPriceInList: boolean;
 			itemSortOrder: 'ranked' | 'alphabetical' | 'deadline';
@@ -190,7 +192,10 @@
 	);
 	/* v8 ignore stop */
 
-	type ToggleFeatureField = Exclude<BooleanFeatureField, 'useDeadline'>;
+	type ToggleFeatureField = Exclude<
+		BooleanFeatureField,
+		'useDeadline' | 'useSubtasks' | 'useSubtaskAutoComplete'
+	>;
 
 	// Every feature toggle above defaults to `true` server-side — `!== false` is
 	// the standard "missing/undefined means on" read used across this page (see
@@ -217,6 +222,17 @@
 		}
 	}
 
+	// Same default-OFF shape as useDeadline above — `current[field] === false`
+	// (toggleFeature's formula) would send `false` on the first "enable" click
+	// for a missing field, a silent no-op.
+	async function toggleSubtasks(current: ListDto) {
+		await onupdate({ useSubtasks: current.useSubtasks !== true });
+	}
+
+	async function toggleSubtaskAutoComplete(current: ListDto) {
+		await onupdate({ useSubtaskAutoComplete: current.useSubtaskAutoComplete !== true });
+	}
+
 	// Turning this off makes the server permanently delete everything it's
 	// learned for this list (see lists_controller.ts), so unlike the other
 	// feature toggles above, turning it off goes through a confirm step;
@@ -224,6 +240,10 @@
 	function handleToggle(field: BooleanFeatureField) {
 		if (field === 'useDeadline') {
 			void toggleDeadline(list!);
+		} else if (field === 'useSubtasks') {
+			void toggleSubtasks(list!);
+		} else if (field === 'useSubtaskAutoComplete') {
+			void toggleSubtaskAutoComplete(list!);
 		} else {
 			void toggleFeature(field, list!);
 		}
@@ -380,7 +400,9 @@
 					useQuantity: list.useQuantity !== false,
 					usePrice: list.usePrice !== false,
 					showPriceInList: list.showPriceInList !== false,
-					useDeadline: list.useDeadline === true
+					useDeadline: list.useDeadline === true,
+					useSubtasks: list.useSubtasks === true,
+					useSubtaskAutoComplete: list.useSubtaskAutoComplete === true
 				}}
 				onToggle={handleToggle}
 				{confirmingCategoryLearningOff}

@@ -213,3 +213,23 @@ export async function queueCounts(): Promise<QueueCounts> {
 
 	return { pending, failed, conflict };
 }
+
+/** Queues a delete for a row the server just created for a create whose optimistic temp row the
+ * user had already deleted locally (see `sub-items.ts`'s `deleteSubItem`). A separate queued
+ * mutation — rather than an inline request chained onto the create — so a transient failure of the
+ * delete retries just the delete, never re-running the (non-idempotent) create. The delete URL is
+ * the create URL plus the new id, matching the REST shape sub-tasks use. */
+export async function enqueueDeleteForDiscardedCreate(
+	entityType: SyncEntityType,
+	createUrl: string,
+	createdId: number
+): Promise<void> {
+	await enqueueMutation({
+		entityType,
+		op: 'delete',
+		targetId: createdId,
+		expectedVersion: null,
+		payload: {},
+		url: `${createUrl}/${createdId}`
+	});
+}

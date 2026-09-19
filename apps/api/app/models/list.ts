@@ -51,6 +51,19 @@ export default class List extends ListSchema {
   @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
   declare useDeadline: boolean
 
+  // Defaults to false server-side, like `useDeadline` above — a todos-style
+  // feature that doesn't fit a shopping list. Missing/undefined reads as OFF
+  // everywhere on the frontend (`=== true`).
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare useSubtasks: boolean
+
+  // Defaults to false server-side, like `useDeadline` above — auto-completing
+  // a parent item is a behavior change, not just visibility, so it shouldn't
+  // silently kick in for existing lists. Missing/undefined reads as OFF
+  // everywhere on the frontend (`=== true`).
+  @column({ consume: (value: unknown) => Boolean(value), prepare: (value: boolean) => value })
+  declare useSubtaskAutoComplete: boolean
+
   @belongsTo(() => User, { foreignKey: 'ownerId' })
   declare owner: BelongsTo<typeof User>
 

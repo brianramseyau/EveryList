@@ -12,6 +12,8 @@ export interface ListFeatureValues {
 	usePrice: boolean;
 	showPriceInList: boolean;
 	useDeadline: boolean;
+	useSubtasks: boolean;
+	useSubtaskAutoComplete: boolean;
 }
 
 export type BooleanFeatureField = keyof ListFeatureValues;
@@ -26,7 +28,13 @@ export const DEFAULT_FEATURE_VALUES: ListFeatureValues = {
 	useQuantity: true,
 	usePrice: true,
 	showPriceInList: true,
-	useDeadline: false
+	useDeadline: false,
+	// Off by default, like useDeadline above — a todos-style feature that
+	// doesn't fit a shopping list (see the Shopping prefab below, which
+	// spreads these values unmodified). The Todo/Chores prefab turns it on
+	// explicitly.
+	useSubtasks: false,
+	useSubtaskAutoComplete: false
 };
 
 export interface ListPrefab {
@@ -64,7 +72,9 @@ export const LIST_PREFABS: ListPrefab[] = [
 			useQuantity: false,
 			usePrice: false,
 			showPriceInList: false,
-			useDeadline: true
+			useDeadline: true,
+			useSubtasks: true,
+			useSubtaskAutoComplete: false
 		},
 		itemSortOrder: 'deadline',
 		showOpenItemLimit: true

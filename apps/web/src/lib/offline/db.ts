@@ -3,6 +3,7 @@ import type {
 	ListDto,
 	CategoryDto,
 	ItemDto,
+	SubItemDto,
 	FavoriteItemDto,
 	StoreDto,
 	StoreCategoryOrderDto,
@@ -15,7 +16,7 @@ import type {
  * `SyncEventDto['entityType']` (see PLAN_05_PHASE_OFFLINE_PWA.md §3).
  */
 export type SyncEntityType =
-	'list' | 'category' | 'item' | 'favorite_item' | 'store' | 'store_category_order';
+	'list' | 'category' | 'item' | 'sub_item' | 'favorite_item' | 'store' | 'store_category_order';
 
 export interface QueuedMutation {
 	id?: number;
@@ -78,6 +79,11 @@ export interface SelectedStoreSettings {
 interface OfflineBookkeeping {
 	_localId?: string;
 	_dirty?: boolean;
+	/** Tombstone on an optimistic temp-id row the user deleted before its create landed — the
+	 * only unambiguous signal that a create's cleanup means "the user discarded this", since the
+	 * temp row can also vanish for unrelated reasons (a concurrent replay of the same create).
+	 * Never set with `_dirty`, so it isn't merged back into the UI. */
+	_discarded?: boolean;
 }
 
 export type OfflineList = ListDto &
@@ -93,6 +99,7 @@ export type OfflineList = ListDto &
 	};
 export type OfflineCategory = CategoryDto & OfflineBookkeeping;
 export type OfflineItem = ItemDto & OfflineBookkeeping;
+export type OfflineSubItem = SubItemDto & OfflineBookkeeping;
 export type OfflineFavoriteItem = FavoriteItemDto & OfflineBookkeeping;
 export type OfflineStore = StoreDto & OfflineBookkeeping;
 export type OfflineStoreCategoryOrder = StoreCategoryOrderDto & OfflineBookkeeping;
@@ -113,6 +120,7 @@ export class EveryListDB extends Dexie {
 	lists!: Table<OfflineList, number>;
 	categories!: Table<OfflineCategory, number>;
 	items!: Table<OfflineItem, number>;
+	subItems!: Table<OfflineSubItem, number>;
 	favoriteItems!: Table<OfflineFavoriteItem, number>;
 	stores!: Table<OfflineStore, number>;
 	storeCategoryOrders!: Table<OfflineStoreCategoryOrder, [number, number]>;
@@ -142,6 +150,9 @@ export class EveryListDB extends Dexie {
 		});
 		this.version(4).stores({
 			categoryLearnings: 'listId'
+		});
+		this.version(5).stores({
+			subItems: 'id, itemId'
 		});
 	}
 }
@@ -175,6 +186,8 @@ export async function isRowDirty(entityType: SyncEntityType, entityId: number): 
 	switch (entityType) {
 		case 'item':
 			return Boolean((await db.items.get(entityId))?._dirty);
+		case 'sub_item':
+			return Boolean((await db.subItems.get(entityId))?._dirty);
 		case 'category':
 			return Boolean((await db.categories.get(entityId))?._dirty);
 		case 'favorite_item':
@@ -192,6 +205,40 @@ export async function isRowDirty(entityType: SyncEntityType, entityId: number): 
 		case 'list':
 			return false;
 	}
+}
+
+/** Removes a create's optimistic temp row and reports whether the user had tombstoned it
+ * (`_discarded`) first. Read and delete share one read-write transaction so a discard can't slip
+ * in between them and be wiped unseen. */
+export async function takeTempRow(
+	db: EveryListDB,
+	table: Table<{ _discarded?: boolean }, number>,
+	tempId: number
+): Promise<boolean> {
+	return db.transaction('rw', table, async () => {
+		const discarded = (await table.get(tempId))?._discarded === true;
+		await table.delete(tempId);
+		return discarded;
+	});
+}
+
+/** Drops a deleted sub-task from its parent's nested `subItems` array in the cached `items`
+ * row. Sub-tasks are cached twice (flat in `subItems`, nested inside each `items` row — see
+ * `fetchItems`), and a hard delete only removes the flat copy on its own, so without this the
+ * nested one would resurface from `getCachedItems` on the next offline read. */
+export async function removeCachedSubItem(
+	db: EveryListDB,
+	itemId: number,
+	subItemId: number
+): Promise<void> {
+	// `modify` runs as one read-write operation, so two concurrent deletes on sibling sub-tasks
+	// can't each write back a stale snapshot and reinstate the other's id.
+	await db.items
+		.where(':id')
+		.equals(itemId)
+		.modify((row) => {
+			if (row.subItems) row.subItems = row.subItems.filter((subItem) => subItem.id !== subItemId);
+		});
 }
 
 /** Deletes the underlying database and drops the singleton, so the next `getDb()` call lazily

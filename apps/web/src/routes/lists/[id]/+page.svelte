@@ -7,7 +7,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { Button, Input } from 'flowbite-svelte';
-	import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared';
+	import type { CategoryDto, ItemDto, ListDto, StoreDto, SubItemDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { emailExportList, fetchList, getCachedList } from '$lib/api/lists';
 	import { fetchCategories, getCachedCategories } from '$lib/api/categories';
@@ -20,6 +20,7 @@
 		undoDeleteItem,
 		updateItem
 	} from '$lib/api/items';
+	import { createSubItem, deleteSubItem, updateSubItem } from '$lib/api/sub-items';
 	import { fetchStoreCategoryOrder, fetchStores, getCachedStores } from '$lib/api/stores';
 	import { getSelectedStoreSettings, setSelectedStoreSettings } from '$lib/api/selected-store';
 	import { isRowDirty, type StoreFilter } from '$lib/offline/db';
@@ -30,7 +31,12 @@
 	import { onConflict, onCreateRejected, onFlushOutcome } from '$lib/offline/flush';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import { markListOrigin, rememberListScroll, consumeListScroll } from '$lib/nav-direction';
-	import { getShowChecked, setShowChecked } from '$lib/list-prefs';
+	import {
+		getShowChecked,
+		setShowChecked,
+		getExpandedSubtaskIds,
+		setExpandedSubtaskIds
+	} from '$lib/list-prefs';
 	import { getProgressDisplayPreference, type ProgressDisplayPreference } from '$lib/listProgress';
 	import { sortableReorder } from '$lib/actions/sortable-reorder';
 	import { longPress } from '$lib/actions/long-press';
@@ -377,6 +383,16 @@
 	});
 
 	async function loadAll() {
+		// Fired immediately, ahead of everything else below — it only needs
+		// `listId`, not any of the data those other fetches return, so there's
+		// no reason to make it wait behind them. Warms the read-only
+		// learned-model cache for this list's offline suggestion fallback
+		// (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md) as early as possible —
+		// e.g. before a user who opens the list and immediately goes offline
+		// would otherwise have nothing cached for it yet. Non-blocking, so a
+		// failure here doesn't fail the page load.
+		void fetchCategoryLearnings(listId);
+
 		// Only the very first load (before `list` exists) should show the loading
 		// placeholder — it unmounts the entire keyed item list below, which resets
 		// scroll position. Realtime/conflict/flush-outcome refreshes reuse this same
@@ -409,6 +425,7 @@
 				// it no longer does now that cached data is on screen. If the
 				// revalidation below also fails, its catch sets it again.
 				error = null;
+				reconcileExpandedSubtasks();
 			} else {
 				loading = true;
 			}
@@ -420,10 +437,16 @@
 				fetchItems(listId),
 				fetchStores(listId)
 			]);
-			// Warm the read-only learned-model cache for this list's offline
-			// suggestion fallback (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md) — non-blocking, so a failure
-			// here doesn't fail the page load.
-			void fetchCategoryLearnings(listId);
+			// A completed item's sub-tasks panel should end up collapsed regardless
+			// of *how* it got completed — this call is what catches the offline
+			// cases loadAll's other callers rely on it for (see its own doc
+			// comment): a queued sub-task check whose server-side auto-complete
+			// only lands once the flush loop replays it after reconnecting, or a
+			// co-shopper completing the item on another device while this one was
+			// offline. The direct, non-`loadAll` path (this device manually
+			// checking the box) collapses immediately via `collapseIfComplete`
+			// instead, since there's no reload to hang this off of there.
+			reconcileExpandedSubtasks();
 
 			const settings = await getSelectedStoreSettings(listId);
 			selectedStoreId = settings.storeId;
@@ -478,6 +501,7 @@
 		isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		showChecked = getShowChecked(listId);
+		for (const id of getExpandedSubtaskIds(listId)) expandedItemIds.add(id);
 		progressDisplay = getProgressDisplayPreference();
 		document.addEventListener('visibilitychange', lockOnHide);
 		// A back-navigation into this page (see nav-direction.ts's
@@ -513,10 +537,12 @@
 				// different ids until the next reload. Skip it — the in-flight create already
 				// patches `items` directly once it resolves. See AGENTS.md's sortable-prototype E2E
 				// flake writeup for the failure this reproduces.
+				// Same race for sub-task creates (`createSubItem` queues `listId` on its payload so
+				// this lookup can match it).
 				if (
 					event.op === 'create' &&
-					event.entityType === 'item' &&
-					(await hasPendingCreateForList('item', listId))
+					(event.entityType === 'item' || event.entityType === 'sub_item') &&
+					(await hasPendingCreateForList(event.entityType, listId))
 				) {
 					return;
 				}
@@ -549,13 +575,17 @@
 		// had its optimistic row severed by the flush loop; say so here rather than letting
 		// the item silently vanish on the next reload. Other lists' rejections are ignored.
 		unsubscribeCreateRejected = onCreateRejected((event) => {
-			if (event.entityType !== 'item' || event.listId !== listId) return;
+			if (
+				(event.entityType !== 'item' && event.entityType !== 'sub_item') ||
+				event.listId !== listId
+			)
+				return;
 			rejectionToastId += 1;
 			rejectionToast = {
 				id: rejectionToastId,
 				message: event.name
 					? `${event.name} wasn't added — ${event.message}`
-					: `Item wasn't added — ${event.message}`
+					: `${event.entityType === 'sub_item' ? 'Sub-task' : 'Item'} wasn't added — ${event.message}`
 			};
 		});
 	});
@@ -653,6 +683,28 @@
 		);
 	}
 
+	// The server's machine-readable code for a parent item with open sub-tasks
+	// (apps/api's `subtask_completion.ts`) — routed to the same red toast as the
+	// open-item limit above, rather than the generic error banner.
+	function isSubtasksIncompleteError(err: ApiError): boolean {
+		return (
+			!!err.body &&
+			typeof err.body === 'object' &&
+			(err.body as { code?: unknown }).code === 'subtasks_incomplete'
+		);
+	}
+
+	function subtaskProgress(item: ItemDto): { label: string; complete: boolean } {
+		// Only rendered for an item that has sub-tasks (see the badge's `{#if}`).
+		const total = item.subItems!.length;
+		const done = total - openSubtaskCount(item);
+		return { label: `${done}/${total}`, complete: done === total };
+	}
+
+	function openSubtaskCount(item: ItemDto): number {
+		return item.subItems?.filter((subtask) => !subtask.checked).length ?? 0;
+	}
+
 	async function toggleChecked(item: ItemDto) {
 		if (isViewer) return;
 		const nextChecked = !item.checked;
@@ -666,9 +718,25 @@
 			);
 			return;
 		}
+		// Same local-pre-check shape as the open-item limit above, for a parent item
+		// with open sub-tasks (PLAN_29_PHASE_SUBTASKS.md) — the server's own 400
+		// backstops a stale local count below.
+		if (nextChecked && list?.useSubtasks === true) {
+			const openSubtasks = openSubtaskCount(item);
+			if (openSubtasks > 0) {
+				showUncheckBlocked(
+					openSubtasks === 1
+						? 'Finish the 1 remaining sub-task before checking this off.'
+						: `Finish the ${openSubtasks} remaining sub-tasks before checking this off.`
+				);
+				return;
+			}
+		}
 		items = items.map((current) =>
 			current.id === item.id ? { ...current, checked: nextChecked } : current
 		);
+		const wasExpanded = expandedItemIds.has(item.id);
+		if (nextChecked) collapseIfComplete(item.id);
 		if (nextChecked && !prefersReducedMotion) {
 			checkAnimatingIds.add(item.id);
 			setTimeout(() => checkAnimatingIds.delete(item.id), CHECK_ANIMATION_MS);
@@ -682,15 +750,174 @@
 			await updateItem(listId, item.id, { checked: nextChecked });
 			void refreshBadgeCount();
 		} catch (err) {
-			if (err instanceof ApiError && isUncheckedLimitError(err)) {
-				pendingUndo = null;
-				clearUndo();
+			// The optimistic collapse above assumed the completion would land — it didn't, so put
+			// the panel back the way the user had it.
+			if (wasExpanded && nextChecked && !expandedItemIds.has(item.id)) {
+				expandedItemIds.add(item.id);
+				setExpandedSubtaskIds(listId, [...expandedItemIds]);
+			}
+			if (
+				err instanceof ApiError &&
+				(isUncheckedLimitError(err) || isSubtasksIncompleteError(err))
+			) {
+				// This action's own undo is moot — the completion never happened.
+				dismissUndo();
 				showUncheckBlocked(err.message);
 			} else {
 				error = err instanceof ApiError ? err.message : 'Failed to update item.';
 			}
 			void loadAll();
 		}
+	}
+
+	/** A lighter-weight sibling of `loadAll` for the one thing checking a
+	 * sub-task off might have changed server-side that the optimistic update
+	 * above doesn't cover: the parent item's own `checked` state, if the
+	 * list's sub-task auto-complete setting just fired. Re-running the *whole*
+	 * `loadAll` for that — list, categories, stores, the category-learning
+	 * cache warm-up, store-category-order overrides — fires a pile of
+	 * unrelated requests on every single sub-task tap; refetching just the
+	 * items covers it. Best-effort and silent on failure (offline, most
+	 * commonly) — same as `loadAll`, the offline flush-outcome/realtime paths
+	 * are what actually reconcile this device once it's back online. */
+	async function refreshItemsAfterSubtaskChange() {
+		try {
+			items = await fetchItems(listId);
+			reconcileExpandedSubtasks();
+		} catch {
+			// Best-effort — offline or a transient failure, no worse off than
+			// before this call, and loadAll's own reload paths will catch up.
+		}
+	}
+
+	async function toggleSubtaskChecked(item: ItemDto, subtask: SubItemDto) {
+		if (isViewer) return;
+		const nextChecked = !subtask.checked;
+		items = items.map((current) =>
+			current.id === item.id
+				? {
+						...current,
+						subItems: current.subItems?.map((row) =>
+							row.id === subtask.id ? { ...row, checked: nextChecked } : row
+						)
+					}
+				: current
+		);
+		try {
+			const result = await updateSubItem(listId, item.id, subtask.id, { checked: nextChecked });
+			// `updateSubItem` resolves to `undefined` when offline (or already
+			// queued behind other pending work on this row) — the mutation was
+			// only queued, not actually confirmed against the server, so there's
+			// nothing new to refetch yet. Refetching anyway would be actively
+			// harmful here, not just wasted: the API GET cache's NetworkFirst
+			// strategy falls back to its last cached response when offline
+			// instead of failing, so `refreshItemsAfterSubtaskChange` would
+			// "succeed" with pre-change data and clobber the optimistic update
+			// above with it. Once this device is back online, the flush loop's
+			// own outcome reload (see onMount's onFlushOutcome) is what picks up
+			// whatever the server actually did — including any auto-complete.
+			if (result) {
+				// The server may have auto-completed the parent (list's
+				// useSubtaskAutoComplete setting) — refetch items to pick that up,
+				// since the optimistic update above only touched the sub-task
+				// itself. Collapses the panel too if that's what just happened
+				// (see reconcileExpandedSubtasks).
+				void refreshItemsAfterSubtaskChange();
+			}
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to update sub-task.';
+			void loadAll();
+		}
+	}
+
+	let newSubtaskDrafts = $state<Record<number, string>>({});
+
+	async function addSubtask(item: ItemDto) {
+		// The add form isn't rendered for a viewer, so this can't actually be reached from the UI —
+		// kept as defense-in-depth.
+		/* v8 ignore next */
+		if (isViewer) return;
+		const name = (newSubtaskDrafts[item.id] ?? '').trim();
+		if (!name) return;
+		newSubtaskDrafts = { ...newSubtaskDrafts, [item.id]: '' };
+		try {
+			// Patch the new sub-item into `items` directly from the return value
+			// (the optimistic temp row while offline, the real one once synced)
+			// — same as `addItem` above does for top-level items — rather than
+			// reloading from the network to pick it up. A reload here would be
+			// actively wrong when offline: the API GET cache's NetworkFirst
+			// strategy falls back to its last cached response instead of
+			// failing, so it would "succeed" with the pre-add list and the new
+			// sub-task just wouldn't appear until something else reloads later.
+			const created = await createSubItem(listId, item.id, name);
+			items = items.map((current) =>
+				current.id === item.id
+					? { ...current, subItems: [...(current.subItems ?? []), created] }
+					: current
+			);
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to add sub-task.';
+		}
+	}
+
+	async function removeSubtask(item: ItemDto, subtask: SubItemDto) {
+		// The delete button isn't rendered for a viewer, so this can't actually be reached from the
+		// UI — kept as defense-in-depth.
+		/* v8 ignore next */
+		if (isViewer) return;
+		items = items.map((current) =>
+			current.id === item.id
+				? { ...current, subItems: current.subItems?.filter((row) => row.id !== subtask.id) }
+				: current
+		);
+		try {
+			await deleteSubItem(listId, item.id, subtask.id);
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : 'Failed to delete sub-task.';
+			void loadAll();
+		}
+	}
+
+	// Populated from localStorage in onMount (see getExpandedSubtaskIds) once
+	// `listId` is known, so a row's expanded/collapsed state survives reloads
+	// and revisits rather than always starting collapsed.
+	const expandedItemIds = new SvelteSet<number>();
+
+	function toggleSubtasksExpanded(itemId: number) {
+		if (expandedItemIds.has(itemId)) expandedItemIds.delete(itemId);
+		else expandedItemIds.add(itemId);
+		setExpandedSubtaskIds(listId, [...expandedItemIds]);
+	}
+
+	/** Completing an item collapses its sub-tasks panel back down, since there's nothing left to
+	 * act on there. Only called once the item is already marked checked in `items` (see
+	 * `toggleChecked`); loads that pick up a completion this device didn't cause itself go
+	 * through `reconcileExpandedSubtasks` instead. */
+	function collapseIfComplete(itemId: number) {
+		if (!expandedItemIds.delete(itemId)) return;
+		setExpandedSubtaskIds(listId, [...expandedItemIds]);
+	}
+
+	/** Same idea as `collapseIfComplete`, swept across every currently-expanded
+	 * item after `items` gets reloaded wholesale — `loadAll` is what actually
+	 * picks up a completion this device didn't just cause itself: a queued
+	 * sub-task check's auto-complete landing only once the offline flush loop
+	 * replays it, a conflict reconciliation, a realtime broadcast from another
+	 * device, or another tab/device completing the item while this one was
+	 * offline. Those all go through `items = await fetchItems(...)` (or the
+	 * Dexie cache read on first paint) with no single mutation to hang a
+	 * targeted `collapseIfComplete` call off of. */
+	function reconcileExpandedSubtasks() {
+		if (expandedItemIds.size === 0) return;
+		let changed = false;
+		for (const id of [...expandedItemIds]) {
+			const current = items.find((row) => row.id === id);
+			if (current?.checked) {
+				expandedItemIds.delete(id);
+				changed = true;
+			}
+		}
+		if (changed) setExpandedSubtaskIds(listId, [...expandedItemIds]);
 	}
 
 	// Fires once, on release, with the dragged item's new immediate
@@ -1366,26 +1593,26 @@
 								>
 									{#each group.items as item (item.id)}
 										<li
-											class="relative overflow-hidden rounded-lg"
+											class="grid grid-cols-1 overflow-hidden rounded-lg"
 											class:item-return-slide={undoSlideIds.has(item.id)}
 											data-item-id={item.id}
 											animate:flip={{ duration: prefersReducedMotion ? 0 : 250 }}
 											out:slide={{ duration: prefersReducedMotion ? 0 : 200 }}
 										>
 											<div
-												class="absolute top-px bottom-px left-px flex w-24 items-center justify-center rounded-l-lg bg-red-600 text-white print:hidden"
+												class="col-start-1 row-start-1 flex h-full w-24 items-center justify-center justify-self-start rounded-l-lg bg-red-600 text-white print:hidden"
 												aria-hidden="true"
 											>
 												<Icon name="trashCanOutline" class="h-5 w-5" />
 											</div>
 											<div
-												class="absolute top-px right-px bottom-px flex w-24 items-center justify-center rounded-r-lg bg-blue-600 text-white print:hidden"
+												class="col-start-1 row-start-1 flex h-full w-24 items-center justify-center justify-self-end rounded-r-lg bg-blue-600 text-white print:hidden"
 												aria-hidden="true"
 											>
 												<Icon name="pencil" class="h-5 w-5" />
 											</div>
 											<div
-												class="item-row relative flex items-center gap-2 bg-paper {highlightedItemId ===
+												class="item-row relative col-start-1 row-start-1 flex items-center gap-2 bg-paper {highlightedItemId ===
 												item.id
 													? 'item-row-highlight'
 													: ''}"
@@ -1402,9 +1629,35 @@
 															})
 														);
 													},
-													onTap: () => void toggleChecked(item)
+													// A row with open sub-tasks would just bounce off the
+													// "finish your sub-tasks first" block in toggleChecked, so a
+													// tap there opens the panel instead — the useful thing to do
+													// in that state. With no sub-tasks, or all of them already
+													// checked, tapping the row still checks the item off as before.
+													onTap: () =>
+														list?.useSubtasks === true && openSubtaskCount(item) > 0
+															? toggleSubtasksExpanded(item.id)
+															: void toggleChecked(item)
 												}}
 											>
+												{#if list?.useSubtasks === true}
+													<button
+														type="button"
+														aria-label={expandedItemIds.has(item.id)
+															? `Collapse sub-tasks for ${item.name}`
+															: `Expand sub-tasks for ${item.name}`}
+														data-reorder-ignore
+														class="flex h-6 w-6 shrink-0 items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+														onclick={() => toggleSubtasksExpanded(item.id)}
+													>
+														<Icon
+															name="chevronRight"
+															class="h-3.5 w-3.5 transition-transform {expandedItemIds.has(item.id)
+																? 'rotate-90'
+																: ''}"
+														/>
+													</button>
+												{/if}
 												<button
 													type="button"
 													role="checkbox"
@@ -1435,10 +1688,7 @@
 														</svg>
 													{/if}
 												</button>
-												<div
-													class="item-name flex min-w-0 flex-1 flex-col"
-													style="touch-action: manipulation; -webkit-touch-callout: none;"
-												>
+												{#snippet itemNameContent()}
 													<div class="flex min-w-0 items-center gap-2">
 														<span
 															class="wrap-anywhere"
@@ -1449,6 +1699,16 @@
 														>
 															{item.name}
 														</span>
+														{#if list?.useSubtasks === true && item.subItems && item.subItems.length > 0}
+															{@const progress = subtaskProgress(item)}
+															<span
+																class="shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[11px] tabular-nums {progress.complete
+																	? 'bg-signal/15 text-signal'
+																	: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}"
+															>
+																{progress.label}
+															</span>
+														{/if}
 														{#if item.quantity && list?.useQuantity !== false}
 															<span class="text-gray-600 dark:text-gray-400"
 																>(<span>{item.quantity}</span>)</span
@@ -1495,7 +1755,32 @@
 															{/each}
 														</p>
 													{/if}
-												</div>
+												{/snippet}
+												{#if !isCoarsePointer && list?.useSubtasks === true}
+													<!-- Mouse-only convenience: keyboard/screen-reader users get the same toggle from the
+														chevron button, so this deliberately isn't a role=button (it can contain note links,
+														and nested interactive content inside a button is an a11y violation). -->
+													<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+													<div
+														class="item-name flex min-w-0 flex-1 cursor-pointer flex-col"
+														style="touch-action: manipulation; -webkit-touch-callout: none;"
+														onclick={(event) => {
+															// A click on a note link (or any other control inside the row text)
+															// is that control's own action, not a request to toggle the panel.
+															if ((event.target as HTMLElement).closest('a, button')) return;
+															toggleSubtasksExpanded(item.id);
+														}}
+													>
+														{@render itemNameContent()}
+													</div>
+												{:else}
+													<div
+														class="item-name flex min-w-0 flex-1 flex-col"
+														style="touch-action: manipulation; -webkit-touch-callout: none;"
+													>
+														{@render itemNameContent()}
+													</div>
+												{/if}
 												{#if !isCoarsePointer && !isViewer}
 													<a
 														href={resolve('/lists/[id]/items/[itemId]', {
@@ -1520,6 +1805,89 @@
 													</button>
 												{/if}
 											</div>
+											{#if list?.useSubtasks === true && expandedItemIds.has(item.id)}
+												<div class="col-start-1 row-start-2">
+													<ul
+														class="flex flex-col gap-1 py-1 pr-2 pl-11"
+														transition:slide={{ duration: prefersReducedMotion ? 0 : 150 }}
+													>
+														{#each item.subItems ?? [] as subtask (subtask.id)}
+															<li class="flex items-center gap-2">
+																<button
+																	type="button"
+																	role="checkbox"
+																	aria-checked={subtask.checked}
+																	aria-disabled={isViewer}
+																	aria-label={subtask.name}
+																	onclick={() => toggleSubtaskChecked(item, subtask)}
+																	class="check-glyph flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border-2 {isViewer
+																		? 'cursor-not-allowed border-gray-400 bg-gray-400 dark:border-gray-500 dark:bg-gray-500'
+																		: subtask.checked
+																			? 'border-signal bg-signal'
+																			: 'border-gray-300 bg-transparent dark:border-gray-600'}"
+																>
+																	{#if subtask.checked}
+																		<svg
+																			class="h-2.5 w-2.5 text-white"
+																			viewBox="0 0 16 16"
+																			fill="none"
+																			stroke="currentColor"
+																			stroke-width="2.5"
+																			stroke-linecap="round"
+																			stroke-linejoin="round"
+																			aria-hidden="true"
+																		>
+																			<path d="M3 8.5l3.2 3.2L13 4.5" />
+																		</svg>
+																	{/if}
+																</button>
+																<span
+																	class="min-w-0 flex-1 text-sm wrap-anywhere"
+																	class:text-gray-400={subtask.checked}
+																	class:line-through={subtask.checked}
+																>
+																	{subtask.name}
+																</span>
+																{#if !isViewer}
+																	<button
+																		type="button"
+																		aria-label={`Delete ${subtask.name}`}
+																		class="flex h-8 w-8 shrink-0 items-center justify-center text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+																		onclick={() => removeSubtask(item, subtask)}
+																	>
+																		<Icon name="close" class="h-4 w-4" />
+																	</button>
+																{/if}
+															</li>
+														{/each}
+														{#if !isViewer}
+															<li>
+																<form
+																	class="flex items-center gap-2 pt-1"
+																	onsubmit={(event) => {
+																		event.preventDefault();
+																		void addSubtask(item);
+																	}}
+																>
+																	<Icon name="plus" class="h-4 w-4 shrink-0 text-gray-400" />
+																	<input
+																		type="text"
+																		placeholder="Add sub-task"
+																		class="min-w-0 flex-1 border-0 border-b border-gray-200 bg-transparent p-0 text-sm focus:border-primary-500 focus:ring-0 dark:border-gray-700"
+																		value={newSubtaskDrafts[item.id] ?? ''}
+																		oninput={(event) => {
+																			newSubtaskDrafts = {
+																				...newSubtaskDrafts,
+																				[item.id]: (event.currentTarget as HTMLInputElement).value
+																			};
+																		}}
+																	/>
+																</form>
+															</li>
+														{/if}
+													</ul>
+												</div>
+											{/if}
 										</li>
 									{/each}
 								</ul>
@@ -1559,11 +1927,9 @@
 		{/if}
 	</div>
 
-	{#if pendingUndo}
-		{#key pendingUndo.id}
-			<UndoToast message={pendingUndo.message} onAction={() => runUndo()} onDismiss={dismissUndo} />
-		{/key}
-	{:else if uncheckBlockedToast}
+	<!-- A blocked-action explanation outranks a lingering undo window: the undo stays registered
+	     (and shake-to-undo keeps working) and reappears once the explanation is dismissed. -->
+	{#if uncheckBlockedToast}
 		{#key uncheckBlockedToast.id}
 			<UndoToast
 				message={uncheckBlockedToast.message}
@@ -1572,6 +1938,10 @@
 				onAction={() => (uncheckBlockedToast = null)}
 				onDismiss={() => (uncheckBlockedToast = null)}
 			/>
+		{/key}
+	{:else if pendingUndo}
+		{#key pendingUndo.id}
+			<UndoToast message={pendingUndo.message} onAction={() => runUndo()} onDismiss={dismissUndo} />
 		{/key}
 	{:else if rejectionToast}
 		{#key rejectionToast.id}

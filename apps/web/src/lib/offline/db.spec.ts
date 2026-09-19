@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getDb, hasIndexedDb, isRowDirty, resetDbForTesting } from './db';
+import { getDb, hasIndexedDb, isRowDirty, removeCachedSubItem, resetDbForTesting } from './db';
 
 describe('hasIndexedDb', () => {
 	it('is true once the fake-indexeddb polyfill is installed', () => {
@@ -36,6 +36,7 @@ describe('getDb', () => {
 				'selectedStore',
 				'stores',
 				'storeCategoryOrders',
+				'subItems',
 				'syncQueue'
 			].sort()
 		);
@@ -104,6 +105,26 @@ describe('isRowDirty', () => {
 		await expect(isRowDirty('item', 1)).resolves.toBe(false);
 	});
 
+	it('reflects the dirty flag on a cached sub-task', async () => {
+		const db = getDb()!;
+		await db.subItems.put({
+			id: 9,
+			itemId: 5,
+			name: 'Sweep',
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			version: 1,
+			_dirty: true
+		});
+
+		await expect(isRowDirty('sub_item', 9)).resolves.toBe(true);
+		await expect(isRowDirty('sub_item', 10)).resolves.toBe(false);
+	});
+
 	it('is false for a list event — never queued client-side', async () => {
 		await expect(isRowDirty('list', 1)).resolves.toBe(false);
 	});
@@ -161,5 +182,51 @@ describe('isRowDirty', () => {
 		});
 
 		await expect(isRowDirty(entityType, 1)).resolves.toBe(true);
+	});
+});
+
+describe('removeCachedSubItem', () => {
+	afterEach(async () => {
+		await resetDbForTesting();
+	});
+
+	const sub = (id: number) => ({
+		id,
+		itemId: 5,
+		name: `Sub ${id}`,
+		checked: false,
+		checkedAt: null,
+		sortOrder: id,
+		createdBy: 1,
+		createdAt: '2026-08-01T00:00:00.000Z',
+		updatedAt: null,
+		version: 1
+	});
+
+	it('removes just that sub-task from the cached parent row', async () => {
+		const db = getDb()!;
+		await db.items.put({ id: 5, listId: 1, name: 'Parent', subItems: [sub(1), sub(2)] } as never);
+		await removeCachedSubItem(db, 5, 1);
+		expect((await db.items.get(5))!.subItems!.map((row) => row.id)).toEqual([2]);
+	});
+
+	it('does not resurrect an id when two sibling deletes run concurrently', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Parent',
+			subItems: [sub(1), sub(2), sub(3)]
+		} as never);
+		await Promise.all([removeCachedSubItem(db, 5, 1), removeCachedSubItem(db, 5, 2)]);
+		expect((await db.items.get(5))!.subItems!.map((row) => row.id)).toEqual([3]);
+	});
+
+	it('is a no-op when the parent row or its nested array is not cached', async () => {
+		const db = getDb()!;
+		await expect(removeCachedSubItem(db, 404, 1)).resolves.toBeUndefined();
+		await db.items.put({ id: 6, listId: 1, name: 'Bare' } as never);
+		await expect(removeCachedSubItem(db, 6, 1)).resolves.toBeUndefined();
+		expect((await db.items.get(6))!.subItems).toBeUndefined();
 	});
 });

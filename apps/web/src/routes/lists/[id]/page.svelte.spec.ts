@@ -84,6 +84,11 @@ vi.mock('$lib/api/items', () => ({
 	updateItem: vi.fn(),
 	fetchRecentItemNames: vi.fn()
 }));
+vi.mock('$lib/api/sub-items', () => ({
+	createSubItem: vi.fn(),
+	updateSubItem: vi.fn(),
+	deleteSubItem: vi.fn()
+}));
 vi.mock('$lib/api/favorites', () => ({ fetchFavorites: vi.fn() }));
 vi.mock('$lib/api/stores', () => ({
 	fetchStoreCategoryOrder: vi.fn(),
@@ -115,6 +120,7 @@ const {
 	updateItem,
 	fetchRecentItemNames
 } = await import('$lib/api/items');
+const { createSubItem, updateSubItem, deleteSubItem } = await import('$lib/api/sub-items');
 const { fetchFavorites } = await import('$lib/api/favorites');
 const { fetchStoreCategoryOrder, fetchStores, getCachedStores } = await import('$lib/api/stores');
 const { getSelectedStoreSettings, setSelectedStoreSettings } =
@@ -3619,6 +3625,491 @@ describe('List detail +page.svelte', () => {
 					)
 					.toBeInTheDocument();
 			});
+		});
+	});
+	describe('sub-tasks', () => {
+		const subtaskList = { ...list, useSubtasks: true };
+
+		function makeSubItem(id: number, name: string, checked = false) {
+			return {
+				id,
+				itemId: 100,
+				name,
+				checked,
+				checkedAt: checked ? TS : null,
+				sortOrder: id,
+				createdBy: 1,
+				createdAt: TS,
+				updatedAt: null,
+				version: 1
+			};
+		}
+
+		function itemWithSubtasks(overrides: Partial<ItemDto> = {}) {
+			return makeItem({
+				id: 100,
+				name: 'Plan party',
+				subItems: [makeSubItem(1, 'Book venue'), makeSubItem(2, 'Order cake')],
+				...overrides
+			});
+		}
+
+		function renderWithSubtasks(items = [itemWithSubtasks()], listOverrides = {}) {
+			vi.mocked(fetchList).mockResolvedValue({ ...subtaskList, ...listOverrides });
+			vi.mocked(fetchItems).mockResolvedValue(items);
+			return render(ListDetailPage);
+		}
+
+		async function tapRow(name: string) {
+			const row = page
+				.getByText(name)
+				.element()
+				.closest('li')!
+				.querySelector(':scope > div:last-of-type') as HTMLElement;
+			row.dispatchEvent(
+				new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+			);
+			row.dispatchEvent(
+				new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 0, clientY: 0 })
+			);
+		}
+
+		it('shows a progress badge and expands/collapses the panel from the chevron, remembering it', async () => {
+			renderWithSubtasks();
+			await expect.element(page.getByText('0/2')).toBeInTheDocument();
+			await expect.element(page.getByText('Book venue')).not.toBeInTheDocument();
+
+			await page.getByRole('button', { name: 'Expand sub-tasks for Plan party' }).click();
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			expect(window.localStorage.getItem('everylist:expandedSubtasks:1')).toBe('[100]');
+
+			await page.getByRole('button', { name: 'Collapse sub-tasks for Plan party' }).click();
+			await expect.element(page.getByText('Book venue')).not.toBeInTheDocument();
+			expect(window.localStorage.getItem('everylist:expandedSubtasks:1')).toBe('[]');
+		});
+
+		it('shows a completed badge when every sub-task is done', async () => {
+			renderWithSubtasks([
+				itemWithSubtasks({
+					subItems: [makeSubItem(1, 'Book venue', true), makeSubItem(2, 'Order cake', true)]
+				})
+			]);
+			await expect.element(page.getByText('2/2')).toBeInTheDocument();
+		});
+
+		it('handles an item that has no sub-tasks yet: expand, add the first one, and check the parent', async () => {
+			vi.mocked(createSubItem).mockResolvedValue(makeSubItem(3, 'Mop'));
+			vi.mocked(updateItem).mockResolvedValue(undefined);
+			renderWithSubtasks([
+				makeItem({ id: 100, name: 'Plan party' }),
+				makeItem({ id: 101, name: 'Other', subItems: [] })
+			]);
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			await page.getByRole('checkbox', { name: 'Plan party' }).click();
+			await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+			await page.getByRole('checkbox', { name: 'Plan party' }).click();
+
+			await page.getByRole('button', { name: 'Expand sub-tasks for Plan party' }).click();
+			await page.getByPlaceholder('Add sub-task').fill('Mop');
+			page.getByPlaceholder('Add sub-task').element().closest('form')!.requestSubmit();
+			await expect.element(page.getByText('Mop')).toBeInTheDocument();
+		});
+
+		it('restores a remembered expanded panel on load', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			renderWithSubtasks();
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+		});
+
+		it('drops a remembered expanded panel for an item that is already complete', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(getCachedList).mockResolvedValue(subtaskList);
+			vi.mocked(getCachedCategories).mockResolvedValue([]);
+			vi.mocked(getCachedStores).mockResolvedValue([]);
+			vi.mocked(getCachedItems).mockResolvedValue([itemWithSubtasks({ checked: true })]);
+			renderWithSubtasks([itemWithSubtasks({ checked: true })]);
+
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+			await expect
+				.poll(() => window.localStorage.getItem('everylist:expandedSubtasks:1'))
+				.toBe('[]');
+			await expect.element(page.getByText('Book venue')).not.toBeInTheDocument();
+		});
+
+		it('toggles the panel by clicking the row text on desktop, but not by clicking a note link', async () => {
+			renderWithSubtasks([itemWithSubtasks({ notes: 'see https://example.com/x' })]);
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			await page.getByText('Plan party').click();
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+
+			await page.getByRole('link', { name: /example\.com/ }).click();
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+
+			await page.getByText('Plan party').click();
+			await expect.element(page.getByText('Book venue')).not.toBeInTheDocument();
+		});
+
+		it('shows no expand affordance when the list has sub-tasks turned off', async () => {
+			renderWithSubtasks([itemWithSubtasks()], { useSubtasks: false });
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+			await expect
+				.element(page.getByRole('button', { name: 'Expand sub-tasks for Plan party' }))
+				.not.toBeInTheDocument();
+		});
+
+		it('adds a sub-task from the inline input', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(createSubItem).mockResolvedValue(makeSubItem(3, 'Mop'));
+			renderWithSubtasks();
+
+			await page.getByPlaceholder('Add sub-task').fill('  ');
+			await page.getByPlaceholder('Add sub-task').click();
+			await page.getByPlaceholder('Add sub-task').fill('Mop');
+			await page.getByPlaceholder('Add sub-task').element().closest('form')!.requestSubmit();
+
+			await expect.element(page.getByText('Mop')).toBeInTheDocument();
+			expect(createSubItem).toHaveBeenCalledTimes(1);
+			expect(createSubItem).toHaveBeenCalledWith(1, 100, 'Mop');
+		});
+
+		it('ignores a blank sub-task name and surfaces a create failure', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(createSubItem).mockRejectedValue(new ApiError(400, 'Sub-tasks are turned off'));
+			renderWithSubtasks();
+			const form = () => page.getByPlaceholder('Add sub-task').element().closest('form')!;
+			await expect.element(page.getByPlaceholder('Add sub-task')).toBeInTheDocument();
+
+			form().requestSubmit();
+			expect(createSubItem).not.toHaveBeenCalled();
+
+			await page.getByPlaceholder('Add sub-task').fill('Mop');
+			form().requestSubmit();
+			await expect.element(page.getByText('Sub-tasks are turned off')).toBeInTheDocument();
+		});
+
+		it('falls back to a generic message when adding a sub-task fails without an ApiError', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(createSubItem).mockRejectedValue(new TypeError('boom'));
+			renderWithSubtasks();
+
+			await page.getByPlaceholder('Add sub-task').fill('Mop');
+			page.getByPlaceholder('Add sub-task').element().closest('form')!.requestSubmit();
+			await expect.element(page.getByText('Failed to add sub-task.')).toBeInTheDocument();
+		});
+
+		it('checks a sub-task, and refetches only once the mutation actually round-tripped', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(updateSubItem).mockResolvedValue(makeSubItem(1, 'Book venue', true));
+			renderWithSubtasks();
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			vi.mocked(fetchItems).mockResolvedValue([
+				itemWithSubtasks({
+					subItems: [makeSubItem(1, 'Book venue', true), makeSubItem(2, 'Order cake')]
+				})
+			]);
+			const before = vi.mocked(fetchItems).mock.calls.length;
+
+			await page.getByRole('checkbox', { name: 'Book venue' }).click();
+
+			expect(updateSubItem).toHaveBeenCalledWith(1, 100, 1, { checked: true });
+			await expect.poll(() => vi.mocked(fetchItems).mock.calls.length).toBe(before + 1);
+			await expect.element(page.getByText('1/2')).toBeInTheDocument();
+		});
+
+		it('does not refetch (and keeps the optimistic check) when the update was only queued offline', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(updateSubItem).mockResolvedValue(undefined);
+			renderWithSubtasks();
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			const before = vi.mocked(fetchItems).mock.calls.length;
+
+			await page.getByRole('checkbox', { name: 'Book venue' }).click();
+
+			await expect.element(page.getByText('1/2')).toBeInTheDocument();
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(fetchItems).toHaveBeenCalledTimes(before);
+		});
+
+		it('collapses the panel when the refetch shows the parent auto-completed', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(updateSubItem).mockResolvedValue(makeSubItem(1, 'Book venue', true));
+			renderWithSubtasks();
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			vi.mocked(fetchItems).mockResolvedValue([
+				itemWithSubtasks({
+					checked: true,
+					subItems: [makeSubItem(1, 'Book venue', true), makeSubItem(2, 'Order cake', true)]
+				})
+			]);
+
+			await page.getByRole('checkbox', { name: 'Book venue' }).click();
+
+			await expect.element(page.getByText('Order cake')).not.toBeInTheDocument();
+			expect(window.localStorage.getItem('everylist:expandedSubtasks:1')).toBe('[]');
+		});
+
+		it('silently ignores a failed post-check refetch', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(updateSubItem).mockResolvedValue(makeSubItem(1, 'Book venue', true));
+			renderWithSubtasks();
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			vi.mocked(fetchItems).mockRejectedValue(new TypeError('network down'));
+
+			await page.getByRole('checkbox', { name: 'Book venue' }).click();
+
+			await expect.element(page.getByText('1/2')).toBeInTheDocument();
+			expect(page.getByText('Failed to load list.').elements()).toHaveLength(0);
+		});
+
+		it('surfaces a sub-task update failure and reloads', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(updateSubItem).mockRejectedValue(new ApiError(409, 'Conflict'));
+			renderWithSubtasks();
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			vi.mocked(fetchList).mockReturnValue(new Promise(() => {}));
+
+			await page.getByRole('checkbox', { name: 'Book venue' }).click();
+
+			await expect.element(page.getByText('Conflict')).toBeInTheDocument();
+		});
+
+		it('falls back to a generic message when a sub-task update fails without an ApiError', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(updateSubItem).mockRejectedValue(new TypeError('boom'));
+			renderWithSubtasks();
+
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			vi.mocked(fetchList).mockReturnValue(new Promise(() => {}));
+			await page.getByRole('checkbox', { name: 'Book venue' }).click();
+
+			await expect.element(page.getByText('Failed to update sub-task.')).toBeInTheDocument();
+		});
+
+		it('deletes a sub-task, and surfaces a failure', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(deleteSubItem).mockResolvedValueOnce(undefined);
+			renderWithSubtasks();
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			vi.mocked(fetchList).mockReturnValue(new Promise(() => {}));
+
+			await page.getByRole('button', { name: 'Delete Book venue' }).click();
+			await expect.element(page.getByText('Book venue')).not.toBeInTheDocument();
+			expect(deleteSubItem).toHaveBeenCalledWith(1, 100, 1);
+
+			vi.mocked(deleteSubItem).mockRejectedValueOnce(new ApiError(500, 'Nope'));
+			await page.getByRole('button', { name: 'Delete Order cake' }).click();
+			await expect.element(page.getByText('Nope')).toBeInTheDocument();
+		});
+
+		it('falls back to a generic message when deleting a sub-task fails without an ApiError', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(deleteSubItem).mockRejectedValue(new TypeError('boom'));
+			renderWithSubtasks();
+
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			vi.mocked(fetchList).mockReturnValue(new Promise(() => {}));
+			await page.getByRole('button', { name: 'Delete Book venue' }).click();
+
+			await expect.element(page.getByText('Failed to delete sub-task.')).toBeInTheDocument();
+		});
+
+		it('blocks checking a parent with open sub-tasks, with singular and plural wording', async () => {
+			renderWithSubtasks();
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			await page.getByRole('checkbox', { name: 'Plan party' }).click();
+			await expect
+				.element(page.getByText('Finish the 2 remaining sub-tasks before checking this off.'))
+				.toBeInTheDocument();
+			expect(updateItem).not.toHaveBeenCalled();
+		});
+
+		it('shows the block message even while an undo toast from the previous action is still up', async () => {
+			vi.mocked(updateItem).mockResolvedValue(undefined);
+			renderWithSubtasks([makeItem({ id: 1, name: 'Milk' }), itemWithSubtasks()]);
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			await page.getByRole('checkbox', { name: 'Milk' }).click();
+			await expect.element(page.getByText('Item checked')).toBeInTheDocument();
+
+			await page.getByRole('checkbox', { name: 'Plan party' }).click();
+			await expect
+				.element(page.getByText('Finish the 2 remaining sub-tasks before checking this off.'))
+				.toBeInTheDocument();
+			await expect.element(page.getByText('Item checked')).not.toBeInTheDocument();
+
+			// The earlier action's undo isn't destroyed — it comes back once the explanation is dismissed.
+			await page.getByRole('button', { name: 'Dismiss' }).click();
+			await expect.element(page.getByText('Item checked')).toBeInTheDocument();
+		});
+
+		it('toasts a terminally rejected offline sub-task create for this list only', async () => {
+			let rejectedListener: ((event: unknown) => void) | undefined;
+			vi.mocked(onCreateRejected).mockImplementation((listener) => {
+				rejectedListener = listener as (event: unknown) => void;
+				return vi.fn();
+			});
+			renderWithSubtasks();
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			rejectedListener!({ entityType: 'sub_item', name: 'Mop', listId: 999, message: 'Nope' });
+			await expect.element(page.getByText(/wasn't added/)).not.toBeInTheDocument();
+
+			rejectedListener!({
+				entityType: 'sub_item',
+				name: 'Mop',
+				listId: 1,
+				message: 'Uncheck this item before adding a sub-task.'
+			});
+			await expect
+				.element(page.getByText("Mop wasn't added — Uncheck this item before adding a sub-task."))
+				.toBeInTheDocument();
+
+			rejectedListener!({ entityType: 'sub_item', name: null, listId: 1, message: 'Forbidden' });
+			await expect.element(page.getByText("Sub-task wasn't added — Forbidden")).toBeInTheDocument();
+		});
+
+		it('uses the singular wording when exactly one sub-task is open', async () => {
+			renderWithSubtasks([
+				itemWithSubtasks({
+					subItems: [makeSubItem(1, 'Book venue', true), makeSubItem(2, 'Order cake')]
+				})
+			]);
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			await page.getByRole('checkbox', { name: 'Plan party' }).click();
+
+			await expect
+				.element(page.getByText('Finish the 1 remaining sub-task before checking this off.'))
+				.toBeInTheDocument();
+		});
+
+		it('collapses the panel when the parent is checked off manually', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			vi.mocked(updateItem).mockResolvedValue(undefined);
+			renderWithSubtasks([
+				itemWithSubtasks({
+					subItems: [makeSubItem(1, 'Book venue', true), makeSubItem(2, 'Order cake', true)]
+				})
+			]);
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+
+			await page.getByRole('checkbox', { name: 'Plan party' }).click();
+
+			await expect.element(page.getByText('Book venue')).not.toBeInTheDocument();
+			expect(window.localStorage.getItem('everylist:expandedSubtasks:1')).toBe('[]');
+		});
+
+		it('puts the panel back and shows the block message when the server rejects the completion', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			const rejection = new ApiError(
+				400,
+				'Finish the 1 remaining sub-task before checking this off.'
+			);
+			rejection.body = { code: 'subtasks_incomplete' };
+			vi.mocked(updateItem).mockRejectedValue(rejection);
+			renderWithSubtasks([
+				itemWithSubtasks({
+					subItems: [makeSubItem(1, 'Book venue', true), makeSubItem(2, 'Order cake', true)]
+				})
+			]);
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+
+			await page.getByRole('checkbox', { name: 'Plan party' }).click();
+
+			await expect
+				.element(page.getByText('Finish the 1 remaining sub-task before checking this off.'))
+				.toBeInTheDocument();
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			expect(window.localStorage.getItem('everylist:expandedSubtasks:1')).toBe('[100]');
+		});
+
+		it('shows a generic error when an uncheck fails without an ApiError', async () => {
+			vi.mocked(updateItem).mockRejectedValue(new TypeError('boom'));
+			renderWithSubtasks([itemWithSubtasks({ checked: true })]);
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+			vi.mocked(fetchList).mockReturnValue(new Promise(() => {}));
+
+			await page.getByRole('checkbox', { name: 'Plan party' }).click();
+
+			await expect.element(page.getByText('Failed to update item.')).toBeInTheDocument();
+		});
+
+		it('on a coarse pointer, tapping a row with open sub-tasks expands it instead of checking it', async () => {
+			const spy = mockCoarsePointer();
+			renderWithSubtasks();
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			await tapRow('Plan party');
+
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			expect(updateItem).not.toHaveBeenCalled();
+			spy.mockRestore();
+		});
+
+		it('on a coarse pointer, tapping a row with no open sub-tasks still checks it off', async () => {
+			const spy = mockCoarsePointer();
+			vi.mocked(updateItem).mockResolvedValue(undefined);
+			renderWithSubtasks([itemWithSubtasks({ subItems: [makeSubItem(1, 'Book venue', true)] })]);
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			await tapRow('Plan party');
+
+			await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+			spy.mockRestore();
+		});
+
+		it('on a coarse pointer, tapping a row on a list without sub-tasks checks it off', async () => {
+			const spy = mockCoarsePointer();
+			vi.mocked(updateItem).mockResolvedValue(undefined);
+			renderWithSubtasks([itemWithSubtasks()], { useSubtasks: false });
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			await tapRow('Plan party');
+
+			await expect.poll(() => vi.mocked(updateItem).mock.calls.length).toBe(1);
+			spy.mockRestore();
+		});
+
+		it('hides sub-task editing controls from a viewer and ignores their attempts', async () => {
+			window.localStorage.setItem('everylist:expandedSubtasks:1', '[100]');
+			renderWithSubtasks([itemWithSubtasks()], { role: 'viewer' });
+			await expect.element(page.getByText('Book venue')).toBeInTheDocument();
+			await expect.element(page.getByPlaceholder('Add sub-task')).not.toBeInTheDocument();
+			await expect
+				.element(page.getByRole('button', { name: 'Delete Book venue' }))
+				.not.toBeInTheDocument();
+
+			await page.getByRole('checkbox', { name: 'Book venue' }).click({ force: true });
+			expect(updateSubItem).not.toHaveBeenCalled();
+		});
+
+		it("skips the reload for this client's own in-flight sub-task create broadcast", async () => {
+			const db = getDb()!;
+			await db.syncQueue.add({
+				entityType: 'sub_item',
+				op: 'create',
+				targetId: -1,
+				expectedVersion: null,
+				payload: { name: 'Mop', listId: 1 },
+				url: '/api/v1/lists/1/items/100/subtasks',
+				status: 'pending',
+				attempts: 0,
+				createdAt: Date.now()
+			});
+			let handler: (event: SyncEventDto) => void = () => {};
+			vi.mocked(subscribeToList).mockImplementation((_listId, onEvent) => {
+				handler = onEvent;
+				return vi.fn();
+			});
+			renderWithSubtasks();
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			handler({ entityType: 'sub_item', entityId: 30, op: 'create', payload: null, version: 1 });
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(fetchList).toHaveBeenCalledTimes(1);
 		});
 	});
 });

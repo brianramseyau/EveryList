@@ -1,11 +1,17 @@
 import type { CategoryDto, StoreCategoryOrderDto } from '@everylist/shared';
 import { ApiError, apiDelete, apiPatch, apiPost } from '$lib/api/client';
-import { getDb, type QueuedMutation } from './db';
+import { getDb, removeCachedSubItem, takeTempRow, type QueuedMutation } from './db';
 // V8's coverage instrumentation attributes a phantom, permanently-uninvoked function entry to
 // this import statement (a `vi.mock`-related artifact — see the identical class of issue
 // documented on $lib/api/selected-store.ts) rather than to any real code in this file.
 /* v8 ignore start */
-import { dequeueMutation, enqueueMutation, pendingMutations, updateMutation } from './sync-queue';
+import {
+	dequeueMutation,
+	enqueueDeleteForDiscardedCreate,
+	enqueueMutation,
+	pendingMutations,
+	updateMutation
+} from './sync-queue';
 /* v8 ignore stop */
 
 const BASE_DELAY_MS = 2000;
@@ -77,14 +83,21 @@ export function onCreateRejected(listener: CreateRejectedListener | null): () =>
 
 async function replay(mutation: QueuedMutation): Promise<void> {
 	if (mutation.op === 'create' || mutation.op === 'attach') {
-		await apiPost(mutation.url, mutation.payload);
+		const created = await apiPost<{ id: number }>(mutation.url, mutation.payload);
 		// The already-online path (sync-engine.ts's offlineCreate) deletes the optimistic
 		// temp row on success; replaying a queued create/attach from here needs the same
 		// cleanup, or the temp row lingers in Dexie forever alongside whatever the server
 		// actually created/matched (full reconciliation with the server's response is a
 		// known gap — see PLAN_10_PHASE_VALIDATION_USABILITY.md §0.2).
 		const table = tableForEntity(mutation.entityType as QueueableEntityType);
-		await table.delete(mutation.targetId);
+		// A sub-task the user deleted while its create was still queued (or in flight) left a
+		// `_discarded` tombstone on its temp row — the delete must still reach the server's new
+		// copy. Mere absence of the row isn't enough: a concurrent replay of this same create
+		// removes it too, and that isn't the user's intent.
+		const deletedBeforeSync = await takeTempRow(getDb()!, table as never, mutation.targetId);
+		if (deletedBeforeSync) {
+			await enqueueDeleteForDiscardedCreate(mutation.entityType, mutation.url, created.id);
+		}
 		return;
 	}
 	if (mutation.op === 'reorder') {
@@ -123,6 +136,16 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 			? mutation.url
 			: `${mutation.url}?expectedVersion=${mutation.expectedVersion}`;
 	await apiDelete(url);
+	// Sub-tasks have no restore/recently-deleted UI (PLAN_29_PHASE_SUBTASKS.md) — unlike
+	// every other entity here, their delete is a hard delete, so the local row is removed
+	// outright rather than left in place with `_dirty` cleared.
+	if (mutation.entityType === 'sub_item') {
+		await table.delete(mutation.targetId);
+		// The parent's cached nested copy still carries it — see `removeCachedSubItem`.
+		const itemId = /\/items\/(\d+)\/subtasks\//.exec(mutation.url)?.[1];
+		if (itemId) await removeCachedSubItem(getDb()!, Number(itemId), mutation.targetId);
+		return;
+	}
 	await table.update(mutation.targetId, { _dirty: false });
 }
 
@@ -158,7 +181,7 @@ async function replayReset(mutation: QueuedMutation): Promise<void> {
  * enqueue through `tableForEntity` — a narrower slice of `SyncEntityType` (which also covers
  * `list`, never queued client-side, and `store_category_order`, queued only via `reorder` and
  * replayed by `replayReorder` above instead of this generic dispatch, see PLAN_05_PHASE_OFFLINE_PWA.md §1). */
-type QueueableEntityType = 'category' | 'item' | 'favorite_item' | 'store';
+type QueueableEntityType = 'category' | 'item' | 'sub_item' | 'favorite_item' | 'store';
 
 function tableForEntity(entityType: QueueableEntityType) {
 	// Provably covered in isolation — other spec files' `vi.mock('./db', …)`
@@ -172,6 +195,8 @@ function tableForEntity(entityType: QueueableEntityType) {
 			return db.categories;
 		case 'item':
 			return db.items;
+		case 'sub_item':
+			return db.subItems;
 		case 'favorite_item':
 			return db.favoriteItems;
 		case 'store':
@@ -192,7 +217,14 @@ async function reconcileConflict(mutation: QueuedMutation, err: ApiError): Promi
 	const body = err.body as { data?: Record<string, unknown> & { version?: number } } | undefined;
 	if (body?.data) {
 		const table = tableForEntity(mutation.entityType as QueueableEntityType);
-		await table.update(mutation.targetId, { ...body.data, _dirty: false });
+		if (mutation.entityType === 'sub_item' && mutation.op === 'delete') {
+			// The optimistic hard delete already removed the local row, so there's nothing for
+			// `update` to patch — the server refused the delete (someone edited the sub-task
+			// meanwhile), so put its authoritative copy back.
+			await table.put({ ...body.data, _dirty: false } as never);
+		} else {
+			await table.update(mutation.targetId, { ...body.data, _dirty: false });
+		}
 
 		if (mutation.op === 'update' && body.data.version !== undefined) {
 			const stillDiffering = Object.fromEntries(
@@ -324,7 +356,7 @@ function backoffDelay(): number {
 	return capped / 2 + Math.random() * (capped / 2);
 }
 
-async function attemptFlush(): Promise<void> {
+export async function attemptFlush(): Promise<void> {
 	if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
 	// Both `pendingMutations()` calls in this function are provably covered in isolation — see

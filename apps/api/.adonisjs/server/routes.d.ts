@@ -57,6 +57,11 @@ export type ScannedRoutes = {
     'lists.items.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.items.restore': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.items.purge': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
+    'lists.sub_items.index': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
+    'lists.sub_items.store': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
+    'lists.sub_items.update': { paramsTuple: [ParamValue,ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue,'subtaskId': ParamValue} }
+    'lists.sub_items.move': { paramsTuple: [ParamValue,ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue,'subtaskId': ParamValue} }
+    'lists.sub_items.destroy': { paramsTuple: [ParamValue,ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue,'subtaskId': ParamValue} }
     'lists.category_learnings.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
@@ -119,6 +124,7 @@ export type ScannedRoutes = {
     'lists.items.recent': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.recent_names': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.categorize': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.sub_items.index': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.category_learnings.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.favorite_items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
@@ -153,6 +159,7 @@ export type ScannedRoutes = {
     'lists.items.recent': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.recent_names': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.categorize': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
+    'lists.sub_items.index': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.category_learnings.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.stores.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.favorite_items.index': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
@@ -193,6 +200,7 @@ export type ScannedRoutes = {
     'lists.items.import': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.items.move_to_list': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.items.restore': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
+    'lists.sub_items.store': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.stores.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.favorite_items.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }
     'lists.favorite_items.add_to_list': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'id': ParamValue} }
@@ -218,6 +226,8 @@ export type ScannedRoutes = {
     'lists.categories.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'categoryId': ParamValue} }
     'lists.items.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.items.move': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
+    'lists.sub_items.update': { paramsTuple: [ParamValue,ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue,'subtaskId': ParamValue} }
+    'lists.sub_items.move': { paramsTuple: [ParamValue,ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue,'subtaskId': ParamValue} }
     'lists.favorite_items.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'id': ParamValue} }
     'lists.list_members.update': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'memberId': ParamValue} }
     'tokens.personal_access_tokens.update': { paramsTuple: [ParamValue]; params: {'tokenId': ParamValue} }
@@ -235,6 +245,7 @@ export type ScannedRoutes = {
     'lists.categories.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'categoryId': ParamValue} }
     'lists.items.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
     'lists.items.purge': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue} }
+    'lists.sub_items.destroy': { paramsTuple: [ParamValue,ParamValue,ParamValue]; params: {'listId': ParamValue,'itemId': ParamValue,'subtaskId': ParamValue} }
     'lists.stores.detach': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'storeId': ParamValue} }
     'lists.favorite_items.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'id': ParamValue} }
     'lists.list_members.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'memberId': ParamValue} }

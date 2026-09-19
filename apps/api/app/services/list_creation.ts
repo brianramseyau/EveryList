@@ -86,6 +86,11 @@ export interface CreateOwnedListInput {
   usePrice?: boolean
   /** Deadlines default off (todos-style feature, not useful on shopping lists). */
   useDeadline?: boolean
+  /** Sub-tasks default off, same rationale as useDeadline above. */
+  useSubtasks?: boolean
+  /** Defaults off — a behavior change, not just visibility, so it shouldn't
+   *  silently apply even on a list that does have sub-tasks turned on. */
+  useSubtaskAutoComplete?: boolean
   showStoreInList?: boolean
   showPriceInList?: boolean
   itemSortOrder?: 'ranked' | 'alphabetical' | 'deadline'
@@ -123,6 +128,8 @@ export async function createOwnedList(input: CreateOwnedListInput) {
       useQuantity: input.useQuantity ?? true,
       usePrice: input.usePrice ?? true,
       useDeadline: input.useDeadline ?? false,
+      useSubtasks: input.useSubtasks ?? false,
+      useSubtaskAutoComplete: input.useSubtaskAutoComplete ?? false,
       showStoreInList: input.showStoreInList ?? true,
       showPriceInList: input.showPriceInList ?? true,
       itemSortOrder: input.itemSortOrder ?? 'ranked',

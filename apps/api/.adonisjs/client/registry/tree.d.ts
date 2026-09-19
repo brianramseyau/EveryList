@@ -94,6 +94,13 @@ export interface ApiDefinition {
       restore: typeof routes['lists.items.restore']
       purge: typeof routes['lists.items.purge']
     }
+    subItems: {
+      index: typeof routes['lists.sub_items.index']
+      store: typeof routes['lists.sub_items.store']
+      update: typeof routes['lists.sub_items.update']
+      move: typeof routes['lists.sub_items.move']
+      destroy: typeof routes['lists.sub_items.destroy']
+    }
     categoryLearnings: {
       index: typeof routes['lists.category_learnings.index']
     }

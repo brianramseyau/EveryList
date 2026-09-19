@@ -6,6 +6,7 @@ import { DateTime } from 'luxon'
 import logger from '@adonisjs/core/services/logger'
 import { suggestCategoryId } from '#services/category_suggestion_service'
 import { broadcastSync } from '#services/sync_broadcaster'
+import { countOpenSubtasks, subtasksIncompleteMessage } from '#services/subtask_completion'
 import { closestMatch } from '#services/alexa/fuzzy_match'
 import { resolveList, roleFor, setDefaultList } from '#services/alexa/list_resolution'
 import { say, type AlexaResponse } from '#services/alexa/response_builder'
@@ -29,6 +30,10 @@ export type IntentResult = { response: AlexaResponse; list?: List }
 /** `uncheckItemRow`'s outcome — the touch handler speaks a refusal instead of the usual "marked
  * not done" when the list has no room (mirrors the checkbox's own limit gate). */
 export type UncheckResult = { blocked: true; message: string } | { blocked: false }
+
+/** `completeItemRow`'s outcome — same shape: a refusal message instead of "marked done" when the
+ * item still has open sub-tasks. */
+export type CompleteResult = UncheckResult
 
 function respond(response: AlexaResponse, list?: List): IntentResult {
   return list ? { response, list } : { response }
@@ -81,7 +86,15 @@ async function resolveListOrRespond(
  * path below and the touch-driven completion path (`apl_touch_handler.ts`, PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md
  * Stage 3), so the version bump/`checkedAt`/`broadcastSync` sequence exists in exactly one place.
  */
-export async function completeItemRow(list: List, item: Item): Promise<void> {
+export async function completeItemRow(list: List, item: Item): Promise<CompleteResult> {
+  // Same gate as items_controller.ts#update (PLAN_29_PHASE_SUBTASKS.md) — voice and touch
+  // completion must not bypass the open-sub-tasks rule.
+  // Only the unchecked→checked transition is gated, exactly like the controller.
+  if (list.useSubtasks && !item.checked) {
+    const openCount = await countOpenSubtasks(item.id)
+    if (openCount > 0) return { blocked: true, message: subtasksIncompleteMessage(openCount) }
+  }
+
   item.checked = true
   item.checkedAt = DateTime.now()
   item.version += 1
@@ -94,6 +107,7 @@ export async function completeItemRow(list: List, item: Item): Promise<void> {
     op: 'update',
     version: item.version,
   })
+  return { blocked: false }
 }
 
 /**
@@ -282,7 +296,8 @@ export async function handleRemoveOrComplete(
     return respond(say(`Removed ${match.name} from ${list.name}.`), list)
   }
 
-  await completeItemRow(list, match)
+  const completion = await completeItemRow(list, match)
+  if (completion.blocked) return respond(say(completion.message), list)
   return respond(say(`Marked ${match.name} as done on ${list.name}.`), list)
 }
 

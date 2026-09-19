@@ -754,3 +754,60 @@ test.group('List deadline flag (PLAN_24_PHASE_ITEM_DEADLINES.md)', (group) => {
     assert.equal(list.itemSortOrder, 'deadline')
   })
 })
+
+test.group('List sub-task flags (PLAN_29_PHASE_SUBTASKS.md)', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('useSubtasks and useSubtaskAutoComplete default to false and persist an explicit true at create time', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+
+    const defaulted = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Subtasks off by default' })
+    defaulted.assertStatus(200)
+    const defaultedList = bodyData<ListDto>(defaulted)
+    assert.isFalse(defaultedList.useSubtasks, 'the Shopping/Custom default')
+    assert.isFalse(defaultedList.useSubtaskAutoComplete)
+
+    // Regression coverage: `store()` used to build the new List row from an
+    // explicit field-by-field pick that omitted these two, so an explicit
+    // `useSubtasks: true` in the create payload was silently dropped and the
+    // row fell back to the (now also false) column default either way —
+    // masking the bug until the column default itself was fixed.
+    const explicit = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Chores', useSubtasks: true, useSubtaskAutoComplete: true })
+    explicit.assertStatus(200)
+    const explicitList = bodyData<ListDto>(explicit)
+    assert.isTrue(explicitList.useSubtasks)
+    assert.isTrue(explicitList.useSubtaskAutoComplete)
+  })
+
+  test('persists enable/disable updates', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Chores' })
+    const list = bodyData<ListDto>(create)
+
+    const enable = await client
+      .patch(`/api/v1/lists/${list.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ useSubtasks: true })
+    enable.assertStatus(200)
+    assert.isTrue(bodyData<ListDto>(enable).useSubtasks)
+
+    const disable = await client
+      .patch(`/api/v1/lists/${list.id}`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ useSubtasks: false })
+    disable.assertStatus(200)
+    assert.isFalse(bodyData<ListDto>(disable).useSubtasks)
+  })
+})

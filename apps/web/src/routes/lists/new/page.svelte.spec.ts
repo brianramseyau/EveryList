@@ -23,7 +23,9 @@ const SHOPPING_FEATURES = {
 	useQuantity: true,
 	usePrice: true,
 	showPriceInList: true,
-	useDeadline: false
+	useDeadline: false,
+	useSubtasks: false,
+	useSubtaskAutoComplete: false
 };
 
 describe('New List +page.svelte', () => {
@@ -223,6 +225,8 @@ describe('New List +page.svelte', () => {
 			usePrice: false,
 			showPriceInList: false,
 			useDeadline: true,
+			useSubtasks: true,
+			useSubtaskAutoComplete: false,
 			itemSortOrder: 'deadline',
 			maxUncheckedItems: 5
 		});

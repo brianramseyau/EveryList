@@ -106,4 +106,18 @@
 	<Toggle checked={values.useDeadline} onchange={() => onToggle('useDeadline')} class={ROW_CLASS}>
 		Deadlines
 	</Toggle>
+
+	<Toggle checked={values.useSubtasks} onchange={() => onToggle('useSubtasks')} class={ROW_CLASS}>
+		Sub-tasks
+	</Toggle>
+
+	{#if values.useSubtasks}
+		<Toggle
+			checked={values.useSubtaskAutoComplete}
+			onchange={() => onToggle('useSubtaskAutoComplete')}
+			class={SUB_ROW_CLASS}
+		>
+			Auto-complete parent when its last sub-task is checked
+		</Toggle>
+	{/if}
 </div>

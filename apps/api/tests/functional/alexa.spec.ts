@@ -1,6 +1,6 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
-import type { ApiClient, ApiResponse } from '@japa/api-client'
+import type { ApiClient, ApiRequest, ApiResponse } from '@japa/api-client'
 import type { ItemDto, ListDto } from '@everylist/shared'
 import { alexaSignatureVerifier } from '#services/alexa/signature_verifier'
 import { addMember, bodyData, signupAndGetUser } from './helpers.js'
@@ -1210,6 +1210,92 @@ test.group('Alexa skill endpoint', (group) => {
       .get(`/api/v1/lists/${listId}/items`)
       .header('Authorization', `Bearer ${owner.token}`)
     assert.isTrue(bodyData<{ checked: boolean }[]>(after)[0]!.checked)
+  })
+
+  test('voice and touch completion refuse an item that still has open sub-tasks', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Chores')
+    const pat = await mintPat(client, owner.token, [listId])
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${owner.token}`)
+    await auth(client.patch(`/api/v1/lists/${listId}`).json({ useSubtasks: true }))
+    await addItem(client, owner.token, listId, 'Clean garage')
+    const items = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    const garage = bodyData<{ id: number }[]>(items)[0]!
+    await auth(
+      client.post(`/api/v1/lists/${listId}/items/${garage.id}/subtasks`).json({ name: 'Sweep' })
+    )
+
+    const voice = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'CompleteItemIntent',
+        slots: { ItemName: 'Clean garage' },
+      })
+    )
+    assert.include(voice.body().response.outputSpeech.text, 'remaining sub-task')
+
+    const touch = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['complete', garage.id, listId],
+      })
+    )
+    assert.include(touch.body().response.outputSpeech.text, 'remaining sub-task')
+
+    const after = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.isFalse(bodyData<{ checked: boolean }[]>(after)[0]!.checked)
+  })
+
+  test('voice completion of an already-checked parent is not blocked by its open sub-tasks', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Chores')
+    const pat = await mintPat(client, owner.token, [listId])
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${owner.token}`)
+    await auth(client.patch(`/api/v1/lists/${listId}`).json({ useSubtasks: true }))
+    await addItem(client, owner.token, listId, 'Clean garage')
+    const garage = bodyData<{ id: number }[]>(
+      await auth(client.get(`/api/v1/lists/${listId}/items`))
+    )[0]!
+    const sub = bodyData<{ id: number }>(
+      await auth(
+        client.post(`/api/v1/lists/${listId}/items/${garage.id}/subtasks`).json({ name: 'Sweep' })
+      )
+    )
+    // Check the sub-task, complete the parent, then re-open the sub-task: a checked parent
+    // with an open child, the one state where the gate must not fire.
+    await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${garage.id}/subtasks/${sub.id}`)
+        .json({ checked: true })
+    )
+    await auth(client.patch(`/api/v1/lists/${listId}/items/${garage.id}`).json({ checked: true }))
+    await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${garage.id}/subtasks/${sub.id}`)
+        .json({ checked: false })
+    )
+
+    const voice = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'CompleteItemIntent',
+        slots: { ItemName: 'Clean garage' },
+      })
+    )
+    assert.include(voice.body().response.outputSpeech.text, 'Marked Clean garage as done')
   })
 
   test('tapping an already-checked item on-screen unchecks it', async ({ client, assert }) => {

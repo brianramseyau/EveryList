@@ -280,7 +280,7 @@ export class ListStoreSchema extends BaseModel {
 }
 
 export class ListSchema extends BaseModel {
-  static $columns = ['archived', 'badgeExcluded', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'insertPosition', 'itemSortOrder', 'maxUncheckedItems', 'name', 'ownerId', 'passcodeHash', 'showPriceInList', 'showStoreInList', 'updatedAt', 'useCategories', 'useCategoryLearning', 'useDeadline', 'useFavorites', 'usePrice', 'useQuantity', 'useRecent', 'useShops', 'version'] as const
+  static $columns = ['archived', 'badgeExcluded', 'color', 'createdAt', 'deletedAt', 'folderId', 'icon', 'id', 'insertPosition', 'itemSortOrder', 'maxUncheckedItems', 'name', 'ownerId', 'passcodeHash', 'showPriceInList', 'showStoreInList', 'updatedAt', 'useCategories', 'useCategoryLearning', 'useDeadline', 'useFavorites', 'usePrice', 'useQuantity', 'useRecent', 'useShops', 'useSubtaskAutoComplete', 'useSubtasks', 'version'] as const
   $columns = ListSchema.$columns
   @column()
   declare archived: boolean
@@ -332,6 +332,10 @@ export class ListSchema extends BaseModel {
   declare useRecent: boolean
   @column()
   declare useShops: boolean
+  @column()
+  declare useSubtaskAutoComplete: boolean
+  @column()
+  declare useSubtasks: boolean
   @column()
   declare version: number
 }
@@ -434,6 +438,31 @@ export class StoreSchema extends BaseModel {
   declare id: number
   @column()
   declare name: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare version: number
+}
+
+export class SubItemSchema extends BaseModel {
+  static $columns = ['checked', 'checkedAt', 'createdAt', 'createdBy', 'id', 'itemId', 'name', 'sortOrder', 'updatedAt', 'version'] as const
+  $columns = SubItemSchema.$columns
+  @column()
+  declare checked: boolean
+  @column.dateTime()
+  declare checkedAt: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare createdBy: number
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare itemId: number
+  @column()
+  declare name: string
+  @column()
+  declare sortOrder: number
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()
