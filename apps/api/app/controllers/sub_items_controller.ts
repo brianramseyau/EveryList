@@ -77,6 +77,11 @@ export default class SubItemsController {
       return response.badRequest({ message: 'Sub-tasks are turned off for this list.' })
     }
     const item = await requireItem(list.id, params.itemId)
+    // A checked parent has, by definition, no open sub-tasks — adding one would break
+    // the "checked ⇒ all sub-tasks done" rule, so it has to be re-opened first.
+    if (item.checked) {
+      return response.badRequest({ message: 'Uncheck this item before adding a sub-task.' })
+    }
     const payload = await request.validateUsing(createSubItemValidator)
 
     const subItem = await SubItem.create({
@@ -146,7 +151,7 @@ export default class SubItemsController {
     })
 
     if (checked === true) {
-      await maybeAutoCompleteParent(item, list.useSubtaskAutoComplete)
+      await maybeAutoCompleteParent(item, list.useSubtasks && list.useSubtaskAutoComplete)
     }
 
     logger.debug(

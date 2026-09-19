@@ -3926,6 +3926,47 @@ describe('List detail +page.svelte', () => {
 			expect(updateItem).not.toHaveBeenCalled();
 		});
 
+		it('shows the block message even while an undo toast from the previous action is still up', async () => {
+			vi.mocked(updateItem).mockResolvedValue(undefined);
+			renderWithSubtasks([makeItem({ id: 1, name: 'Milk' }), itemWithSubtasks()]);
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			await page.getByRole('checkbox', { name: 'Milk' }).click();
+			await expect.element(page.getByText('Item checked')).toBeInTheDocument();
+
+			await page.getByRole('checkbox', { name: 'Plan party' }).click();
+			await expect
+				.element(page.getByText('Finish the 2 remaining sub-tasks before checking this off.'))
+				.toBeInTheDocument();
+			await expect.element(page.getByText('Item checked')).not.toBeInTheDocument();
+		});
+
+		it('toasts a terminally rejected offline sub-task create for this list only', async () => {
+			let rejectedListener: ((event: unknown) => void) | undefined;
+			vi.mocked(onCreateRejected).mockImplementation((listener) => {
+				rejectedListener = listener as (event: unknown) => void;
+				return vi.fn();
+			});
+			renderWithSubtasks();
+			await expect.element(page.getByText('Plan party')).toBeInTheDocument();
+
+			rejectedListener!({ entityType: 'sub_item', name: 'Mop', listId: 999, message: 'Nope' });
+			await expect.element(page.getByText(/wasn't added/)).not.toBeInTheDocument();
+
+			rejectedListener!({
+				entityType: 'sub_item',
+				name: 'Mop',
+				listId: 1,
+				message: 'Uncheck this item before adding a sub-task.'
+			});
+			await expect
+				.element(page.getByText("Mop wasn't added — Uncheck this item before adding a sub-task."))
+				.toBeInTheDocument();
+
+			rejectedListener!({ entityType: 'sub_item', name: null, listId: 1, message: 'Forbidden' });
+			await expect.element(page.getByText("Sub-task wasn't added — Forbidden")).toBeInTheDocument();
+		});
+
 		it('uses the singular wording when exactly one sub-task is open', async () => {
 			renderWithSubtasks([
 				itemWithSubtasks({

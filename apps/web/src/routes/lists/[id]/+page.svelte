@@ -168,6 +168,9 @@
 	let uncheckBlockedToastId = 0;
 
 	function showUncheckBlocked(message: string) {
+		// The undo toast outranks this one in the render chain below, so an undo window still
+		// open from the previous action would hide the very explanation for why this tap did nothing.
+		dismissUndo();
 		uncheckBlockedToastId += 1;
 		uncheckBlockedToast = { id: uncheckBlockedToastId, message };
 	}
@@ -575,13 +578,17 @@
 		// had its optimistic row severed by the flush loop; say so here rather than letting
 		// the item silently vanish on the next reload. Other lists' rejections are ignored.
 		unsubscribeCreateRejected = onCreateRejected((event) => {
-			if (event.entityType !== 'item' || event.listId !== listId) return;
+			if (
+				(event.entityType !== 'item' && event.entityType !== 'sub_item') ||
+				event.listId !== listId
+			)
+				return;
 			rejectionToastId += 1;
 			rejectionToast = {
 				id: rejectionToastId,
 				message: event.name
 					? `${event.name} wasn't added — ${event.message}`
-					: `Item wasn't added — ${event.message}`
+					: `${event.entityType === 'sub_item' ? 'Sub-task' : 'Item'} wasn't added — ${event.message}`
 			};
 		});
 	});
@@ -756,8 +763,6 @@
 				err instanceof ApiError &&
 				(isUncheckedLimitError(err) || isSubtasksIncompleteError(err))
 			) {
-				pendingUndo = null;
-				clearUndo();
 				showUncheckBlocked(err.message);
 			} else {
 				error = err instanceof ApiError ? err.message : 'Failed to update item.';

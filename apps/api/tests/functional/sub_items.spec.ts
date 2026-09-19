@@ -4,7 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
 import type { ItemDto, ListDto, SubItemDto } from '@everylist/shared'
 import SubItem from '#models/sub_item'
-import { bodyData, signupAndGetToken } from './helpers.js'
+import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 // useSubtasks defaults to false server-side (see PLAN_29_PHASE_SUBTASKS.md) — this
 // suite is specifically about sub-tasks, so its own list-creation helper opts in.
@@ -358,5 +358,95 @@ test.group('Sub-items CRUD and completion gating', (group) => {
 
     const loaded = await SubItem.query().where('id', sub.id).preload('item').firstOrFail()
     assert.equal(loaded.item.id, item.id)
+  })
+  test('rejects adding a sub-task to an already-checked parent', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const item = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Clean garage' }))
+    )
+    await auth(client.patch(`/api/v1/lists/${listId}/items/${item.id}`).json({ checked: true }))
+
+    const created = await auth(
+      client.post(`/api/v1/lists/${listId}/items/${item.id}/subtasks`).json({ name: 'Sweep' })
+    )
+    created.assertStatus(400)
+    assert.include(created.body().message, 'Uncheck this item')
+  })
+
+  test('does not auto-complete the parent while useSubtasks is off, even with auto-complete on', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    await auth(client.patch(`/api/v1/lists/${listId}`).json({ useSubtaskAutoComplete: true }))
+    const item = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Plan birthday' }))
+    )
+    const sub = bodyData<SubItemDto>(
+      await auth(
+        client
+          .post(`/api/v1/lists/${listId}/items/${item.id}/subtasks`)
+          .json({ name: 'Book venue' })
+      )
+    )
+    await auth(client.patch(`/api/v1/lists/${listId}`).json({ useSubtasks: false }))
+
+    await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${item.id}/subtasks/${sub.id}`)
+        .json({ checked: true })
+    )
+    const fetched = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    assert.isFalse(fetched.body().data.find((row: ItemDto) => row.id === item.id).checked)
+  })
+
+  test('enforces list membership and role on every sub-task route', async ({ client, assert }) => {
+    const owner = await signupAndGetUser(client)
+    const viewer = await signupAndGetUser(client)
+    const stranger = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token)
+    await addMember(listId, viewer.id, 'viewer')
+    const ownerAuth = (req: ApiRequest) => req.header('Authorization', `Bearer ${owner.token}`)
+
+    const item = bodyData<ItemDto>(
+      await ownerAuth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Clean garage' }))
+    )
+    const sub = bodyData<SubItemDto>(
+      await ownerAuth(
+        client.post(`/api/v1/lists/${listId}/items/${item.id}/subtasks`).json({ name: 'Sweep' })
+      )
+    )
+    const base = `/api/v1/lists/${listId}/items/${item.id}/subtasks`
+
+    // Every route as [method, path, body], hit as a given user, returning just the status.
+    const statusesFor = async (token: string) => {
+      const as = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+      const responses = [
+        await as(client.get(base)),
+        await as(client.post(base).json({ name: 'Mop' })),
+        await as(client.patch(`${base}/${sub.id}`).json({ checked: true })),
+        await as(client.patch(`${base}/${sub.id}/move`).json({})),
+        await as(client.delete(`${base}/${sub.id}`)),
+      ]
+      return responses.map((response) => response.status())
+    }
+
+    // A viewer can read but never write.
+    assert.deepEqual(await statusesFor(viewer.token), [200, 403, 403, 403, 403])
+    // A non-member gets nothing at all.
+    assert.deepEqual(await statusesFor(stranger.token), [404, 404, 404, 404, 404])
+
+    // An item id from another list can't be used to reach this list's sub-tasks.
+    const otherListId = await createList(client, owner.token, 'Other')
+    const crossList = await ownerAuth(
+      client.get(`/api/v1/lists/${otherListId}/items/${item.id}/subtasks`)
+    )
+    crossList.assertStatus(404)
   })
 })

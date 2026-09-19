@@ -1,6 +1,6 @@
 import type { CategoryDto, StoreCategoryOrderDto } from '@everylist/shared';
 import { ApiError, apiDelete, apiPatch, apiPost } from '$lib/api/client';
-import { getDb, type QueuedMutation } from './db';
+import { getDb, removeCachedSubItem, type QueuedMutation } from './db';
 // V8's coverage instrumentation attributes a phantom, permanently-uninvoked function entry to
 // this import statement (a `vi.mock`-related artifact — see the identical class of issue
 // documented on $lib/api/selected-store.ts) rather than to any real code in this file.
@@ -128,6 +128,9 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 	// outright rather than left in place with `_dirty` cleared.
 	if (mutation.entityType === 'sub_item') {
 		await table.delete(mutation.targetId);
+		// The parent's cached nested copy still carries it — see `removeCachedSubItem`.
+		const itemId = Number(/\/items\/(\d+)\/subtasks\//.exec(mutation.url)![1]);
+		await removeCachedSubItem(getDb()!, itemId, mutation.targetId);
 		return;
 	}
 	await table.update(mutation.targetId, { _dirty: false });
@@ -201,7 +204,14 @@ async function reconcileConflict(mutation: QueuedMutation, err: ApiError): Promi
 	const body = err.body as { data?: Record<string, unknown> & { version?: number } } | undefined;
 	if (body?.data) {
 		const table = tableForEntity(mutation.entityType as QueueableEntityType);
-		await table.update(mutation.targetId, { ...body.data, _dirty: false });
+		if (mutation.entityType === 'sub_item' && mutation.op === 'delete') {
+			// The optimistic hard delete already removed the local row, so there's nothing for
+			// `update` to patch — the server refused the delete (someone edited the sub-task
+			// meanwhile), so put its authoritative copy back.
+			await table.put({ ...body.data, _dirty: false } as never);
+		} else {
+			await table.update(mutation.targetId, { ...body.data, _dirty: false });
+		}
 
 		if (mutation.op === 'update' && body.data.version !== undefined) {
 			const stillDiffering = Object.fromEntries(

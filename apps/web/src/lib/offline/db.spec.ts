@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getDb, hasIndexedDb, isRowDirty, resetDbForTesting } from './db';
+import { getDb, hasIndexedDb, isRowDirty, removeCachedSubItem, resetDbForTesting } from './db';
 
 describe('hasIndexedDb', () => {
 	it('is true once the fake-indexeddb polyfill is installed', () => {
@@ -182,5 +182,39 @@ describe('isRowDirty', () => {
 		});
 
 		await expect(isRowDirty(entityType, 1)).resolves.toBe(true);
+	});
+});
+
+describe('removeCachedSubItem', () => {
+	afterEach(async () => {
+		await resetDbForTesting();
+	});
+
+	const sub = (id: number) => ({
+		id,
+		itemId: 5,
+		name: `Sub ${id}`,
+		checked: false,
+		checkedAt: null,
+		sortOrder: id,
+		createdBy: 1,
+		createdAt: '2026-08-01T00:00:00.000Z',
+		updatedAt: null,
+		version: 1
+	});
+
+	it('removes just that sub-task from the cached parent row', async () => {
+		const db = getDb()!;
+		await db.items.put({ id: 5, listId: 1, name: 'Parent', subItems: [sub(1), sub(2)] } as never);
+		await removeCachedSubItem(db, 5, 1);
+		expect((await db.items.get(5))!.subItems!.map((row) => row.id)).toEqual([2]);
+	});
+
+	it('is a no-op when the parent row or its nested array is not cached', async () => {
+		const db = getDb()!;
+		await expect(removeCachedSubItem(db, 404, 1)).resolves.toBeUndefined();
+		await db.items.put({ id: 6, listId: 1, name: 'Bare' } as never);
+		await expect(removeCachedSubItem(db, 6, 1)).resolves.toBeUndefined();
+		expect((await db.items.get(6))!.subItems).toBeUndefined();
 	});
 });

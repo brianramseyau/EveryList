@@ -264,6 +264,70 @@ describe('flushQueue', () => {
 		expect(await db.subItems.get(9)).toBeUndefined();
 	});
 
+	it('also drops a replayed sub-task delete from its parent item’s cached nested array', async () => {
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+		const db = getDb()!;
+		const sub = (id: number) => ({
+			id,
+			itemId: 5,
+			name: `Sub ${id}`,
+			checked: false,
+			checkedAt: null,
+			sortOrder: id,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			version: 1
+		});
+		await db.items.put({ id: 5, listId: 1, name: 'Parent', subItems: [sub(9), sub(10)] } as never);
+		await enqueueMutation({
+			entityType: 'sub_item',
+			op: 'delete',
+			targetId: 9,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5/subtasks/9'
+		});
+
+		await flushQueue();
+
+		expect((await db.items.get(5))!.subItems!.map((row) => row.id)).toEqual([10]);
+	});
+
+	it('puts a sub-task back when the server 409s its replayed delete', async () => {
+		const db = getDb()!;
+		const serverCopy = {
+			id: 9,
+			itemId: 5,
+			name: 'Sweep (edited elsewhere)',
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			version: 4
+		};
+		vi.mocked(apiDelete).mockRejectedValue(
+			new ApiError(409, 'Conflict', { data: serverCopy, conflict: true })
+		);
+		await enqueueMutation({
+			entityType: 'sub_item',
+			op: 'delete',
+			targetId: 9,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5/subtasks/9'
+		});
+
+		await flushQueue();
+
+		expect(await db.subItems.get(9)).toMatchObject({
+			name: 'Sweep (edited elsewhere)',
+			version: 4
+		});
+	});
+
 	it('leaves the URL bare when a queued delete never had an expectedVersion', async () => {
 		vi.mocked(apiDelete).mockResolvedValue(undefined);
 		await enqueueMutation({

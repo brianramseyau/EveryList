@@ -202,6 +202,22 @@ export async function isRowDirty(entityType: SyncEntityType, entityId: number): 
 	}
 }
 
+/** Drops a deleted sub-task from its parent's nested `subItems` array in the cached `items`
+ * row. Sub-tasks are cached twice (flat in `subItems`, nested inside each `items` row — see
+ * `fetchItems`), and a hard delete only removes the flat copy on its own, so without this the
+ * nested one would resurface from `getCachedItems` on the next offline read. */
+export async function removeCachedSubItem(
+	db: EveryListDB,
+	itemId: number,
+	subItemId: number
+): Promise<void> {
+	const item = await db.items.get(itemId);
+	if (!item?.subItems) return;
+	await db.items.update(itemId, {
+		subItems: item.subItems.filter((subItem) => subItem.id !== subItemId)
+	});
+}
+
 /** Deletes the underlying database and drops the singleton, so the next `getDb()` call lazily
  * rebuilds an empty one. The `everylist` database is a single global store not scoped per user
  * (see the constructor above), so this must run on logout — otherwise a second user signing in

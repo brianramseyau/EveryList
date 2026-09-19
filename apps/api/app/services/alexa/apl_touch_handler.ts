@@ -8,7 +8,7 @@ import { completeItemRow, uncheckItemRow, type IntentResult } from '#services/al
 import { say } from '#services/alexa/response_builder'
 
 const ACTIONS = {
-  complete: { mutate: completeItemRow, speak: (name: string) => `Marked ${name} as done.` },
+  complete: { speak: (name: string) => `Marked ${name} as done.` },
   uncheck: { speak: (name: string) => `Marked ${name} as not done.` },
 } as const
 
@@ -99,6 +99,7 @@ export async function handleTouchEvent(token: AccessToken, args: unknown[]): Pro
     return { response: say(ACTIONS.uncheck.speak(item.name)), list }
   }
 
-  await ACTIONS.complete.mutate(list, item)
+  const result = await completeItemRow(list, item)
+  if (result.blocked) return { response: say(result.message), list }
   return { response: say(ACTIONS.complete.speak(item.name)), list }
 }

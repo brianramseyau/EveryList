@@ -17,7 +17,7 @@ vi.mock('./client', () => ({
 
 const { apiGet, apiPost, apiPatch, apiDelete } = await import('./client');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
-const { pendingMutations } = await import('$lib/offline/sync-queue');
+const { pendingMutations, enqueueMutation } = await import('$lib/offline/sync-queue');
 const { createSubItem, updateSubItem, deleteSubItem, moveSubItem, fetchSubItems } =
 	await import('./sub-items');
 
@@ -174,6 +174,63 @@ describe('deleteSubItem (Dexie available)', () => {
 		expect(await db.subItems.get(9)).toBeUndefined();
 		expect(await pendingMutations()).toHaveLength(1);
 		expect(apiDelete).not.toHaveBeenCalled();
+	});
+});
+
+describe('deleteSubItem — cached parent and unflushed creates', () => {
+	const subItem = (id: number, itemId = 5) => ({
+		id,
+		itemId,
+		name: `Sub ${id}`,
+		checked: false,
+		checkedAt: null,
+		sortOrder: id,
+		createdBy: 1,
+		createdAt: '2026-08-01T00:00:00.000Z',
+		updatedAt: null,
+		version: 1
+	});
+	const parent = (subItems: ReturnType<typeof subItem>[]) => ({
+		id: 5,
+		listId: 1,
+		name: 'Clean garage',
+		subItems
+	});
+
+	it('drops the sub-task from its parent item’s cached nested array once the delete round-trips', async () => {
+		const db = getDb()!;
+		await db.items.put(parent([subItem(9), subItem(10)]) as never);
+		await db.subItems.put(subItem(9));
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+
+		await deleteSubItem(1, 5, 9);
+
+		expect((await db.items.get(5))!.subItems!.map((row) => row.id)).toEqual([10]);
+	});
+
+	it('cancels a still-queued offline create instead of queueing a delete for its temp id', async () => {
+		const db = getDb()!;
+		await db.subItems.put(subItem(-3));
+		await enqueueMutation({
+			entityType: 'sub_item',
+			op: 'create',
+			targetId: -3,
+			expectedVersion: null,
+			payload: { name: 'Sub -3', listId: 1 },
+			url: '/api/v1/lists/1/items/5/subtasks'
+		});
+
+		await deleteSubItem(1, 5, -3);
+
+		expect(await pendingMutations()).toHaveLength(0);
+		expect(await db.subItems.get(-3)).toBeUndefined();
+		expect(apiDelete).not.toHaveBeenCalled();
+	});
+
+	it('falls through to a normal delete for a negative id with no queued create', async () => {
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+		await deleteSubItem(1, 5, -4);
+		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/5/subtasks/-4');
 	});
 });
 
