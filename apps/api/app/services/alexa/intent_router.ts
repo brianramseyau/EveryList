@@ -89,7 +89,8 @@ async function resolveListOrRespond(
 export async function completeItemRow(list: List, item: Item): Promise<CompleteResult> {
   // Same gate as items_controller.ts#update (PLAN_29_PHASE_SUBTASKS.md) — voice and touch
   // completion must not bypass the open-sub-tasks rule.
-  if (list.useSubtasks) {
+  // Only the unchecked→checked transition is gated, exactly like the controller.
+  if (list.useSubtasks && !item.checked) {
     const openCount = await countOpenSubtasks(item.id)
     if (openCount > 0) return { blocked: true, message: subtasksIncompleteMessage(openCount) }
   }

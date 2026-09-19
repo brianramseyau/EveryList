@@ -1254,6 +1254,50 @@ test.group('Alexa skill endpoint', (group) => {
     assert.isFalse(bodyData<{ checked: boolean }[]>(after)[0]!.checked)
   })
 
+  test('voice completion of an already-checked parent is not blocked by its open sub-tasks', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Chores')
+    const pat = await mintPat(client, owner.token, [listId])
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${owner.token}`)
+    await auth(client.patch(`/api/v1/lists/${listId}`).json({ useSubtasks: true }))
+    await addItem(client, owner.token, listId, 'Clean garage')
+    const garage = bodyData<{ id: number }[]>(
+      await auth(client.get(`/api/v1/lists/${listId}/items`))
+    )[0]!
+    const sub = bodyData<{ id: number }>(
+      await auth(
+        client.post(`/api/v1/lists/${listId}/items/${garage.id}/subtasks`).json({ name: 'Sweep' })
+      )
+    )
+    // Check the sub-task, complete the parent, then re-open the sub-task: a checked parent
+    // with an open child, the one state where the gate must not fire.
+    await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${garage.id}/subtasks/${sub.id}`)
+        .json({ checked: true })
+    )
+    await auth(client.patch(`/api/v1/lists/${listId}/items/${garage.id}`).json({ checked: true }))
+    await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${garage.id}/subtasks/${sub.id}`)
+        .json({ checked: false })
+    )
+
+    const voice = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'CompleteItemIntent',
+        slots: { ItemName: 'Clean garage' },
+      })
+    )
+    assert.include(voice.body().response.outputSpeech.text, 'Marked Clean garage as done')
+  })
+
   test('tapping an already-checked item on-screen unchecks it', async ({ client, assert }) => {
     const owner = await signupAndGetUser(client)
     const listId = await createList(client, owner.token, 'Groceries')

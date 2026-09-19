@@ -211,11 +211,14 @@ export async function removeCachedSubItem(
 	itemId: number,
 	subItemId: number
 ): Promise<void> {
-	const item = await db.items.get(itemId);
-	if (!item?.subItems) return;
-	await db.items.update(itemId, {
-		subItems: item.subItems.filter((subItem) => subItem.id !== subItemId)
-	});
+	// `modify` runs as one read-write operation, so two concurrent deletes on sibling sub-tasks
+	// can't each write back a stale snapshot and reinstate the other's id.
+	await db.items
+		.where(':id')
+		.equals(itemId)
+		.modify((row) => {
+			if (row.subItems) row.subItems = row.subItems.filter((subItem) => subItem.id !== subItemId);
+		});
 }
 
 /** Deletes the underlying database and drops the singleton, so the next `getDb()` call lazily

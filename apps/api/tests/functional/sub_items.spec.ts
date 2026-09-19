@@ -397,11 +397,15 @@ test.group('Sub-items CRUD and completion gating', (group) => {
     )
     await auth(client.patch(`/api/v1/lists/${listId}`).json({ useSubtasks: false }))
 
-    await auth(
+    const checkedSub = await auth(
       client
         .patch(`/api/v1/lists/${listId}/items/${item.id}/subtasks/${sub.id}`)
         .json({ checked: true })
     )
+    // The sub-task update itself must succeed — otherwise the parent would stay open for the
+    // wrong reason and this test wouldn't be exercising the gate at all.
+    checkedSub.assertStatus(200)
+    assert.isTrue(checkedSub.body().data.checked)
     const fetched = await auth(client.get(`/api/v1/lists/${listId}/items`))
     assert.isFalse(fetched.body().data.find((row: ItemDto) => row.id === item.id).checked)
   })

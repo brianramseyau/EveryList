@@ -3,7 +3,6 @@ import type { SubItemDto } from '@everylist/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 import { getDb, removeCachedSubItem } from '$lib/offline/db';
 import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';
-import { dequeueMutation, findPendingMutation } from '$lib/offline/sync-queue';
 /* v8 ignore stop */
 
 /** Rarely used directly — the list page gets every item's sub-tasks preloaded
@@ -98,13 +97,12 @@ export async function deleteSubItem(
 	itemId: number,
 	subtaskId: number
 ): Promise<void> {
-	// A sub-task created offline that hasn't flushed yet only exists locally (negative temp id):
-	// the right delete is to cancel its queued create, not to queue a delete for an id the server
-	// has never heard of — replaying the create afterwards would resurrect the sub-task.
-	const pendingCreate =
-		subtaskId < 0 ? await findPendingMutation('sub_item', subtaskId, 'create') : undefined;
-	if (pendingCreate?.id !== undefined) {
-		await dequeueMutation(pendingCreate.id);
+	// A sub-task created offline that hasn't flushed yet only exists locally (negative temp id) —
+	// there's nothing on the server to delete *yet*, so drop the local row and leave the queued
+	// create alone: the flush loop notices the temp row is gone once the create lands and deletes
+	// the server's copy (see flush.ts's `replay`). Cancelling the create here instead would lose
+	// the delete whenever its POST was already in flight.
+	if (subtaskId < 0) {
 		await getDb()?.subItems.delete(subtaskId);
 		return;
 	}

@@ -328,6 +328,74 @@ describe('flushQueue', () => {
 		});
 	});
 
+	it('deletes the server copy of a sub-task whose temp row was removed before its create replayed', async () => {
+		vi.mocked(apiPost).mockResolvedValue({ id: 77 });
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+		await enqueueMutation({
+			entityType: 'sub_item',
+			op: 'create',
+			targetId: -3,
+			expectedVersion: null,
+			payload: { name: 'Sweep', listId: 1 },
+			url: '/api/v1/lists/1/items/5/subtasks'
+		});
+
+		await flushQueue();
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/lists/1/items/5/subtasks', {
+			name: 'Sweep',
+			listId: 1
+		});
+		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/5/subtasks/77');
+	});
+
+	it('keeps a sub-task whose temp row is still present when its create replays', async () => {
+		vi.mocked(apiPost).mockResolvedValue({ id: 77 });
+		const db = getDb()!;
+		await db.subItems.put({
+			id: -3,
+			itemId: 5,
+			name: 'Sweep',
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 0,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			version: 1,
+			_dirty: true
+		});
+		await enqueueMutation({
+			entityType: 'sub_item',
+			op: 'create',
+			targetId: -3,
+			expectedVersion: null,
+			payload: { name: 'Sweep', listId: 1 },
+			url: '/api/v1/lists/1/items/5/subtasks'
+		});
+
+		await flushQueue();
+
+		expect(apiDelete).not.toHaveBeenCalled();
+		expect(await db.subItems.get(-3)).toBeUndefined();
+	});
+
+	it('still completes a replayed sub-task delete whose URL has no parseable item id', async () => {
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+		await enqueueMutation({
+			entityType: 'sub_item',
+			op: 'delete',
+			targetId: 9,
+			expectedVersion: null,
+			payload: {},
+			url: '/api/v1/somewhere/else/9'
+		});
+
+		await flushQueue();
+
+		expect(await pendingMutations()).toHaveLength(0);
+	});
+
 	it('leaves the URL bare when a queued delete never had an expectedVersion', async () => {
 		vi.mocked(apiDelete).mockResolvedValue(undefined);
 		await enqueueMutation({

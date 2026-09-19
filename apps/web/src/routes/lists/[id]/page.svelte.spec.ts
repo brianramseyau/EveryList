@@ -3939,6 +3939,10 @@ describe('List detail +page.svelte', () => {
 				.element(page.getByText('Finish the 2 remaining sub-tasks before checking this off.'))
 				.toBeInTheDocument();
 			await expect.element(page.getByText('Item checked')).not.toBeInTheDocument();
+
+			// The earlier action's undo isn't destroyed — it comes back once the explanation is dismissed.
+			await page.getByRole('button', { name: 'Dismiss' }).click();
+			await expect.element(page.getByText('Item checked')).toBeInTheDocument();
 		});
 
 		it('toasts a terminally rejected offline sub-task create for this list only', async () => {

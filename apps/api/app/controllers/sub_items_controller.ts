@@ -9,6 +9,7 @@ import {
 import type { HttpContext } from '@adonisjs/core/http'
 import SubItemTransformer from '#transformers/sub_item_transformer'
 import { DateTime } from 'luxon'
+import db from '@adonisjs/lucid/services/db'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { areAllSubtasksChecked } from '#services/subtask_completion'
 import {
@@ -77,21 +78,31 @@ export default class SubItemsController {
       return response.badRequest({ message: 'Sub-tasks are turned off for this list.' })
     }
     const item = await requireItem(list.id, params.itemId)
+    const payload = await request.validateUsing(createSubItemValidator)
+    const sortOrder = await nextSubItemSortOrder(item.id)
+
     // A checked parent has, by definition, no open sub-tasks — adding one would break
-    // the "checked ⇒ all sub-tasks done" rule, so it has to be re-opened first.
-    if (item.checked) {
+    // the "checked ⇒ all sub-tasks done" rule, so it has to be re-opened first. Checked and
+    // inserted in one transaction so a parent completed on another device between the
+    // request's earlier awaits and the insert can't slip an open sub-task underneath it.
+    const subItem = await db.transaction(async (trx) => {
+      const freshItem = await Item.query({ client: trx }).where('id', item.id).firstOrFail()
+      if (freshItem.checked) return null
+      return SubItem.create(
+        {
+          itemId: item.id,
+          name: payload.name,
+          checked: false,
+          sortOrder,
+          createdBy: user.id,
+          version: 1,
+        },
+        { client: trx }
+      )
+    })
+    if (!subItem) {
       return response.badRequest({ message: 'Uncheck this item before adding a sub-task.' })
     }
-    const payload = await request.validateUsing(createSubItemValidator)
-
-    const subItem = await SubItem.create({
-      itemId: item.id,
-      name: payload.name,
-      checked: false,
-      sortOrder: await nextSubItemSortOrder(item.id),
-      createdBy: user.id,
-      version: 1,
-    })
 
     await broadcastSync({
       listId: list.id,

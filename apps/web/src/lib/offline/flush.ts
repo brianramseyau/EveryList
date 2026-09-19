@@ -77,14 +77,19 @@ export function onCreateRejected(listener: CreateRejectedListener | null): () =>
 
 async function replay(mutation: QueuedMutation): Promise<void> {
 	if (mutation.op === 'create' || mutation.op === 'attach') {
-		await apiPost(mutation.url, mutation.payload);
+		const created = await apiPost<{ id: number }>(mutation.url, mutation.payload);
 		// The already-online path (sync-engine.ts's offlineCreate) deletes the optimistic
 		// temp row on success; replaying a queued create/attach from here needs the same
 		// cleanup, or the temp row lingers in Dexie forever alongside whatever the server
 		// actually created/matched (full reconciliation with the server's response is a
 		// known gap — see PLAN_10_PHASE_VALIDATION_USABILITY.md §0.2).
 		const table = tableForEntity(mutation.entityType as QueueableEntityType);
+		// A sub-task deleted locally while its create was still queued (or in flight) has no temp
+		// row left to reconcile — the user's delete must still reach the server's new copy.
+		const deletedBeforeSync =
+			mutation.entityType === 'sub_item' && (await table.get(mutation.targetId)) === undefined;
 		await table.delete(mutation.targetId);
+		if (deletedBeforeSync) await apiDelete(`${mutation.url}/${created.id}`);
 		return;
 	}
 	if (mutation.op === 'reorder') {
@@ -129,8 +134,8 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 	if (mutation.entityType === 'sub_item') {
 		await table.delete(mutation.targetId);
 		// The parent's cached nested copy still carries it — see `removeCachedSubItem`.
-		const itemId = Number(/\/items\/(\d+)\/subtasks\//.exec(mutation.url)![1]);
-		await removeCachedSubItem(getDb()!, itemId, mutation.targetId);
+		const itemId = /\/items\/(\d+)\/subtasks\//.exec(mutation.url)?.[1];
+		if (itemId) await removeCachedSubItem(getDb()!, Number(itemId), mutation.targetId);
 		return;
 	}
 	await table.update(mutation.targetId, { _dirty: false });

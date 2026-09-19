@@ -208,7 +208,7 @@ describe('deleteSubItem — cached parent and unflushed creates', () => {
 		expect((await db.items.get(5))!.subItems!.map((row) => row.id)).toEqual([10]);
 	});
 
-	it('cancels a still-queued offline create instead of queueing a delete for its temp id', async () => {
+	it('drops a temp-id sub-task locally without queueing a delete, leaving its create to the flush loop', async () => {
 		const db = getDb()!;
 		await db.subItems.put(subItem(-3));
 		await enqueueMutation({
@@ -222,15 +222,10 @@ describe('deleteSubItem — cached parent and unflushed creates', () => {
 
 		await deleteSubItem(1, 5, -3);
 
-		expect(await pendingMutations()).toHaveLength(0);
 		expect(await db.subItems.get(-3)).toBeUndefined();
+		const queued = await pendingMutations();
+		expect(queued.map((row) => row.op)).toEqual(['create']);
 		expect(apiDelete).not.toHaveBeenCalled();
-	});
-
-	it('falls through to a normal delete for a negative id with no queued create', async () => {
-		vi.mocked(apiDelete).mockResolvedValue(undefined);
-		await deleteSubItem(1, 5, -4);
-		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/5/subtasks/-4');
 	});
 });
 

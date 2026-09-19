@@ -168,9 +168,6 @@
 	let uncheckBlockedToastId = 0;
 
 	function showUncheckBlocked(message: string) {
-		// The undo toast outranks this one in the render chain below, so an undo window still
-		// open from the previous action would hide the very explanation for why this tap did nothing.
-		dismissUndo();
 		uncheckBlockedToastId += 1;
 		uncheckBlockedToast = { id: uncheckBlockedToastId, message };
 	}
@@ -763,6 +760,8 @@
 				err instanceof ApiError &&
 				(isUncheckedLimitError(err) || isSubtasksIncompleteError(err))
 			) {
+				// This action's own undo is moot — the completion never happened.
+				dismissUndo();
 				showUncheckBlocked(err.message);
 			} else {
 				error = err instanceof ApiError ? err.message : 'Failed to update item.';
@@ -1928,11 +1927,9 @@
 		{/if}
 	</div>
 
-	{#if pendingUndo}
-		{#key pendingUndo.id}
-			<UndoToast message={pendingUndo.message} onAction={() => runUndo()} onDismiss={dismissUndo} />
-		{/key}
-	{:else if uncheckBlockedToast}
+	<!-- A blocked-action explanation outranks a lingering undo window: the undo stays registered
+	     (and shake-to-undo keeps working) and reappears once the explanation is dismissed. -->
+	{#if uncheckBlockedToast}
 		{#key uncheckBlockedToast.id}
 			<UndoToast
 				message={uncheckBlockedToast.message}
@@ -1941,6 +1938,10 @@
 				onAction={() => (uncheckBlockedToast = null)}
 				onDismiss={() => (uncheckBlockedToast = null)}
 			/>
+		{/key}
+	{:else if pendingUndo}
+		{#key pendingUndo.id}
+			<UndoToast message={pendingUndo.message} onAction={() => runUndo()} onDismiss={dismissUndo} />
 		{/key}
 	{:else if rejectionToast}
 		{#key rejectionToast.id}

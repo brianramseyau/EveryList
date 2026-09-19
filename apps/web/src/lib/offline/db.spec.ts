@@ -210,6 +210,18 @@ describe('removeCachedSubItem', () => {
 		expect((await db.items.get(5))!.subItems!.map((row) => row.id)).toEqual([2]);
 	});
 
+	it('does not resurrect an id when two sibling deletes run concurrently', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Parent',
+			subItems: [sub(1), sub(2), sub(3)]
+		} as never);
+		await Promise.all([removeCachedSubItem(db, 5, 1), removeCachedSubItem(db, 5, 2)]);
+		expect((await db.items.get(5))!.subItems!.map((row) => row.id)).toEqual([3]);
+	});
+
 	it('is a no-op when the parent row or its nested array is not cached', async () => {
 		const db = getDb()!;
 		await expect(removeCachedSubItem(db, 404, 1)).resolves.toBeUndefined();
