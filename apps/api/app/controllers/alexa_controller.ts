@@ -25,7 +25,7 @@ type AlexaRequestBody = {
       device?: { supportedInterfaces?: Record<string, unknown> }
     }
   }
-  session?: { user?: { accessToken?: string } }
+  session?: { user?: { accessToken?: string }; attributes?: Record<string, unknown> }
   request: {
     type:
       'LaunchRequest' | 'IntentRequest' | 'SessionEndedRequest' | 'Alexa.Presentation.APL.UserEvent'
@@ -163,17 +163,24 @@ export default class AlexaController {
       case 'SessionEndedRequest':
         return response.ok({ version: '1.0', response: {} })
 
-      case 'IntentRequest':
+      case 'IntentRequest': {
+        // Alexa doesn't persist session attributes on its own — each response must echo them
+        // back. The list an intent acted on becomes the session's current list, so a follow-up
+        // "add milk" after "open Costco list" targets Costco instead of the default list.
+        const attributes = body.session?.attributes
+        const sessionListId = Number(attributes?.currentListId) || undefined
+        const result = await this.#routeIntent(token, body.request, logger, sessionListId)
+        const currentListId = result.list?.id ?? sessionListId
+        const reply = await withDisplay(result, hasDisplay, token)
         return response.ok(
           await withDynamicListEntities(
-            await withDisplay(
-              await this.#routeIntent(token, body.request, logger),
-              hasDisplay,
-              token
-            ),
+            currentListId
+              ? { ...reply, sessionAttributes: { ...attributes, currentListId } }
+              : reply,
             token
           )
         )
+      }
 
       case 'Alexa.Presentation.APL.UserEvent':
         // No `withDynamicListEntities` here: a tap carries no spoken utterance for the
@@ -197,20 +204,21 @@ export default class AlexaController {
   async #routeIntent(
     token: AccessToken,
     alexaRequest: AlexaRequestBody['request'],
-    logger: HttpContext['logger']
+    logger: HttpContext['logger'],
+    sessionListId?: number
   ): Promise<IntentResult> {
     const intentName = alexaRequest.intent?.name ?? ''
     const slots = slotValues(alexaRequest.intent)
 
     switch (intentName) {
       case 'AddItemIntent':
-        return handleAddItem(token, slots)
+        return handleAddItem(token, slots, sessionListId)
       case 'RemoveItemIntent':
-        return handleRemoveOrComplete(token, slots, 'remove')
+        return handleRemoveOrComplete(token, slots, 'remove', sessionListId)
       case 'CompleteItemIntent':
-        return handleRemoveOrComplete(token, slots, 'complete')
+        return handleRemoveOrComplete(token, slots, 'complete', sessionListId)
       case 'ReadListIntent':
-        return handleReadList(token, slots)
+        return handleReadList(token, slots, sessionListId)
       case 'SetDefaultListIntent':
         return handleSetDefaultList(token, slots)
       case 'ShowCheckedItemsIntent':

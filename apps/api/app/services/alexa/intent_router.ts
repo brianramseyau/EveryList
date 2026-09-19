@@ -68,9 +68,10 @@ function speakAmbiguousLists(options: List[]): AlexaResponse {
 
 async function resolveListOrRespond(
   token: AccessToken,
-  listNameSlot: string | undefined
+  listNameSlot: string | undefined,
+  sessionListId?: number
 ): Promise<{ list: List } | { response: AlexaResponse }> {
-  const resolution = await resolveList(token, listNameSlot)
+  const resolution = await resolveList(token, listNameSlot, sessionListId)
   if (resolution.kind === 'found') return { list: resolution.list }
 
   logger.debug(
@@ -148,11 +149,15 @@ export async function uncheckItemRow(list: List, item: Item): Promise<UncheckRes
  * rather than creating a metadata-less duplicate, so it's reused wholesale here instead of
  * reimplemented.
  */
-export async function handleAddItem(token: AccessToken, slots: AlexaSlots): Promise<IntentResult> {
+export async function handleAddItem(
+  token: AccessToken,
+  slots: AlexaSlots,
+  sessionListId?: number
+): Promise<IntentResult> {
   const itemName = slots.ItemName?.trim()
   if (!itemName) return respond(say("I didn't catch what to add."))
 
-  const resolved = await resolveListOrRespond(token, slots.ListName)
+  const resolved = await resolveListOrRespond(token, slots.ListName, sessionListId)
   if ('response' in resolved) return respond(resolved.response)
   const list = resolved.list
 
@@ -257,12 +262,13 @@ export async function handleAddItem(token: AccessToken, slots: AlexaSlots): Prom
 export async function handleRemoveOrComplete(
   token: AccessToken,
   slots: AlexaSlots,
-  action: 'remove' | 'complete'
+  action: 'remove' | 'complete',
+  sessionListId?: number
 ): Promise<IntentResult> {
   const itemName = slots.ItemName?.trim()
   if (!itemName) return respond(say("I didn't catch which item you meant."))
 
-  const resolved = await resolveListOrRespond(token, slots.ListName)
+  const resolved = await resolveListOrRespond(token, slots.ListName, sessionListId)
   if ('response' in resolved) return respond(resolved.response)
   const list = resolved.list
 
@@ -304,8 +310,12 @@ export async function handleRemoveOrComplete(
 /** `ReadListIntent` — a spoken summary, not a full read of a long list (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2).
  * Unlike the APL display (`apl_view.ts`, Stage 3), this only speaks unchecked items — the two
  * are deliberately allowed to diverge (see PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3's design note). */
-export async function handleReadList(token: AccessToken, slots: AlexaSlots): Promise<IntentResult> {
-  const resolved = await resolveListOrRespond(token, slots.ListName)
+export async function handleReadList(
+  token: AccessToken,
+  slots: AlexaSlots,
+  sessionListId?: number
+): Promise<IntentResult> {
+  const resolved = await resolveListOrRespond(token, slots.ListName, sessionListId)
   if ('response' in resolved) return respond(resolved.response)
   const list = resolved.list
 
@@ -315,7 +325,10 @@ export async function handleReadList(token: AccessToken, slots: AlexaSlots): Pro
     .where('checked', false)
     .orderBy('sortOrder', 'asc')
 
-  if (items.length === 0) return respond(say(`${list.name} is empty.`), list)
+  // Keeps the session open (`reprompt`) so a follow-up like "add milk" lands in the same
+  // session, where `alexa_controller.ts` carries this list forward as the session's current one.
+  const reprompt = 'What would you like to do?'
+  if (items.length === 0) return respond(say(`${list.name} is empty.`, { reprompt }), list)
 
   const maxSpoken = 5
   const spoken = items.slice(0, maxSpoken).map((item) => item.name)
@@ -326,7 +339,7 @@ export async function handleReadList(token: AccessToken, slots: AlexaSlots): Pro
       ? `On ${list.name}, you have ${spoken.join(', ')}, and ${remaining} more item${remaining === 1 ? '' : 's'}.`
       : `On ${list.name}, you have ${spoken.join(', ')}.`
 
-  return respond(say(summary), list)
+  return respond(say(summary, { reprompt }), list)
 }
 
 /**

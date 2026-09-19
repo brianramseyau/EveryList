@@ -4,6 +4,7 @@
  * (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 3). */
 export type AlexaResponse = {
   version: '1.0'
+  sessionAttributes?: Record<string, unknown>
   response: {
     outputSpeech: { type: 'PlainText'; text: string }
     reprompt?: { outputSpeech: { type: 'PlainText'; text: string } }

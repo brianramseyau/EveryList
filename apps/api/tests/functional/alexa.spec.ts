@@ -19,6 +19,8 @@ type Envelope = {
   hasDisplay?: boolean
   /** `request.arguments` for an `Alexa.Presentation.APL.UserEvent` (a tap on-screen). */
   args?: unknown[]
+  /** `session.attributes` echoed back from the previous response in the same Alexa session. */
+  sessionAttributes?: Record<string, unknown>
 }
 
 function buildEnvelope(options: Envelope) {
@@ -30,7 +32,10 @@ function buildEnvelope(options: Envelope) {
 
   return {
     version: '1.0',
-    session: accessTokenLocation === 'session' ? userWithToken : { user: {} },
+    session: {
+      ...(accessTokenLocation === 'session' ? userWithToken : { user: {} }),
+      ...(options.sessionAttributes ? { attributes: options.sessionAttributes } : {}),
+    },
     context: {
       System: {
         application: { applicationId: options.applicationId ?? 'test-skill-id' },
@@ -842,6 +847,50 @@ test.group('Alexa skill endpoint', (group) => {
       })
     )
     assert.include(addToOther.body().response.outputSpeech.text, 'Added Hammer to Hardware')
+  })
+
+  test('a list opened earlier in the session is used by a follow-up add, ahead of the default list', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const groceriesId = await createList(client, owner.token, 'Groceries')
+    const hardwareId = await createList(client, owner.token, 'Hardware')
+    const pat = await mintPat(client, owner.token, [groceriesId, hardwareId])
+    await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'SetDefaultListIntent',
+        slots: { ListName: 'Groceries' },
+      })
+    )
+
+    const open = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'ReadListIntent',
+        slots: { ListName: 'Hardware' },
+      })
+    )
+    assert.isFalse(open.body().response.shouldEndSession)
+    assert.equal(open.body().sessionAttributes.currentListId, hardwareId)
+
+    const add = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Hammer' },
+        sessionAttributes: open.body().sessionAttributes,
+      })
+    )
+    assert.include(add.body().response.outputSpeech.text, 'Added Hammer to Hardware')
+    assert.equal(add.body().sessionAttributes.currentListId, hardwareId)
   })
 
   test('SetDefaultListIntent with no ListName slot asks for clarification', async ({
