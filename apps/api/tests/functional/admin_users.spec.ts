@@ -4,6 +4,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import type { AdminUserDto, ListDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
 import db from '@adonisjs/lucid/services/db'
+import logger from '@adonisjs/core/services/logger'
 import User from '#models/user'
 import { bodyData, signupAndGetUser } from './helpers.js'
 
@@ -475,6 +476,11 @@ test.group('Admin user management', (group) => {
       .json({ name: 'x', listIds: [listId], role: 'editor' })
     mint.assertStatus(403)
 
+    const revoke = await client
+      .delete(`/api/v1/tokens/${(existing.body().data as { id: string | number }).id}`)
+      .header('Authorization', `Bearer ${token}`)
+    revoke.assertStatus(403)
+
     const rescope = await client
       .patch(`/api/v1/tokens/${(existing.body().data as { id: string | number }).id}`)
       .header('Authorization', `Bearer ${token}`)
@@ -510,11 +516,24 @@ test.group('Admin user management', (group) => {
     // Inside this test's rolled-back transaction, so the schema change never leaks out.
     await db.rawQuery('ALTER TABLE users DROP COLUMN last_seen_at')
 
-    const response = await client
-      .get('/api/v1/lists')
-      .header('Authorization', `Bearer ${other.token}`)
-    response.assertStatus(200)
-    assert.isDefined(other.id)
+    // Request loggers are children of the app logger and share its prototype.
+    const proto = Object.getPrototypeOf(logger.child({}))
+    const original = proto.warn
+    const warnings: unknown[][] = []
+    proto.warn = function (this: unknown, ...args: unknown[]) {
+      warnings.push(args)
+      return original.apply(this, args)
+    }
+    try {
+      const response = await client
+        .get('/api/v1/lists')
+        .header('Authorization', `Bearer ${other.token}`)
+      response.assertStatus(200)
+    } finally {
+      proto.warn = original
+    }
+
+    assert.isTrue(warnings.some((args) => args.includes('failed to record last seen')))
   })
 
   test('a user with no access token is not impersonated', ({ assert }) => {

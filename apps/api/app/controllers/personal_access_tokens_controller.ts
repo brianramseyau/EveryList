@@ -12,17 +12,17 @@ import PersonalAccessTokenTransformer, {
 import type { AccessToken } from '@adonisjs/auth/access_tokens'
 import type { ListRole } from '#models/list_member'
 
+/** An impersonation session is view-only: minting, re-scoping or revoking a PAT from inside it
+ * would outlive (or undo) what the 1-hour token was meant to allow. */
+function forbidImpersonated(response: HttpContext['response']) {
+  return response.forbidden({ message: 'Not available while impersonating a user.' })
+}
+
 /**
  * Decodes a PAT's `list:<id>:<role>` abilities — one per granted list,
  * written verbatim by `store` below (the only place this app ever mints
  * one) — trusted to be well-formed rather than defensively re-validated.
  */
-/** An impersonation session is view-only: minting or re-scoping a non-expiring PAT from inside it
- * would outlive the 1-hour token. */
-function forbidImpersonated(response: HttpContext['response']) {
-  return response.forbidden({ message: 'Not available while impersonating a user.' })
-}
-
 function decodeGrants(token: AccessToken): { listId: number; role: ListRole }[] {
   return token.abilities.map((ability) => {
     const [, id, role] = ability.split(':')
@@ -134,6 +134,7 @@ export default class PersonalAccessTokensController {
 
   async destroy({ auth, params, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
+    if (user.isImpersonated) return forbidImpersonated(response)
     const token = await User.personalAccessTokens.find(user, params.tokenId)
     if (!token) {
       return response.notFound({ message: 'Token not found' })
