@@ -8,6 +8,7 @@
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { getToken, syncAuthToNative, syncTokenToServiceWorker } from '$lib/api/token';
+	import { reconcileImpersonation } from '$lib/api/impersonation.svelte';
 	import { getServerUrl } from '$lib/api/server-url';
 	import { fetchSetupStatus } from '$lib/api/setup';
 	import { isRemoteClient } from '$lib/platform/desktop';
@@ -42,6 +43,7 @@
 	import BottomNav from '$lib/components/BottomNav.svelte';
 	import SyncStatusIcon from '$lib/components/SyncStatusIcon.svelte';
 	import ShakeRepromptBanner from '$lib/components/ShakeRepromptBanner.svelte';
+	import ImpersonationBanner from '$lib/components/ImpersonationBanner.svelte';
 
 	let { children } = $props();
 
@@ -49,6 +51,7 @@
 
 	function refreshAuth() {
 		loggedIn = Boolean(getToken());
+		reconcileImpersonation();
 	}
 
 	function syncBadge() {
@@ -354,6 +357,7 @@
 		<div class="print:hidden">
 			<SyncStatusIcon />
 			<ShakeRepromptBanner />
+			<ImpersonationBanner />
 		</div>
 	{/if}
 </div>

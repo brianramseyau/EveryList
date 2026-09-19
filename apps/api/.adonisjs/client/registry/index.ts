@@ -132,6 +132,12 @@ const routes = {
     tokens: [{"old":"/api/v1/admin/users/:id","type":0,"val":"api","end":""},{"old":"/api/v1/admin/users/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/admin/users/:id","type":0,"val":"admin","end":""},{"old":"/api/v1/admin/users/:id","type":0,"val":"users","end":""},{"old":"/api/v1/admin/users/:id","type":1,"val":"id","end":""}],
     types: placeholder as Registry['adminUsers.admin_users.update']['types'],
   },
+  'adminUsers.admin_users.impersonate': {
+    methods: ["POST"],
+    pattern: '/api/v1/admin/users/:id/impersonate',
+    tokens: [{"old":"/api/v1/admin/users/:id/impersonate","type":0,"val":"api","end":""},{"old":"/api/v1/admin/users/:id/impersonate","type":0,"val":"v1","end":""},{"old":"/api/v1/admin/users/:id/impersonate","type":0,"val":"admin","end":""},{"old":"/api/v1/admin/users/:id/impersonate","type":0,"val":"users","end":""},{"old":"/api/v1/admin/users/:id/impersonate","type":1,"val":"id","end":""},{"old":"/api/v1/admin/users/:id/impersonate","type":0,"val":"impersonate","end":""}],
+    types: placeholder as Registry['adminUsers.admin_users.impersonate']['types'],
+  },
   'adminUsers.admin_users.destroy': {
     methods: ["DELETE"],
     pattern: '/api/v1/admin/users/:id',

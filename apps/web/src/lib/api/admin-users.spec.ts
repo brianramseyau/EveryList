@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createAdminUser, deleteAdminUser, fetchAdminUsers, updateAdminUser } from './admin-users';
+import {
+	createAdminUser,
+	deleteAdminUser,
+	fetchAdminUsers,
+	impersonateAdminUser,
+	updateAdminUser
+} from './admin-users';
 
 const user = {
 	id: 2,
@@ -7,7 +13,8 @@ const user = {
 	email: 'new-guy@example.com',
 	createdAt: '2026-08-01T00:00:00.000Z',
 	updatedAt: null,
-	disabledAt: null
+	disabledAt: null,
+	lastSeenAt: null
 };
 
 describe('admin-users API client', () => {
@@ -65,5 +72,18 @@ describe('admin-users API client', () => {
 		const [url, init] = fetchMock.mock.calls[0];
 		expect(url).toContain('/api/v1/admin/users/2');
 		expect(init.method).toBe('DELETE');
+	});
+
+	it('impersonateAdminUser posts to the impersonate endpoint and returns the minted token', async () => {
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ data: { user, token: 'imp-token' } })
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(impersonateAdminUser(2)).resolves.toEqual({ user, token: 'imp-token' });
+		const [url, init] = fetchMock.mock.calls[0];
+		expect(url).toContain('/api/v1/admin/users/2/impersonate');
+		expect(init.method).toBe('POST');
 	});
 });

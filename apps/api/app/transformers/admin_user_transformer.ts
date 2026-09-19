@@ -12,6 +12,7 @@ export default class AdminUserTransformer extends BaseTransformer<User> {
       'createdAt',
       'updatedAt',
       'disabledAt',
+      'lastSeenAt',
     ])
   }
 }

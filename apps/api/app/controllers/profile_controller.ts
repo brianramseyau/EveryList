@@ -32,6 +32,9 @@ export default class ProfileController {
    */
   async updatePassword({ auth, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
+    if (user.isImpersonated) {
+      return response.forbidden({ message: 'Not available while impersonating a user.' })
+    }
     const { currentPassword, password, signOutOtherDevices } =
       await request.validateUsing(updatePasswordValidator)
 

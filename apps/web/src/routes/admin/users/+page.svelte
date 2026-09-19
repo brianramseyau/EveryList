@@ -10,6 +10,8 @@
 		fetchAdminUsers,
 		updateAdminUser
 	} from '$lib/api/admin-users';
+	import { startImpersonation } from '$lib/api/impersonation.svelte';
+	import { PendingChangesError } from '$lib/api/impersonation-errors';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -50,6 +52,17 @@
 			year: 'numeric',
 			month: 'short',
 			day: 'numeric'
+		});
+	}
+
+	function formatLastSeen(iso: string | null): string {
+		if (!iso) return 'Never';
+		return new Date(iso).toLocaleString(undefined, {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit'
 		});
 	}
 
@@ -142,6 +155,21 @@
 			users = users.map((u) => (u.id === updated.id ? updated : u));
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to update user.';
+		} finally {
+			rowBusyId = null;
+		}
+	}
+
+	async function impersonate(user: AdminUserDto) {
+		rowBusyId = user.id;
+		try {
+			await startImpersonation({ id: user.id, label: displayName(user) });
+			await goto(resolve('/'));
+		} catch (err) {
+			error =
+				err instanceof ApiError || err instanceof PendingChangesError
+					? err.message
+					: 'Failed to impersonate user.';
 		} finally {
 			rowBusyId = null;
 		}
@@ -242,6 +270,9 @@
 										· <span class="text-red-600 dark:text-red-400">Disabled</span>
 									{/if}
 								</p>
+								<p class="text-xs text-gray-400 dark:text-gray-500">
+									Last active {formatLastSeen(user.lastSeenAt)}
+								</p>
 							</div>
 							<div class="flex shrink-0 items-center gap-1">
 								<button
@@ -253,6 +284,17 @@
 									<Icon name="pencil" class="h-4 w-4" />
 								</button>
 								{#if user.id !== CURRENT_USER_ID}
+									{#if !user.disabledAt}
+										<button
+											type="button"
+											onclick={() => impersonate(user)}
+											disabled={rowBusyId === user.id}
+											aria-label="Impersonate"
+											class="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800"
+										>
+											<Icon name="eye" class="h-4 w-4" />
+										</button>
+									{/if}
 									<button
 										type="button"
 										onclick={() => toggleDisabled(user)}

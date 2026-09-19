@@ -9,6 +9,9 @@ export interface AdminUserDto {
   createdAt: string
   updatedAt: string | null
   disabledAt: string | null
+  /** Last authenticated request by this user (throttled to ~1/min); null if never seen since
+   * tracking began. Admin impersonation doesn't count. */
+  lastSeenAt: string | null
 }
 
 export interface AdminUserCreateRequest {

@@ -259,6 +259,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'adminUsers.admin_users.impersonate': {
+    methods: ["POST"]
+    pattern: '/api/v1/admin/users/:id/impersonate'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['impersonate']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['impersonate']>>>
+    }
+  }
   'adminUsers.admin_users.destroy': {
     methods: ["DELETE"]
     pattern: '/api/v1/admin/users/:id'

@@ -19,6 +19,17 @@ export default class User extends compose(UserSchema, withAuthFinder(hash)) {
   })
   declare currentAccessToken?: AccessToken
 
+  /** Ability carried only by the short-lived login token an admin mints to act as another user
+   * (see admin_users_controller.ts#impersonate). Keyed on an ability rather than the token's
+   * `name` because names are user-supplied (a PAT can be called anything) whereas abilities are
+   * always server-generated. */
+  static IMPERSONATION_ABILITY = 'impersonated'
+
+  /** True when this request was authenticated with an admin-minted impersonation token. */
+  get isImpersonated() {
+    return this.currentAccessToken?.abilities.includes(User.IMPERSONATION_ABILITY) ?? false
+  }
+
   get initials() {
     const [first, last] = this.fullName ? this.fullName.split(' ') : this.email.split('@')
     if (first && last) {
