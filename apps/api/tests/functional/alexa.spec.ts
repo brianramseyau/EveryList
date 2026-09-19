@@ -900,9 +900,13 @@ test.group('Alexa skill endpoint', (group) => {
         type: 'IntentRequest',
         accessToken: pat,
         intentName: 'HideCheckedItemsIntent',
+        hasDisplay: true,
         sessionAttributes: add.body().sessionAttributes,
       })
     )
+    // On a screen device the toggled display keeps the session open, so these attributes are
+    // what the real device hands to the next turn.
+    assert.isFalse(hide.body().response.shouldEndSession)
     assert.equal(hide.body().sessionAttributes.currentListId, hardwareId)
 
     // An explicit spoken list still beats the session's list, and becomes the new current one.
