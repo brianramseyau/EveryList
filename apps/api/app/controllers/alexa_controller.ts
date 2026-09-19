@@ -92,6 +92,26 @@ async function withDynamicListEntities(
   }
 }
 
+function sessionListIdOf(attributes: Record<string, unknown> | undefined): number | undefined {
+  return Number(attributes?.currentListId) || undefined
+}
+
+/**
+ * Echoes `session.attributes` back with `currentListId` set. Alexa only carries attributes to
+ * the next request in a session when the response includes them, so every response that keeps
+ * the session open must re-send them. The list an intent acted on becomes the session's
+ * current list, so a follow-up "add milk" after "open Costco list" targets Costco instead of
+ * the default list.
+ */
+function withSessionList(
+  response: AlexaResponse,
+  attributes: Record<string, unknown> | undefined,
+  currentListId: number | undefined
+): AlexaResponse {
+  if (!currentListId) return response
+  return { ...response, sessionAttributes: { ...attributes, currentListId } }
+}
+
 /** Handles the Alexa custom skill's `LaunchRequest`/`IntentRequest`/`SessionEndedRequest`
  * (PLAN_16_PHASE_VOICE_ASSISTANT_INTEGRATION.md Stage 2) and, for screen devices, `Alexa.Presentation.APL.UserEvent` touch
  * events (Stage 3). Reached only after `AlexaSignatureMiddleware` has confirmed the request
@@ -164,36 +184,32 @@ export default class AlexaController {
         return response.ok({ version: '1.0', response: {} })
 
       case 'IntentRequest': {
-        // Alexa doesn't persist session attributes on its own — each response must echo them
-        // back. The list an intent acted on becomes the session's current list, so a follow-up
-        // "add milk" after "open Costco list" targets Costco instead of the default list.
         const attributes = body.session?.attributes
-        const sessionListId = Number(attributes?.currentListId) || undefined
+        const sessionListId = sessionListIdOf(attributes)
         const result = await this.#routeIntent(token, body.request, logger, sessionListId)
-        const currentListId = result.list?.id ?? sessionListId
         const reply = await withDisplay(result, hasDisplay, token)
         return response.ok(
           await withDynamicListEntities(
-            currentListId
-              ? { ...reply, sessionAttributes: { ...attributes, currentListId } }
-              : reply,
+            withSessionList(reply, attributes, result.list?.id ?? sessionListId),
             token
           )
         )
       }
 
-      case 'Alexa.Presentation.APL.UserEvent':
+      case 'Alexa.Presentation.APL.UserEvent': {
         // No `withDynamicListEntities` here: a tap carries no spoken utterance for the
         // registration to affect, so it'd only add a DB query per tap with nothing to show
         // for it — unlike `LaunchRequest`/`IntentRequest`, which precede the next thing the
         // user says.
+        const attributes = body.session?.attributes
+        const result = await handleTouchEvent(token, body.request.arguments ?? [])
+        const reply = await withDisplay(result, hasDisplay, token)
+        // The tapped row's list is the one on screen, so it's the session's current list; the
+        // display keeps the session open, and a follow-up "add milk" should land there too.
         return response.ok(
-          await withDisplay(
-            await handleTouchEvent(token, body.request.arguments ?? []),
-            hasDisplay,
-            token
-          )
+          withSessionList(reply, attributes, result.list?.id ?? sessionListIdOf(attributes))
         )
+      }
 
       /* c8 ignore next 2 -- Alexa's request.type is a closed enum; no other value is ever sent. */
       default:
@@ -222,9 +238,9 @@ export default class AlexaController {
       case 'SetDefaultListIntent':
         return handleSetDefaultList(token, slots)
       case 'ShowCheckedItemsIntent':
-        return handleSetShowChecked(token, true)
+        return handleSetShowChecked(token, true, sessionListId)
       case 'HideCheckedItemsIntent':
-        return handleSetShowChecked(token, false)
+        return handleSetShowChecked(token, false, sessionListId)
       case 'AMAZON.HelpIntent':
         return {
           response: say(

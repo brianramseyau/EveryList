@@ -375,12 +375,13 @@ export async function handleSetDefaultList(
  */
 export async function handleSetShowChecked(
   token: AccessToken,
-  show: boolean
+  show: boolean,
+  sessionListId?: number
 ): Promise<IntentResult> {
   const userId = Number(token.tokenableId)
   await AlexaPreference.updateOrCreate({ userId }, { userId, showChecked: show })
 
-  const resolution = await resolveList(token, undefined)
+  const resolution = await resolveList(token, undefined, sessionListId)
   const list = resolution.kind === 'found' ? resolution.list : undefined
   return respond(say(show ? 'Okay, showing checked items.' : 'Okay, hiding checked items.'), list)
 }
