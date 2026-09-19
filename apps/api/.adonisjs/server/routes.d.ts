@@ -25,6 +25,7 @@ export type ScannedRoutes = {
     'adminUsers.admin_users.index': { paramsTuple?: []; params?: {} }
     'adminUsers.admin_users.store': { paramsTuple?: []; params?: {} }
     'adminUsers.admin_users.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'adminUsers.admin_users.impersonate': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'adminUsers.admin_users.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'folders.folders.index': { paramsTuple?: []; params?: {} }
     'folders.folders.store': { paramsTuple?: []; params?: {} }
@@ -191,6 +192,7 @@ export type ScannedRoutes = {
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.refresh': { paramsTuple?: []; params?: {} }
     'adminUsers.admin_users.store': { paramsTuple?: []; params?: {} }
+    'adminUsers.admin_users.impersonate': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'folders.folders.store': { paramsTuple?: []; params?: {} }
     'lists.lists.store': { paramsTuple?: []; params?: {} }
     'lists.categories.store': { paramsTuple: [ParamValue]; params: {'listId': ParamValue} }

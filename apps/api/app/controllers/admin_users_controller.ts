@@ -2,6 +2,7 @@ import db from '@adonisjs/lucid/services/db'
 import User from '#models/user'
 import { DateTime } from 'luxon'
 import type { HttpContext } from '@adonisjs/core/http'
+import UserTransformer from '#transformers/user_transformer'
 import AdminUserTransformer from '#transformers/admin_user_transformer'
 import { adminCreateUserValidator, adminUpdateUserValidator } from '#validators/admin_user'
 import { createOwnedList, STARTER_LIST, TODOS_LIST } from '#services/list_creation'
@@ -141,5 +142,35 @@ export default class AdminUsersController {
     await target.delete()
     ctx.logger.info({ userId: target.id }, 'admin deleted user')
     return ctx.response.noContent()
+  }
+
+  /** Issues a short-lived login token for the target user so the primary account can see the
+   * app as they do. The token is a normal login-bucket token (so every route accepts it)
+   * named `impersonation`, which the auth middleware uses to keep it from bumping the
+   * target's `lastSeenAt` and `refresh` uses to refuse rotating it into a long-lived one. */
+  async impersonate(ctx: HttpContext) {
+    const admin = this.requireAdmin(ctx)
+    if (!admin) return
+
+    const target = await User.findOrFail(ctx.request.param('id'))
+    if (target.id === admin.id) {
+      return ctx.response.unprocessableEntity({ message: 'You cannot impersonate yourself.' })
+    }
+    if (target.disabledAt) {
+      return ctx.response.unprocessableEntity({
+        message: 'A disabled account cannot be impersonated.',
+      })
+    }
+
+    const token = await User.accessTokens.create(target, ['*'], {
+      name: User.IMPERSONATION_TOKEN_NAME,
+      expiresIn: '1 hour',
+    })
+    ctx.logger.warn({ adminId: admin.id, userId: target.id }, 'admin impersonation started')
+
+    return ctx.serialize({
+      user: UserTransformer.transform(target),
+      token: token.value!.release(),
+    })
   }
 }

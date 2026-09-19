@@ -11,9 +11,11 @@ vi.mock('$lib/api/admin-users', () => ({
 	updateAdminUser: vi.fn(),
 	deleteAdminUser: vi.fn()
 }));
+vi.mock('$lib/api/impersonation.svelte', () => ({ startImpersonation: vi.fn() }));
 
 const { fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser } =
 	await import('$lib/api/admin-users');
+const { startImpersonation } = await import('$lib/api/impersonation.svelte');
 const { goto } = await import('$app/navigation');
 const AdminUsersPage = (await import('./+page.svelte')).default;
 
@@ -25,7 +27,8 @@ const admin = {
 	email: 'ada@example.com',
 	createdAt: '2026-08-01T00:00:00.000Z',
 	updatedAt: null,
-	disabledAt: null
+	disabledAt: null,
+	lastSeenAt: null
 };
 
 const other = {
@@ -34,7 +37,8 @@ const other = {
 	email: 'grace@example.com',
 	createdAt: '2026-08-02T00:00:00.000Z',
 	updatedAt: null,
-	disabledAt: null
+	disabledAt: null,
+	lastSeenAt: null
 };
 
 describe('Admin users +page.svelte', () => {
@@ -379,5 +383,60 @@ describe('Admin users +page.svelte', () => {
 
 		await expect.element(page.getByRole('button', { name: 'Disable' })).not.toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+	});
+
+	it('shows each user\'s last active time, or "Never"', async () => {
+		vi.mocked(fetchAdminUsers).mockResolvedValue([
+			{ ...admin, lastSeenAt: '2026-09-18T14:30:00.000Z' },
+			other
+		]);
+
+		render(AdminUsersPage);
+
+		await expect.element(page.getByText('Last active Never')).toBeInTheDocument();
+		await expect.element(page.getByText(/Last active .*2026.*\d/).first()).toBeInTheDocument();
+	});
+
+	it('impersonates another user and heads to the home page', async () => {
+		vi.mocked(fetchAdminUsers).mockResolvedValue([admin, other]);
+		vi.mocked(startImpersonation).mockResolvedValue();
+
+		render(AdminUsersPage);
+		await page.getByRole('button', { name: 'Impersonate' }).click();
+
+		expect(startImpersonation).toHaveBeenCalledWith({ id: 2, label: 'Grace Hopper' });
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBeGreaterThan(0);
+	});
+
+	it('shows an error when impersonating fails', async () => {
+		vi.mocked(fetchAdminUsers).mockResolvedValue([admin, other]);
+		vi.mocked(startImpersonation).mockRejectedValue(new ApiError(422, 'Nope.'));
+
+		render(AdminUsersPage);
+		await page.getByRole('button', { name: 'Impersonate' }).click();
+
+		await expect.element(page.getByText('Nope.')).toBeInTheDocument();
+	});
+
+	it('shows a generic message when impersonating fails without an ApiError', async () => {
+		vi.mocked(fetchAdminUsers).mockResolvedValue([admin, other]);
+		vi.mocked(startImpersonation).mockRejectedValue(new Error('boom'));
+
+		render(AdminUsersPage);
+		await page.getByRole('button', { name: 'Impersonate' }).click();
+
+		await expect.element(page.getByText('Failed to impersonate user.')).toBeInTheDocument();
+	});
+
+	it('does not offer impersonation for the current account or a disabled user', async () => {
+		vi.mocked(fetchAdminUsers).mockResolvedValue([
+			admin,
+			{ ...other, disabledAt: '2026-08-03T00:00:00.000Z' }
+		]);
+
+		render(AdminUsersPage);
+
+		await expect.element(page.getByText('Grace Hopper')).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Impersonate' })).not.toBeInTheDocument();
 	});
 });

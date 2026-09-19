@@ -100,6 +100,7 @@ router
         router.get('/', [controllers.AdminUsers, 'index'])
         router.post('/', [controllers.AdminUsers, 'store'])
         router.patch(':id', [controllers.AdminUsers, 'update'])
+        router.post(':id/impersonate', [controllers.AdminUsers, 'impersonate'])
         router.delete(':id', [controllers.AdminUsers, 'destroy'])
       })
       .prefix('admin/users')

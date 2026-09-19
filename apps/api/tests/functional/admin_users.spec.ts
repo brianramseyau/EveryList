@@ -2,6 +2,8 @@ import { test } from '@japa/runner'
 import type { ApiClient } from '@japa/api-client'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { AdminUserDto, ListDto } from '@everylist/shared'
+import { DateTime } from 'luxon'
+import User from '#models/user'
 import { bodyData, signupAndGetUser } from './helpers.js'
 
 const PASSWORD = 'password123'
@@ -282,5 +284,144 @@ test.group('Admin user management', (group) => {
       .delete(`/api/v1/admin/users/${admin.id}`)
       .header('Authorization', `Bearer ${admin.token}`)
     response.assertStatus(422)
+  })
+
+  test("index reports lastSeenAt, stamped by the user's own authenticated requests", async ({
+    client,
+    assert,
+  }) => {
+    const admin = await signupAndGetUser(client)
+    const other = await signupAndGetUser(client)
+
+    const before = await client
+      .get('/api/v1/admin/users')
+      .header('Authorization', `Bearer ${admin.token}`)
+    const otherBefore = bodyData<AdminUserDto[]>(before).find((u) => u.id === other.id)!
+    assert.isNull(otherBefore.lastSeenAt)
+
+    await client.get('/api/v1/lists').header('Authorization', `Bearer ${other.token}`)
+
+    const after = await client
+      .get('/api/v1/admin/users')
+      .header('Authorization', `Bearer ${admin.token}`)
+    const otherAfter = bodyData<AdminUserDto[]>(after).find((u) => u.id === other.id)!
+    assert.isNotNull(otherAfter.lastSeenAt)
+    assert.equal(otherAfter.updatedAt, otherBefore.updatedAt)
+  })
+
+  test('impersonate is forbidden for any user other than id 1', async ({ client }) => {
+    await signupAndGetUser(client)
+    const other = await signupAndGetUser(client)
+    const third = await signupAndGetUser(client)
+
+    const response = await client
+      .post(`/api/v1/admin/users/${third.id}/impersonate`)
+      .header('Authorization', `Bearer ${other.token}`)
+    response.assertStatus(403)
+  })
+
+  test('impersonate returns a token that acts as the target without bumping their lastSeenAt', async ({
+    client,
+    assert,
+  }) => {
+    const admin = await signupAndGetUser(client)
+    const other = await signupAndGetUser(client)
+
+    const response = await client
+      .post(`/api/v1/admin/users/${other.id}/impersonate`)
+      .header('Authorization', `Bearer ${admin.token}`)
+    response.assertStatus(200)
+    assert.equal(response.body().data.user.id, other.id)
+    const token = response.body().data.token as string
+
+    const profile = await client
+      .get('/api/v1/account/profile')
+      .header('Authorization', `Bearer ${token}`)
+    profile.assertStatus(200)
+    assert.equal(profile.body().data.id, other.id)
+
+    // Acting as the user isn't the user interacting — they've still never been seen.
+    const index = await client
+      .get('/api/v1/admin/users')
+      .header('Authorization', `Bearer ${admin.token}`)
+    const otherRow = bodyData<AdminUserDto[]>(index).find((u) => u.id === other.id)!
+    assert.isNull(otherRow.lastSeenAt)
+
+    // ...and the impersonated session can't reach admin endpoints, being a non-primary user.
+    const adminAttempt = await client
+      .get('/api/v1/admin/users')
+      .header('Authorization', `Bearer ${token}`)
+    adminAttempt.assertStatus(403)
+  })
+
+  test('an impersonation token cannot be refreshed into a long-lived one', async ({ client }) => {
+    const admin = await signupAndGetUser(client)
+    const other = await signupAndGetUser(client)
+
+    const response = await client
+      .post(`/api/v1/admin/users/${other.id}/impersonate`)
+      .header('Authorization', `Bearer ${admin.token}`)
+    const token = response.body().data.token as string
+
+    const refresh = await client
+      .post('/api/v1/account/refresh')
+      .header('Authorization', `Bearer ${token}`)
+    refresh.assertStatus(403)
+  })
+
+  test('impersonate refuses the primary account and disabled users', async ({ client }) => {
+    const admin = await signupAndGetUser(client)
+    const other = await signupAndGetUser(client)
+
+    const self = await client
+      .post(`/api/v1/admin/users/${admin.id}/impersonate`)
+      .header('Authorization', `Bearer ${admin.token}`)
+    self.assertStatus(422)
+
+    await client
+      .patch(`/api/v1/admin/users/${other.id}`)
+      .header('Authorization', `Bearer ${admin.token}`)
+      .json({ disabled: true })
+    const disabled = await client
+      .post(`/api/v1/admin/users/${other.id}/impersonate`)
+      .header('Authorization', `Bearer ${admin.token}`)
+    disabled.assertStatus(422)
+  })
+
+  test('impersonate 404s for an unknown user', async ({ client }) => {
+    const admin = await signupAndGetUser(client)
+    const response = await client
+      .post('/api/v1/admin/users/99999/impersonate')
+      .header('Authorization', `Bearer ${admin.token}`)
+    response.assertStatus(404)
+  })
+
+  test('lastSeenAt is only rewritten once it is at least a minute old', async ({
+    client,
+    assert,
+  }) => {
+    const other = await signupAndGetUser(client)
+    const stamp = async () => {
+      const row = await User.findOrFail(other.id)
+      return row.lastSeenAt
+    }
+
+    await client.get('/api/v1/lists').header('Authorization', `Bearer ${other.token}`)
+    const first = await stamp()
+    assert.isNotNull(first)
+
+    // Within the throttle window: no rewrite.
+    await client.get('/api/v1/lists').header('Authorization', `Bearer ${other.token}`)
+    const second = await stamp()
+    assert.equal(second!.toMillis(), first!.toMillis())
+
+    // Once stale, the next request refreshes it.
+    const stale = DateTime.now().minus({ minutes: 5 })
+    await User.query()
+      .where('id', other.id)
+      .update({ last_seen_at: stale.toFormat('yyyy-MM-dd HH:mm:ss') })
+    await client.get('/api/v1/lists').header('Authorization', `Bearer ${other.token}`)
+    const third = await stamp()
+    assert.isTrue(third!.toMillis() > stale.toMillis() + 60_000)
   })
 })

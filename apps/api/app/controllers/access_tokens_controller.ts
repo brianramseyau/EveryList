@@ -45,8 +45,13 @@ export default class AccessTokensController {
    * one used to authenticate this request, so a long-lived client session
    * never has to ask the user to re-enter their password to stay signed in.
    */
-  async refresh({ auth, serialize, logger }: HttpContext) {
+  async refresh({ auth, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
+    // Rotating would turn a 1-hour impersonation token into a normal 30-day login for the
+    // target user.
+    if (user.isImpersonated) {
+      return response.forbidden({ message: 'Impersonation sessions cannot be refreshed.' })
+    }
     const previousToken = user.currentAccessToken
 
     const token = await User.accessTokens.create(user)

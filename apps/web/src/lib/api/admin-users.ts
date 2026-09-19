@@ -1,7 +1,8 @@
 import type {
 	AdminUserCreateRequest,
 	AdminUserDto,
-	AdminUserUpdateRequest
+	AdminUserUpdateRequest,
+	UserDto
 } from '@everylist/shared';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 
@@ -21,4 +22,11 @@ export function updateAdminUser(id: number, body: AdminUserUpdateRequest): Promi
 
 export function deleteAdminUser(id: number): Promise<void> {
 	return apiDelete(`/api/v1/admin/users/${id}`);
+}
+
+/** Mints a 1-hour login token that acts as `id` — see admin_users_controller.ts#impersonate.
+ * Callers must go through `startImpersonation` rather than `setToken`-ing this directly, so the
+ * admin's own token is kept for the way back. */
+export function impersonateAdminUser(id: number): Promise<{ user: UserDto; token: string }> {
+	return apiPost(`/api/v1/admin/users/${id}/impersonate`);
 }

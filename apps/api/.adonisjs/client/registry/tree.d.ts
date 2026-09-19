@@ -49,6 +49,7 @@ export interface ApiDefinition {
       index: typeof routes['adminUsers.admin_users.index']
       store: typeof routes['adminUsers.admin_users.store']
       update: typeof routes['adminUsers.admin_users.update']
+      impersonate: typeof routes['adminUsers.admin_users.impersonate']
       destroy: typeof routes['adminUsers.admin_users.destroy']
     }
   }

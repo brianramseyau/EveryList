@@ -19,6 +19,15 @@ export default class User extends compose(UserSchema, withAuthFinder(hash)) {
   })
   declare currentAccessToken?: AccessToken
 
+  /** Name of the short-lived login token an admin mints to act as another user (see
+   * admin_users_controller.ts#impersonate). */
+  static IMPERSONATION_TOKEN_NAME = 'impersonation'
+
+  /** True when this request was authenticated with an admin-minted impersonation token. */
+  get isImpersonated() {
+    return this.currentAccessToken?.name === User.IMPERSONATION_TOKEN_NAME
+  }
+
   get initials() {
     const [first, last] = this.fullName ? this.fullName.split(' ') : this.email.split('@')
     if (first && last) {
