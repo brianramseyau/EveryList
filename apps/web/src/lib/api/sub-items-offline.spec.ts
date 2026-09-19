@@ -70,6 +70,19 @@ describe('createSubItem — deleted while its request is in flight', () => {
 		);
 		expect(await db.subItems.toArray()).toEqual([]);
 	});
+
+	it('does not delete the server copy when the temp row merely vanished (e.g. a concurrent replay)', async () => {
+		const db = getDb()!;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			await db.subItems.clear();
+			return { id: 42, itemId: 5, name: 'Sweep', version: 1 };
+		});
+
+		await createSubItem(1, 5, 'Sweep');
+
+		expect(apiDelete).not.toHaveBeenCalled();
+		expect(await pendingMutations()).toHaveLength(0);
+	});
 });
 
 describe('updateSubItem (Dexie available)', () => {
@@ -228,7 +241,7 @@ describe('deleteSubItem — cached parent and unflushed creates', () => {
 		expect((await db.items.get(5))!.subItems!.map((row) => row.id)).toEqual([10]);
 	});
 
-	it('drops a temp-id sub-task locally without queueing a delete, leaving its create to the flush loop', async () => {
+	it('tombstones a temp-id sub-task without queueing a delete, leaving its create to the flush loop', async () => {
 		const db = getDb()!;
 		await db.subItems.put(subItem(-3));
 		await enqueueMutation({
@@ -242,7 +255,8 @@ describe('deleteSubItem — cached parent and unflushed creates', () => {
 
 		await deleteSubItem(1, 5, -3);
 
-		expect(await db.subItems.get(-3)).toBeUndefined();
+		// Hidden from the UI (not dirty) but kept as a durable marker for the create's cleanup.
+		expect(await db.subItems.get(-3)).toMatchObject({ _discarded: true, _dirty: false });
 		const queued = await pendingMutations();
 		expect(queued.map((row) => row.op)).toEqual(['create']);
 		expect(apiDelete).not.toHaveBeenCalled();

@@ -1,6 +1,6 @@
 import type { CategoryDto, StoreCategoryOrderDto } from '@everylist/shared';
 import { ApiError, apiDelete, apiPatch, apiPost } from '$lib/api/client';
-import { getDb, removeCachedSubItem, type QueuedMutation } from './db';
+import { getDb, removeCachedSubItem, takeTempRow, type QueuedMutation } from './db';
 // V8's coverage instrumentation attributes a phantom, permanently-uninvoked function entry to
 // this import statement (a `vi.mock`-related artifact — see the identical class of issue
 // documented on $lib/api/selected-store.ts) rather than to any real code in this file.
@@ -90,11 +90,11 @@ async function replay(mutation: QueuedMutation): Promise<void> {
 		// actually created/matched (full reconciliation with the server's response is a
 		// known gap — see PLAN_10_PHASE_VALIDATION_USABILITY.md §0.2).
 		const table = tableForEntity(mutation.entityType as QueueableEntityType);
-		// A sub-task deleted locally while its create was still queued (or in flight) has no temp
-		// row left to reconcile — the user's delete must still reach the server's new copy.
-		const deletedBeforeSync =
-			mutation.entityType === 'sub_item' && (await table.get(mutation.targetId)) === undefined;
-		await table.delete(mutation.targetId);
+		// A sub-task the user deleted while its create was still queued (or in flight) left a
+		// `_discarded` tombstone on its temp row — the delete must still reach the server's new
+		// copy. Mere absence of the row isn't enough: a concurrent replay of this same create
+		// removes it too, and that isn't the user's intent.
+		const deletedBeforeSync = await takeTempRow(getDb()!, table as never, mutation.targetId);
 		if (deletedBeforeSync) {
 			await enqueueDeleteForDiscardedCreate(mutation.entityType, mutation.url, created.id);
 		}
@@ -356,7 +356,7 @@ function backoffDelay(): number {
 	return capped / 2 + Math.random() * (capped / 2);
 }
 
-async function attemptFlush(): Promise<void> {
+export async function attemptFlush(): Promise<void> {
 	if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
 	// Both `pendingMutations()` calls in this function are provably covered in isolation — see

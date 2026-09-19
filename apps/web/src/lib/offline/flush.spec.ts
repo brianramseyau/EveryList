@@ -328,9 +328,23 @@ describe('flushQueue', () => {
 		});
 	});
 
-	it('deletes the server copy of a sub-task whose temp row was removed before its create replayed', async () => {
+	it('deletes the server copy of a sub-task whose temp row was tombstoned before its create replayed', async () => {
 		vi.mocked(apiPost).mockResolvedValue({ id: 77 });
 		vi.mocked(apiDelete).mockResolvedValue(undefined);
+		await getDb()!.subItems.put({
+			id: -3,
+			itemId: 5,
+			name: 'Sweep',
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 0,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			version: 1,
+			_dirty: false,
+			_discarded: true
+		});
 		await enqueueMutation({
 			entityType: 'sub_item',
 			op: 'create',
@@ -362,6 +376,23 @@ describe('flushQueue', () => {
 
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/5/subtasks/77');
 		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(await pendingMutations()).toHaveLength(0);
+	});
+
+	it('leaves the server copy alone when the temp row is simply gone (not tombstoned)', async () => {
+		vi.mocked(apiPost).mockResolvedValue({ id: 77 });
+		await enqueueMutation({
+			entityType: 'sub_item',
+			op: 'create',
+			targetId: -3,
+			expectedVersion: null,
+			payload: { name: 'Sweep', listId: 1 },
+			url: '/api/v1/lists/1/items/5/subtasks'
+		});
+
+		await flushQueue();
+
+		expect(apiDelete).not.toHaveBeenCalled();
 		expect(await pendingMutations()).toHaveLength(0);
 	});
 

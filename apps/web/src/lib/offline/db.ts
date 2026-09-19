@@ -79,6 +79,11 @@ export interface SelectedStoreSettings {
 interface OfflineBookkeeping {
 	_localId?: string;
 	_dirty?: boolean;
+	/** Tombstone on an optimistic temp-id row the user deleted before its create landed — the
+	 * only unambiguous signal that a create's cleanup means "the user discarded this", since the
+	 * temp row can also vanish for unrelated reasons (a concurrent replay of the same create).
+	 * Never set with `_dirty`, so it isn't merged back into the UI. */
+	_discarded?: boolean;
 }
 
 export type OfflineList = ListDto &
@@ -200,6 +205,21 @@ export async function isRowDirty(entityType: SyncEntityType, entityId: number): 
 		case 'list':
 			return false;
 	}
+}
+
+/** Removes a create's optimistic temp row and reports whether the user had tombstoned it
+ * (`_discarded`) first. Read and delete share one read-write transaction so a discard can't slip
+ * in between them and be wiped unseen. */
+export async function takeTempRow(
+	db: EveryListDB,
+	table: Table<{ _discarded?: boolean }, number>,
+	tempId: number
+): Promise<boolean> {
+	return db.transaction('rw', table, async () => {
+		const discarded = (await table.get(tempId))?._discarded === true;
+		await table.delete(tempId);
+		return discarded;
+	});
 }
 
 /** Drops a deleted sub-task from its parent's nested `subItems` array in the cached `items`

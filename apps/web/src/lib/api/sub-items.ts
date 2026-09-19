@@ -99,13 +99,13 @@ export async function deleteSubItem(
 	subtaskId: number
 ): Promise<void> {
 	// A sub-task created offline that hasn't flushed yet only exists locally (negative temp id) —
-	// there's nothing on the server to delete *yet*, so drop the local row and leave the queued
+	// there's nothing on the server to delete *yet*, so tombstone the local row (hiding it) and leave the queued
 	// create alone: whichever path lands the create (`offlineCreate` when it's already in flight, the flush
 	// loop's `replay` otherwise) notices the temp row is gone and queues a delete for the server's
 	// copy. Cancelling the create here instead would lose
 	// the delete whenever its POST was already in flight.
 	if (subtaskId < 0) {
-		await getDb()?.subItems.delete(subtaskId);
+		await getDb()?.subItems.update(subtaskId, { _dirty: false, _discarded: true });
 		return;
 	}
 
