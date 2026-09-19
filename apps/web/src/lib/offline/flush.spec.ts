@@ -233,6 +233,37 @@ describe('flushQueue', () => {
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/5?expectedVersion=3');
 	});
 
+	it('hard-deletes the local row once a queued sub-task delete replays, instead of clearing _dirty', async () => {
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+		const db = getDb()!;
+		await db.subItems.put({
+			id: 9,
+			itemId: 5,
+			name: 'Sweep',
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			version: 1,
+			_dirty: true
+		});
+		await enqueueMutation({
+			entityType: 'sub_item',
+			op: 'delete',
+			targetId: 9,
+			expectedVersion: 1,
+			payload: {},
+			url: '/api/v1/lists/1/items/5/subtasks/9'
+		});
+
+		await flushQueue();
+
+		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/5/subtasks/9?expectedVersion=1');
+		expect(await db.subItems.get(9)).toBeUndefined();
+	});
+
 	it('leaves the URL bare when a queued delete never had an expectedVersion', async () => {
 		vi.mocked(apiDelete).mockResolvedValue(undefined);
 		await enqueueMutation({

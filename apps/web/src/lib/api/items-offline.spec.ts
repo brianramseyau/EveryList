@@ -784,6 +784,138 @@ describe('fetchItems (cache hydration)', () => {
 		expect(items.map((item) => item.name)).toEqual(['Milk', 'Bread']);
 	});
 
+	it('caches a fetched item’s nested sub-items into the subItems table so a later offline edit reads their version', async () => {
+		vi.mocked(apiGet).mockResolvedValue([
+			{
+				id: 8,
+				name: 'Plan birthday party',
+				version: 1,
+				subItems: [{ id: 3, itemId: 8, name: 'Book venue', checked: false, version: 5 }]
+			}
+		]);
+
+		await fetchItems(1);
+
+		expect((await getDb()!.subItems.get(3))?.version).toBe(5);
+	});
+
+	it('does not clobber a sub-item with an unacked local edit during a re-fetch', async () => {
+		const db = getDb()!;
+		await db.subItems.put({
+			id: 3,
+			itemId: 8,
+			name: 'Book venue',
+			checked: true,
+			checkedAt: '2026-08-17T00:00:00.000Z',
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			version: 5,
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([
+			{
+				id: 8,
+				name: 'Plan birthday party',
+				version: 1,
+				subItems: [{ id: 3, itemId: 8, name: 'Book venue', checked: false, version: 5 }]
+			}
+		]);
+
+		const items = await fetchItems(1);
+
+		// Neither the raw Dexie cache nor the returned, merged list should have
+		// reverted the checked sub-item back to the server's stale copy.
+		expect((await db.subItems.get(3))?.checked).toBe(true);
+		expect(items[0].subItems).toEqual([
+			expect.objectContaining({ id: 3, checked: true, version: 5 })
+		]);
+	});
+
+	it('appends a locally-created (temp-id) sub-item the server response does not have yet', async () => {
+		const db = getDb()!;
+		await db.subItems.put({
+			id: -1,
+			itemId: 8,
+			name: 'New sub-task',
+			checked: false,
+			checkedAt: null,
+			sortOrder: 999,
+			createdBy: 0,
+			createdAt: '2026-08-17T00:00:00.000Z',
+			updatedAt: null,
+			version: 1,
+			_localId: '-1',
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([{ id: 8, name: 'Plan birthday party', version: 1 }]);
+
+		const items = await fetchItems(1);
+
+		expect(items[0].subItems?.map((subItem) => subItem.id)).toEqual([-1]);
+	});
+
+	it('prunes a sub-task with a queued delete from the returned list until the delete syncs', async () => {
+		const db = getDb()!;
+		await db.syncQueue.add({
+			entityType: 'sub_item',
+			op: 'delete',
+			targetId: 3,
+			expectedVersion: 5,
+			payload: {},
+			url: '/api/v1/lists/1/items/8/subtasks/3',
+			status: 'pending',
+			attempts: 0,
+			createdAt: Date.now()
+		});
+		vi.mocked(apiGet).mockResolvedValue([
+			{
+				id: 8,
+				name: 'Plan birthday party',
+				version: 1,
+				subItems: [
+					{ id: 3, itemId: 8, name: 'Book venue', checked: false, version: 5 },
+					{ id: 4, itemId: 8, name: 'Order cake', checked: false, version: 1 }
+				]
+			}
+		]);
+
+		const items = await fetchItems(1);
+
+		expect(items[0].subItems?.map((subItem) => subItem.id)).toEqual([4]);
+	});
+
+	it('leaves an item with no dirty sub-items of its own untouched when a sibling item does have one', async () => {
+		const db = getDb()!;
+		await db.subItems.put({
+			id: 3,
+			itemId: 8,
+			name: 'Book venue',
+			checked: true,
+			checkedAt: '2026-08-17T00:00:00.000Z',
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			version: 5,
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([
+			{
+				id: 8,
+				name: 'Plan birthday party',
+				version: 1,
+				subItems: [{ id: 3, itemId: 8, name: 'Book venue', checked: false, version: 5 }]
+			},
+			{ id: 9, name: 'Buy milk', version: 1 }
+		]);
+
+		const items = await fetchItems(1);
+
+		expect(items.find((item) => item.id === 9)).toEqual({ id: 9, name: 'Buy milk', version: 1 });
+	});
+
 	it('drops a soft-deleted local row so a stale server copy does not resurrect it', async () => {
 		const db = getDb()!;
 		await db.items.put({

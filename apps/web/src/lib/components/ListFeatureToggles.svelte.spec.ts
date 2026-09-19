@@ -28,6 +28,20 @@ describe('ListFeatureToggles.svelte', () => {
 		expect(onToggle).toHaveBeenCalledWith('useShops');
 	});
 
+	it('shows the sub-task auto-complete sub-toggle only while Sub-tasks is on, and reports clicks', async () => {
+		const onToggle = vi.fn();
+		const { rerender } = render(ListFeatureToggles, { values: DEFAULT_FEATURE_VALUES, onToggle });
+		const autoComplete = page.getByRole('checkbox', { name: /Auto-complete parent/ });
+
+		await expect.element(autoComplete).not.toBeInTheDocument();
+		await page.getByRole('checkbox', { name: 'Sub-tasks' }).click();
+		expect(onToggle).toHaveBeenCalledWith('useSubtasks');
+
+		await rerender({ values: { ...DEFAULT_FEATURE_VALUES, useSubtasks: true }, onToggle });
+		await autoComplete.click();
+		expect(onToggle).toHaveBeenCalledWith('useSubtaskAutoComplete');
+	});
+
 	it('hides the nested sub-toggles when their parent feature is off', async () => {
 		render(ListFeatureToggles, {
 			values: { ...DEFAULT_FEATURE_VALUES, useShops: false, usePrice: false },

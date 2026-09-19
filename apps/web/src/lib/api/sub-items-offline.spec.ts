@@ -97,6 +97,34 @@ describe('updateSubItem (Dexie available)', () => {
 		expect(cached?.checkedAt).toBeNull();
 	});
 
+	it('leaves checkedAt untouched when the update does not toggle checked', async () => {
+		const db = getDb()!;
+		await db.subItems.put({ ...baseSubItem, checked: true, checkedAt: '2026-08-01T00:00:00.000Z' });
+		vi.mocked(apiPatch).mockResolvedValue({
+			...baseSubItem,
+			name: 'Sweep floor',
+			checked: true,
+			checkedAt: '2026-08-01T00:00:00.000Z',
+			version: 2
+		});
+
+		await updateSubItem(1, 5, 9, { name: 'Sweep floor' });
+
+		const cached = await db.subItems.get(9);
+		expect(cached?.name).toBe('Sweep floor');
+		expect(cached?.checkedAt).toBe('2026-08-01T00:00:00.000Z');
+	});
+
+	it('skips cache reconciliation when the server response is empty', async () => {
+		const db = getDb()!;
+		await db.subItems.put(baseSubItem);
+		vi.mocked(apiPatch).mockResolvedValue(undefined);
+
+		await expect(updateSubItem(1, 5, 9, { name: 'Sweep floor' })).resolves.toBeUndefined();
+
+		expect((await db.subItems.get(9))?._dirty).toBe(true);
+	});
+
 	it('is a no-op against Dexie when the row was never cached', async () => {
 		vi.mocked(apiPatch).mockResolvedValue({ id: 999, version: 1 });
 		await expect(updateSubItem(1, 5, 999, { checked: true })).resolves.toEqual({
@@ -129,6 +157,11 @@ describe('deleteSubItem (Dexie available)', () => {
 
 		expect(apiDelete).toHaveBeenCalledWith('/api/v1/lists/1/items/5/subtasks/9');
 		expect(await db.subItems.get(9)).toBeUndefined();
+	});
+
+	it('is a no-op against Dexie when the row was never cached', async () => {
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+		await expect(deleteSubItem(1, 5, 999)).resolves.toBeUndefined();
 	});
 
 	it('stays queued and removed from Dexie while offline', async () => {

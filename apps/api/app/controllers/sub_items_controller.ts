@@ -68,9 +68,14 @@ export default class SubItemsController {
     return serialize(SubItemTransformer.transform(subItems))
   }
 
-  async store({ auth, params, request, serialize, logger }: HttpContext) {
+  async store({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
+    // Only creation is gated: turning the feature off must not strand existing
+    // sub-tasks, so update/move/destroy stay available.
+    if (!list.useSubtasks) {
+      return response.badRequest({ message: 'Sub-tasks are turned off for this list.' })
+    }
     const item = await requireItem(list.id, params.itemId)
     const payload = await request.validateUsing(createSubItemValidator)
 

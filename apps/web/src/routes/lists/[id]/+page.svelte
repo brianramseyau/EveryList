@@ -537,10 +537,12 @@
 				// different ids until the next reload. Skip it — the in-flight create already
 				// patches `items` directly once it resolves. See AGENTS.md's sortable-prototype E2E
 				// flake writeup for the failure this reproduces.
+				// Same race for sub-task creates (`createSubItem` queues `listId` on its payload so
+				// this lookup can match it).
 				if (
 					event.op === 'create' &&
-					event.entityType === 'item' &&
-					(await hasPendingCreateForList('item', listId))
+					(event.entityType === 'item' || event.entityType === 'sub_item') &&
+					(await hasPendingCreateForList(event.entityType, listId))
 				) {
 					return;
 				}
@@ -688,6 +690,13 @@
 		);
 	}
 
+	function subtaskProgress(item: ItemDto): { label: string; complete: boolean } {
+		// Only rendered for an item that has sub-tasks (see the badge's `{#if}`).
+		const total = item.subItems!.length;
+		const done = total - openSubtaskCount(item);
+		return { label: `${done}/${total}`, complete: done === total };
+	}
+
 	function openSubtaskCount(item: ItemDto): number {
 		return item.subItems?.filter((subtask) => !subtask.checked).length ?? 0;
 	}
@@ -722,6 +731,7 @@
 		items = items.map((current) =>
 			current.id === item.id ? { ...current, checked: nextChecked } : current
 		);
+		const wasExpanded = expandedItemIds.has(item.id);
 		if (nextChecked) collapseIfComplete(item.id);
 		if (nextChecked && !prefersReducedMotion) {
 			checkAnimatingIds.add(item.id);
@@ -736,6 +746,12 @@
 			await updateItem(listId, item.id, { checked: nextChecked });
 			void refreshBadgeCount();
 		} catch (err) {
+			// The optimistic collapse above assumed the completion would land — it didn't, so put
+			// the panel back the way the user had it.
+			if (wasExpanded && nextChecked && !expandedItemIds.has(item.id)) {
+				expandedItemIds.add(item.id);
+				setExpandedSubtaskIds(listId, [...expandedItemIds]);
+			}
 			if (
 				err instanceof ApiError &&
 				(isUncheckedLimitError(err) || isSubtasksIncompleteError(err))
@@ -813,6 +829,9 @@
 	let newSubtaskDrafts = $state<Record<number, string>>({});
 
 	async function addSubtask(item: ItemDto) {
+		// The add form isn't rendered for a viewer, so this can't actually be reached from the UI —
+		// kept as defense-in-depth.
+		/* v8 ignore next */
 		if (isViewer) return;
 		const name = (newSubtaskDrafts[item.id] ?? '').trim();
 		if (!name) return;
@@ -838,6 +857,9 @@
 	}
 
 	async function removeSubtask(item: ItemDto, subtask: SubItemDto) {
+		// The delete button isn't rendered for a viewer, so this can't actually be reached from the
+		// UI — kept as defense-in-depth.
+		/* v8 ignore next */
 		if (isViewer) return;
 		items = items.map((current) =>
 			current.id === item.id
@@ -863,16 +885,12 @@
 		setExpandedSubtaskIds(listId, [...expandedItemIds]);
 	}
 
-	/** Completing an item — manually or via server-side sub-task auto-complete
-	 * — collapses its sub-tasks panel back down, since there's nothing left to
-	 * act on there. Looks the item up fresh in `items` rather than trusting a
-	 * caller's stale reference, since this runs after both an optimistic
-	 * update and a post-`loadAll` reload. */
+	/** Completing an item collapses its sub-tasks panel back down, since there's nothing left to
+	 * act on there. Only called once the item is already marked checked in `items` (see
+	 * `toggleChecked`); loads that pick up a completion this device didn't cause itself go
+	 * through `reconcileExpandedSubtasks` instead. */
 	function collapseIfComplete(itemId: number) {
-		if (!expandedItemIds.has(itemId)) return;
-		const current = items.find((row) => row.id === itemId);
-		if (!current?.checked) return;
-		expandedItemIds.delete(itemId);
+		if (!expandedItemIds.delete(itemId)) return;
 		setExpandedSubtaskIds(listId, [...expandedItemIds]);
 	}
 
@@ -1678,14 +1696,13 @@
 															{item.name}
 														</span>
 														{#if list?.useSubtasks === true && item.subItems && item.subItems.length > 0}
-															{@const doneCount = item.subItems.length - openSubtaskCount(item)}
+															{@const progress = subtaskProgress(item)}
 															<span
-																class="shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[11px] tabular-nums {doneCount ===
-																item.subItems.length
+																class="shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[11px] tabular-nums {progress.complete
 																	? 'bg-signal/15 text-signal'
 																	: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}"
 															>
-																{doneCount}/{item.subItems.length}
+																{progress.label}
 															</span>
 														{/if}
 														{#if item.quantity && list?.useQuantity !== false}
@@ -1736,17 +1753,18 @@
 													{/if}
 												{/snippet}
 												{#if !isCoarsePointer && list?.useSubtasks === true}
+													<!-- Mouse-only convenience: keyboard/screen-reader users get the same toggle from the
+														chevron button, so this deliberately isn't a role=button (it can contain note links,
+														and nested interactive content inside a button is an a11y violation). -->
+													<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 													<div
 														class="item-name flex min-w-0 flex-1 cursor-pointer flex-col"
 														style="touch-action: manipulation; -webkit-touch-callout: none;"
-														role="button"
-														tabindex="0"
-														onclick={() => toggleSubtasksExpanded(item.id)}
-														onkeydown={(event) => {
-															if (event.key === 'Enter' || event.key === ' ') {
-																event.preventDefault();
-																toggleSubtasksExpanded(item.id);
-															}
+														onclick={(event) => {
+															// A click on a note link (or any other control inside the row text)
+															// is that control's own action, not a request to toggle the panel.
+															if ((event.target as HTMLElement).closest('a, button')) return;
+															toggleSubtasksExpanded(item.id);
 														}}
 													>
 														{@render itemNameContent()}

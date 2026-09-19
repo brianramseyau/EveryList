@@ -18,10 +18,6 @@ export async function countOpenSubtasks(itemId: number): Promise<number> {
   return Number(result.$extras.openSubtasks)
 }
 
-export async function hasOpenSubtasks(itemId: number): Promise<boolean> {
-  return (await countOpenSubtasks(itemId)) > 0
-}
-
 /** True once every sub-task on `itemId` is checked — including "no sub-tasks
  * at all", which callers should special-case away (auto-completing a parent
  * that never had sub-tasks isn't this feature's concern). */

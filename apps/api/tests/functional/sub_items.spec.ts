@@ -3,6 +3,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
 import type { ItemDto, ListDto, SubItemDto } from '@everylist/shared'
+import SubItem from '#models/sub_item'
 import { bodyData, signupAndGetToken } from './helpers.js'
 
 // useSubtasks defaults to false server-side (see PLAN_29_PHASE_SUBTASKS.md) — this
@@ -180,6 +181,10 @@ test.group('Sub-items CRUD and completion gating', (group) => {
         .patch(`/api/v1/lists/${listId}/items/${item.id}/subtasks/${sub1.id}`)
         .json({ checked: true })
     )
+    const blockedSingular = await auth(
+      client.patch(`/api/v1/lists/${listId}/items/${item.id}`).json({ checked: true })
+    )
+    assert.include(blockedSingular.body().message, '1 remaining sub-task ')
     await auth(
       client
         .patch(`/api/v1/lists/${listId}/items/${item.id}/subtasks/${sub2.id}`)
@@ -271,5 +276,87 @@ test.group('Sub-items CRUD and completion gating', (group) => {
     )
     check.assertStatus(200)
     assert.isTrue(check.body().data.checked)
+  })
+
+  test('rejects creating a sub-task while useSubtasks is off, but leaves existing ones editable', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const item = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Clean garage' }))
+    )
+    const sub = bodyData<SubItemDto>(
+      await auth(
+        client.post(`/api/v1/lists/${listId}/items/${item.id}/subtasks`).json({ name: 'Sweep' })
+      )
+    )
+    await auth(client.patch(`/api/v1/lists/${listId}`).json({ useSubtasks: false }))
+
+    const created = await auth(
+      client.post(`/api/v1/lists/${listId}/items/${item.id}/subtasks`).json({ name: 'Mop' })
+    )
+    created.assertStatus(400)
+    assert.include(created.body().message, 'turned off')
+
+    const updated = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${item.id}/subtasks/${sub.id}`)
+        .json({ checked: true })
+    )
+    updated.assertStatus(200)
+  })
+
+  test('move honors expectedVersion and rejects a previousSubItemId from another item', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const item = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Clean garage' }))
+    )
+    const sub = bodyData<SubItemDto>(
+      await auth(
+        client.post(`/api/v1/lists/${listId}/items/${item.id}/subtasks`).json({ name: 'Sweep' })
+      )
+    )
+    const base = `/api/v1/lists/${listId}/items/${item.id}/subtasks/${sub.id}/move`
+
+    const stale = await auth(
+      client.patch(base).json({ previousSubItemId: null, expectedVersion: 99 })
+    )
+    stale.assertStatus(409)
+    assert.isTrue(stale.body().conflict)
+
+    const bad = await auth(client.patch(base).json({ previousSubItemId: 999999 }))
+    bad.assertStatus(400)
+
+    await auth(
+      client.post(`/api/v1/lists/${listId}/items/${item.id}/subtasks`).json({ name: 'Mop' })
+    )
+    const toTop = await auth(client.patch(base).json({ previousSubItemId: null }))
+    toTop.assertStatus(200)
+
+    const checkedOn = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${item.id}/subtasks/${sub.id}`)
+        .json({ checked: true })
+    )
+    checkedOn.assertStatus(200)
+    const checkedOff = await auth(
+      client
+        .patch(`/api/v1/lists/${listId}/items/${item.id}/subtasks/${sub.id}`)
+        .json({ checked: false })
+    )
+    assert.isNull(checkedOff.body().data.checkedAt)
+
+    const loaded = await SubItem.query().where('id', sub.id).preload('item').firstOrFail()
+    assert.equal(loaded.item.id, item.id)
   })
 })

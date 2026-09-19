@@ -19,7 +19,10 @@ export async function createSubItem(
 	return offlineCreate<SubItemDto>({
 		entityType: 'sub_item',
 		table: (database) => database.subItems,
-		payload: { name },
+		// `listId` is queue bookkeeping (not sent to the server as the URL already has it): it lets
+		// the list page's realtime handler recognize this client's own in-flight create via
+		// `hasPendingCreateForList` and skip the redundant reload of its own broadcast.
+		payload: { name, listId },
 		url: `/api/v1/lists/${listId}/items/${itemId}/subtasks`,
 		buildOptimisticRow: (tempId) => ({
 			id: tempId,

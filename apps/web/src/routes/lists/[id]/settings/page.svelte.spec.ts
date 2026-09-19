@@ -472,6 +472,25 @@ describe('List settings +page.svelte', () => {
 		expect(updateList).toHaveBeenCalledWith(1, { useDeadline: true });
 	});
 
+	it('enables the default-off Sub-tasks flag on the first click even when the field is missing', async () => {
+		vi.mocked(updateList).mockImplementation(async (_id, patch) => ({ ...list, ...patch }));
+
+		render(SettingsPage);
+		await page.getByRole('checkbox', { name: 'Sub-tasks' }).click();
+
+		expect(updateList).toHaveBeenCalledWith(1, { useSubtasks: true });
+	});
+
+	it('toggles the sub-task auto-complete sub-setting on and off', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useSubtasks: true });
+		vi.mocked(updateList).mockImplementation(async (_id, patch) => ({ ...list, ...patch }));
+
+		render(SettingsPage);
+		await page.getByRole('checkbox', { name: /Auto-complete parent/ }).click();
+
+		expect(updateList).toHaveBeenCalledWith(1, { useSubtaskAutoComplete: true });
+	});
+
 	it('disables Deadlines without touching the sort order when the list is not sorted by deadline', async () => {
 		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
 		vi.mocked(updateList).mockImplementation(async (_id, patch) => ({

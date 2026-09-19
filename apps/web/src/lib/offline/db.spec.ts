@@ -105,6 +105,26 @@ describe('isRowDirty', () => {
 		await expect(isRowDirty('item', 1)).resolves.toBe(false);
 	});
 
+	it('reflects the dirty flag on a cached sub-task', async () => {
+		const db = getDb()!;
+		await db.subItems.put({
+			id: 9,
+			itemId: 5,
+			name: 'Sweep',
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			version: 1,
+			_dirty: true
+		});
+
+		await expect(isRowDirty('sub_item', 9)).resolves.toBe(true);
+		await expect(isRowDirty('sub_item', 10)).resolves.toBe(false);
+	});
+
 	it('is false for a list event — never queued client-side', async () => {
 		await expect(isRowDirty('list', 1)).resolves.toBe(false);
 	});

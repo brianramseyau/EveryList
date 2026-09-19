@@ -17,12 +17,21 @@ import { withCacheFallback } from './cache-fallback';
  * unchecked the next time anything re-reads items (another `fetchItems` call, or a fully offline
  * reload reading `getCachedItems`) until the edit actually flushes. A dirty row overrides the
  * matching id (including one the item's own array doesn't have yet — an offline-created sub-task,
- * whose temp id never came from the server); nothing removes one, since `deleteSubItem`'s
- * optimistic apply already hard-deletes the Dexie row immediately rather than flagging it dirty.
+ * whose temp id never came from the server); and a sub-task with a queued
+ * delete is pruned (`deleteSubItem` hard-deletes the Dexie row immediately rather than flagging it
+ * dirty, so the queue is the only record of it).
  */
 async function mergeDirtySubItems(db: EveryListDB, items: ItemDto[]): Promise<ItemDto[]> {
 	const dirtySubItems = await db.subItems.filter((subItem) => subItem._dirty === true).toArray();
-	if (dirtySubItems.length === 0) return items;
+	// A queued (not yet flushed) sub-task delete hard-removes the Dexie row immediately, but the
+	// parent item's own cached/server-fetched `subItems` array still carries it — prune those ids
+	// so it can't reappear from a stale cached or re-fetched copy until the delete actually syncs.
+	const pendingDeletes = new Set(
+		(await db.syncQueue.where('status').equals('pending').toArray())
+			.filter((row) => row.entityType === 'sub_item' && row.op === 'delete')
+			.map((row) => row.targetId)
+	);
+	if (dirtySubItems.length === 0 && pendingDeletes.size === 0) return items;
 
 	const dirtyByItemId = new Map<number, SubItemDto[]>();
 	for (const subItem of dirtySubItems) {
@@ -33,9 +42,10 @@ async function mergeDirtySubItems(db: EveryListDB, items: ItemDto[]): Promise<It
 
 	return items.map((item) => {
 		const dirty = dirtyByItemId.get(item.id);
-		if (!dirty) return item;
+		if (!dirty && !item.subItems?.some((subItem) => pendingDeletes.has(subItem.id))) return item;
 		const subById = new Map((item.subItems ?? []).map((subItem) => [subItem.id, subItem]));
-		for (const subItem of dirty) subById.set(subItem.id, subItem);
+		for (const subItem of dirty ?? []) subById.set(subItem.id, subItem);
+		for (const id of pendingDeletes) subById.delete(id);
 		return { ...item, subItems: [...subById.values()] };
 	});
 }
