@@ -19,6 +19,8 @@ type Envelope = {
   hasDisplay?: boolean
   /** `request.arguments` for an `Alexa.Presentation.APL.UserEvent` (a tap on-screen). */
   args?: unknown[]
+  /** `session.attributes` echoed back from the previous response in the same Alexa session. */
+  sessionAttributes?: Record<string, unknown>
 }
 
 function buildEnvelope(options: Envelope) {
@@ -30,7 +32,10 @@ function buildEnvelope(options: Envelope) {
 
   return {
     version: '1.0',
-    session: accessTokenLocation === 'session' ? userWithToken : { user: {} },
+    session: {
+      ...(accessTokenLocation === 'session' ? userWithToken : { user: {} }),
+      ...(options.sessionAttributes ? { attributes: options.sessionAttributes } : {}),
+    },
     context: {
       System: {
         application: { applicationId: options.applicationId ?? 'test-skill-id' },
@@ -844,6 +849,81 @@ test.group('Alexa skill endpoint', (group) => {
     assert.include(addToOther.body().response.outputSpeech.text, 'Added Hammer to Hardware')
   })
 
+  test('a list opened earlier in the session is used by a follow-up add, ahead of the default list', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const groceriesId = await createList(client, owner.token, 'Groceries')
+    const hardwareId = await createList(client, owner.token, 'Hardware')
+    const pat = await mintPat(client, owner.token, [groceriesId, hardwareId])
+    await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'SetDefaultListIntent',
+        slots: { ListName: 'Groceries' },
+      })
+    )
+
+    const open = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'ReadListIntent',
+        slots: { ListName: 'Hardware' },
+      })
+    )
+    assert.isFalse(open.body().response.shouldEndSession)
+    assert.equal(open.body().sessionAttributes.currentListId, hardwareId)
+
+    const add = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Hammer' },
+        sessionAttributes: open.body().sessionAttributes,
+      })
+    )
+    assert.include(add.body().response.outputSpeech.text, 'Added Hammer to Hardware')
+    assert.equal(add.body().sessionAttributes.currentListId, hardwareId)
+
+    // "hide checked items" resolves a list only to refresh the display — it must keep the
+    // session's list rather than snapping back to the default.
+    const hide = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'HideCheckedItemsIntent',
+        hasDisplay: true,
+        sessionAttributes: add.body().sessionAttributes,
+      })
+    )
+    // On a screen device the toggled display keeps the session open, so these attributes are
+    // what the real device hands to the next turn.
+    assert.isFalse(hide.body().response.shouldEndSession)
+    assert.equal(hide.body().sessionAttributes.currentListId, hardwareId)
+
+    // An explicit spoken list still beats the session's list, and becomes the new current one.
+    const explicit = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'IntentRequest',
+        accessToken: pat,
+        intentName: 'AddItemIntent',
+        slots: { ItemName: 'Milk', ListName: 'Groceries' },
+        sessionAttributes: hide.body().sessionAttributes,
+      })
+    )
+    assert.include(explicit.body().response.outputSpeech.text, 'Added Milk to Groceries')
+    assert.equal(explicit.body().sessionAttributes.currentListId, groceriesId)
+  })
+
   test('SetDefaultListIntent with no ListName slot asks for clarification', async ({
     client,
     assert,
@@ -1210,6 +1290,29 @@ test.group('Alexa skill endpoint', (group) => {
       .get(`/api/v1/lists/${listId}/items`)
       .header('Authorization', `Bearer ${owner.token}`)
     assert.isTrue(bodyData<{ checked: boolean }[]>(after)[0]!.checked)
+    // The tapped row's list becomes the session's current list, so a follow-up "add" lands there.
+    assert.equal(response.body().sessionAttributes.currentListId, listId)
+  })
+
+  test('a touch event on an unresolved list keeps the session attributes it was sent', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+
+    const response = await postAlexa(
+      client,
+      buildEnvelope({
+        type: 'Alexa.Presentation.APL.UserEvent',
+        accessToken: pat,
+        hasDisplay: true,
+        args: ['delete'],
+        sessionAttributes: { currentListId: listId },
+      })
+    )
+    assert.equal(response.body().sessionAttributes.currentListId, listId)
   })
 
   test('voice and touch completion refuse an item that still has open sub-tasks', async ({

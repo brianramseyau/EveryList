@@ -31,11 +31,14 @@ export async function accessibleLists(token: AccessToken): Promise<List[]> {
  * section) — this logic is Alexa-specific and exists nowhere else in the app. An explicit
  * `ListName` slot is fuzzy-matched against the token's accessible lists; with no slot, a single
  * accessible list is used implicitly, and more than one asks the user to disambiguate rather
- * than guessing.
+ * than guessing. Between the two, a list already opened earlier in the same Alexa session
+ * (`sessionListId`, echoed back through `sessionAttributes`) wins over the saved default, so
+ * "open Costco list" followed by "add milk" targets Costco.
  */
 export async function resolveList(
   token: AccessToken,
-  listNameSlot: string | undefined
+  listNameSlot: string | undefined,
+  sessionListId?: number
 ): Promise<ListResolution> {
   const accessible = await accessibleLists(token)
   if (accessible.length === 0) return { kind: 'not-found' }
@@ -46,6 +49,9 @@ export async function resolveList(
   }
 
   if (accessible.length === 1) return { kind: 'found', list: accessible[0]! }
+
+  const sessionList = sessionListId && accessible.find((list) => list.id === sessionListId)
+  if (sessionList) return { kind: 'found', list: sessionList }
 
   const preference = await AlexaPreference.findBy('userId', Number(token.tokenableId))
   const defaultList = preference && accessible.find((list) => list.id === preference.defaultListId)
