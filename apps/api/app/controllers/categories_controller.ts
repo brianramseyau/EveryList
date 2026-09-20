@@ -1,4 +1,6 @@
 import Category from '#models/category'
+import Item from '#models/item'
+import FavoriteItem from '#models/favorite_item'
 import ListPolicy from '#policies/list_policy'
 import {
   createCategoryValidator,
@@ -22,6 +24,7 @@ import {
   reportVersionConflict,
 } from '#services/version_conflict'
 import { DateTime } from 'luxon'
+import db from '@adonisjs/lucid/services/db'
 
 export default class CategoriesController {
   async index({ auth, params, serialize }: HttpContext) {
@@ -234,6 +237,28 @@ export default class CategoriesController {
     return serialize(CategoryTransformer.transform(category))
   }
 
+  /**
+   * Deletes (soft) this category. Unlike a store detach, a category is never hard-removed from
+   * anything — there's no pivot row whose disappearance items/favorites can be checked against —
+   * so `deletedAt` is the only signal that `categoryId`/`defaultCategoryId` now points at a dead
+   * row, and that row still exists for a straight foreign-key lookup to find. Orphan them (null
+   * out the reference) in the same transaction as the soft-delete, the same way `StoresController
+   * #detach` orphans items/favorites left pointing at a detached store — otherwise they'd keep a
+   * stale category id that the list page's category grouping silently drops (it only renders
+   * buckets for categories `getEffectiveCategories` still returns), making the item disappear from
+   * view while still being counted by anything that reads the raw list rather than the rendered
+   * groups. Not scoped to this list: unlike a store (legitimately attachable to several lists via
+   * `list_stores`), a category id only ever means one list's category, so a row on any list is
+   * stale the moment this one is gone — `resolveCategoryId` (items_controller.ts) doesn't check
+   * that an explicit `categoryId` belongs to the item's own list, so such a row is reachable today,
+   * and the backfill migration below already orphans it on that global rule; scoping this query to
+   * `list.id` would leave the two disagreeing. (The broadcast below stays scoped to this list — a
+   * stray cross-list row misses the live push but self-corrects on that other list's next fetch,
+   * same as the migration itself, which sends none at all.) Runs against every item/favorite
+   * regardless of deletedAt, so a later restore from Recently Deleted doesn't resurrect the same
+   * stale reference. Broadcasts are batched (one per affected entity type, not one per row) and
+   * sent after commit — see `detach`'s doc comment for why.
+   */
   async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
@@ -258,9 +283,50 @@ export default class CategoriesController {
       })
     }
 
-    category.deletedAt = DateTime.now()
-    category.version += 1
-    await category.save()
+    const { orphanedItemCount, orphanedFavoriteCount } = await db.transaction(async (trx) => {
+      category.useTransaction(trx)
+      category.deletedAt = DateTime.now()
+      category.version += 1
+      await category.save()
+
+      const items = await Item.query({ client: trx }).where('categoryId', category.id)
+      for (const item of items) {
+        item.categoryId = null
+        item.version += 1
+        await item.useTransaction(trx).save()
+      }
+
+      const favorites = await FavoriteItem.query({ client: trx }).where(
+        'defaultCategoryId',
+        category.id
+      )
+      for (const favorite of favorites) {
+        favorite.defaultCategoryId = null
+        favorite.version += 1
+        await favorite.useTransaction(trx).save()
+      }
+
+      return { orphanedItemCount: items.length, orphanedFavoriteCount: favorites.length }
+    })
+
+    if (orphanedItemCount > 0) {
+      await broadcastSync({
+        listId: list.id,
+        entityType: 'item',
+        entityId: list.id,
+        op: 'update',
+        payload: { categoryId: category.id, count: orphanedItemCount },
+      })
+    }
+    if (orphanedFavoriteCount > 0) {
+      await broadcastSync({
+        listId: list.id,
+        entityType: 'favorite_item',
+        entityId: list.id,
+        op: 'update',
+        payload: { categoryId: category.id, count: orphanedFavoriteCount },
+      })
+    }
 
     await broadcastSync({
       listId: list.id,
@@ -270,7 +336,10 @@ export default class CategoriesController {
       version: category.version,
     })
 
-    logger.debug({ listId: list.id, categoryId: category.id }, 'category deleted')
+    logger.debug(
+      { listId: list.id, categoryId: category.id, orphanedItemCount, orphanedFavoriteCount },
+      'category deleted; its items and favorites orphaned'
+    )
 
     return response.noContent()
   }

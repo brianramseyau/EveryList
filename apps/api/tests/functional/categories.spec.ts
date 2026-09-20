@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
-import type { CategoryDto, ListDto } from '@everylist/shared'
+import type { CategoryDto, FavoriteItemDto, ItemDto, ListDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 async function createList(client: ApiClient, token: string, name = 'Test List') {
@@ -228,6 +228,88 @@ test.group('Categories', (group) => {
       .header('Authorization', `Bearer ${token}`)
     const names = index.body().data.map((c: { name: string }) => c.name)
     assert.notInclude(names, 'Pet Supplies')
+  })
+
+  test('deleting a category orphans (nulls categoryId on) every item and favorite that referenced it — including soft-deleted items and, since a category id is never list-scoped for the reader, items on other lists — without touching other categories', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const otherListId = await createList(client, token, 'Other List')
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const categoryA = await createCategory(client, token, listId, 'Produce', 'fruitCherries')
+    const categoryB = await createCategory(client, token, listId, 'Dairy', 'cheese')
+
+    const taggedActive = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Apple', categoryId: categoryA.id })
+    )
+    const taggedActiveId = bodyData<ItemDto>(taggedActive).id
+
+    const taggedDeleted = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Pear', categoryId: categoryA.id })
+    )
+    const taggedDeletedId = bodyData<ItemDto>(taggedDeleted).id
+    const deletedVersion = bodyData<ItemDto>(taggedDeleted).version
+    await auth(client.delete(`/api/v1/lists/${listId}/items/${taggedDeletedId}`))
+
+    const taggedCategoryB = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk', categoryId: categoryB.id })
+    )
+    const taggedCategoryBId = bodyData<ItemDto>(taggedCategoryB).id
+
+    // `resolveCategoryId` doesn't check that an explicit categoryId belongs to the item's own
+    // list, so this (a category from `listId`, on an item created on `otherListId`) is a request
+    // the API accepts today — and once `categoryA` is deleted, this row's reference is just as
+    // dead as `listId`'s own rows', so it must be orphaned too, not left stale.
+    const otherListItem = await auth(
+      client
+        .post(`/api/v1/lists/${otherListId}/items`)
+        .json({ name: 'Grapes', categoryId: categoryA.id })
+    )
+    const otherListItemId = bodyData<ItemDto>(otherListItem).id
+
+    const favorite = await auth(
+      client
+        .post(`/api/v1/lists/${listId}/favorites`)
+        .json({ name: 'Bananas', defaultCategoryId: categoryA.id })
+    )
+    const favoriteId = bodyData<FavoriteItemDto>(favorite).id
+    const favoriteVersion = bodyData<FavoriteItemDto>(favorite).version
+
+    const destroy = await auth(client.delete(`/api/v1/lists/${listId}/categories/${categoryA.id}`))
+    destroy.assertStatus(204)
+
+    const items = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    const active = bodyData<ItemDto[]>(items)
+    const activeItem = active.find((item) => item.id === taggedActiveId)!
+    assert.isNull(activeItem.categoryId)
+    assert.equal(activeItem.version, 2)
+    const categoryBItem = active.find((item) => item.id === taggedCategoryBId)!
+    assert.equal(categoryBItem.categoryId, categoryB.id)
+
+    const recentlyDeleted = await auth(client.get(`/api/v1/lists/${listId}/items/recent`))
+    const deletedItem = bodyData<ItemDto[]>(recentlyDeleted).find(
+      (item) => item.id === taggedDeletedId
+    )!
+    assert.isNull(deletedItem.categoryId)
+    // +1 from the soft-delete itself, +1 from the category delete orphaning it.
+    assert.equal(deletedItem.version, deletedVersion + 2)
+
+    const otherListItems = await auth(client.get(`/api/v1/lists/${otherListId}/items`))
+    const otherListOrphanedItem = bodyData<ItemDto[]>(otherListItems).find(
+      (item) => item.id === otherListItemId
+    )!
+    assert.isNull(otherListOrphanedItem.categoryId)
+    assert.equal(otherListOrphanedItem.version, 2)
+
+    const favorites = await auth(client.get(`/api/v1/lists/${listId}/favorites`))
+    const orphanedFavorite = bodyData<FavoriteItemDto[]>(favorites).find(
+      (item) => item.id === favoriteId
+    )!
+    assert.isNull(orphanedFavorite.defaultCategoryId)
+    assert.equal(orphanedFavorite.version, favoriteVersion + 1)
   })
 
   test('a viewer can list categories but cannot create, update, or delete them', async ({
