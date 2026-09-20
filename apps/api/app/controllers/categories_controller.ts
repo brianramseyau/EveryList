@@ -247,10 +247,17 @@ export default class CategoriesController {
    * stale category id that the list page's category grouping silently drops (it only renders
    * buckets for categories `getEffectiveCategories` still returns), making the item disappear from
    * view while still being counted by anything that reads the raw list rather than the rendered
-   * groups. Runs against every item/favorite regardless of deletedAt, so a later restore from
-   * Recently Deleted doesn't resurrect the same stale reference. Broadcasts are batched (one per
-   * affected entity type, not one per row) and sent after commit — see `detach`'s doc comment for
-   * why.
+   * groups. Not scoped to this list: unlike a store (legitimately attachable to several lists via
+   * `list_stores`), a category id only ever means one list's category, so a row on any list is
+   * stale the moment this one is gone — `resolveCategoryId` (items_controller.ts) doesn't check
+   * that an explicit `categoryId` belongs to the item's own list, so such a row is reachable today,
+   * and the backfill migration below already orphans it on that global rule; scoping this query to
+   * `list.id` would leave the two disagreeing. (The broadcast below stays scoped to this list — a
+   * stray cross-list row misses the live push but self-corrects on that other list's next fetch,
+   * same as the migration itself, which sends none at all.) Runs against every item/favorite
+   * regardless of deletedAt, so a later restore from Recently Deleted doesn't resurrect the same
+   * stale reference. Broadcasts are batched (one per affected entity type, not one per row) and
+   * sent after commit — see `detach`'s doc comment for why.
    */
   async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
     const user = auth.getUserOrFail()
@@ -282,18 +289,17 @@ export default class CategoriesController {
       category.version += 1
       await category.save()
 
-      const items = await Item.query({ client: trx })
-        .where('listId', list.id)
-        .where('categoryId', category.id)
+      const items = await Item.query({ client: trx }).where('categoryId', category.id)
       for (const item of items) {
         item.categoryId = null
         item.version += 1
         await item.useTransaction(trx).save()
       }
 
-      const favorites = await FavoriteItem.query({ client: trx })
-        .where('listId', list.id)
-        .where('defaultCategoryId', category.id)
+      const favorites = await FavoriteItem.query({ client: trx }).where(
+        'defaultCategoryId',
+        category.id
+      )
       for (const favorite of favorites) {
         favorite.defaultCategoryId = null
         favorite.version += 1

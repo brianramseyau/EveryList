@@ -14,29 +14,30 @@ import { BaseSchema } from '@adonisjs/lucid/schema'
  * store migration otherwise: a one-time backfill, `version` bumped alongside the null so a client
  * still holding the pre-migration copy can't silently write the stale id straight back. Pure data
  * cleanup, no schema change — safe to run directly against a populated production database.
+ *
+ * Expressed as `WHERE column NOT IN (<live category ids>)` rather than the store migration's
+ * "read every row, filter in JS, `WHERE id IN (<stale ids>)`" shape: every item is normally
+ * categorized (unlike the minority that have a store), so reading every categorized row into
+ * memory here would mean materializing most of the table, and a large enough stale set would blow
+ * past SQLite's bound-parameter limit on the `IN` list. The category count this runs against is
+ * bounded by how many categories exist at all (comfortably small), not by how many rows reference
+ * them, so it stays a single set-based `UPDATE` per table with no per-row read.
  */
 export default class extends BaseSchema {
   async up() {
-    const categoryRows = await this.db.from('categories').select('id', 'deleted_at')
-    const liveCategoryIds = new Set(
-      categoryRows.filter((row) => row.deleted_at === null).map((row) => row.id)
-    )
+    const liveCategoryRows = await this.db.from('categories').whereNull('deleted_at').select('id')
+    const liveCategoryIds = liveCategoryRows.map((row) => row.id as number)
 
     await this.orphanStaleRows('items', 'category_id', liveCategoryIds)
     await this.orphanStaleRows('favorite_items', 'default_category_id', liveCategoryIds)
   }
 
-  private async orphanStaleRows(table: string, column: string, liveIds: Set<number>) {
-    const rows = await this.db.from(table).whereNotNull(column).select('id', column)
-    if (rows.length === 0) return
-
-    const staleIds = rows.filter((row) => !liveIds.has(row[column])).map((row) => row.id)
-    if (staleIds.length === 0) return
-
-    await this.db
-      .from(table)
-      .whereIn('id', staleIds)
-      .update({ [column]: null, version: this.db.raw('version + 1') })
+  private async orphanStaleRows(table: string, column: string, liveIds: number[]) {
+    const query = this.db.from(table).whereNotNull(column)
+    if (liveIds.length > 0) {
+      query.whereNotIn(column, liveIds)
+    }
+    await query.update({ [column]: null, version: this.db.raw('version + 1') })
   }
 
   async down() {

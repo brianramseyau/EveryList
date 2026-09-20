@@ -230,7 +230,7 @@ test.group('Categories', (group) => {
     assert.notInclude(names, 'Pet Supplies')
   })
 
-  test('deleting a category orphans (nulls categoryId on) items and favorites that referenced it, including soft-deleted items, without touching other categories or other lists', async ({
+  test('deleting a category orphans (nulls categoryId on) every item and favorite that referenced it — including soft-deleted items and, since a category id is never list-scoped for the reader, items on other lists — without touching other categories', async ({
     client,
     assert,
   }) => {
@@ -259,6 +259,10 @@ test.group('Categories', (group) => {
     )
     const taggedCategoryBId = bodyData<ItemDto>(taggedCategoryB).id
 
+    // `resolveCategoryId` doesn't check that an explicit categoryId belongs to the item's own
+    // list, so this (a category from `listId`, on an item created on `otherListId`) is a request
+    // the API accepts today — and once `categoryA` is deleted, this row's reference is just as
+    // dead as `listId`'s own rows', so it must be orphaned too, not left stale.
     const otherListItem = await auth(
       client
         .post(`/api/v1/lists/${otherListId}/items`)
@@ -294,10 +298,11 @@ test.group('Categories', (group) => {
     assert.equal(deletedItem.version, deletedVersion + 2)
 
     const otherListItems = await auth(client.get(`/api/v1/lists/${otherListId}/items`))
-    const untouchedItem = bodyData<ItemDto[]>(otherListItems).find(
+    const otherListOrphanedItem = bodyData<ItemDto[]>(otherListItems).find(
       (item) => item.id === otherListItemId
     )!
-    assert.equal(untouchedItem.categoryId, categoryA.id)
+    assert.isNull(otherListOrphanedItem.categoryId)
+    assert.equal(otherListOrphanedItem.version, 2)
 
     const favorites = await auth(client.get(`/api/v1/lists/${listId}/favorites`))
     const orphanedFavorite = bodyData<FavoriteItemDto[]>(favorites).find(
