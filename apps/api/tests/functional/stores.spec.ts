@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
-import type { ApiClient } from '@japa/api-client'
-import type { CategoryDto, ListDto, StoreDto } from '@everylist/shared'
+import type { ApiClient, ApiRequest } from '@japa/api-client'
+import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 interface StoreCategoryOrderDto {
@@ -100,6 +100,56 @@ test.group('Stores', (group) => {
       .get(`/api/v1/lists/${listId}/stores`)
       .header('Authorization', `Bearer ${token}`)
     assert.lengthOf(bodyData<StoreDto[]>(afterDetach), 0)
+  })
+
+  test('detaching a store orphans (nulls storeId on) items that referenced it, including soft-deleted ones, without touching items on other stores', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const storeA = await auth(client.post(`/api/v1/lists/${listId}/stores`).json({ name: 'A' }))
+    const storeAId = bodyData<StoreDto>(storeA).id
+    const storeB = await auth(client.post(`/api/v1/lists/${listId}/stores`).json({ name: 'B' }))
+    const storeBId = bodyData<StoreDto>(storeB).id
+
+    const taggedActive = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk', storeId: storeAId })
+    )
+    const taggedActiveId = bodyData<ItemDto>(taggedActive).id
+
+    const taggedDeleted = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Eggs', storeId: storeAId })
+    )
+    const taggedDeletedId = bodyData<ItemDto>(taggedDeleted).id
+    const deletedVersion = bodyData<ItemDto>(taggedDeleted).version
+    await auth(client.delete(`/api/v1/lists/${listId}/items/${taggedDeletedId}`))
+
+    const untagged = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bread', storeId: storeBId })
+    )
+    const untaggedId = bodyData<ItemDto>(untagged).id
+
+    const detach = await auth(client.delete(`/api/v1/lists/${listId}/stores/${storeAId}`))
+    detach.assertStatus(204)
+
+    const items = await auth(client.get(`/api/v1/lists/${listId}/items`))
+    const active = bodyData<ItemDto[]>(items)
+    const activeItem = active.find((item) => item.id === taggedActiveId)!
+    assert.isNull(activeItem.storeId)
+    assert.equal(activeItem.version, 2)
+    const untaggedItem = active.find((item) => item.id === untaggedId)!
+    assert.equal(untaggedItem.storeId, storeBId)
+
+    const recentlyDeleted = await auth(client.get(`/api/v1/lists/${listId}/items/recent`))
+    const deletedItem = bodyData<ItemDto[]>(recentlyDeleted).find(
+      (item) => item.id === taggedDeletedId
+    )!
+    assert.isNull(deletedItem.storeId)
+    // +1 from the soft-delete itself, +1 from detach orphaning it.
+    assert.equal(deletedItem.version, deletedVersion + 2)
   })
 
   test('update honors expectedVersion — omitted always applies, matching applies and bumps, stale conflicts with 409', async ({

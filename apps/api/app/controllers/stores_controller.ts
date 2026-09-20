@@ -2,6 +2,7 @@ import Store from '#models/store'
 import ListStore from '#models/list_store'
 import StoreCategoryOrder from '#models/store_category_order'
 import Category from '#models/category'
+import Item from '#models/item'
 import ListPolicy from '#policies/list_policy'
 import {
   attachStoreValidator,
@@ -97,19 +98,46 @@ export default class StoresController {
     return serialize(StoreTransformer.transform(store))
   }
 
+  /**
+   * Detaches a store from this list. `storeId` is only meaningful within the
+   * lists a store is attached to (list_stores is per-list), so once detached
+   * it's no longer a valid reference for this list's items — orphan them
+   * (null out storeId) rather than leaving a stale id that would silently
+   * exclude them from every store-filtered view going forward. Runs against
+   * every item on the list regardless of deletedAt, so a later restore from
+   * Recently Deleted doesn't resurrect the same stale reference.
+   */
   async detach({ auth, params, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
-    await ListStore.query().where('listId', list.id).where('storeId', params.storeId).delete()
+    const storeId = Number(params.storeId)
+    await ListStore.query().where('listId', list.id).where('storeId', storeId).delete()
+
+    const orphanedItems = await Item.query().where('listId', list.id).where('storeId', storeId)
+    for (const item of orphanedItems) {
+      item.storeId = null
+      item.version += 1
+      await item.save()
+      await broadcastSync({
+        listId: list.id,
+        entityType: 'item',
+        entityId: item.id,
+        op: 'update',
+        version: item.version,
+      })
+    }
 
     await broadcastSync({
       listId: list.id,
       entityType: 'store',
-      entityId: Number(params.storeId),
+      entityId: storeId,
       op: 'delete',
     })
 
-    logger.debug({ listId: list.id, storeId: Number(params.storeId) }, 'store detached from list')
+    logger.debug(
+      { listId: list.id, storeId, orphanedItemCount: orphanedItems.length },
+      'store detached from list; its items orphaned'
+    )
 
     return response.noContent()
   }
