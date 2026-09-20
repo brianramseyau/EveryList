@@ -277,7 +277,8 @@ export async function createItem(
 		storeId?: number | null;
 		price?: number | null;
 		deadline?: string | null;
-	}
+	},
+	options?: { insertPosition?: 'top' | 'bottom' }
 ): Promise<ItemDto> {
 	// Provably covered in isolation (run items.spec.ts + items-offline.spec.ts
 	// alone and this file reports 100%) — other spec files' `vi.mock('./client',
@@ -292,6 +293,16 @@ export async function createItem(
 			: db
 				? await guessCategoryId(db, listId, input.name)
 				: null;
+
+	// Mirrors the server's `nextSortOrder` (items_controller.ts): a 'top' list gets a value just
+	// below its current minimum so an offline-created row lands first; otherwise it's the largest.
+	let sortOrder = Date.now();
+	if (options?.insertPosition === 'top' && db) {
+		const siblings = await db.items
+			.filter((item) => item.listId === listId && !item.deletedAt)
+			.toArray();
+		sortOrder = siblings.reduce((min, item) => Math.min(min, item.sortOrder), 1) - 1;
+	}
 
 	return offlineCreate<ItemDto>({
 		entityType: 'item',
@@ -310,7 +321,7 @@ export async function createItem(
 			deadline: input.deadline ?? null,
 			checked: false,
 			checkedAt: null,
-			sortOrder: Date.now(),
+			sortOrder,
 			// Not known client-side until the server's response arrives; not
 			// rendered anywhere in the current UI.
 			createdBy: 0,

@@ -727,7 +727,7 @@ describe('List detail +page.svelte', () => {
 			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
-		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread' });
+		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread' }, { insertPosition: undefined });
 	});
 
 	it('keeps an existing item stable when a new item is added', async () => {
@@ -1105,7 +1105,7 @@ describe('List detail +page.svelte', () => {
 		await input.fill('bre');
 		await page.getByRole('button', { name: 'Bread' }).click();
 
-		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread' });
+		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread' }, { insertPosition: undefined });
 		await expect.element(page.getByText('Bread')).toBeInTheDocument();
 		await expect.element(input).toHaveValue('');
 	});

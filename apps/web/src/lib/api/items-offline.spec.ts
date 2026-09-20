@@ -73,6 +73,40 @@ describe('createItem (Dexie available)', () => {
 		return cached?.categoryId;
 	}
 
+	it("gives the optimistic row a sortOrder below every sibling when insertPosition is 'top'", async () => {
+		const db = getDb()!;
+		const base = {
+			listId: 1,
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			deadline: null,
+			checked: false,
+			checkedAt: null,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		await db.items.bulkPut([
+			{ ...base, id: 1, name: 'A', sortOrder: 5 },
+			{ ...base, id: 2, name: 'B', sortOrder: 9 }
+		]);
+		let captured: number | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			const rows = await db.items.filter((item) => item.name === 'Bananas').toArray();
+			captured = rows[0]?.sortOrder;
+			return { id: 42, name: 'Bananas', version: 1 };
+		});
+
+		await createItem(1, { name: 'Bananas' }, { insertPosition: 'top' });
+
+		expect(captured).toBe(0);
+	});
+
 	it('uses the personalized suggestion from the categorize endpoint when it succeeds', async () => {
 		vi.mocked(apiGet).mockResolvedValue({ categoryId: 77 });
 		let captured: number | null | undefined;

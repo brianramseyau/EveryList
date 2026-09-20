@@ -47,10 +47,20 @@ function toTitleCase(name: string): string {
 }
 
 // Mirrors items_controller.ts's own private copy — see that file's comment on
-// why this five-line helper isn't shared through packages/shared.
-async function nextSortOrder(listId: number): Promise<number> {
+// why this five-line helper isn't shared through packages/shared. Honors the list's
+// `insertPosition` like a user-initiated add there: 'top' lands below the current minimum.
+async function nextSortOrder(list: List): Promise<number> {
+  if (list.insertPosition === 'top') {
+    const result = await Item.query()
+      .where('listId', list.id)
+      .whereNull('deletedAt')
+      .min('sort_order as minSortOrder')
+      .first()
+    return Number(result?.$extras.minSortOrder ?? 1) - 1
+  }
+
   const result = await Item.query()
-    .where('listId', listId)
+    .where('listId', list.id)
     .whereNull('deletedAt')
     .max('sort_order as maxSortOrder')
     .first()
@@ -212,7 +222,7 @@ export async function handleAddItem(
     deletedMatch.deletedAt = null
     deletedMatch.checked = false
     deletedMatch.checkedAt = null
-    deletedMatch.sortOrder = await nextSortOrder(list.id)
+    deletedMatch.sortOrder = await nextSortOrder(list)
     deletedMatch.version += 1
     await deletedMatch.save()
 
@@ -240,7 +250,7 @@ export async function handleAddItem(
     storeId: null,
     price: null,
     checked: false,
-    sortOrder: await nextSortOrder(list.id),
+    sortOrder: await nextSortOrder(list),
     createdBy: Number(token.tokenableId),
     version: 1,
   })
