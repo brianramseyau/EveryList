@@ -48,7 +48,8 @@ async function resolveCategoryId(
 
 /**
  * By default appends to the end of the list. Pass `respectInsertPosition` only
- * for user-initiated new-item creation (not restores/imports/moves) — when the
+ * for user-initiated adds — a fresh create or `store()`'s restore-on-name-match, but not the
+ * explicit restore endpoint, imports, or moves — when the
  * owning list's `insertPosition` is `'top'`, it instead returns a value below
  * the current minimum so the new item lands first. Takes the full `list` (every
  * call site already has one in hand via `ListPolicy.requireList` or similar) so

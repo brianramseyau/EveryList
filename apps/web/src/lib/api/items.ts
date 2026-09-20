@@ -98,9 +98,10 @@ export async function fetchItems(listId: number): Promise<ItemDto[]> {
 
 			// Merge local optimistic edits into the result so they survive a re-fetch (e.g. navigating
 			// back to the list while still offline, where the network/cache response predates the edit).
-			// A dirty local row overrides the server's copy, a locally-created (temp-id) row is appended,
-			// and a soft-deleted row is dropped. Map insertion order keeps the server's `sortOrder` order
-			// for existing rows while appending offline-created rows at the end.
+			// A dirty local row overrides the server's copy, a locally-created (temp-id) row is added,
+			// and a soft-deleted row is dropped. The merged set is sorted by `sortOrder` below, so an
+			// offline-created row lands where its optimistic `sortOrder` puts it (first on an
+			// add-to-top list, last otherwise).
 			const dirtyRows = await db.items
 				.filter((item) => item.listId === listId && item._dirty === true)
 				.toArray();
