@@ -3,6 +3,7 @@ import ListStore from '#models/list_store'
 import StoreCategoryOrder from '#models/store_category_order'
 import Category from '#models/category'
 import Item from '#models/item'
+import FavoriteItem from '#models/favorite_item'
 import ListPolicy from '#policies/list_policy'
 import {
   attachStoreValidator,
@@ -15,6 +16,7 @@ import StoreCategoryOrderTransformer from '#transformers/store_category_order_tr
 import { broadcastSync, broadcastToStoreLists } from '#services/sync_broadcaster'
 import { hasVersionConflict, reportVersionConflict } from '#services/version_conflict'
 import { DateTime } from 'luxon'
+import db from '@adonisjs/lucid/services/db'
 
 export default class StoresController {
   async index({ auth, params, serialize }: HttpContext) {
@@ -101,29 +103,72 @@ export default class StoresController {
   /**
    * Detaches a store from this list. `storeId` is only meaningful within the
    * lists a store is attached to (list_stores is per-list), so once detached
-   * it's no longer a valid reference for this list's items — orphan them
-   * (null out storeId) rather than leaving a stale id that would silently
-   * exclude them from every store-filtered view going forward. Runs against
-   * every item on the list regardless of deletedAt, so a later restore from
-   * Recently Deleted doesn't resurrect the same stale reference.
+   * it's no longer a valid reference for this list's items or favorites —
+   * orphan them (null out storeId) rather than leaving a stale id that would
+   * silently exclude them from every store-filtered view going forward (and,
+   * for a favorite, get copied onto every future item created from it — see
+   * FavoriteItemsController#addToList). Runs against every item regardless of
+   * deletedAt, so a later restore from Recently Deleted doesn't resurrect the
+   * same stale reference. The pivot delete and both orphan loops share one
+   * transaction so a mid-loop failure can't leave the pivot gone but some
+   * items/favorites still pointing at it; the broadcasts are batched (one per
+   * affected entity type, not one per row) and sent after commit, since
+   * per-row broadcasts would (a) risk running against a second, untransacted
+   * connection while this transaction still holds SQLite's single writer
+   * lock, and (b) fire a `loadAll()` reload per row on every connected
+   * client, including the one that made this request.
    */
   async detach({ auth, params, response, logger }: HttpContext) {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const storeId = Number(params.storeId)
-    await ListStore.query().where('listId', list.id).where('storeId', storeId).delete()
+    if (!Number.isInteger(storeId)) {
+      return response.notFound()
+    }
 
-    const orphanedItems = await Item.query().where('listId', list.id).where('storeId', storeId)
-    for (const item of orphanedItems) {
-      item.storeId = null
-      item.version += 1
-      await item.save()
+    const { orphanedItemCount, orphanedFavoriteCount } = await db.transaction(async (trx) => {
+      await ListStore.query({ client: trx })
+        .where('listId', list.id)
+        .where('storeId', storeId)
+        .delete()
+
+      const items = await Item.query({ client: trx })
+        .where('listId', list.id)
+        .where('storeId', storeId)
+      for (const item of items) {
+        item.storeId = null
+        item.version += 1
+        await item.useTransaction(trx).save()
+      }
+
+      const favorites = await FavoriteItem.query({ client: trx })
+        .where('listId', list.id)
+        .where('storeId', storeId)
+      for (const favorite of favorites) {
+        favorite.storeId = null
+        favorite.version += 1
+        await favorite.useTransaction(trx).save()
+      }
+
+      return { orphanedItemCount: items.length, orphanedFavoriteCount: favorites.length }
+    })
+
+    if (orphanedItemCount > 0) {
       await broadcastSync({
         listId: list.id,
         entityType: 'item',
-        entityId: item.id,
+        entityId: list.id,
         op: 'update',
-        version: item.version,
+        payload: { storeId, count: orphanedItemCount },
+      })
+    }
+    if (orphanedFavoriteCount > 0) {
+      await broadcastSync({
+        listId: list.id,
+        entityType: 'favorite_item',
+        entityId: list.id,
+        op: 'update',
+        payload: { storeId, count: orphanedFavoriteCount },
       })
     }
 
@@ -135,8 +180,8 @@ export default class StoresController {
     })
 
     logger.debug(
-      { listId: list.id, storeId, orphanedItemCount: orphanedItems.length },
-      'store detached from list; its items orphaned'
+      { listId: list.id, storeId, orphanedItemCount, orphanedFavoriteCount },
+      'store detached from list; its items and favorites orphaned'
     )
 
     return response.noContent()

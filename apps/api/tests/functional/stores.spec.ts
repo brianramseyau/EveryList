@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
-import type { CategoryDto, ItemDto, ListDto, StoreDto } from '@everylist/shared'
+import type { CategoryDto, FavoriteItemDto, ItemDto, ListDto, StoreDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 interface StoreCategoryOrderDto {
@@ -102,18 +102,22 @@ test.group('Stores', (group) => {
     assert.lengthOf(bodyData<StoreDto[]>(afterDetach), 0)
   })
 
-  test('detaching a store orphans (nulls storeId on) items that referenced it, including soft-deleted ones, without touching items on other stores', async ({
+  test('detaching a store orphans (nulls storeId on) items and favorites that referenced it, including soft-deleted items, without touching other stores or other lists', async ({
     client,
     assert,
   }) => {
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
+    const otherListId = await createList(client, token)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const storeA = await auth(client.post(`/api/v1/lists/${listId}/stores`).json({ name: 'A' }))
     const storeAId = bodyData<StoreDto>(storeA).id
     const storeB = await auth(client.post(`/api/v1/lists/${listId}/stores`).json({ name: 'B' }))
     const storeBId = bodyData<StoreDto>(storeB).id
+    // Store A attached to a second list too — detaching it from `listId` must not
+    // touch this other list's own row for the same store.
+    await auth(client.post(`/api/v1/lists/${otherListId}/stores`).json({ storeId: storeAId }))
 
     const taggedActive = await auth(
       client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Milk', storeId: storeAId })
@@ -127,10 +131,21 @@ test.group('Stores', (group) => {
     const deletedVersion = bodyData<ItemDto>(taggedDeleted).version
     await auth(client.delete(`/api/v1/lists/${listId}/items/${taggedDeletedId}`))
 
-    const untagged = await auth(
+    const taggedStoreB = await auth(
       client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bread', storeId: storeBId })
     )
-    const untaggedId = bodyData<ItemDto>(untagged).id
+    const taggedStoreBId = bodyData<ItemDto>(taggedStoreB).id
+
+    const otherListItem = await auth(
+      client.post(`/api/v1/lists/${otherListId}/items`).json({ name: 'Cheese', storeId: storeAId })
+    )
+    const otherListItemId = bodyData<ItemDto>(otherListItem).id
+
+    const favorite = await auth(
+      client.post(`/api/v1/lists/${listId}/favorites`).json({ name: 'Cereal', storeId: storeAId })
+    )
+    const favoriteId = bodyData<FavoriteItemDto>(favorite).id
+    const favoriteVersion = bodyData<FavoriteItemDto>(favorite).version
 
     const detach = await auth(client.delete(`/api/v1/lists/${listId}/stores/${storeAId}`))
     detach.assertStatus(204)
@@ -140,8 +155,8 @@ test.group('Stores', (group) => {
     const activeItem = active.find((item) => item.id === taggedActiveId)!
     assert.isNull(activeItem.storeId)
     assert.equal(activeItem.version, 2)
-    const untaggedItem = active.find((item) => item.id === untaggedId)!
-    assert.equal(untaggedItem.storeId, storeBId)
+    const storeBItem = active.find((item) => item.id === taggedStoreBId)!
+    assert.equal(storeBItem.storeId, storeBId)
 
     const recentlyDeleted = await auth(client.get(`/api/v1/lists/${listId}/items/recent`))
     const deletedItem = bodyData<ItemDto[]>(recentlyDeleted).find(
@@ -150,6 +165,31 @@ test.group('Stores', (group) => {
     assert.isNull(deletedItem.storeId)
     // +1 from the soft-delete itself, +1 from detach orphaning it.
     assert.equal(deletedItem.version, deletedVersion + 2)
+
+    const otherListItems = await auth(client.get(`/api/v1/lists/${otherListId}/items`))
+    const untouchedItem = bodyData<ItemDto[]>(otherListItems).find(
+      (item) => item.id === otherListItemId
+    )!
+    assert.equal(untouchedItem.storeId, storeAId)
+
+    const favorites = await auth(client.get(`/api/v1/lists/${listId}/favorites`))
+    const orphanedFavorite = bodyData<FavoriteItemDto[]>(favorites).find(
+      (item) => item.id === favoriteId
+    )!
+    assert.isNull(orphanedFavorite.storeId)
+    assert.equal(orphanedFavorite.version, favoriteVersion + 1)
+  })
+
+  test('detach rejects a non-numeric storeId route param instead of letting it reach the query layer', async ({
+    client,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+
+    const detach = await client
+      .delete(`/api/v1/lists/${listId}/stores/not-a-number`)
+      .header('Authorization', `Bearer ${token}`)
+    detach.assertStatus(404)
   })
 
   test('update honors expectedVersion — omitted always applies, matching applies and bumps, stale conflicts with 409', async ({
