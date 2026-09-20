@@ -1,4 +1,4 @@
-import type { CategorizeSuggestionDto, ItemDto, SubItemDto } from '@everylist/shared';
+import type { CategorizeSuggestionDto, ItemDto, ListDto, SubItemDto } from '@everylist/shared';
 import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared';
 /* v8 ignore start */
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
@@ -110,7 +110,10 @@ export async function fetchItems(listId: number): Promise<ItemDto[]> {
 				if (row.deletedAt) byId.delete(row.id);
 				else byId.set(row.id, row);
 			}
-			return mergeDirtySubItems(db, [...byId.values()]);
+			// Sort the merged set: an offline-created row on an add-to-top list carries a sortOrder
+			// below its siblings, and the temp-id row is otherwise appended after the server's rows.
+			const merged = [...byId.values()].sort((a, b) => a.sortOrder - b.sortOrder);
+			return mergeDirtySubItems(db, merged);
 		},
 		() => getCachedItems(listId)
 	);
@@ -278,7 +281,7 @@ export async function createItem(
 		price?: number | null;
 		deadline?: string | null;
 	},
-	options?: { insertPosition?: 'top' | 'bottom' }
+	options?: { insertPosition?: ListDto['insertPosition'] }
 ): Promise<ItemDto> {
 	// Provably covered in isolation (run items.spec.ts + items-offline.spec.ts
 	// alone and this file reports 100%) — other spec files' `vi.mock('./client',
@@ -301,7 +304,7 @@ export async function createItem(
 		const siblings = await db.items
 			.filter((item) => item.listId === listId && !item.deletedAt)
 			.toArray();
-		sortOrder = siblings.reduce((min, item) => Math.min(min, item.sortOrder), 1) - 1;
+		sortOrder = (siblings.length > 0 ? Math.min(...siblings.map((item) => item.sortOrder)) : 1) - 1;
 	}
 
 	return offlineCreate<ItemDto>({

@@ -1164,6 +1164,34 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
       'a later item on a top-insert list sorts above an earlier one'
     )
   })
+
+  test("re-adding a deleted item's name on a 'top' list restores it above existing items, while the explicit restore endpoint appends", async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+    const listResponse = await auth(
+      client.post('/api/v1/lists').json({ name: 'Top-insert list', insertPosition: 'top' })
+    )
+    const listId = bodyData<ListDto>(listResponse).id
+    const add = async (name: string) =>
+      bodyData<ItemDto>(await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name })))
+
+    const milk = await add('Milk')
+    const bread = await add('Bread')
+    await auth(client.delete(`/api/v1/lists/${listId}/items/${milk.id}`))
+
+    const readded = await add('milk')
+    assert.equal(readded.id, milk.id)
+    assert.isBelow(readded.sortOrder, bread.sortOrder, 'typing the name puts it back on top')
+
+    await auth(client.delete(`/api/v1/lists/${listId}/items/${milk.id}`))
+    const restored = bodyData<ItemDto>(
+      await auth(client.post(`/api/v1/lists/${listId}/items/${milk.id}/restore`))
+    )
+    assert.isAbove(restored.sortOrder, bread.sortOrder, 'undo-style restore still appends')
+  })
 })
 
 test.group('Open item limit', (group) => {

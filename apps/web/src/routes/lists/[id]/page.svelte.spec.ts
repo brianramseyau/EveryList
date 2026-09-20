@@ -761,6 +761,32 @@ describe('List detail +page.svelte', () => {
 		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
 	});
 
+	it("renders a newly added item above existing ones on an insertPosition 'top' list", async () => {
+		vi.mocked(fetchList).mockResolvedValue({
+			...list,
+			useCategories: false,
+			insertPosition: 'top'
+		});
+		vi.mocked(fetchItems).mockResolvedValue([makeItem({ id: 100, name: 'Bananas', sortOrder: 5 })]);
+		vi.mocked(createItem).mockResolvedValue(makeItem({ id: 200, name: 'Bread', sortOrder: 4 }));
+
+		render(ListDetailPage);
+		await expect.element(page.getByText('Bananas')).toBeInTheDocument();
+
+		await page.getByPlaceholder('Item name').fill('Bread');
+		page
+			.getByPlaceholder('Item name')
+			.element()
+			.closest('form')
+			?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+		await expect.element(page.getByText('Bread')).toBeInTheDocument();
+		expect(createItem).toHaveBeenCalledWith(1, { name: 'Bread' }, { insertPosition: 'top' });
+		const bread = page.getByText('Bread', { exact: true }).element();
+		const bananas = page.getByText('Bananas', { exact: true }).element();
+		expect(bread.compareDocumentPosition(bananas) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	});
+
 	it('matching an existing unchecked item by name skips the request, keeps the input, and highlights the row instead of duplicating', async () => {
 		vi.mocked(fetchItems).mockResolvedValue([
 			makeItem({ id: 100, name: 'Bananas', categoryId: 10 })

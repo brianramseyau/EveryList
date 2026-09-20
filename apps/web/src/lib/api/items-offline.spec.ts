@@ -104,6 +104,19 @@ describe('createItem (Dexie available)', () => {
 
 		await createItem(1, { name: 'Bananas' }, { insertPosition: 'top' });
 
+		expect(captured).toBe(4);
+	});
+
+	it("falls back to 0 for the optimistic row's sortOrder on an empty 'top' list", async () => {
+		let captured: number | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			const [row] = await getDb()!.items.toArray();
+			captured = row?.sortOrder;
+			return { id: 42, name: 'Bananas', version: 1 };
+		});
+
+		await createItem(1, { name: 'Bananas' }, { insertPosition: 'top' });
+
 		expect(captured).toBe(0);
 	});
 
@@ -816,6 +829,35 @@ describe('fetchItems (cache hydration)', () => {
 
 		expect(items.map((item) => item.id)).toEqual([8, -1]);
 		expect(items.map((item) => item.name)).toEqual(['Milk', 'Bread']);
+	});
+
+	it('sorts a locally-created row by sortOrder rather than appending it, so an add-to-top item stays first', async () => {
+		await getDb()!.items.put({
+			id: -1,
+			listId: 1,
+			name: 'Bread',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			deadline: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 4,
+			createdBy: 0,
+			createdAt: '2026-08-17T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_localId: '-1',
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([{ id: 8, name: 'Milk', sortOrder: 5, version: 7 }]);
+
+		const items = await fetchItems(1);
+
+		expect(items.map((item) => item.name)).toEqual(['Bread', 'Milk']);
 	});
 
 	it('caches a fetched item’s nested sub-items into the subItems table so a later offline edit reads their version', async () => {
