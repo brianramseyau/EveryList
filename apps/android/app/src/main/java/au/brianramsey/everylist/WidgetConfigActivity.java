@@ -188,6 +188,12 @@ public class WidgetConfigActivity extends Activity {
     }
 
     private void showError(int resId) {
+        // Every error path (a failed fetch, zero granted lists, a Save-time validation miss)
+        // routes through here — without this, "Loading your lists…" (config_list_hint) stays on
+        // screen forever alongside the error, since the only other place that hides it is
+        // showLists' success branch. Left stuck like that, the picker reads as frozen rather than
+        // as having failed with a message.
+        findViewById(R.id.config_list_hint).setVisibility(View.GONE);
         errorView.setText(resId);
         errorView.setVisibility(View.VISIBLE);
     }
