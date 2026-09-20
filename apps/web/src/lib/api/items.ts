@@ -1,4 +1,4 @@
-import type { CategorizeSuggestionDto, ItemDto, SubItemDto } from '@everylist/shared';
+import type { CategorizeSuggestionDto, ItemDto, ListDto, SubItemDto } from '@everylist/shared';
 import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared';
 /* v8 ignore start */
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
@@ -98,9 +98,10 @@ export async function fetchItems(listId: number): Promise<ItemDto[]> {
 
 			// Merge local optimistic edits into the result so they survive a re-fetch (e.g. navigating
 			// back to the list while still offline, where the network/cache response predates the edit).
-			// A dirty local row overrides the server's copy, a locally-created (temp-id) row is appended,
-			// and a soft-deleted row is dropped. Map insertion order keeps the server's `sortOrder` order
-			// for existing rows while appending offline-created rows at the end.
+			// A dirty local row overrides the server's copy, a locally-created (temp-id) row is added,
+			// and a soft-deleted row is dropped. The merged set is sorted by `sortOrder` below, so an
+			// offline-created row lands where its optimistic `sortOrder` puts it (first on an
+			// add-to-top list, last otherwise).
 			const dirtyRows = await db.items
 				.filter((item) => item.listId === listId && item._dirty === true)
 				.toArray();
@@ -110,7 +111,10 @@ export async function fetchItems(listId: number): Promise<ItemDto[]> {
 				if (row.deletedAt) byId.delete(row.id);
 				else byId.set(row.id, row);
 			}
-			return mergeDirtySubItems(db, [...byId.values()]);
+			// Sort the merged set: an offline-created row on an add-to-top list carries a sortOrder
+			// below its siblings, and the temp-id row is otherwise appended after the server's rows.
+			const merged = [...byId.values()].sort((a, b) => a.sortOrder - b.sortOrder);
+			return mergeDirtySubItems(db, merged);
 		},
 		() => getCachedItems(listId)
 	);
@@ -277,7 +281,8 @@ export async function createItem(
 		storeId?: number | null;
 		price?: number | null;
 		deadline?: string | null;
-	}
+	},
+	options?: { insertPosition?: ListDto['insertPosition'] }
 ): Promise<ItemDto> {
 	// Provably covered in isolation (run items.spec.ts + items-offline.spec.ts
 	// alone and this file reports 100%) — other spec files' `vi.mock('./client',
@@ -292,6 +297,16 @@ export async function createItem(
 			: db
 				? await guessCategoryId(db, listId, input.name)
 				: null;
+
+	// Mirrors the server's `nextSortOrder` (items_controller.ts): a 'top' list gets a value just
+	// below its current minimum so an offline-created row lands first; otherwise it's the largest.
+	let sortOrder = Date.now();
+	if (options?.insertPosition === 'top' && db) {
+		const siblings = await db.items
+			.filter((item) => item.listId === listId && !item.deletedAt)
+			.toArray();
+		sortOrder = (siblings.length > 0 ? Math.min(...siblings.map((item) => item.sortOrder)) : 1) - 1;
+	}
 
 	return offlineCreate<ItemDto>({
 		entityType: 'item',
@@ -310,7 +325,7 @@ export async function createItem(
 			deadline: input.deadline ?? null,
 			checked: false,
 			checkedAt: null,
-			sortOrder: Date.now(),
+			sortOrder,
 			// Not known client-side until the server's response arrives; not
 			// rendered anywhere in the current UI.
 			createdBy: 0,

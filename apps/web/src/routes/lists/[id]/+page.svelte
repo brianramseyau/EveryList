@@ -636,14 +636,14 @@
 
 		adding = true;
 		try {
-			const item = await createItem(listId, { name });
+			const item = await createItem(listId, { name }, { insertPosition: list?.insertPosition });
 			// The server may have matched an existing item instead of creating a new
 			// one (a checked match it unchecked) — replace that row in place rather
 			// than appending a duplicate.
 			const existingIndex = items.findIndex((current) => current.id === item.id);
 			items =
 				existingIndex === -1
-					? [...items, item]
+					? [...items, item].sort((a, b) => a.sortOrder - b.sortOrder)
 					: items.map((current, index) => (index === existingIndex ? item : current));
 			flashHighlight(item.id);
 			newItemName = '';

@@ -73,6 +73,53 @@ describe('createItem (Dexie available)', () => {
 		return cached?.categoryId;
 	}
 
+	it("gives the optimistic row a sortOrder below every sibling when insertPosition is 'top'", async () => {
+		const db = getDb()!;
+		const base = {
+			listId: 1,
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			deadline: null,
+			checked: false,
+			checkedAt: null,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		};
+		await db.items.bulkPut([
+			{ ...base, id: 1, name: 'A', sortOrder: 5 },
+			{ ...base, id: 2, name: 'B', sortOrder: 9 }
+		]);
+		let captured: number | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			const rows = await db.items.filter((item) => item.name === 'Bananas').toArray();
+			captured = rows[0]?.sortOrder;
+			return { id: 42, name: 'Bananas', version: 1 };
+		});
+
+		await createItem(1, { name: 'Bananas' }, { insertPosition: 'top' });
+
+		expect(captured).toBe(4);
+	});
+
+	it("falls back to 0 for the optimistic row's sortOrder on an empty 'top' list", async () => {
+		let captured: number | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			const [row] = await getDb()!.items.toArray();
+			captured = row?.sortOrder;
+			return { id: 42, name: 'Bananas', version: 1 };
+		});
+
+		await createItem(1, { name: 'Bananas' }, { insertPosition: 'top' });
+
+		expect(captured).toBe(0);
+	});
+
 	it('uses the personalized suggestion from the categorize endpoint when it succeeds', async () => {
 		vi.mocked(apiGet).mockResolvedValue({ categoryId: 77 });
 		let captured: number | null | undefined;
@@ -782,6 +829,35 @@ describe('fetchItems (cache hydration)', () => {
 
 		expect(items.map((item) => item.id)).toEqual([8, -1]);
 		expect(items.map((item) => item.name)).toEqual(['Milk', 'Bread']);
+	});
+
+	it('sorts a locally-created row by sortOrder rather than appending it, so an add-to-top item stays first', async () => {
+		await getDb()!.items.put({
+			id: -1,
+			listId: 1,
+			name: 'Bread',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			deadline: null,
+			checked: false,
+			checkedAt: null,
+			sortOrder: 4,
+			createdBy: 0,
+			createdAt: '2026-08-17T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1,
+			_localId: '-1',
+			_dirty: true
+		});
+		vi.mocked(apiGet).mockResolvedValue([{ id: 8, name: 'Milk', sortOrder: 5, version: 7 }]);
+
+		const items = await fetchItems(1);
+
+		expect(items.map((item) => item.name)).toEqual(['Bread', 'Milk']);
 	});
 
 	it('caches a fetched item’s nested sub-items into the subItems table so a later offline edit reads their version', async () => {

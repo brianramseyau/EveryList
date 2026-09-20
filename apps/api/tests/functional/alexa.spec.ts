@@ -416,6 +416,53 @@ test.group('Alexa skill endpoint', (group) => {
     assert.include(addItemResponse.body().response.outputSpeech.text, 'Added Tortillas to Costco')
   })
 
+  test("AddItemIntent puts a new or restored item first when the list's insertPosition is 'top'", async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const listId = await createList(client, owner.token, 'Groceries')
+    const pat = await mintPat(client, owner.token, [listId])
+    await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ insertPosition: 'top' })
+
+    const speak = (itemName: string) =>
+      postAlexa(
+        client,
+        buildEnvelope({
+          type: 'IntentRequest',
+          accessToken: pat,
+          intentName: 'AddItemIntent',
+          slots: { ItemName: itemName },
+        })
+      )
+    const names = async () => {
+      const res = await client
+        .get(`/api/v1/lists/${listId}/items`)
+        .header('Authorization', `Bearer ${owner.token}`)
+      return bodyData<{ name: string }[]>(res).map((item) => item.name)
+    }
+
+    // First item on an empty list, then a second that must land above it.
+    await speak('Eggs')
+    await speak('Milk')
+    assert.deepEqual(await names(), ['Milk', 'Eggs'])
+
+    // Delete Eggs, then restore it by voice: it should come back on top too.
+    const eggs = bodyData<{ id: number; name: string }[]>(
+      await client
+        .get(`/api/v1/lists/${listId}/items`)
+        .header('Authorization', `Bearer ${owner.token}`)
+    ).find((item) => item.name === 'Eggs')!
+    await client
+      .delete(`/api/v1/lists/${listId}/items/${eggs.id}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    await speak('Eggs')
+    assert.deepEqual(await names(), ['Eggs', 'Milk'])
+  })
+
   test('AddItemIntent title-cases a lower-case, multi-word spoken item name', async ({
     client,
     assert,

@@ -48,7 +48,8 @@ async function resolveCategoryId(
 
 /**
  * By default appends to the end of the list. Pass `respectInsertPosition` only
- * for user-initiated new-item creation (not restores/imports/moves) — when the
+ * for user-initiated adds — a fresh create or `store()`'s restore-on-name-match, but not the
+ * explicit restore endpoint, imports, or moves — when the
  * owning list's `insertPosition` is `'top'`, it instead returns a value below
  * the current minimum so the new item lands first. Takes the full `list` (every
  * call site already has one in hand via `ListPolicy.requireList` or similar) so
@@ -96,12 +97,18 @@ export function computeMidpointSortOrder(
 
 /** Clears `deletedAt` on an existing row (vs. creating a fresh one) so its category/store/price/
  * quantity/notes survive — shared by the explicit restore endpoint and `store()`'s implicit
- * restore-on-name-match. */
-async function restoreItemRow(list: List, item: Item): Promise<void> {
+ * restore-on-name-match. `respectInsertPosition` is for the latter only: typing a deleted item's
+ * name is a user-initiated add, so it follows the list's add-to-top setting like a fresh create;
+ * the explicit restore endpoint (undo) keeps appending. */
+async function restoreItemRow(
+  list: List,
+  item: Item,
+  options?: { respectInsertPosition?: boolean }
+): Promise<void> {
   item.deletedAt = null
   item.checked = false
   item.checkedAt = null
-  item.sortOrder = await nextSortOrder(list)
+  item.sortOrder = await nextSortOrder(list, options)
   item.version += 1
   await item.save()
 
@@ -251,7 +258,7 @@ export default class ItemsController {
           code: UNCHECKED_LIMIT_REACHED,
         })
       }
-      await restoreItemRow(list, deletedMatch)
+      await restoreItemRow(list, deletedMatch, { respectInsertPosition: true })
       logger.debug(
         { listId: list.id, itemId: deletedMatch.id },
         'item store matched deleted item, restored'
