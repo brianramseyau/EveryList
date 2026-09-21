@@ -14,8 +14,10 @@
  *      git tag v1.6.2 && git push origin v1.6.2
  *   3. Once docker-publish.yml has finished:  pnpm release-addon v1.6.2  (see that script)
  *
- * Bumping package.json before tagging matters because apps/desktop's version names the built
- * DMG/EXE/AppImage, so the tag must already contain the real version.
+ * Bump before tagging so the tagged commit carries the right versions. Nothing in CI requires it
+ * (Docker takes its version from the tag, and native-build.yml injects the tag's version into
+ * apps/desktop before packaging), but apps/api's version is real: config/openapi.ts reads it for
+ * the OpenAPI document's info.version (/docs, /openapi). Don't blank these to 0.0.0.
  *
  * Stable releases only (no "-rc"/"-beta" suffix).
  */
