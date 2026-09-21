@@ -353,7 +353,9 @@ export async function fetchRecentItemNames(listId: number): Promise<string[]> {
 		if (!db) return [];
 
 		const rows = await db.items.filter((item) => item.listId === listId).toArray();
-		rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+		// Last-use order, matching the server: re-adding a name reuses its row, so createdAt never moves.
+		const lastUsed = (row: (typeof rows)[number]) => row.updatedAt ?? row.createdAt;
+		rows.sort((a, b) => lastUsed(b).localeCompare(lastUsed(a)));
 
 		const seen = new Set<string>();
 		const names: string[] = [];
@@ -362,7 +364,6 @@ export async function fetchRecentItemNames(listId: number): Promise<string[]> {
 			if (seen.has(key)) continue;
 			seen.add(key);
 			names.push(row.name.trim());
-			if (names.length >= 50) break;
 		}
 		return names;
 	}
@@ -437,6 +438,9 @@ export async function deleteItem(listId: number, itemId: number): Promise<void> 
 		applyOptimistically: async (db) => {
 			const existing = await db.items.get(itemId);
 			if (!existing) return 0;
+			// Left checked locally on purpose: undoing a still-queued delete only clears `deletedAt`,
+			// so clearing `checked` here would desync the cache from the server until a refetch. The
+			// server unchecks on delete and the next fetch reconciles the (hidden) deleted row.
 			await db.items.put({ ...existing, deletedAt: new Date().toISOString(), _dirty: true });
 			return existing.version;
 		},

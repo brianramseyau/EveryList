@@ -6,6 +6,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import FavoriteItemTransformer from '#transformers/favorite_item_transformer'
 import ItemTransformer from '#transformers/item_transformer'
 import { broadcastSync } from '#services/sync_broadcaster'
+import { findItemByName, restoreItemRow } from '#services/item_reuse'
 import { learnCategory } from '#services/category_suggestion_service'
 import {
   UNCHECKED_LIMIT_REACHED,
@@ -200,11 +201,25 @@ export default class FavoriteItemsController {
       .whereNull('deletedAt')
       .firstOrFail()
 
-    const existing = await Item.query()
-      .where('listId', list.id)
-      .whereNull('deletedAt')
-      .whereRaw('LOWER(TRIM(name)) = ?', [favorite.name.trim().toLowerCase()])
-      .first()
+    const match = await findItemByName(list, favorite.name)
+
+    // A deleted match is restored (category/store/price intact) rather than duplicated.
+    if (match?.deleted) {
+      if (!(await hasCapacityFor(list))) {
+        return response.badRequest({
+          message: limitReachedMessage(list),
+          code: UNCHECKED_LIMIT_REACHED,
+        })
+      }
+      await restoreItemRow(list, match.item)
+      logger.debug(
+        { listId: list.id, favoriteItemId: favorite.id, itemId: match.item.id },
+        'favorite item addToList matched deleted item, restored'
+      )
+      return serialize(ItemTransformer.transform(match.item))
+    }
+
+    const existing = match?.item
 
     if (existing) {
       if (existing.checked) {

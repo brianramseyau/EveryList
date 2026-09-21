@@ -456,6 +456,37 @@ describe('deleteItem (Dexie available)', () => {
 		expect(cached?.deletedAt).not.toBeNull();
 	});
 
+	it('leaves a checked row checked locally, since undoing a queued delete cannot restore it', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 6,
+			listId: 1,
+			name: 'Bread',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			deadline: null,
+			checked: true,
+			checkedAt: '2026-08-02T00:00:00.000Z',
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		vi.mocked(apiDelete).mockResolvedValue(undefined);
+
+		await deleteItem(1, 6);
+
+		const cached = await db.items.get(6);
+		expect(cached?.deletedAt).not.toBeNull();
+		expect(cached?.checked).toBe(true);
+		expect(cached?.checkedAt).toBe('2026-08-02T00:00:00.000Z');
+	});
+
 	it('is a no-op against Dexie when the row was never cached', async () => {
 		vi.mocked(apiDelete).mockResolvedValue(undefined);
 		await expect(deleteItem(1, 999)).resolves.toBeUndefined();
@@ -648,7 +679,7 @@ describe('fetchRecentItemNames', () => {
 		await expect(fetchRecentItemNames(1)).resolves.toEqual(['bananas', 'Bread']);
 	});
 
-	it('caps the offline fallback at 50 distinct names', async () => {
+	it('does not truncate the offline fallback at 50 names', async () => {
 		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
 		const db = getDb()!;
 		const base = {
@@ -677,7 +708,7 @@ describe('fetchRecentItemNames', () => {
 		}
 
 		const names = await fetchRecentItemNames(1);
-		expect(names).toHaveLength(50);
+		expect(names).toHaveLength(55);
 	});
 });
 
