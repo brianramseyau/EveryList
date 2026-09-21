@@ -6,7 +6,7 @@
 	import type { ListDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import { fetchLists } from '$lib/api/lists';
-	import { configureWidget } from '$lib/widget';
+	import { configureWidget, currentWidgetListIds } from '$lib/widget';
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Loader from '$lib/components/Loader.svelte';
@@ -27,7 +27,13 @@
 	async function loadAll() {
 		loading = true;
 		try {
-			lists = await fetchLists();
+			const [loaded, granted] = await Promise.all([fetchLists(), currentWidgetListIds()]);
+			lists = loaded;
+			// Only tick lists that still render a checkbox — a stale grant (deleted list, lost
+			// ownership) couldn't be unticked and would fail every save.
+			selectedListIds = granted.filter((id) =>
+				loaded.some((list) => list.id === id && list.role === 'owner')
+			);
 			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to load lists.';
@@ -87,8 +93,9 @@
 			class="rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400"
 		>
 			Widget set up — find it in your widget picker and place it on your home screen, then pick
-			which list it shows. You can manage (or revoke) the "Home-screen widget" access token any time
-			on the <a class="underline" href={resolve('/settings/tokens')}>Access Tokens</a> page.
+			which list it shows. Coming back here later updates this same widget's access (say, to add a
+			new list) rather than creating another token; it's listed under Managed on the
+			<a class="underline" href={resolve('/settings/tokens')}>Access Tokens</a> page.
 		</div>
 	{/if}
 
@@ -116,7 +123,7 @@
 				class="mt-1 w-fit"
 				disabled={creating || selectedListIds.length === 0}
 			>
-				{creating ? 'Setting up…' : 'Create widget'}
+				{creating ? 'Saving…' : 'Save widget access'}
 			</Button>
 		</form>
 	{/if}

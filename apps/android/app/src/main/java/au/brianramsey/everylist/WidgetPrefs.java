@@ -21,6 +21,8 @@ final class WidgetPrefs {
 
     static final String GLOBAL_PREFS = "everylist_widget";
     private static final String KEY_TOKEN = "token";
+    private static final String KEY_TOKEN_ID = "tokenId";
+    private static final String KEY_DEVICE_ID = "deviceId";
     private static final String KEY_SERVER_URL = "serverUrl";
     private static final String KEY_LIST_IDS = "listIds";
     private static final String KEY_DEFAULT_LIST_ID = "defaultListId";
@@ -44,7 +46,7 @@ final class WidgetPrefs {
 
     // --- Global (provisioned) credentials ---
 
-    static void saveGlobalCredentials(Context context, String token, String serverUrl, List<Long> listIds) {
+    static void saveGlobalCredentials(Context context, String token, long tokenId, String serverUrl, List<Long> listIds) {
         StringBuilder sb = new StringBuilder();
         for (Long id : listIds) {
             if (sb.length() > 0) sb.append(',');
@@ -52,14 +54,31 @@ final class WidgetPrefs {
         }
         global(context).edit()
             .putString(KEY_TOKEN, token)
+            .putLong(KEY_TOKEN_ID, tokenId)
             .putString(KEY_SERVER_URL, serverUrl)
             .putString(KEY_LIST_IDS, sb.toString())
             .apply();
     }
 
+    /** A random id, generated on first use and kept for the life of the install. */
+    static String getDeviceId(Context context) {
+        SharedPreferences g = global(context);
+        String id = g.getString(KEY_DEVICE_ID, null);
+        if (id == null) {
+            id = java.util.UUID.randomUUID().toString().substring(0, 8);
+            g.edit().putString(KEY_DEVICE_ID, id).apply();
+        }
+        return id;
+    }
+
     static boolean hasGlobalCredentials(Context context) {
         SharedPreferences g = global(context);
         return g.contains(KEY_TOKEN) && g.contains(KEY_SERVER_URL);
+    }
+
+    /** The server-side id of the held PAT, or -1 if unknown (none held, or stored by an older build). */
+    static long getTokenId(Context context) {
+        return global(context).getLong(KEY_TOKEN_ID, -1L);
     }
 
     static String getGlobalToken(Context context) {

@@ -6,10 +6,10 @@ import { ApiError } from '$lib/api/client';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/lists', () => ({ fetchLists: vi.fn() }));
-vi.mock('$lib/widget', () => ({ configureWidget: vi.fn() }));
+vi.mock('$lib/widget', () => ({ configureWidget: vi.fn(), currentWidgetListIds: vi.fn() }));
 
 const { fetchLists } = await import('$lib/api/lists');
-const { configureWidget } = await import('$lib/widget');
+const { configureWidget, currentWidgetListIds } = await import('$lib/widget');
 const { goto } = await import('$app/navigation');
 const WidgetPage = (await import('./+page.svelte')).default;
 
@@ -43,12 +43,26 @@ describe('Home-screen widget +page.svelte', () => {
 		vi.mocked(fetchLists).mockResolvedValue([list({})]);
 		vi.mocked(goto).mockResolvedValue(undefined);
 		vi.mocked(configureWidget).mockResolvedValue(true);
+		vi.mocked(currentWidgetListIds).mockResolvedValue([]);
 	});
 
 	afterEach(() => {
 		vi.clearAllMocks();
 		vi.unstubAllGlobals();
 		clearToken();
+	});
+
+	it('pre-ticks the lists the widget token already grants', async () => {
+		vi.mocked(currentWidgetListIds).mockResolvedValue([1]);
+		render(WidgetPage);
+		await expect.element(page.getByRole('checkbox', { name: 'Groceries' })).toBeChecked();
+	});
+
+	it('drops granted list ids the user no longer owns', async () => {
+		vi.mocked(currentWidgetListIds).mockResolvedValue([99]);
+		render(WidgetPage);
+		await expect.element(page.getByRole('checkbox', { name: 'Groceries' })).not.toBeChecked();
+		await expect.element(page.getByRole('button', { name: 'Save widget access' })).toBeDisabled();
 	});
 
 	it('sets the document title', async () => {
@@ -95,7 +109,7 @@ describe('Home-screen widget +page.svelte', () => {
 		render(WidgetPage);
 
 		await page.getByRole('checkbox', { name: 'Groceries' }).click();
-		await page.getByRole('button', { name: 'Create widget' }).click();
+		await page.getByRole('button', { name: 'Save widget access' }).click();
 
 		await expect.poll(() => vi.mocked(configureWidget).mock.calls.length).toBe(1);
 		expect(configureWidget).toHaveBeenCalledWith([1]);
@@ -108,7 +122,7 @@ describe('Home-screen widget +page.svelte', () => {
 		render(WidgetPage);
 
 		await page.getByRole('checkbox', { name: 'Groceries' }).click();
-		await page.getByRole('button', { name: 'Create widget' }).click();
+		await page.getByRole('button', { name: 'Save widget access' }).click();
 
 		await expect.element(page.getByText('Token invalid.')).toBeInTheDocument();
 		await expect.element(page.getByText(/Widget set up/)).not.toBeInTheDocument();
@@ -120,7 +134,7 @@ describe('Home-screen widget +page.svelte', () => {
 		render(WidgetPage);
 
 		await page.getByRole('checkbox', { name: 'Groceries' }).click();
-		await page.getByRole('button', { name: 'Create widget' }).click();
+		await page.getByRole('button', { name: 'Save widget access' }).click();
 
 		await expect
 			.element(page.getByText('Failed to set up the widget: no launcher'))
@@ -133,7 +147,7 @@ describe('Home-screen widget +page.svelte', () => {
 		render(WidgetPage);
 
 		await page.getByRole('checkbox', { name: 'Groceries' }).click();
-		await page.getByRole('button', { name: 'Create widget' }).click();
+		await page.getByRole('button', { name: 'Save widget access' }).click();
 
 		await expect.element(page.getByText('Failed to set up the widget.')).toBeInTheDocument();
 	});
@@ -141,6 +155,6 @@ describe('Home-screen widget +page.svelte', () => {
 	it('disables the button until at least one list is chosen', async () => {
 		render(WidgetPage);
 
-		await expect.element(page.getByRole('button', { name: 'Create widget' })).toBeDisabled();
+		await expect.element(page.getByRole('button', { name: 'Save widget access' })).toBeDisabled();
 	});
 });
