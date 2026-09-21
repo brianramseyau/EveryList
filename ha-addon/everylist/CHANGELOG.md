@@ -3,8 +3,8 @@
 ## v1.6.2
 
 Updates from v1.5.0 (the add-on skipped v1.5.1–v1.6.1, so this covers all of
-them). **Upgrading:** three automatic, additive database migrations run on
-first boot (sub-tasks, per-user last-active time, and a repair of stale
+them). **Upgrading:** automatic, additive database migrations run on first
+boot (sub-tasks, per-user last-active time, and one-time repairs of stale
 store/category references on items); no foreign keys or table rebuilds.
 
 - **Sub-tasks** — give any list item its own checklist, with an optional
