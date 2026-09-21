@@ -1030,11 +1030,17 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     )
     await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bread' }))
     await auth(client.delete(`/api/v1/lists/${listId}/items/${bananas.body().data.id}`))
-    // Bulk import bypasses store()'s active/deleted dedup (which would otherwise restore the
-    // just-deleted "Bananas" row instead of creating a second one) — the one remaining path that
-    // produces a genuine same-name duplicate, exercising recentNames' own case-insensitive
-    // collapse. Deleted items aren't excluded from the source query, only the duplicate name is.
-    await auth(client.post(`/api/v1/lists/${listId}/items/import`).json({ text: 'bananas' }))
+    // Every add path now reuses an existing row by name, so a same-name pair only exists from
+    // before that (legacy production data) — seed one directly to exercise recentNames' own
+    // case-insensitive collapse. Deleted rows count as history; only the duplicate name is dropped.
+    const original = await db.from('items').where('id', bananas.body().data.id).first()
+    await db.table('items').insert({
+      ...original,
+      id: undefined,
+      name: 'bananas',
+      created_at: '2030-01-01 00:00:00',
+      updated_at: '2030-01-01 00:00:00',
+    })
 
     const recentNames = await auth(client.get(`/api/v1/lists/${listId}/items/recent-names`))
     recentNames.assertStatus(200)
@@ -1151,9 +1157,10 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     const listId = await createList(client, token)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
-    const created = (
-      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bread' }))
-    ).body().data as ItemDto
+    const createRes = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bread' })
+    )
+    const created = createRes.body().data as ItemDto
     await auth(client.patch(`/api/v1/lists/${listId}/items/${created.id}`).json({ checked: true }))
     await auth(client.delete(`/api/v1/lists/${listId}/items/${created.id}`))
 
@@ -1162,9 +1169,10 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     assert.equal(Number(row.checked), 0)
     assert.isNull(row.checked_at)
 
-    const readded = (
-      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: ' bread ' }))
-    ).body().data as ItemDto
+    const readdRes = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: ' bread ' })
+    )
+    const readded = readdRes.body().data as ItemDto
     assert.equal(
       readded.id,
       created.id,
@@ -1422,6 +1430,57 @@ test.group('Open item limit', (group) => {
       .header('Authorization', `Bearer ${token}`)
     restore.assertStatus(400)
     assert.equal(restore.body().code, 'unchecked_limit_reached')
+  })
+
+  test('bulk import reuses existing, checked and deleted items by name instead of duplicating', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const open = bodyData<ItemDto>(await addItem(client, token, listId, 'Milk'))
+    const checked = bodyData<ItemDto>(await addItem(client, token, listId, 'Bread'))
+    const removed = bodyData<ItemDto>(await addItem(client, token, listId, 'Beer'))
+    await auth(client.patch(`/api/v1/lists/${listId}/items/${checked.id}`).json({ checked: true }))
+    await auth(client.delete(`/api/v1/lists/${listId}/items/${removed.id}`))
+
+    const res = await auth(
+      client
+        .post(`/api/v1/lists/${listId}/items/import`)
+        .json({ text: 'milk\n bread \nBEER\nEggs\nEggs' })
+    )
+    res.assertStatus(200)
+    assert.sameMembers(
+      bodyData<ItemDto[]>(res).map((i) => i.id),
+      [open.id, checked.id, removed.id, bodyData<ItemDto[]>(res).find((i) => i.name === 'Eggs')!.id]
+    )
+
+    const all = bodyData<ItemDto[]>(await auth(client.get(`/api/v1/lists/${listId}/items`)))
+    assert.lengthOf(all, 4, 'no duplicates, and a repeated pasted name is created once')
+    assert.isTrue(
+      all.every((i) => !i.checked),
+      'checked and deleted matches come back open'
+    )
+  })
+
+  test('bulk import only counts lines that need a slot toward the open-item limit', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createLimitedList(client, token, 'Today', 2)
+    await addItem(client, token, listId, 'Milk')
+    await addItem(client, token, listId, 'Bread')
+
+    // Both lines already sit open, so nothing new is needed even though the list is full.
+    const res = await client
+      .post(`/api/v1/lists/${listId}/items/import`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ text: 'Milk\nBread' })
+    res.assertStatus(200)
+    assert.lengthOf(bodyData<ItemDto[]>(res), 2)
   })
 
   test('rejects a bulk import that would not fit, naming the remaining slots', async ({

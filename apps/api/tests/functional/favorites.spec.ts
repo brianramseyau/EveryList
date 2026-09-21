@@ -472,4 +472,40 @@ test.group('Favorites open item limit', (group) => {
     blocked.assertStatus(400)
     assert.equal(blocked.body().code, 'unchecked_limit_reached')
   })
+
+  test('adding a favorite whose item was deleted restores that item instead of duplicating', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = { Authorization: `Bearer ${token}` }
+
+    const item = bodyData<ItemDto>(
+      await client
+        .post(`/api/v1/lists/${listId}/items`)
+        .header('Authorization', auth.Authorization)
+        .json({ name: 'Bananas' })
+    )
+    const favorite = bodyData<FavoriteItemDto>(
+      await client
+        .post(`/api/v1/lists/${listId}/favorites`)
+        .header('Authorization', auth.Authorization)
+        .json({ name: 'bananas' })
+    )
+    await client
+      .delete(`/api/v1/lists/${listId}/items/${item.id}`)
+      .header('Authorization', auth.Authorization)
+
+    const added = await client
+      .post(`/api/v1/lists/${listId}/favorites/${favorite.id}/add-to-list`)
+      .header('Authorization', auth.Authorization)
+    added.assertStatus(200)
+    assert.equal(bodyData<ItemDto>(added).id, item.id)
+
+    const all = await client
+      .get(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', auth.Authorization)
+    assert.lengthOf(bodyData<ItemDto[]>(all), 1)
+  })
 })

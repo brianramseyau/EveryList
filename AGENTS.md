@@ -130,6 +130,12 @@ typed-and-submitted paths, since the frontend already funnels both through the s
 `apps/api/tests/functional/items.spec.ts`'s `"re-adding a deleted item's name restores its old
 row..."` test.
 
+**Follow-up (2026-09-21):** bulk import and favorite `addToList` never had this lookup and kept
+creating same-name duplicates (production had several). Every add-by-name path must now resolve
+through `findItemByName` in `apps/api/app/services/item_reuse.ts` (active row first, else most
+recently deleted; case-insensitive, trimmed). `store()`, bulk import, favorites and Alexa all do.
+`moveToList` still doesn't dedupe against the destination list. A new add path needs the same.
+
 If this resurfaces: check whether `store()`'s deleted-match lookup is still in place before
 assuming it's the same bug — a regression here would look identical to the original report (price/
 store/quantity/notes missing after re-adding a name).

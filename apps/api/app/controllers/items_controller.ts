@@ -18,6 +18,7 @@ import { matchCategoryIcon, titleCaseCategoryName } from '#services/category_bul
 import type { CategorizeSuggestionDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
 import { broadcastSync } from '#services/sync_broadcaster'
+import { findItemByName, nextSortOrder, restoreItemRow } from '#services/item_reuse'
 import {
   UNCHECKED_LIMIT_REACHED,
   hasCapacityFor,
@@ -46,36 +47,6 @@ async function resolveCategoryId(
   return suggestCategoryId(list, itemName)
 }
 
-/**
- * By default appends to the end of the list. Pass `respectInsertPosition` only
- * for user-initiated adds — a fresh create or `store()`'s restore-on-name-match, but not the
- * explicit restore endpoint, imports, or moves — when the
- * owning list's `insertPosition` is `'top'`, it instead returns a value below
- * the current minimum so the new item lands first. Takes the full `list` (every
- * call site already has one in hand via `ListPolicy.requireList` or similar) so
- * `insertPosition` is read off it directly rather than re-querying the row.
- */
-async function nextSortOrder(
-  list: List,
-  options?: { respectInsertPosition?: boolean }
-): Promise<number> {
-  if (options?.respectInsertPosition && list.insertPosition === 'top') {
-    const result = await Item.query()
-      .where('listId', list.id)
-      .whereNull('deletedAt')
-      .min('sort_order as minSortOrder')
-      .first()
-    return Number(result?.$extras.minSortOrder ?? 1) - 1
-  }
-
-  const result = await Item.query()
-    .where('listId', list.id)
-    .whereNull('deletedAt')
-    .max('sort_order as maxSortOrder')
-    .first()
-  return Number(result?.$extras.maxSortOrder ?? -1) + 1
-}
-
 // Mirrors apps/web/src/lib/item-sort-order.ts's computeMidpointSortOrder exactly: only the
 // moved item's own sortOrder ever changes, to a value strictly between its new neighbors'
 // *existing* sortOrder values (fractional indexing) — never a shared/derived index. No other
@@ -93,32 +64,6 @@ export function computeMidpointSortOrder(
   if (before === undefined) return after! - 1
   if (after === undefined) return before + 1
   return (before + after) / 2
-}
-
-/** Clears `deletedAt` on an existing row (vs. creating a fresh one) so its category/store/price/
- * quantity/notes survive — shared by the explicit restore endpoint and `store()`'s implicit
- * restore-on-name-match. `respectInsertPosition` is for the latter only: typing a deleted item's
- * name is a user-initiated add, so it follows the list's add-to-top setting like a fresh create;
- * the explicit restore endpoint (undo) keeps appending. */
-async function restoreItemRow(
-  list: List,
-  item: Item,
-  options?: { respectInsertPosition?: boolean }
-): Promise<void> {
-  item.deletedAt = null
-  item.checked = false
-  item.checkedAt = null
-  item.sortOrder = await nextSortOrder(list, options)
-  item.version += 1
-  await item.save()
-
-  await broadcastSync({
-    listId: list.id,
-    entityType: 'item',
-    entityId: item.id,
-    op: 'create',
-    version: item.version,
-  })
 }
 
 export default class ItemsController {
@@ -195,15 +140,11 @@ export default class ItemsController {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'editor')
     const payload = await request.validateUsing(createItemValidator)
-    const normalizedName = payload.name.trim().toLowerCase()
 
     logger.debug({ listId: list.id, name: payload.name }, 'item store requested')
 
-    const existing = await Item.query()
-      .where('listId', list.id)
-      .whereNull('deletedAt')
-      .whereRaw('LOWER(TRIM(name)) = ?', [normalizedName])
-      .first()
+    const match = await findItemByName(list, payload.name)
+    const existing = match && !match.deleted ? match.item : null
 
     if (existing) {
       if (existing.checked) {
@@ -242,12 +183,7 @@ export default class ItemsController {
     // No active match — re-adding a name that was deleted restores its old row (category, store,
     // price, quantity, notes intact) rather than silently creating a metadata-less duplicate. See
     // AGENTS.md's "Re-adding a deleted item's name" footgun.
-    const deletedMatch = await Item.query()
-      .where('listId', list.id)
-      .whereNotNull('deletedAt')
-      .whereRaw('LOWER(TRIM(name)) = ?', [normalizedName])
-      .orderBy('deletedAt', 'desc')
-      .first()
+    const deletedMatch = match?.deleted ? match.item : null
 
     if (deletedMatch) {
       // Restoring a soft-deleted row brings an invisible item back as unchecked —
@@ -323,13 +259,23 @@ export default class ItemsController {
       'item bulk import requested'
     )
 
-    // The import is atomic in spirit — every parsed line becomes an unchecked
-    // item — so it's gated as a whole rather than partially applied up to the
-    // cap. The message says how much would have fit.
-    const incomingCount = parsed.sections.reduce(
-      (total, section) => total + section.items.length,
-      0
-    )
+    // Every line resolves by name first (same as `store()`): an open item is left alone, a
+    // checked one is unchecked, a deleted one is restored, and only an unknown name is created —
+    // so re-importing a list never duplicates. Names repeated within the paste resolve once.
+    const matches = new Map<string, Awaited<ReturnType<typeof findItemByName>>>()
+    for (const section of parsed.sections) {
+      for (const parsedItem of section.items) {
+        const key = parsedItem.name.trim().toLowerCase()
+        if (!matches.has(key)) matches.set(key, await findItemByName(list, parsedItem.name))
+      }
+    }
+
+    // The import is atomic in spirit — every line ends up open — so it's gated as a whole
+    // rather than partially applied up to the cap. Only lines that add an open row count
+    // toward it (an already-open match takes no slot). The message says how much would have fit.
+    const incomingCount = [...matches.values()].filter(
+      (match) => match === null || match.deleted || match.item.checked
+    ).length
     const remaining = await remainingCapacity(list)
     if (remaining !== null && incomingCount > remaining) {
       return response.badRequest({
@@ -391,21 +337,46 @@ export default class ItemsController {
     for (const section of parsed.sections) {
       const sectionCategoryId = await resolveSectionCategory(section.header)
       for (const parsedItem of section.items) {
+        const key = parsedItem.name.trim().toLowerCase()
+        const match = matches.get(key)!
+        if (match) {
+          // Reuse the row as-is (its category/notes/price win over the pasted line's); an
+          // already-handled repeat within the paste is a no-op.
+          if (match.deleted) {
+            await restoreItemRow(list, match.item, { sortOrder: sortOrder++ })
+          } else if (match.item.checked) {
+            match.item.checked = false
+            match.item.checkedAt = null
+            match.item.version += 1
+            await match.item.save()
+            await broadcastSync({
+              listId: list.id,
+              entityType: 'item',
+              entityId: match.item.id,
+              op: 'update',
+              version: match.item.version,
+            })
+          }
+          if (!items.includes(match.item)) items.push(match.item)
+          matches.set(key, { item: match.item, deleted: false })
+          continue
+        }
+
         const categoryId = sectionCategoryId ?? (await suggestCategoryId(list, parsedItem.name))
-        items.push(
-          await Item.create({
-            listId: list.id,
-            name: parsedItem.name,
-            quantity: null,
-            notes: parsedItem.notes.length > 0 ? parsedItem.notes.join('\n').slice(0, 1000) : null,
-            categoryId,
-            price: parsedItem.price,
-            checked: false,
-            sortOrder: sortOrder++,
-            createdBy: user.id,
-            version: 1,
-          })
-        )
+        const created = await Item.create({
+          listId: list.id,
+          name: parsedItem.name,
+          quantity: null,
+          notes: parsedItem.notes.length > 0 ? parsedItem.notes.join('\n').slice(0, 1000) : null,
+          categoryId,
+          price: parsedItem.price,
+          checked: false,
+          sortOrder: sortOrder++,
+          createdBy: user.id,
+          version: 1,
+        })
+        items.push(created)
+        matches.set(key, { item: created, deleted: false })
         // Only a section header's category is an explicit assignment worth
         // teaching — items auto-categorized without a header are not.
         if (sectionCategoryId !== null) {
