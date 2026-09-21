@@ -6,18 +6,37 @@ vi.mock('@capacitor/core', () => ({
 
 // Partial-mock tokens so `createToken` is stubbed without dragging in the API
 // client (whose other exports this spec never touches).
-vi.mock('$lib/api/tokens', () => ({ createToken: vi.fn() }));
+vi.mock('$lib/api/tokens', () => ({
+	createToken: vi.fn(),
+	fetchTokens: vi.fn(),
+	updateToken: vi.fn(),
+	revokeToken: vi.fn()
+}));
 vi.mock('$lib/api/server-url', () => ({ getServerUrl: vi.fn() }));
 
 const { Capacitor } = await import('@capacitor/core');
 const isNativePlatform = vi.mocked(Capacitor.isNativePlatform);
 const registerPlugin = vi.mocked(Capacitor.registerPlugin);
-const { createToken } = await import('$lib/api/tokens');
+const { createToken, fetchTokens, updateToken, revokeToken } = await import('$lib/api/tokens');
 const { getServerUrl } = await import('$lib/api/server-url');
-const { configureWidget, WIDGET_TOKEN_NAME } = await import('./widget');
+const { configureWidget, currentWidgetListIds } = await import('./widget');
+const { widgetTokenName } = await import('./widget-token');
 
-function mockNativeClient(configure: ReturnType<typeof vi.fn>) {
-	const client = { configure };
+const NAME = widgetTokenName('abc123');
+const existingToken = {
+	id: 42,
+	name: NAME,
+	grants: [{ listId: 3, role: 'editor' as const }],
+	lastUsedAt: null,
+	expiresAt: null,
+	createdAt: new Date().toISOString()
+};
+
+function mockNativeClient(configure: ReturnType<typeof vi.fn>, hasToken = false) {
+	const client = {
+		configure,
+		status: vi.fn().mockResolvedValue({ deviceId: 'abc123', hasToken })
+	};
 	vi.mocked(registerPlugin).mockReturnValue(client as never);
 	return client;
 }
@@ -44,30 +63,77 @@ describe('widget', () => {
 		expect(createToken).not.toHaveBeenCalled();
 	});
 
-	it('mints a list-scoped widget PAT and hands it to the native plugin on native', async () => {
+	it('mints one device-named widget PAT the first time', async () => {
 		isNativePlatform.mockReturnValue(true);
 		vi.mocked(getServerUrl).mockReturnValue('https://everylist.example.com');
 		const configure = vi.fn().mockResolvedValue(undefined);
 		mockNativeClient(configure);
-		vi.mocked(createToken).mockResolvedValue({
-			id: 42,
-			name: WIDGET_TOKEN_NAME,
-			grants: [{ listId: 3, role: 'editor' }],
-			lastUsedAt: null,
-			expiresAt: null,
-			createdAt: new Date().toISOString(),
-			token: 'elt_widget123'
-		});
+		vi.mocked(fetchTokens).mockResolvedValue([]);
+		vi.mocked(createToken).mockResolvedValue({ ...existingToken, token: 'elt_widget123' });
 
-		const result = await configureWidget([3]);
-
-		expect(result).toBe(true);
-		expect(createToken).toHaveBeenCalledWith(WIDGET_TOKEN_NAME, [3], 'editor');
+		expect(await configureWidget([3])).toBe(true);
+		expect(createToken).toHaveBeenCalledWith(NAME, [3], 'editor');
 		expect(registerPlugin).toHaveBeenCalledWith('EveryListWidget');
 		expect(configure).toHaveBeenCalledWith({
 			token: 'elt_widget123',
 			listIds: [3],
 			serverUrl: 'https://everylist.example.com'
+		});
+	});
+
+	it('updates the existing PAT in place instead of minting another', async () => {
+		isNativePlatform.mockReturnValue(true);
+		vi.mocked(getServerUrl).mockReturnValue('https://everylist.example.com');
+		const configure = vi.fn().mockResolvedValue(undefined);
+		mockNativeClient(configure, true);
+		vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
+
+		expect(await configureWidget([3, 4])).toBe(true);
+		expect(createToken).not.toHaveBeenCalled();
+		expect(updateToken).toHaveBeenCalledWith(42, [3, 4], 'editor', NAME);
+		expect(configure).toHaveBeenCalledWith({
+			listIds: [3, 4],
+			serverUrl: 'https://everylist.example.com'
+		});
+	});
+
+	it('replaces a server token whose plaintext this device lost', async () => {
+		isNativePlatform.mockReturnValue(true);
+		vi.mocked(getServerUrl).mockReturnValue('https://everylist.example.com');
+		const configure = vi.fn().mockResolvedValue(undefined);
+		mockNativeClient(configure, false);
+		vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
+		vi.mocked(createToken).mockResolvedValue({ ...existingToken, token: 'elt_new' });
+
+		await configureWidget([3]);
+		expect(revokeToken).toHaveBeenCalledWith(42);
+		expect(createToken).toHaveBeenCalledWith(NAME, [3], 'editor');
+	});
+
+	describe('currentWidgetListIds', () => {
+		it('is empty on the web build', async () => {
+			isNativePlatform.mockReturnValue(false);
+			expect(await currentWidgetListIds()).toEqual([]);
+		});
+
+		it('is empty before the widget is set up', async () => {
+			isNativePlatform.mockReturnValue(true);
+			mockNativeClient(vi.fn(), false);
+			expect(await currentWidgetListIds()).toEqual([]);
+		});
+
+		it('returns the existing token grants', async () => {
+			isNativePlatform.mockReturnValue(true);
+			mockNativeClient(vi.fn(), true);
+			vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
+			expect(await currentWidgetListIds()).toEqual([3]);
+		});
+
+		it('is empty when the server has no matching token', async () => {
+			isNativePlatform.mockReturnValue(true);
+			mockNativeClient(vi.fn(), true);
+			vi.mocked(fetchTokens).mockResolvedValue([]);
+			expect(await currentWidgetListIds()).toEqual([]);
 		});
 	});
 });

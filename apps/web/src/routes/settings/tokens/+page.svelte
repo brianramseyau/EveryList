@@ -10,6 +10,7 @@
 	import { ApiError } from '$lib/api/client';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Loader from '$lib/components/Loader.svelte';
+	import { isManagedToken } from '$lib/widget-token';
 
 	let lists = $state<ListDto[]>([]);
 	let tokens = $state<AccessTokenDto[]>([]);
@@ -36,6 +37,11 @@
 	// lists are offered to pick from — an editor/viewer-only list would just
 	// 403 the whole request.
 	const ownedLists = $derived(lists.filter((list) => list.role === 'owner'));
+
+	// App-managed tokens (the Android widget's, one per device) are created and re-scoped from
+	// their own settings screen, so they're kept out of the user's own token list.
+	const userTokens = $derived(tokens.filter((token) => !isManagedToken(token.name)));
+	const managedTokens = $derived(tokens.filter((token) => isManagedToken(token.name)));
 
 	function listName(listId: number): string {
 		return lists.find((list) => list.id === listId)?.name ?? `List #${listId}`;
@@ -218,11 +224,11 @@
 
 		<section class="flex flex-col gap-2">
 			<h2 class="text-sm font-semibold">Active tokens</h2>
-			{#if tokens.length === 0}
+			{#if userTokens.length === 0}
 				<p class="text-sm text-gray-600 dark:text-gray-400">No tokens yet.</p>
 			{:else}
 				<ul class="flex flex-col gap-2">
-					{#each tokens as token (token.id)}
+					{#each userTokens as token (token.id)}
 						<li
 							class="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700"
 						>
@@ -314,5 +320,58 @@
 				</ul>
 			{/if}
 		</section>
+
+		{#if managedTokens.length > 0}
+			<section class="flex flex-col gap-2">
+				<h2 class="text-sm font-semibold">Managed</h2>
+				<p class="text-xs text-gray-600 dark:text-gray-400">
+					Created and kept up to date by the app itself — the Android widget's list access is
+					changed from Settings → Home-screen widget. Revoke one only to disconnect that device.
+				</p>
+				<ul class="flex flex-col gap-2">
+					{#each managedTokens as token (token.id)}
+						<li
+							class="flex items-center gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700"
+						>
+							<div class="flex flex-col">
+								<span>{token.name}</span>
+								<span class="text-xs text-gray-600 dark:text-gray-400">
+									{token.grants
+										.map((grant) => `${listName(grant.listId)} (${grant.role})`)
+										.join(', ')}
+								</span>
+							</div>
+							<div class="ml-auto flex items-center gap-2">
+								{#if confirmingRevokeId === token.id}
+									<span class="text-xs text-gray-600 dark:text-gray-400">Revoke this token?</span>
+									<button
+										type="button"
+										class="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+										onclick={() => handleRevoke(token)}
+									>
+										Revoke
+									</button>
+									<button
+										type="button"
+										class="text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+										onclick={() => (confirmingRevokeId = null)}
+									>
+										Cancel
+									</button>
+								{:else}
+									<button
+										type="button"
+										class="text-xs text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+										onclick={() => (confirmingRevokeId = token.id)}
+									>
+										Revoke
+									</button>
+								{/if}
+							</div>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
 	{/if}
 </main>

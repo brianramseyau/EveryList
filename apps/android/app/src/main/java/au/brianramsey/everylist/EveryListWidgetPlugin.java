@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -21,11 +22,26 @@ import java.util.List;
 @CapacitorPlugin(name = "EveryListWidget")
 public class EveryListWidgetPlugin extends Plugin {
 
+    /** Reports this install's stable device id and whether it already holds a PAT, so the web app
+     *  can update the widget's existing token instead of minting another. */
+    @PluginMethod
+    public void status(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("deviceId", WidgetPrefs.getDeviceId(getContext()));
+        result.put("hasToken", WidgetPrefs.hasGlobalCredentials(getContext()));
+        call.resolve(result);
+    }
+
     @PluginMethod
     public void configure(PluginCall call) {
         String token = call.getString("token");
         String serverUrl = call.getString("serverUrl");
         List<Long> listIds = parseListIds(call);
+        boolean hasNewToken = token != null && !token.isEmpty();
+        // No token = re-configuring: the PAT was updated in place server-side, keep the one we hold.
+        if (!hasNewToken && WidgetPrefs.hasGlobalCredentials(getContext())) {
+            token = WidgetPrefs.getGlobalToken(getContext());
+        }
         if (token == null || token.isEmpty() || serverUrl == null || serverUrl.isEmpty() || listIds.isEmpty()) {
             call.reject("token, serverUrl and a non-empty listIds array are required");
             return;

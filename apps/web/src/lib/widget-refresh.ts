@@ -1,11 +1,12 @@
 import { Capacitor } from '@capacitor/core';
-import type { WidgetConfigDto } from '@everylist/shared';
+import type { WidgetConfigDto, WidgetStatusDto } from '@everylist/shared';
 
 /** The native `EveryListWidget` Capacitor plugin's methods — the one definition both this module
  *  and `widget.ts` (the provisioning handoff) type against, so they can't drift apart.
  *  `configure` writes the PAT to the widget's private SharedPreferences rather than carrying it in
  *  a URL (an `everylist://widget-config` query string can surface in `dumpsys`/logcat). */
 export interface EveryListWidgetNative {
+	status(): Promise<WidgetStatusDto>;
 	configure(config: WidgetConfigDto): Promise<void>;
 	refresh(): Promise<void>;
 }

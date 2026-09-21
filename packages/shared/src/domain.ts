@@ -295,12 +295,22 @@ export interface HaLinkDto {
  *  a native widget can't read the WebView's IndexedDB offline cache, so it authenticates over
  *  HTTP with this bearer token instead. */
 export interface WidgetConfigDto {
-  /** The `elt_`-prefixed Personal Access Token the widget uses for `Authorization: Bearer`. */
-  token: string
+  /** The `elt_`-prefixed Personal Access Token the widget uses for `Authorization: Bearer`.
+   *  Omitted when re-configuring an already-provisioned widget (its existing PAT was updated in
+   *  place server-side, so the native side keeps the token it already holds). */
+  token?: string
   /** The list ids the token grants the widget — the user picks which one to display. */
   listIds: number[]
   /** The user-configured server origin (see `apps/web/src/lib/api/server-url.ts`). */
   serverUrl: string
+}
+
+/** What the native widget plugin reports about this device before (re)configuring. */
+export interface WidgetStatusDto {
+  /** A stable random id for this install, used to suffix the widget's PAT name. */
+  deviceId: string
+  /** Whether the widget already holds a PAT (and server URL) in private storage. */
+  hasToken: boolean
 }
 
 export type BackupFrequency = 'daily' | 'weekly' | 'monthly'

@@ -116,6 +116,25 @@ describe('Access Tokens +page.svelte', () => {
 		await expect.element(page.getByText('New token')).not.toBeInTheDocument();
 	});
 
+	it('lists app-managed tokens under Managed with revoke only', async () => {
+		vi.mocked(fetchTokens).mockResolvedValue([
+			token({ id: 5, name: 'Home Assistant' }),
+			token({ id: 6, name: 'Home-screen widget (abc123)' })
+		]);
+		vi.mocked(revokeToken).mockResolvedValue(undefined);
+		render(TokensPage);
+
+		await expect.element(page.getByRole('heading', { name: 'Managed' })).toBeInTheDocument();
+		await expect.element(page.getByText('Home-screen widget (abc123)')).toBeInTheDocument();
+
+		const managed = page.getByRole('listitem').filter({ hasText: 'Home-screen widget (abc123)' });
+		await managed.getByRole('button', { name: 'Revoke' }).click();
+		await managed.getByRole('button', { name: 'Cancel' }).click();
+		await managed.getByRole('button', { name: 'Revoke' }).click();
+		await managed.getByRole('button', { name: 'Revoke', exact: true }).first().click();
+		await expect.poll(() => vi.mocked(revokeToken).mock.calls.length).toBe(1);
+	});
+
 	it('still shows existing tokens even when the user currently owns no lists', async () => {
 		vi.mocked(fetchLists).mockResolvedValue([list({ role: 'editor' })]);
 		vi.mocked(fetchTokens).mockResolvedValue([token({ id: 5, name: 'Home Assistant' })]);
