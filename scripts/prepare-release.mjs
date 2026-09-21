@@ -1,32 +1,25 @@
 #!/usr/bin/env node
 /**
- * Updates every version marker for a release in one place, so
- * ha-addon/everylist/config.yaml and each workspace's package.json can't
+ * Updates every workspace package.json "version" for a release in one place, so they can't
  * drift out of sync with each other or with the release tag being cut.
  *
- * This replaces an earlier attempt to bump ha-addon/everylist/config.yaml
- * from CI on every stable tag (see .github/workflows/docker-publish.yml's
- * comment) - that job pushed straight to main, which main's pull_request-only
- * required status checks always reject, and routing it through a bot-authored
- * PR instead doesn't work either (GitHub suppresses the `pull_request` event
- * for anything created with the workflow's own GITHUB_TOKEN, so those checks
- * would never run and auto-merge would sit pending forever). A local script
- * run once per release, committed through the normal branch/PR flow, sidesteps
- * all of that.
+ * Deliberately does NOT touch ha-addon/everylist/config.yaml: that version is the exact GHCR
+ * image tag Supervisor pulls, so it may only move *after* the release image is published. It has
+ * its own script, scripts/release-addon.mjs (`pnpm release-addon`), run as the last step.
  *
- * Usage:
- *   git tag v1.5.0 && git push origin v1.5.0   # first - triggers docker-publish.yml
- *   # wait for that to finish, then, on a release branch (not main):
- *   node scripts/prepare-release.mjs v1.5.0
+ * Release order:
+ *   1. On a release branch (not main):  pnpm prepare-release v1.6.2
+ *      Commit, open a PR, merge it like any other change.
+ *   2. Tag the merge commit and push the tag - triggers docker-publish.yml and native-build.yml:
+ *      git tag v1.6.2 && git push origin v1.6.2
+ *   3. Once docker-publish.yml has finished:  pnpm release-addon v1.6.2  (see that script)
  *
- * Tag first, script second - deliberately. ha-addon/everylist/config.yaml's `version` is the
- * exact GHCR image tag Supervisor will pull, so it must never land on `main` ahead of that
- * image actually existing; bumping it only after `docker-publish.yml` has published the tag
- * closes that gap. Review the script's diff, then commit, push, open a PR, and merge it like
- * any other change.
+ * Bump before tagging so the tagged commit carries the right versions. Nothing in CI requires it
+ * (Docker takes its version from the tag, and native-build.yml injects the tag's version into
+ * apps/desktop before packaging), but apps/api's version is real: config/openapi.ts reads it for
+ * the OpenAPI document's info.version (/docs, /openapi). Don't blank these to 0.0.0.
  *
- * Stable releases only (no "-rc"/"-beta" suffix) - a prerelease tag is never what
- * config.yaml's `version` should point every add-on user's instance at.
+ * Stable releases only (no "-rc"/"-beta" suffix).
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -42,19 +35,6 @@ if (!tag || !/^v\d+\.\d+\.\d+$/.test(tag)) {
   process.exit(1)
 }
 const bareVersion = tag.slice(1)
-
-// Supervisor pulls this value verbatim as the Docker image tag to install, so it must keep
-// the "v" prefix - see the comment atop config.yaml. Single-quoted to match this repo's
-// prettier config (singleQuote: true, which `pnpm format` already enforces on this file).
-const configPath = path.join(repoRoot, 'ha-addon/everylist/config.yaml')
-const config = readFileSync(configPath, 'utf8')
-const versionLine = /^version: .*/m
-if (!versionLine.test(config)) {
-  console.error(`Could not find a "version:" line in ${configPath}`)
-  process.exit(1)
-}
-writeFileSync(configPath, config.replace(versionLine, `version: '${tag}'`))
-console.log(`Updated ${path.relative(repoRoot, configPath)} -> ${tag}`)
 
 // Every workspace's package.json "version" field - npm/electron-builder want a bare semver,
 // no "v" prefix. apps/desktop's is the one that actually matters functionally (it names the
@@ -81,5 +61,5 @@ for (const relPath of packageJsonPaths) {
 }
 
 console.log(
-  `\nDone. Also update ha-addon/everylist/CHANGELOG.md with a "${tag}" entry (not scripted - it's prose).\nThen review the diff, commit/PR/merge as usual.`
+  `\nDone. Review the diff, then commit/PR/merge, tag the merge commit, and (after docker-publish.yml finishes) run \`pnpm release-addon ${tag}\`.`
 )
