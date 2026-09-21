@@ -2,9 +2,13 @@ package au.brianramsey.everylist;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.provider.Settings;
 
 import org.json.JSONException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,6 +26,8 @@ final class WidgetPrefs {
     static final String GLOBAL_PREFS = "everylist_widget";
     private static final String KEY_TOKEN = "token";
     private static final String KEY_TOKEN_ID = "tokenId";
+    /** The constant some old emulators/OEM builds report for every device. */
+    private static final String BROKEN_ANDROID_ID = "9774d56d682e549c";
     private static final String KEY_DEVICE_ID = "deviceId";
     private static final String KEY_SERVER_URL = "serverUrl";
     private static final String KEY_LIST_IDS = "listIds";
@@ -60,15 +66,36 @@ final class WidgetPrefs {
             .apply();
     }
 
-    /** A random id, generated on first use and kept for the life of the install. */
+    /** The widget PAT's per-device name suffix, fixed the first time it's asked for and kept in prefs
+     *  so the token's name never changes under an install (an upgrade keeps its existing id, and a
+     *  later unusable {@code ANDROID_ID} can't flip it back). The first choice is derived from
+     *  {@code ANDROID_ID} — scoped to this app's signing key, so it survives Clear storage and
+     *  reinstall, and a returning device recomputes the same suffix, finds its own old token by name
+     *  and replaces it rather than orphaning it. It's hashed so the raw id never leaves the device.
+     *  Falls back to a random id where {@code ANDROID_ID} is missing or the well-known bad value. */
     static String getDeviceId(Context context) {
         SharedPreferences g = global(context);
         String id = g.getString(KEY_DEVICE_ID, null);
         if (id == null) {
-            id = java.util.UUID.randomUUID().toString().substring(0, 8);
+            id = deriveDeviceId(context);
+            if (id == null) id = java.util.UUID.randomUUID().toString().substring(0, 8);
             g.edit().putString(KEY_DEVICE_ID, id).apply();
         }
         return id;
+    }
+
+    private static String deriveDeviceId(Context context) {
+        String androidId = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
+        if (androidId == null || androidId.isEmpty() || BROKEN_ANDROID_ID.equals(androidId)) return null;
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                .digest((context.getPackageName() + ":" + androidId).getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < 4; i++) hex.append(String.format("%02x", digest[i]));
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            return null; // SHA-256 is mandatory on every JVM; the random fallback covers it anyway
+        }
     }
 
     static boolean hasGlobalCredentials(Context context) {
