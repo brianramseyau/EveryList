@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // client.ts's only dependency on storage is this module — faking it here
 // keeps these tests focused on apiFetch's own logic (headers, envelope
@@ -14,6 +14,9 @@ vi.mock('./token', () => ({
 		fakeToken = null;
 	}
 }));
+
+const refreshWidget = vi.fn();
+vi.mock('../widget-refresh', () => ({ refreshWidget: () => refreshWidget() }));
 
 let fakeServerUrl = '';
 vi.mock('./server-url', () => ({
@@ -258,5 +261,55 @@ describe('apiGet/apiPost/apiPatch/apiDelete', () => {
 		await expect(apiDelete('/api/v1/lists/1')).resolves.toBeUndefined();
 		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 		expect(init.method).toBe('DELETE');
+	});
+});
+
+describe('apiFetch widget refresh', () => {
+	beforeEach(() => {
+		refreshWidget.mockClear();
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	function stubOk(): void {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { data: {} })));
+	}
+
+	it('refreshes the widget after a successful write', async () => {
+		stubOk();
+		await apiFetch('/x', { method: 'PATCH' });
+		expect(refreshWidget).toHaveBeenCalledTimes(1);
+	});
+
+	it('treats the method case-insensitively', async () => {
+		stubOk();
+		await apiFetch('/x', { method: 'patch' });
+		expect(refreshWidget).toHaveBeenCalledTimes(1);
+	});
+
+	it('refreshes the widget after a successful 204 write', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({ ok: true, status: 204, json: vi.fn() } as unknown as Response)
+		);
+		await apiFetch('/x', { method: 'DELETE' });
+		expect(refreshWidget).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not refresh the widget after a read', async () => {
+		stubOk();
+		await apiFetch('/x');
+		await apiFetch('/x', { method: 'GET' });
+		await apiFetch('/x', { method: 'get' });
+		await apiFetch('/x', { method: 'HEAD' });
+		expect(refreshWidget).not.toHaveBeenCalled();
+	});
+
+	it('does not refresh the widget when the write fails', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(500, { message: 'no' })));
+		await expect(apiFetch('/x', { method: 'POST' })).rejects.toBeInstanceOf(ApiError);
+		expect(refreshWidget).not.toHaveBeenCalled();
 	});
 });

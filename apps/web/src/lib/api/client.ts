@@ -1,5 +1,6 @@
 import { apiBaseUrl } from './base-url';
 import { clearToken, getToken } from './token';
+import { refreshWidget } from '../widget-refresh';
 
 export class ApiError extends Error {
 	status: number;
@@ -61,6 +62,9 @@ export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}
 		const body = await parseErrorBody(response);
 		throw new ApiError(response.status, extractErrorMessage(body, response.status), body);
 	}
+
+	// A write reached the server — let the home-screen widget pick it up (no-op off Android).
+	if (init.method && !['GET', 'HEAD'].includes(init.method.toUpperCase())) refreshWidget();
 
 	if (response.status === 204) return undefined as T;
 
