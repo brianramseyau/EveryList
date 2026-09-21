@@ -6,7 +6,7 @@ import { DateTime } from 'luxon'
 import logger from '@adonisjs/core/services/logger'
 import { suggestCategoryId } from '#services/category_suggestion_service'
 import { broadcastSync } from '#services/sync_broadcaster'
-import { findItemByName } from '#services/item_reuse'
+import { findItemByName, nextSortOrder, restoreItemRow } from '#services/item_reuse'
 import { countOpenSubtasks, subtasksIncompleteMessage } from '#services/subtask_completion'
 import { closestMatch } from '#services/alexa/fuzzy_match'
 import { resolveList, roleFor, setDefaultList } from '#services/alexa/list_resolution'
@@ -45,27 +45,6 @@ function toTitleCase(name: string): string {
     .split(' ')
     .map((word) => word[0]!.toUpperCase() + word.slice(1).toLowerCase())
     .join(' ')
-}
-
-// Mirrors items_controller.ts's own private copy — see that file's comment on
-// why this five-line helper isn't shared through packages/shared. Honors the list's
-// `insertPosition` like a user-initiated add there: 'top' lands below the current minimum.
-async function nextSortOrder(list: List): Promise<number> {
-  if (list.insertPosition === 'top') {
-    const result = await Item.query()
-      .where('listId', list.id)
-      .whereNull('deletedAt')
-      .min('sort_order as minSortOrder')
-      .first()
-    return Number(result?.$extras.minSortOrder ?? 1) - 1
-  }
-
-  const result = await Item.query()
-    .where('listId', list.id)
-    .whereNull('deletedAt')
-    .max('sort_order as maxSortOrder')
-    .first()
-  return Number(result?.$extras.maxSortOrder ?? -1) + 1
 }
 
 async function activeItems(listId: number): Promise<Item[]> {
@@ -211,20 +190,8 @@ export async function handleAddItem(
     if (!(await hasCapacityFor(list))) {
       return respond(say(limitReachedMessage(list)), list)
     }
-    deletedMatch.deletedAt = null
-    deletedMatch.checked = false
-    deletedMatch.checkedAt = null
-    deletedMatch.sortOrder = await nextSortOrder(list)
-    deletedMatch.version += 1
-    await deletedMatch.save()
-
-    await broadcastSync({
-      listId: list.id,
-      entityType: 'item',
-      entityId: deletedMatch.id,
-      op: 'create',
-      version: deletedMatch.version,
-    })
+    // Alexa is a user-initiated add, so it follows the list's add-to-top setting.
+    await restoreItemRow(list, deletedMatch, { respectInsertPosition: true })
     return respond(say(`Added ${deletedMatch.name} to ${list.name}.`), list)
   }
 
@@ -242,7 +209,7 @@ export async function handleAddItem(
     storeId: null,
     price: null,
     checked: false,
-    sortOrder: await nextSortOrder(list),
+    sortOrder: await nextSortOrder(list, { respectInsertPosition: true }),
     createdBy: Number(token.tokenableId),
     version: 1,
   })
