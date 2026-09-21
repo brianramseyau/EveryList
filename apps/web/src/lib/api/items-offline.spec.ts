@@ -332,6 +332,85 @@ describe('updateItem (Dexie available)', () => {
 		expect(cached?.checkedAt).not.toBeNull();
 	});
 
+	describe('repeat rule', () => {
+		const rule = {
+			interval: 1,
+			unit: 'week' as const,
+			weekdays: [1],
+			monthly: null,
+			startDate: '2026-09-14',
+			end: { type: 'never' as const }
+		};
+		const baseRow = {
+			id: 5,
+			listId: 1,
+			name: 'Bins',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			deadline: '2026-09-14',
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 3
+		};
+
+		it('caches a new rule with placeholder series bookkeeping and sends the bare rule', async () => {
+			const db = getDb()!;
+			await db.items.put(baseRow);
+			vi.mocked(apiPatch).mockRejectedValue(new Error('offline'));
+
+			await updateItem(1, 5, { recurrence: rule }).catch(() => {});
+
+			expect(apiPatch).toHaveBeenCalledWith('/api/v1/lists/1/items/5', { recurrence: rule });
+			expect((await db.items.get(5))?.recurrence).toEqual({ ...rule, id: 0, occurrence: 1 });
+		});
+
+		it('keeps the stored series id and occurrence when the rule is edited', async () => {
+			const db = getDb()!;
+			await db.items.put({
+				...baseRow,
+				recurrence: { ...rule, id: 9, occurrence: 4 }
+			});
+			vi.mocked(apiPatch).mockRejectedValue(new Error('offline'));
+
+			await updateItem(1, 5, { recurrence: { ...rule, interval: 2 } }).catch(() => {});
+
+			expect((await db.items.get(5))?.recurrence).toEqual({
+				...rule,
+				interval: 2,
+				id: 9,
+				occurrence: 4
+			});
+		});
+
+		it('clears the cached rule when repeating is stopped', async () => {
+			const db = getDb()!;
+			await db.items.put({ ...baseRow, recurrence: { ...rule, id: 9, occurrence: 4 } });
+			vi.mocked(apiPatch).mockRejectedValue(new Error('offline'));
+
+			await updateItem(1, 5, { recurrence: null }).catch(() => {});
+
+			expect((await db.items.get(5))?.recurrence).toBeNull();
+		});
+
+		it('leaves the cached rule alone for an unrelated change', async () => {
+			const db = getDb()!;
+			await db.items.put({ ...baseRow, recurrence: { ...rule, id: 9, occurrence: 4 } });
+			vi.mocked(apiPatch).mockRejectedValue(new Error('offline'));
+
+			await updateItem(1, 5, { notes: 'x' }).catch(() => {});
+
+			expect((await db.items.get(5))?.recurrence).toEqual({ ...rule, id: 9, occurrence: 4 });
+		});
+	});
+
 	it('clears checkedAt when unchecking', async () => {
 		const db = getDb()!;
 		await db.items.put({

@@ -17,6 +17,14 @@ import { parseBulkImport } from '#services/bulk_import_parser'
 import { matchCategoryIcon, titleCaseCategoryName } from '#services/category_bulk_import'
 import type { CategorizeSuggestionDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
+import db from '@adonisjs/lucid/services/db'
+import { todayLocalIso } from '#services/deadline_notification_service'
+import {
+  nextDueDate,
+  ruleFromPayload,
+  spawnNextItem,
+  upsertRecurrence,
+} from '#services/item_recurrence_service'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { findItemByName, nextSortOrder, restoreItemRow } from '#services/item_reuse'
 import {
@@ -76,6 +84,7 @@ export default class ItemsController {
       .where('listId', list.id)
       .whereNull('deletedAt')
       .preload('subItems', (subItemsQuery) => subItemsQuery.orderBy('sortOrder', 'asc'))
+      .preload('recurrence')
     if (!includeChecked) query.where('checked', false)
 
     const items = await query.orderBy('sortOrder', 'asc')
@@ -214,6 +223,16 @@ export default class ItemsController {
       })
     }
 
+    let recurrenceRule = null
+    if (payload.recurrence) {
+      const parsed = ruleFromPayload(payload.recurrence)
+      if ('problem' in parsed) return response.unprocessableEntity({ message: parsed.problem })
+      if (!payload.deadline) {
+        return response.unprocessableEntity({ message: 'A repeating item needs a deadline.' })
+      }
+      recurrenceRule = parsed.rule
+    }
+
     const item = await Item.create({
       listId: list.id,
       name: payload.name,
@@ -228,6 +247,12 @@ export default class ItemsController {
       createdBy: user.id,
       version: 1,
     })
+
+    if (recurrenceRule) {
+      await upsertRecurrence(item, recurrenceRule)
+      await item.save()
+      await item.load('recurrence')
+    }
 
     // Only an *explicit* category choice teaches the model — never the
     // auto-suggestion itself (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md's self-reinforcement guard).
@@ -408,7 +433,7 @@ export default class ItemsController {
       .firstOrFail()
 
     const payload = await request.validateUsing(updateItemValidator)
-    const { checked, expectedVersion, ...rest } = payload
+    const { checked, expectedVersion, recurrence, ...rest } = payload
 
     if (hasVersionConflict(item, expectedVersion)) {
       reportVersionConflict(request, logger, {
@@ -450,13 +475,46 @@ export default class ItemsController {
 
     const previousCategoryId = item.categoryId
     const previousDeadline = item.deadline
+    const wasChecked = item.checked
     item.merge(rest)
     if (checked !== undefined) {
       item.checked = checked
       item.checkedAt = checked ? DateTime.now() : null
     }
+
+    // Repeat rule (PLAN_30_PHASE_RECURRING_ITEMS.md): a rule needs a deadline to repeat from, and
+    // clearing the deadline stops the repeat. `null` stops repeating (this item only — older
+    // checked siblings keep the series as history).
+    let recurrenceRule = null
+    if (recurrence) {
+      const parsed = ruleFromPayload(recurrence)
+      if ('problem' in parsed) return response.unprocessableEntity({ message: parsed.problem })
+      if (!item.deadline) {
+        return response.unprocessableEntity({ message: 'A repeating item needs a deadline.' })
+      }
+      recurrenceRule = parsed.rule
+    }
+    if (recurrence === null || !item.deadline) item.recurrenceId = null
+
     item.version += 1
-    await item.save()
+    if (recurrenceRule) await upsertRecurrence(item, recurrenceRule)
+
+    // Checking off a repeating item spawns the next one — saved together with the checked row so
+    // a failure can't leave a completed item with no successor.
+    const nextDate =
+      checked === true && !wasChecked
+        ? await nextDueDate(item, todayLocalIso(DateTime.now()))
+        : null
+    let spawned: Item | null = null
+    if (nextDate) {
+      const sortOrder = await nextSortOrder(list, { respectInsertPosition: true })
+      spawned = await db.transaction(async (trx) => {
+        await item.useTransaction(trx).save()
+        return spawnNextItem(item, nextDate, sortOrder, trx)
+      })
+    } else {
+      await item.save()
+    }
 
     // A changed deadline can re-fire a notification that already sent for the
     // old one — see PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md.
@@ -479,8 +537,19 @@ export default class ItemsController {
       version: item.version,
     })
 
+    if (spawned) {
+      await broadcastSync({
+        listId: list.id,
+        entityType: 'item',
+        entityId: spawned.id,
+        op: 'create',
+        version: spawned.version,
+      })
+    }
+
     logger.debug({ listId: list.id, itemId: item.id, version: item.version }, 'item updated')
 
+    await item.load('recurrence')
     return serialize(ItemTransformer.transform(item))
   }
 

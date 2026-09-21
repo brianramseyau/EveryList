@@ -1,3 +1,5 @@
+import type { RecurrenceDto } from './recurrence.js'
+
 /** Mirrors the field picks in apps/api's transformers — see PLAN_00_FOUNDATIONAL_PLAN.md §7-8. */
 
 export interface ListDto {
@@ -98,6 +100,10 @@ export interface ItemDto {
    *  seconds, no timezone). Null = no deadline. Only edited/shown on lists
    *  whose useDeadline flag is on. See PLAN_24_PHASE_ITEM_DEADLINES.md. */
   deadline: string | null
+  /** Repeat rule shared by every item in this item's series — null when the item doesn't
+   *  repeat. Present only when the fetch preloaded it (a single-item mutation response
+   *  carries it too). See PLAN_30_PHASE_RECURRING_ITEMS.md. */
+  recurrence?: RecurrenceDto | null
   checked: boolean
   checkedAt: string | null
   sortOrder: number

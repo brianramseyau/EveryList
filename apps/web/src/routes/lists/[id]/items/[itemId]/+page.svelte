@@ -15,6 +15,8 @@
 	import { ApiError } from '$lib/api/client';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
 	import { splitDeadline } from '$lib/deadline';
+	import { ruleFromDto, snapDeadlineDate } from '$lib/recurrence';
+	import { recurrenceRuleProblem, type RecurrenceRule } from '@everylist/shared';
 	import {
 		getDeadlineNotificationsPreference,
 		resyncDeadlineNotifications
@@ -73,6 +75,9 @@
 	// API's single 'YYYY-MM-DD[THH:mm]' string.
 	let draftDeadlineDate = $state('');
 	let draftDeadlineTime = $state('');
+	// PLAN_30: the repeat rule (null = doesn't repeat) — the same shape the API takes, so it can
+	// be sent as-is; the stored series id/occurrence are the server's business.
+	let draftRecurrence = $state<RecurrenceRule | null>(null);
 
 	// Snapshot of the draft fields as loaded, for the dirty check below —
 	// plain (non-reactive) since it's only written once, right after the
@@ -86,6 +91,7 @@
 		storeId: number | null;
 		deadlineDate: string;
 		deadlineTime: string;
+		recurrence: string;
 	} | null = null;
 	let saved = $state(false);
 	// Opened when this page is reached via the deadline notification's "Reschedule" action
@@ -129,7 +135,8 @@
 			draftCategoryId !== original.categoryId ||
 			draftStoreId !== original.storeId ||
 			draftDeadlineDate !== original.deadlineDate ||
-			draftDeadlineTime !== original.deadlineTime
+			draftDeadlineTime !== original.deadlineTime ||
+			JSON.stringify(draftRecurrence) !== original.recurrence
 		);
 	});
 
@@ -189,6 +196,7 @@
 				const deadline = item.deadline ? splitDeadline(item.deadline) : null;
 				draftDeadlineDate = deadline?.date ?? '';
 				draftDeadlineTime = deadline?.time ?? '';
+				draftRecurrence = item.recurrence ? ruleFromDto(item.recurrence) : null;
 				originalDraft = {
 					name: draftName,
 					quantity: draftQuantity,
@@ -197,7 +205,8 @@
 					categoryId: draftCategoryId,
 					storeId: draftStoreId,
 					deadlineDate: draftDeadlineDate,
-					deadlineTime: draftDeadlineTime
+					deadlineTime: draftDeadlineTime,
+					recurrence: JSON.stringify(draftRecurrence)
 				};
 				error = null;
 			} else {
@@ -263,6 +272,21 @@
 		const price = trimmedPrice === '' ? null : Math.round(Number(trimmedPrice) * 100);
 		if (price !== null && !Number.isFinite(price)) return;
 
+		// A repeating item lands on its rule's grid (a weekly-on-Monday rule can't leave it due on a
+		// Thursday). The API needs a deadline to repeat from, so a rule without a date is dropped.
+		const recurrence = draftDeadlineDate ? draftRecurrence : null;
+		if (recurrence) {
+			const problem = recurrenceRuleProblem(recurrence);
+			if (problem) {
+				error = problem;
+				return;
+			}
+		}
+		const deadlineDate =
+			recurrence && draftDeadlineDate
+				? snapDeadlineDate(recurrence, draftDeadlineDate)
+				: draftDeadlineDate;
+
 		saving = true;
 		try {
 			await updateItem(listId, itemId, {
@@ -275,11 +299,13 @@
 				// Time requires a date — ItemFields clears the time draft when the
 				// date is cleared, but the guard here makes the invariant hold even
 				// if that ever regresses.
-				deadline: draftDeadlineDate
+				deadline: deadlineDate
 					? draftDeadlineTime
-						? `${draftDeadlineDate}T${draftDeadlineTime}`
-						: draftDeadlineDate
-					: null
+						? `${deadlineDate}T${draftDeadlineTime}`
+						: deadlineDate
+					: null,
+				// Only sent when it changed, so an unrelated edit can't touch the shared series.
+				...(JSON.stringify(recurrence) !== originalDraft?.recurrence ? { recurrence } : {})
 			});
 			// A deadline set/changed/cleared here otherwise sits unreflected in the native/Electron
 			// local schedule until the app's next launch, resume, or 5-minute tick (+layout.svelte's
@@ -421,6 +447,7 @@
 				bind:notes={draftNotes}
 				bind:deadlineDate={draftDeadlineDate}
 				bind:deadlineTime={draftDeadlineTime}
+				bind:recurrence={draftRecurrence}
 				autofocusName={false}
 				{categories}
 				{stores}
@@ -429,6 +456,7 @@
 				showPrice={list?.usePrice !== false}
 				showStore={list?.useShops !== false}
 				showDeadline={list?.useDeadline === true}
+				showRecurrence={list?.useDeadline === true}
 			/>
 		</form>
 

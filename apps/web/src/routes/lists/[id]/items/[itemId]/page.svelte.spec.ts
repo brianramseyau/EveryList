@@ -539,6 +539,179 @@ describe('Item detail +page.svelte', () => {
 		);
 	});
 
+	it('only offers the repeat editor once a date is set', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bins' }));
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+
+		render(ItemDetailPage);
+
+		const repeat = page.getByRole('checkbox', { name: 'Repeat', exact: true });
+		await expect.element(repeat).not.toBeInTheDocument();
+		await page.getByLabelText('Required by (optional)').fill('2026-09-11');
+		await expect.element(repeat).toBeInTheDocument();
+	});
+
+	it('saves a repeat rule and snaps the deadline onto its grid', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bins' }));
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		// 2026-09-10 is a Thursday; the rule below is Mondays only, so the deadline moves to Sep 14.
+		await page.getByLabelText('Required by (optional)').fill('2026-09-10');
+		await page.getByRole('checkbox', { name: 'Repeat', exact: true }).click();
+		await page.getByRole('button', { name: 'Monday' }).click();
+		await page.getByRole('button', { name: 'Thursday' }).click();
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(
+			1,
+			100,
+			expect.objectContaining({
+				deadline: '2026-09-14',
+				recurrence: expect.objectContaining({
+					unit: 'week',
+					weekdays: [1],
+					startDate: '2026-09-10'
+				})
+			})
+		);
+	});
+
+	it('keeps the time of day on a repeating deadline', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bins' }));
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await page.getByLabelText('Required by (optional)').fill('2026-09-11');
+		await page.getByLabelText('Time (optional)').fill('07:45');
+		await page.getByRole('checkbox', { name: 'Repeat', exact: true }).click();
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(
+			1,
+			100,
+			expect.objectContaining({ deadline: '2026-09-11T07:45' })
+		);
+	});
+
+	it('pre-fills an existing repeat rule and does not resend it when unchanged', async () => {
+		const db = getDb()!;
+		await db.items.put(
+			makeItem({
+				id: 100,
+				name: 'Bins',
+				deadline: '2026-09-11',
+				recurrence: {
+					id: 7,
+					occurrence: 3,
+					interval: 2,
+					unit: 'week',
+					weekdays: [5],
+					monthly: null,
+					startDate: '2026-08-28',
+					end: { type: 'never' }
+				}
+			})
+		);
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Repeat every')).toHaveValue(2);
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		const [, , body] = vi.mocked(updateItem).mock.calls[0]!;
+		expect(body).not.toHaveProperty('recurrence');
+	});
+
+	it('sends null to stop repeating', async () => {
+		const db = getDb()!;
+		await db.items.put(
+			makeItem({
+				id: 100,
+				name: 'Bins',
+				deadline: '2026-09-11',
+				recurrence: {
+					id: 7,
+					occurrence: 1,
+					interval: 1,
+					unit: 'day',
+					weekdays: [],
+					monthly: null,
+					startDate: '2026-09-11',
+					end: { type: 'never' }
+				}
+			})
+		);
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await page.getByRole('checkbox', { name: 'Repeat', exact: true }).click();
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(
+			1,
+			100,
+			expect.objectContaining({ deadline: '2026-09-11', recurrence: null })
+		);
+	});
+
+	it('drops the repeat when the date is cleared', async () => {
+		const db = getDb()!;
+		await db.items.put(
+			makeItem({
+				id: 100,
+				name: 'Bins',
+				deadline: '2026-09-11',
+				recurrence: {
+					id: 7,
+					occurrence: 1,
+					interval: 1,
+					unit: 'day',
+					weekdays: [],
+					monthly: null,
+					startDate: '2026-09-11',
+					end: { type: 'never' }
+				}
+			})
+		);
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await page.getByLabelText('Required by (optional)').fill('');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(
+			1,
+			100,
+			expect.objectContaining({ deadline: null, recurrence: null })
+		);
+	});
+
+	it('shows an invalid repeat rule instead of saving it', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bins', deadline: '2026-09-11' }));
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+
+		render(ItemDetailPage);
+		await page.getByRole('checkbox', { name: 'Repeat', exact: true }).click();
+		await page.getByLabelText('Ends').selectOptions('on');
+		await page.getByLabelText('End date').fill('2026-09-01');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		await expect
+			.element(page.getByText('The end date cannot be before the start date').first())
+			.toBeInTheDocument();
+		expect(updateItem).not.toHaveBeenCalled();
+	});
+
 	it('clears the time when the deadline date is cleared, and saves null', async () => {
 		const db = getDb()!;
 		await db.items.put(makeItem({ id: 100, name: 'Bananas', deadline: '2026-09-11T17:30' }));

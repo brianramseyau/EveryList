@@ -4,12 +4,14 @@ import { DateTime } from 'luxon'
 import User from '#models/user'
 import List from '#models/list'
 import Item from '#models/item'
+import ItemRecurrence from '#models/item_recurrence'
 import SyncEvent from '#models/sync_event'
 import {
   DELETED_ITEM_RETENTION_DAYS,
   SYNC_EVENT_RETENTION_DAYS,
   pruneExpiredDeletedItems,
   pruneExpiredSyncEvents,
+  pruneOrphanRecurrences,
   runPruneSweep,
 } from '#services/prune_service'
 
@@ -273,5 +275,53 @@ test.group('runPruneSweep', (group) => {
 
     assert.equal(result.purgedItems, 1)
     assert.equal(result.purgedSyncEvents, 1)
+    assert.equal(result.purgedRecurrences, 0)
+  })
+})
+
+test.group('pruneOrphanRecurrences', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('deletes series no item references and keeps referenced ones', async ({ assert }) => {
+    const user = await User.create({
+      fullName: 'Ada Lovelace',
+      email: 'prune-recurrence@example.com',
+      password: 'password123',
+    })
+    const list = await List.create({ name: 'Chores', ownerId: user.id })
+    const series = () => ({
+      interval: 1,
+      unit: 'day',
+      weekdays: '[]',
+      startDate: '2026-01-01',
+      endType: 'never',
+      occurrencesCreated: 1,
+    })
+    const kept = await ItemRecurrence.create(series())
+    await ItemRecurrence.create(series())
+    await Item.create({
+      listId: list.id,
+      name: 'Bins',
+      categoryId: null,
+      checked: true,
+      sortOrder: 0,
+      createdBy: user.id,
+      version: 1,
+      recurrenceId: kept.id,
+    })
+
+    const result = await pruneOrphanRecurrences()
+
+    assert.equal(result.purged, 1)
+    const remaining = await ItemRecurrence.all()
+    assert.deepEqual(
+      remaining.map((row) => row.id),
+      [kept.id]
+    )
+  })
+
+  test('does nothing when every series is still referenced', async ({ assert }) => {
+    const result = await pruneOrphanRecurrences()
+    assert.equal(result.purged, 0)
   })
 })

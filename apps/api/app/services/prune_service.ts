@@ -1,5 +1,6 @@
 import Item from '#models/item'
 import SyncEvent from '#models/sync_event'
+import ItemRecurrence from '#models/item_recurrence'
 import { DateTime } from 'luxon'
 import logger from '@adonisjs/core/services/logger'
 
@@ -135,15 +136,36 @@ export async function pruneExpiredSyncEvents(
 }
 
 /**
+ * Deletes repeat series (`item_recurrences`) that no item references any more — every item in
+ * the series has been purged. Series with even one remaining item (open or checked history) are
+ * kept: `items.recurrence_id` is `ON DELETE SET NULL`, so this can never orphan an item.
+ */
+export async function pruneOrphanRecurrences(): Promise<{ purged: number }> {
+  const [count] = await ItemRecurrence.query()
+    .whereNotExists((query) =>
+      query.from('items').whereColumn('items.recurrence_id', 'item_recurrences.id')
+    )
+    .delete()
+  if (count > 0) logger.info({ purged: count }, 'orphaned recurrence prune completed')
+  return { purged: count }
+}
+
+/**
  * Runs every retention sweep the app maintains — the scheduler's single entry
  * point, so a new table only needs a new `prune*` function wired in here.
- * Sequential (not Promise.all) because both sweeps write to the same single
+ * Sequential (not Promise.all) because the sweeps write to the same single
  * SQLite file.
  */
 export async function runPruneSweep(
   now: DateTime = DateTime.now()
-): Promise<{ purgedItems: number; purgedSyncEvents: number }> {
+): Promise<{ purgedItems: number; purgedSyncEvents: number; purgedRecurrences: number }> {
   const items = await pruneExpiredDeletedItems(now)
   const syncEvents = await pruneExpiredSyncEvents(now)
-  return { purgedItems: items.purged, purgedSyncEvents: syncEvents.purged }
+  // After the item sweep: purging a series' last item is what makes its row an orphan.
+  const recurrences = await pruneOrphanRecurrences()
+  return {
+    purgedItems: items.purged,
+    purgedSyncEvents: syncEvents.purged,
+    purgedRecurrences: recurrences.purged,
+  }
 }

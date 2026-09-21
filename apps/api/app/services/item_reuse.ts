@@ -16,6 +16,9 @@ export async function findItemByName(
     .where('listId', list.id)
     .whereNull('deletedAt')
     .whereRaw('LOWER(TRIM(name)) = ?', [normalized])
+    // A recurring item's checked history rows share its name with the open copy — prefer the
+    // open one so a name-based add never "reactivates" history (PLAN_30_PHASE_RECURRING_ITEMS.md).
+    .orderBy('checked', 'asc')
     .first()
   if (active) return { item: active, deleted: false }
 

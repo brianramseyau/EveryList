@@ -44,6 +44,7 @@
 	import { computeMidpointSortOrder, sortItemsWithinBucket } from '$lib/item-sort-order';
 	import { isAtLimit, uncheckedCount } from '$lib/unchecked-limit';
 	import { deadlineChip } from '$lib/deadline';
+	import { formatRecurrence, ruleFromDto } from '$lib/recurrence';
 	import { swipeReveal } from '$lib/actions/swipe-reveal';
 	import { splitTextWithLinks } from '$lib/linkify';
 	import Icon from '$lib/components/Icon.svelte';
@@ -1724,17 +1725,30 @@
 													</div>
 													{#if list?.useDeadline === true && item.deadline}
 														{@const chip = deadlineChip(item.deadline)}
-														<span
-															class="text-xs font-medium"
-															class:text-red-600={chip.overdue}
-															class:dark:text-red-400={chip.overdue}
-															class:text-amber-600={chip.dueToday}
-															class:dark:text-amber-400={chip.dueToday}
-															class:text-gray-500={!chip.overdue && !chip.dueToday}
-															class:dark:text-gray-400={!chip.overdue && !chip.dueToday}
-														>
-															{chip.label}
-														</span>
+														<div class="flex items-center gap-1">
+															<span
+																class="text-xs font-medium"
+																class:text-red-600={chip.overdue}
+																class:dark:text-red-400={chip.overdue}
+																class:text-amber-600={chip.dueToday}
+																class:dark:text-amber-400={chip.dueToday}
+																class:text-gray-500={!chip.overdue && !chip.dueToday}
+																class:dark:text-gray-400={!chip.overdue && !chip.dueToday}
+															>
+																{chip.label}
+															</span>
+															{#if item.recurrence}
+																{@const summary = formatRecurrence(ruleFromDto(item.recurrence))}
+																<span
+																	title={summary}
+																	aria-label={summary}
+																	role="img"
+																	class="text-gray-500 dark:text-gray-400"
+																>
+																	<Icon name="repeat" class="h-3 w-3" />
+																</span>
+															{/if}
+														</div>
 													{/if}
 													{#if item.storeId && showStoreInList}
 														{@const itemStore = stores.find((store) => store.id === item.storeId)}

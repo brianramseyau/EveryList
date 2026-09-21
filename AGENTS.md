@@ -140,6 +140,26 @@ If this resurfaces: check whether `store()`'s deleted-match lookup is still in p
 assuming it's the same bug — a regression here would look identical to the original report (price/
 store/quantity/notes missing after re-adding a name).
 
+### Recurring items spawn a *new* item on check-off — checked history rows share the open copy's name
+
+Items can carry a repeat rule ([`PLAN_30`](foundational/PLAN_30_PHASE_RECURRING_ITEMS.md)): the rule
+lives once in `item_recurrences`, every item in the series points at it via `items.recurrence_id`
+(real FK, `ON DELETE SET NULL`). `ItemsController#update`, on `checked: true` of an unchecked
+recurring item, saves the checked row and **creates a copy** with the next deadline in one
+transaction (`spawnNextItem` in `item_recurrence_service.ts`; date math is the shared
+`nextOccurrence`). Consequences to remember:
+
+- A list can therefore hold a checked history row *and* an open row with the same name. Every
+  add-by-name path resolves through `findItemByName`, which orders `checked` ascending so it returns
+  the open row — a lookup that ignored that would "reactivate" the history row and leave two open
+  duplicates. New name-based paths must keep going through it.
+- There is no unique `(list_id, name)` constraint on `items`; don't add one — spawning depends on it.
+- The spawn happens server-side only. An offline check is just a queued `checked: true`; the next
+  item arrives via the realtime `create` broadcast (or the next fetch) once the queue flushes.
+- Adding `items.recurrence_id` was an inline-FK `ALTER TABLE` on `items` (the shape from the first
+  footgun above). It was reproduced against a seeded SQLite file — parents and every CASCADE child
+  survived — before shipping; the `console`-env `foreign_keys = OFF` guard is what makes it safe.
+
 ### Offline-sync E2E test can intermittently see a duplicate row on CI (not locally)
 
 **Status (2026-08-22): fixed.** `apps/web/e2e/offline-sync.e2e.ts`'s "adds an item while offline

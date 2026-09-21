@@ -179,8 +179,41 @@ export class FolderSchema extends BaseModel {
   declare version: number
 }
 
+export class ItemRecurrenceSchema extends BaseModel {
+  static $columns = ['createdAt', 'endCount', 'endDate', 'endType', 'id', 'interval', 'monthDay', 'monthNth', 'monthWeekday', 'occurrencesCreated', 'startDate', 'unit', 'updatedAt', 'weekdays'] as const
+  $columns = ItemRecurrenceSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare endCount: number | null
+  @column()
+  declare endDate: string | null
+  @column()
+  declare endType: string
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare interval: number
+  @column()
+  declare monthDay: number | null
+  @column()
+  declare monthNth: number | null
+  @column()
+  declare monthWeekday: number | null
+  @column()
+  declare occurrencesCreated: number
+  @column()
+  declare startDate: string
+  @column()
+  declare unit: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare weekdays: string
+}
+
 export class ItemSchema extends BaseModel {
-  static $columns = ['categoryId', 'checked', 'checkedAt', 'createdAt', 'createdBy', 'deadline', 'deletedAt', 'id', 'listId', 'name', 'notes', 'price', 'quantity', 'sortOrder', 'storeId', 'updatedAt', 'version'] as const
+  static $columns = ['categoryId', 'checked', 'checkedAt', 'createdAt', 'createdBy', 'deadline', 'deletedAt', 'id', 'listId', 'name', 'notes', 'price', 'quantity', 'recurrenceId', 'sortOrder', 'storeId', 'updatedAt', 'version'] as const
   $columns = ItemSchema.$columns
   @column()
   declare categoryId: number | null
@@ -208,6 +241,8 @@ export class ItemSchema extends BaseModel {
   declare price: number | null
   @column()
   declare quantity: string | null
+  @column()
+  declare recurrenceId: number | null
   @column()
   declare sortOrder: number
   @column()
