@@ -283,6 +283,12 @@ describe('apiFetch widget refresh', () => {
 		expect(refreshWidget).toHaveBeenCalledTimes(1);
 	});
 
+	it('treats the method case-insensitively', async () => {
+		stubOk();
+		await apiFetch('/x', { method: 'patch' });
+		expect(refreshWidget).toHaveBeenCalledTimes(1);
+	});
+
 	it('refreshes the widget after a successful 204 write', async () => {
 		vi.stubGlobal(
 			'fetch',
@@ -296,6 +302,8 @@ describe('apiFetch widget refresh', () => {
 		stubOk();
 		await apiFetch('/x');
 		await apiFetch('/x', { method: 'GET' });
+		await apiFetch('/x', { method: 'get' });
+		await apiFetch('/x', { method: 'HEAD' });
 		expect(refreshWidget).not.toHaveBeenCalled();
 	});
 

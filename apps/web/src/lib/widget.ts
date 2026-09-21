@@ -1,23 +1,15 @@
 /* v8 ignore start */ // Imports: other specs' `vi.mock('@capacitor/...')` corrupts their V8
 // function attribution once merged into the full suite — the same coverage-collection
 // artifact documented on `lib/api/items.ts`; widget.spec.ts alone reports these covered.
-import type { WidgetConfigDto } from '@everylist/shared';
 import { Capacitor } from '@capacitor/core';
 import { createToken } from './api/tokens';
+import type { EveryListWidgetNative } from './widget-refresh';
 import { getServerUrl } from './api/server-url';
 /* v8 ignore stop */
 
 /** The PAT name the widget-minting flow uses, so it's recognizable/revocable in
  *  Settings → Access Tokens (PLAN_18_PHASE_ANDROID_HOME_SCREEN_WIDGET.md). */
 export const WIDGET_TOKEN_NAME = 'Home-screen widget';
-
-/** The native handoff channel (the Capacitor `EveryListWidgetPlugin`). Kept token-free of any URL:
- *  `configure` writes the PAT to the widget's private SharedPreferences and opens the config
- *  screen — the earlier design carried the token in an `everylist://widget-config` deep-link query
- *  string, which Android can surface in `dumpsys`/logcat. */
-interface EveryListWidgetNative {
-	configure(config: WidgetConfigDto): Promise<void>;
-}
 
 function nativeWidgetClient(): EveryListWidgetNative | null {
 	if (!Capacitor.isNativePlatform()) return null;
