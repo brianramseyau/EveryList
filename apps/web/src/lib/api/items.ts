@@ -438,13 +438,10 @@ export async function deleteItem(listId: number, itemId: number): Promise<void> 
 		applyOptimistically: async (db) => {
 			const existing = await db.items.get(itemId);
 			if (!existing) return 0;
-			await db.items.put({
-				...existing,
-				deletedAt: new Date().toISOString(),
-				checked: false,
-				checkedAt: null,
-				_dirty: true
-			});
+			// Left checked locally on purpose: undoing a still-queued delete only clears `deletedAt`,
+			// so clearing `checked` here would desync the cache from the server until a refetch. The
+			// server unchecks on delete and the next fetch reconciles the (hidden) deleted row.
+			await db.items.put({ ...existing, deletedAt: new Date().toISOString(), _dirty: true });
 			return existing.version;
 		},
 		onSuccess: async (db) => {

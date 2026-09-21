@@ -133,7 +133,7 @@ row..."` test.
 **Follow-up (2026-09-21):** bulk import and favorite `addToList` never had this lookup and kept
 creating same-name duplicates (production had several). Every add-by-name path must now resolve
 through `findItemByName` in `apps/api/app/services/item_reuse.ts` (active row first, else most
-recently deleted; case-insensitive, trimmed). `store()`, bulk import, favorites and Alexa all do.
+recently deleted; case-insensitive, trimmed). `store()`, bulk import, favorites and Alexa all do — new paths should too.
 `moveToList` still doesn't dedupe against the destination list. A new add path needs the same.
 
 If this resurfaces: check whether `store()`'s deleted-match lookup is still in place before

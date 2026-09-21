@@ -6,6 +6,7 @@ import { DateTime } from 'luxon'
 import logger from '@adonisjs/core/services/logger'
 import { suggestCategoryId } from '#services/category_suggestion_service'
 import { broadcastSync } from '#services/sync_broadcaster'
+import { findItemByName } from '#services/item_reuse'
 import { countOpenSubtasks, subtasksIncompleteMessage } from '#services/subtask_completion'
 import { closestMatch } from '#services/alexa/fuzzy_match'
 import { resolveList, roleFor, setDefaultList } from '#services/alexa/list_resolution'
@@ -176,12 +177,8 @@ export async function handleAddItem(
     return respond(say(`You only have view access to ${list.name}, so I can't add to it.`), list)
   }
 
-  const normalizedName = itemName.toLowerCase()
-  const existing = await Item.query()
-    .where('listId', list.id)
-    .whereNull('deletedAt')
-    .whereRaw('LOWER(TRIM(name)) = ?', [normalizedName])
-    .first()
+  const match = await findItemByName(list, itemName)
+  const existing = match && !match.deleted ? match.item : null
 
   if (existing) {
     if (existing.checked) {
@@ -206,12 +203,7 @@ export async function handleAddItem(
     return respond(say(`${existing.name} is already on ${list.name}.`), list)
   }
 
-  const deletedMatch = await Item.query()
-    .where('listId', list.id)
-    .whereNotNull('deletedAt')
-    .whereRaw('LOWER(TRIM(name)) = ?', [normalizedName])
-    .orderBy('deletedAt', 'desc')
-    .first()
+  const deletedMatch = match?.deleted ? match.item : null
 
   if (deletedMatch) {
     // Restoring brings an invisible item back as unchecked — intake, so the
