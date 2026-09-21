@@ -386,6 +386,37 @@ test.group('Favorites open item limit', (group) => {
       .json({ name: `Limited ${listCounter}`, maxUncheckedItems: 1 })
     const listId = bodyData<ListDto>(createListResponse).id
 
+    const favorite = await client
+      .post(`/api/v1/lists/${listId}/favorites`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Bananas' })
+    await client
+      .post(`/api/v1/lists/${listId}/items`)
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: 'Eggs' })
+
+    // No item named Bananas has ever existed, so this is a fresh create on a full list.
+    const blocked = await client
+      .post(
+        `/api/v1/lists/${listId}/favorites/${bodyData<FavoriteItemDto>(favorite).id}/add-to-list`
+      )
+      .header('Authorization', `Bearer ${token}`)
+    blocked.assertStatus(400)
+    assert.equal(blocked.body().code, 'unchecked_limit_reached')
+  })
+
+  test('addToList is gated by the open-item limit when restoring a deleted match', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    listCounter += 1
+    const createListResponse = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${token}`)
+      .json({ name: `Limited ${listCounter}`, maxUncheckedItems: 1 })
+    const listId = bodyData<ListDto>(createListResponse).id
+
     const create = await client
       .post(`/api/v1/lists/${listId}/favorites`)
       .header('Authorization', `Bearer ${token}`)
@@ -399,8 +430,8 @@ test.group('Favorites open item limit', (group) => {
     const item = bodyData<ItemDto>(first)
 
     // Delete the Bananas row (freeing the slot), fill it with a different item,
-    // then re-add the favorite: with no active Bananas match, the create branch
-    // is intake and must be blocked.
+    // then re-add the favorite: restoring the deleted Bananas row is intake and
+    // must be blocked.
     await client
       .delete(`/api/v1/lists/${listId}/items/${item.id}`)
       .header('Authorization', `Bearer ${token}`)
