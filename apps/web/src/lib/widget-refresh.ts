@@ -46,6 +46,12 @@ export function refreshWidget(): void {
 		listening = true;
 		document.addEventListener('visibilitychange', onVisibilityChange);
 	}
+	// A write landing while already hidden (a background sync draining the offline queue) has no
+	// later visibility change to flush it, so skip the debounce and send it now.
+	if (document.visibilityState === 'hidden') {
+		flush();
+		return;
+	}
 	clearTimeout(timer);
 	timer = setTimeout(flush, WIDGET_REFRESH_DEBOUNCE_MS);
 }

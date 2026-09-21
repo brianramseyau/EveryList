@@ -100,6 +100,17 @@ describe('refreshWidget', () => {
 		expect(refresh).toHaveBeenCalledTimes(1);
 	});
 
+	it('sends immediately, with no debounce, when a write lands while already hidden', () => {
+		const refresh = setUpAndroid();
+		fakeDocument.visibilityState = 'hidden';
+
+		refreshWidget();
+		expect(refresh).toHaveBeenCalledTimes(1);
+
+		vi.advanceTimersByTime(WIDGET_REFRESH_DEBOUNCE_MS * 2);
+		expect(refresh).toHaveBeenCalledTimes(1);
+	});
+
 	it('ignores visibility changes when nothing is pending or the app is visible', () => {
 		const refresh = setUpAndroid();
 		refreshWidget();
