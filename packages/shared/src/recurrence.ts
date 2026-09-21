@@ -170,38 +170,64 @@ export function nextOccurrence(
 /** Highest "every N" interval and "after N occurrences" count a rule may carry. */
 export const MAX_RECURRENCE_COUNT = 999
 
+/** True for a real 'YYYY-MM-DD' calendar date (rejects '', '2026-02-31', …). */
+function isRealDate(date: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false
+  return fromDayNumber(toDayNumber(date)) === date
+}
+
 /**
- * The first reason a rule is invalid, or null when it's fine. Structural only (unit-specific
- * fields on the wrong unit, out-of-range values, an end date before the anchor) — field shapes
- * and real calendar dates are the caller's own validator's job.
+ * The first reason a rule is invalid, or null when it's safe to run the date math on. Covers
+ * everything the math assumes — real dates, whole numbers, in-range values, unit-specific fields
+ * only on their unit — so it is the one gate every caller (API, editor preview, save) needs.
  */
 export function recurrenceRuleProblem(rule: RecurrenceRule): string | null {
-  if (rule.interval < 1 || rule.interval > MAX_RECURRENCE_COUNT) {
-    return `Repeat interval must be between 1 and ${MAX_RECURRENCE_COUNT}`
+  if (!isRealDate(rule.startDate)) return 'A valid start date is required'
+  if (
+    !Number.isInteger(rule.interval) ||
+    rule.interval < 1 ||
+    rule.interval > MAX_RECURRENCE_COUNT
+  ) {
+    return `Repeat interval must be a whole number between 1 and ${MAX_RECURRENCE_COUNT}`
   }
   if (rule.unit !== 'week' && rule.weekdays.length > 0) {
     return 'Weekdays can only be chosen for a weekly repeat'
   }
-  if (rule.weekdays.some((weekday) => weekday < 0 || weekday > 6)) {
+  if (rule.weekdays.some((weekday) => !isWeekday(weekday))) {
     return 'Weekdays must be between 0 (Sunday) and 6 (Saturday)'
   }
   if (rule.unit !== 'month' && rule.monthly !== null) {
     return 'A day of the month can only be chosen for a monthly repeat'
   }
-  if (rule.monthly?.kind === 'dayOfMonth' && (rule.monthly.day < 1 || rule.monthly.day > 31)) {
-    return 'Day of the month must be between 1 and 31'
+  if (
+    rule.monthly?.kind === 'dayOfMonth' &&
+    (!Number.isInteger(rule.monthly.day) || rule.monthly.day < 1 || rule.monthly.day > 31)
+  ) {
+    return 'Day of the month must be a whole number between 1 and 31'
+  }
+  if (rule.monthly?.kind === 'nthWeekday') {
+    if (![1, 2, 3, 4, -1].includes(rule.monthly.nth)) {
+      return 'The week of the month must be first, second, third, fourth or last'
+    }
+    if (!isWeekday(rule.monthly.weekday)) {
+      return 'Weekday must be between 0 (Sunday) and 6 (Saturday)'
+    }
+  }
+  if (rule.end.type === 'on') {
+    if (!isRealDate(rule.end.date)) return 'A valid end date is required'
+    if (rule.end.date < rule.startDate) return 'The end date cannot be before the start date'
   }
   if (
-    rule.monthly?.kind === 'nthWeekday' &&
-    (rule.monthly.weekday < 0 || rule.monthly.weekday > 6)
+    rule.end.type === 'after' &&
+    (!Number.isInteger(rule.end.count) ||
+      rule.end.count < 1 ||
+      rule.end.count > MAX_RECURRENCE_COUNT)
   ) {
-    return 'Weekday must be between 0 (Sunday) and 6 (Saturday)'
-  }
-  if (rule.end.type === 'on' && rule.end.date < rule.startDate) {
-    return 'The end date cannot be before the start date'
-  }
-  if (rule.end.type === 'after' && (rule.end.count < 1 || rule.end.count > MAX_RECURRENCE_COUNT)) {
-    return `Number of occurrences must be between 1 and ${MAX_RECURRENCE_COUNT}`
+    return `Number of occurrences must be a whole number between 1 and ${MAX_RECURRENCE_COUNT}`
   }
   return null
+}
+
+function isWeekday(value: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= 6
 }

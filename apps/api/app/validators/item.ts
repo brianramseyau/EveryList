@@ -39,9 +39,10 @@ const recurrenceRule = vine.object({
   monthly: vine
     .object({
       kind: vine.enum(['dayOfMonth', 'nthWeekday'] as const),
-      day: vine.number().withoutDecimals().nullable().optional(),
-      nth: vine.number().withoutDecimals().nullable().optional(),
-      weekday: vine.number().withoutDecimals().nullable().optional(),
+      day: vine.number().withoutDecimals().range([1, 31]).nullable().optional(),
+      // 1-4 or -1 (last); the cross-field check in `recurrenceRuleProblem` enforces the exact set.
+      nth: vine.number().withoutDecimals().range([-1, 4]).nullable().optional(),
+      weekday: vine.number().withoutDecimals().range([0, 6]).nullable().optional(),
     })
     .nullable()
     .optional(),
@@ -59,7 +60,7 @@ const recurrenceRule = vine.object({
       .use(calendarDeadline())
       .nullable()
       .optional(),
-    count: vine.number().withoutDecimals().nullable().optional(),
+    count: vine.number().withoutDecimals().range([1, 999]).nullable().optional(),
   }),
 })
 

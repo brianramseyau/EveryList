@@ -13,7 +13,9 @@ Decisions:
 
 - **Completing a recurring item spawns the next item.** The checked row stays as history and a
   copy with the next deadline is created (Google Tasks' behavior).
-- **Available on any list with `useDeadline`** — no separate list toggle.
+- **Offered on any list with `useDeadline`** — no separate list toggle. This is a UI scope only: the
+  server accepts a rule on any item that has a deadline, exactly as it accepts the `deadline` field
+  itself regardless of the flag.
 - **Recurrence only** — no Google Tasks importer.
 
 ## Data model
@@ -78,15 +80,23 @@ sync entity are needed.
    `recurrenceId` and `nextOccurrence` is non-null: in one transaction save the checked row,
    create the copy (same `recurrenceId`; name, quantity, notes, category, store, price, sort order;
    deadline = next date + same time; unchecked; sub-tasks copied unchecked when
-   `list.useSubtasks`), bump `occurrences_created`, then `broadcastSync` both rows. No
+   `list.useSubtasks`), bump `occurrences_created`, then `broadcastSync` both rows. The rule
+   upsert, the "already completed?" re-read and the counter read all happen *inside* that
+   transaction (SQLite serializes writers on its one connection), so two simultaneous check-offs
+   spawn exactly one copy. A rule edit is only accepted on an *open* item — never a checked history
+   row of the same series, which would silently retarget the open sibling. No
    `hasCapacityFor` gate — checking off frees the slot the copy takes. Payload `recurrence`:
    object → create the series (or update the shared row; only one open item per series exists, so
    edits naturally apply to future spawns); `null` → stop repeating (null this item's
    `recurrenceId` only).
-5. `findItemByName` (`item_reuse.ts`) prefers an *unchecked* active row: with checked history
-   rows now sharing a name with their open copy, name-based add paths must not "reactivate" the
-   history row.
-6. Transformer + index preload emit `recurrence`.
+5. `findItemByName` (`item_reuse.ts`) prefers an *unchecked* active row (then the oldest id, so the
+   pick is deterministic when legacy same-name duplicates exist): with checked history rows now
+   sharing a name with their open copy, name-based add paths must not "reactivate" the history row.
+6. Transformer + every single-item response (and `recent`/index) preload `recurrence`, so a client
+   that replaces its cached row wholesale never drops a stored rule.
+7. `recurrenceRuleProblem` (shared) is the one gate for everything the date math assumes: real
+   dates, whole numbers, in-range values, `nth` in {1,2,3,4,-1}. The API validator repeats the range
+   checks so it stays self-contained.
 
 ## Frontend
 
@@ -94,7 +104,10 @@ sync entity are needed.
   set: Repeat select (Does not repeat / Custom), "Repeat every [n] [unit]", weekday chips (week),
   day-of-month vs First/Second/Third/Fourth/Last + weekday (month), "Starts" (defaults to the
   item's date), "Ends" Never / On date / After N occurrences, and a live "Next: …" preview.
-- Item edit page and create paths carry the draft, dirty-check and save payload; `lib/api/items.ts`
+- Item edit page and create paths carry the draft, dirty-check and save payload. Saving snaps the
+  deadline onto the rule's grid only when the rule itself was created or edited — an unrelated edit
+  never moves a deadline that was rescheduled off-grid. An invalid rule is shown once, by the
+  editor's inline alert; Save just declines to send it; `lib/api/items.ts`
   (input types + optimistic Dexie row) carries `recurrence`.
 - Row chip gets a repeat icon; `formatRecurrence()` produces the summary ("Every 2 weeks on Mon,
   Thu").

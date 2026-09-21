@@ -209,6 +209,34 @@ describe('recurrenceRuleProblem', () => {
       /occurrences/
     )
   })
+
+  it('rejects an empty or impossible start or end date', () => {
+    expect(recurrenceRuleProblem(rule({ startDate: '' }))).toMatch(/start date/)
+    expect(recurrenceRuleProblem(rule({ startDate: '2026-02-31' }))).toMatch(/start date/)
+    expect(recurrenceRuleProblem(rule({ end: { type: 'on', date: '' } }))).toMatch(/end date/)
+  })
+
+  it('rejects fractions and NaN', () => {
+    expect(recurrenceRuleProblem(rule({ interval: 2.5 }))).toMatch(/whole number/)
+    expect(recurrenceRuleProblem(rule({ interval: NaN }))).toMatch(/whole number/)
+    expect(recurrenceRuleProblem(rule({ unit: 'week', weekdays: [1.5] }))).toMatch(/Weekdays/)
+    expect(
+      recurrenceRuleProblem(rule({ unit: 'month', monthly: { kind: 'dayOfMonth', day: 1.5 } }))
+    ).toMatch(/whole number/)
+    expect(recurrenceRuleProblem(rule({ end: { type: 'after', count: 2.5 } }))).toMatch(
+      /whole number/
+    )
+  })
+
+  it('rejects a week-of-month that is not first to fourth or last', () => {
+    for (const nth of [0, 5, -2]) {
+      expect(
+        recurrenceRuleProblem(
+          rule({ unit: 'month', monthly: { kind: 'nthWeekday', nth: nth as 1, weekday: 1 } })
+        )
+      ).toMatch(/week of the month/)
+    }
+  })
 })
 
 describe('occurrenceOnOrAfter', () => {

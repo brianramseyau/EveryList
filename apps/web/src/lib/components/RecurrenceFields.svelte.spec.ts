@@ -146,6 +146,23 @@ describe('RecurrenceFields.svelte', () => {
 		await expect.element(page.getByTestId('repeat-preview')).toHaveTextContent('Next: Oct 1');
 	});
 
+	it('flags a cleared start date instead of previewing a nonsense one', async () => {
+		render(RecurrenceFields, { deadlineDate: DATE, recurrence: rule() });
+
+		await page.getByLabelText('Starts').fill('');
+		await expect
+			.element(page.getByRole('alert'))
+			.toHaveTextContent('A valid start date is required');
+		await expect.element(page.getByTestId('repeat-preview')).not.toBeInTheDocument();
+	});
+
+	it('flags a fractional interval', async () => {
+		render(RecurrenceFields, { deadlineDate: DATE, recurrence: rule() });
+
+		await page.getByLabelText('Repeat every').fill('2.5');
+		await expect.element(page.getByRole('alert')).toHaveTextContent('whole number');
+	});
+
 	it('ends never, on a date, or after N occurrences', async () => {
 		render(RecurrenceFields, { deadlineDate: DATE, recurrence: rule() });
 

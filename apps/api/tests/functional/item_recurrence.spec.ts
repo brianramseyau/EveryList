@@ -7,7 +7,7 @@ import Item from '#models/item'
 import ItemRecurrence from '#models/item_recurrence'
 import SyncEvent from '#models/sync_event'
 import { todayLocalIso } from '#services/deadline_notification_service'
-import { bodyData, signupAndGetToken } from './helpers.js'
+import { bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 // A far-future anchor so the "late completion rolls forward to today" rule never interferes,
 // except in the test that wants it to.
@@ -172,7 +172,7 @@ test.group('Recurring items (PLAN_30_PHASE_RECURRING_ITEMS.md)', (group) => {
       ],
       [
         'nth weekday incomplete',
-        { ...daily, unit: 'month', monthly: { kind: 'nthWeekday', nth: 7, weekday: 1 } },
+        { ...daily, unit: 'month', monthly: { kind: 'nthWeekday', nth: 0, weekday: 1 } },
         /week of the month/,
       ],
       ['end date missing', { ...daily, end: { type: 'on' } }, /end date/],
@@ -403,6 +403,129 @@ test.group('Recurring items (PLAN_30_PHASE_RECURRING_ITEMS.md)', (group) => {
     // The completed history row was not reactivated.
     const history = await Item.findOrFail(item.id)
     assert.isTrue(history.checked)
+  })
+
+  test('a repeat rule can only be changed on an open item, not a checked history row', async ({
+    client,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const item = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
+    await patchItem(client, token, listId, item.id, { checked: true })
+
+    const edit = await patchItem(client, token, listId, item.id, {
+      recurrence: { ...daily, interval: 3 },
+    })
+    edit.assertStatus(422)
+    // Checking and re-ruling in one request is the same thing.
+    const open = await Item.query().where('listId', listId).where('checked', false).firstOrFail()
+    const both = await patchItem(client, token, listId, open.id, {
+      checked: true,
+      recurrence: { ...daily, interval: 3 },
+    })
+    both.assertStatus(422)
+  })
+
+  test('two simultaneous check-offs spawn exactly one next item', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const item = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
+
+    const responses = await Promise.all([
+      patchItem(client, token, listId, item.id, { checked: true }),
+      patchItem(client, token, listId, item.id, { checked: true }),
+    ])
+    for (const response of responses) response.assertStatus(200)
+
+    assert.lengthOf(await Item.query().where('listId', listId), 2)
+    const series = await ItemRecurrence.firstOrFail()
+    assert.equal(series.occurrencesCreated, 2)
+  })
+
+  test('single-item responses carry the repeat rule (recent, restore, re-add, move)', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const otherListId = await createList(client, token, { name: 'Other chores' })
+    const item = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
+    const auth = { Authorization: `Bearer ${token}` }
+
+    await client.delete(`/api/v1/lists/${listId}/items/${item.id}`).headers(auth)
+    const recent = await client.get(`/api/v1/lists/${listId}/items/recent`).headers(auth)
+    assert.equal(bodyData<ItemDto[]>(recent)[0]!.recurrence?.id, item.recurrence?.id)
+
+    const restore = await client
+      .post(`/api/v1/lists/${listId}/items/${item.id}/restore`)
+      .headers(auth)
+    assert.equal(bodyData<ItemDto>(restore).recurrence?.id, item.recurrence?.id)
+
+    const readd = await createItem(client, token, listId, {})
+    assert.equal(bodyData<ItemDto>(readd).recurrence?.id, item.recurrence?.id)
+
+    await client.delete(`/api/v1/lists/${listId}/items/${item.id}`).headers(auth)
+    const restoredByName = await createItem(client, token, listId, {})
+    assert.equal(bodyData<ItemDto>(restoredByName).recurrence?.id, item.recurrence?.id)
+
+    const move = await client
+      .patch(`/api/v1/lists/${listId}/items/${item.id}/move`)
+      .headers(auth)
+      .json({ previousItemId: null })
+    assert.equal(bodyData<ItemDto>(move).recurrence?.id, item.recurrence?.id)
+
+    const moveToList = await client
+      .post(`/api/v1/lists/${listId}/items/${item.id}/move-to-list`)
+      .headers(auth)
+      .json({ destinationListId: otherListId })
+    assert.equal(bodyData<ItemDto>(moveToList).recurrence?.id, item.recurrence?.id)
+  })
+
+  test('rejects out-of-range rule values at the validator', async ({ client }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const bad: object[] = [
+      { ...daily, end: { type: 'after', count: 0 } },
+      { ...daily, end: { type: 'after', count: 1000 } },
+      { ...daily, unit: 'month', monthly: { kind: 'dayOfMonth', day: 32 } },
+      { ...daily, unit: 'month', monthly: { kind: 'nthWeekday', nth: 1, weekday: 9 } },
+      { ...daily, interval: 0 },
+    ]
+    for (const recurrence of bad) {
+      const response = await createItem(client, token, listId, { deadline: FUTURE, recurrence })
+      response.assertStatus(422)
+    }
+  })
+
+  test('a name-based add picks the oldest of several open same-name rows', async ({
+    client,
+    assert,
+  }) => {
+    const { token, id: userId } = await signupAndGetUser(client)
+    const listId = await createList(client, token)
+    // Legacy duplicates from before the by-name lookup existed.
+    const rows = []
+    for (const sortOrder of [1, 2]) {
+      rows.push(
+        await Item.create({
+          listId,
+          name: 'Take out bins',
+          checked: false,
+          sortOrder,
+          createdBy: userId,
+          version: 1,
+        })
+      )
+    }
+
+    const readd = await createItem(client, token, listId, {})
+    assert.equal(bodyData<ItemDto>(readd).id, rows[0]!.id)
   })
 
   test('a non-repeating item still checks without spawning', async ({ client, assert }) => {

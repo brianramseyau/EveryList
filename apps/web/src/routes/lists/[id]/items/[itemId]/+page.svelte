@@ -272,18 +272,16 @@
 		const price = trimmedPrice === '' ? null : Math.round(Number(trimmedPrice) * 100);
 		if (price !== null && !Number.isFinite(price)) return;
 
-		// A repeating item lands on its rule's grid (a weekly-on-Monday rule can't leave it due on a
-		// Thursday). The API needs a deadline to repeat from, so a rule without a date is dropped.
+		// The API needs a deadline to repeat from, so a rule without a date is dropped. An invalid
+		// rule is already flagged by the editor's own inline alert, so Save just declines to send it.
 		const recurrence = draftDeadlineDate ? draftRecurrence : null;
-		if (recurrence) {
-			const problem = recurrenceRuleProblem(recurrence);
-			if (problem) {
-				error = problem;
-				return;
-			}
-		}
+		if (recurrence && recurrenceRuleProblem(recurrence)) return;
+		// Creating or editing a rule lands the deadline on its grid (a weekly-on-Monday rule can't
+		// leave the item due on a Thursday). An unchanged rule leaves the deadline alone — it may
+		// have been rescheduled off-grid on purpose, and an unrelated edit must not move it.
+		const recurrenceChanged = JSON.stringify(recurrence) !== originalDraft?.recurrence;
 		const deadlineDate =
-			recurrence && draftDeadlineDate
+			recurrence && recurrenceChanged
 				? snapDeadlineDate(recurrence, draftDeadlineDate)
 				: draftDeadlineDate;
 
@@ -305,7 +303,7 @@
 						: deadlineDate
 					: null,
 				// Only sent when it changed, so an unrelated edit can't touch the shared series.
-				...(JSON.stringify(recurrence) !== originalDraft?.recurrence ? { recurrence } : {})
+				...(recurrenceChanged ? { recurrence } : {})
 			});
 			// A deadline set/changed/cleared here otherwise sits unreflected in the native/Electron
 			// local schedule until the app's next launch, resume, or 5-minute tick (+layout.svelte's

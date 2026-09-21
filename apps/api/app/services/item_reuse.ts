@@ -19,6 +19,9 @@ export async function findItemByName(
     // A recurring item's checked history rows share its name with the open copy — prefer the
     // open one so a name-based add never "reactivates" history (PLAN_30_PHASE_RECURRING_ITEMS.md).
     .orderBy('checked', 'asc')
+    // Two open same-name rows can exist (legacy duplicates); a stable order keeps the pick
+    // deterministic — the oldest, which is what an unordered lookup effectively returned.
+    .orderBy('id', 'asc')
     .first()
   if (active) return { item: active, deleted: false }
 

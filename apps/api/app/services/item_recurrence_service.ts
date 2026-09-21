@@ -126,10 +126,15 @@ export function assignRule(row: ItemRecurrence, rule: RecurrenceRule): void {
  * item). An item that already has a series updates that shared row in place — only one open item
  * per series exists, so the edit naturally applies to every future spawn.
  */
-export async function upsertRecurrence(item: Item, rule: RecurrenceRule): Promise<void> {
+export async function upsertRecurrence(
+  item: Item,
+  rule: RecurrenceRule,
+  client: TransactionClientContract
+): Promise<void> {
   const row = item.recurrenceId
-    ? await ItemRecurrence.findOrFail(item.recurrenceId)
+    ? await ItemRecurrence.query({ client }).where('id', item.recurrenceId).firstOrFail()
     : new ItemRecurrence()
+  row.useTransaction(client)
   assignRule(row, rule)
   if (!item.recurrenceId) row.occurrencesCreated = 1
   await row.save()
@@ -137,17 +142,23 @@ export async function upsertRecurrence(item: Item, rule: RecurrenceRule): Promis
 }
 
 /**
- * The next due date for a just-completed recurring item, or null when it doesn't repeat any
- * further (no series, no deadline, or the series' end was reached). `today` is the server's local
- * calendar day.
+ * The next due date for a just-completed recurring item, or null when its series is over.
+ * `today` is the server's local calendar day. The item must belong to a series and have a
+ * deadline — `ItemsController#update` guarantees both (it unlinks the series whenever the
+ * deadline is cleared, and rejects a rule without one).
  */
-export async function nextDueDate(item: Item, today: string): Promise<string | null> {
-  if (!item.recurrenceId || !item.deadline) return null
-  const series = await ItemRecurrence.findOrFail(item.recurrenceId)
+export async function nextDueDate(
+  item: Item,
+  today: string,
+  client: TransactionClientContract
+): Promise<string | null> {
+  const series = await ItemRecurrence.query({ client })
+    .where('id', item.recurrenceId as number)
+    .firstOrFail()
   return nextOccurrence(
     ruleFromRow(series),
     series.occurrencesCreated,
-    item.deadline.slice(0, 10),
+    (item.deadline as string).slice(0, 10),
     today
   )
 }

@@ -695,7 +695,7 @@ describe('Item detail +page.svelte', () => {
 		);
 	});
 
-	it('shows an invalid repeat rule instead of saving it', async () => {
+	it('declines to save an invalid repeat rule, showing the message once', async () => {
 		const db = getDb()!;
 		await db.items.put(makeItem({ id: 100, name: 'Bins', deadline: '2026-09-11' }));
 		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
@@ -706,10 +706,80 @@ describe('Item detail +page.svelte', () => {
 		await page.getByLabelText('End date').fill('2026-09-01');
 		await page.getByRole('button', { name: 'Save' }).click();
 
+		// Only the editor's own inline alert — Save adds no second copy.
 		await expect
-			.element(page.getByText('The end date cannot be before the start date').first())
+			.element(page.getByText('The end date cannot be before the start date'))
 			.toBeInTheDocument();
 		expect(updateItem).not.toHaveBeenCalled();
+	});
+
+	it('does not move an off-grid deadline when only an unrelated field changes', async () => {
+		const db = getDb()!;
+		// Mondays only, but the deadline was rescheduled to a Thursday (2026-09-10) on purpose.
+		await db.items.put(
+			makeItem({
+				id: 100,
+				name: 'Bins',
+				deadline: '2026-09-10',
+				recurrence: {
+					id: 7,
+					occurrence: 2,
+					interval: 1,
+					unit: 'week',
+					weekdays: [1],
+					monthly: null,
+					startDate: '2026-09-07',
+					end: { type: 'never' }
+				}
+			})
+		);
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await page.getByLabelText('Notes (optional)').fill('Blue bin too');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		const [, , body] = vi.mocked(updateItem).mock.calls[0]!;
+		expect(body).toMatchObject({ deadline: '2026-09-10', notes: 'Blue bin too' });
+		expect(body).not.toHaveProperty('recurrence');
+	});
+
+	it('does snap the deadline once the rule itself is edited', async () => {
+		const db = getDb()!;
+		await db.items.put(
+			makeItem({
+				id: 100,
+				name: 'Bins',
+				deadline: '2026-09-10',
+				recurrence: {
+					id: 7,
+					occurrence: 2,
+					interval: 1,
+					unit: 'week',
+					weekdays: [1],
+					monthly: null,
+					startDate: '2026-09-07',
+					end: { type: 'never' }
+				}
+			})
+		);
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await page.getByLabelText('Repeat every').fill('2');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(
+			1,
+			100,
+			expect.objectContaining({
+				// Every 2 weeks from the week of Sep 7: the week of Sep 14 is skipped.
+				deadline: '2026-09-21',
+				recurrence: expect.objectContaining({ interval: 2 })
+			})
+		);
 	});
 
 	it('clears the time when the deadline date is cleared, and saves null', async () => {
