@@ -19,8 +19,10 @@ import type { CategorizeSuggestionDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
 import db from '@adonisjs/lucid/services/db'
 import { todayLocalIso } from '#services/deadline_notification_service'
+import ItemRecurrence from '#models/item_recurrence'
 import {
   nextDueDate,
+  openSuccessorOf,
   ruleFromPayload,
   spawnNextItem,
   upsertRecurrence,
@@ -470,7 +472,22 @@ export default class ItemsController {
     // every intake path (2026-09-03 revision, from manual testing): it turns an
     // invisible (checked) row back into an open one, so it's blocked the same way
     // when the list has no room — check something off or remove an item first.
-    if (checked === false && item.checked && !(await hasCapacityFor(list))) {
+    // Unchecking a completed *repeating* item is an undo of its check-off: the copy that
+    // completing it spawned is discarded (below), so the series never holds two open items. That
+    // discard also frees the slot the reopened row takes, so it bypasses the limit gate.
+    let discarded: Item | null = null
+    if (checked === false && item.checked && item.recurrenceId) {
+      const successor = await openSuccessorOf(item)
+      if (successor === 'blocked') {
+        return response.unprocessableEntity({
+          message:
+            'This repeat already has an open occurrence, so this one can’t be reopened. Uncheck the most recent completed occurrence instead.',
+        })
+      }
+      discarded = successor
+    }
+
+    if (checked === false && item.checked && !discarded && !(await hasCapacityFor(list))) {
       return response.badRequest({
         message: limitReachedMessageForUncheck(list),
         code: UNCHECKED_LIMIT_REACHED,
@@ -528,7 +545,7 @@ export default class ItemsController {
     // check-off that committed first is seen here and cannot spawn a second copy.
     const completing = checked === true && !wasChecked
     let spawned: Item | null = null
-    if (recurrenceRule || (completing && item.recurrenceId)) {
+    if (recurrenceRule || (completing && item.recurrenceId) || discarded) {
       const sortOrder = completing ? await nextSortOrder(list, { respectInsertPosition: true }) : 0
       const today = todayLocalIso(DateTime.now())
       spawned = await db.transaction(async (trx) => {
@@ -539,6 +556,17 @@ export default class ItemsController {
             .where('checked', true)
             .first()) !== null
         if (recurrenceRule) await upsertRecurrence(item, recurrenceRule, trx)
+        if (discarded) {
+          // Soft-deleted like `destroy`, and detached from the series so restoring or re-adding
+          // it later can't bring back a second open item that repeats.
+          discarded.deletedAt = DateTime.now()
+          discarded.recurrenceId = null
+          discarded.version += 1
+          await discarded.useTransaction(trx).save()
+          await ItemRecurrence.query({ client: trx })
+            .where('id', item.recurrenceId as number)
+            .decrement('occurrences_created', 1)
+        }
         await item.useTransaction(trx).save()
         if (!completing || alreadyCompleted) return null
         const nextDate = await nextDueDate(item, today, trx)
@@ -568,6 +596,16 @@ export default class ItemsController {
       op: 'update',
       version: item.version,
     })
+
+    if (discarded) {
+      await broadcastSync({
+        listId: list.id,
+        entityType: 'item',
+        entityId: discarded.id,
+        op: 'delete',
+        version: discarded.version,
+      })
+    }
 
     if (spawned) {
       await broadcastSync({

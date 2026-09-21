@@ -89,6 +89,14 @@ sync entity are needed.
    object → create the series (or update the shared row; only one open item per series exists, so
    edits naturally apply to future spawns); `null` → stop repeating (null this item's
    `recurrenceId` only).
+   - **Unchecking a completed repeating item is an undo.** If the series' only open item is the
+     copy that completing it spawned (and nothing later exists), that copy is discarded in the same
+     transaction — soft-deleted like `destroy`, detached from the series so a later restore/re-add
+     can't revive a second repeating item, and the series counter is decremented. The discard
+     frees the slot the reopened row takes, so it bypasses the open-item limit gate. Any other open
+     sibling (a later occurrence already moved on) makes the uncheck a 422, since it would leave two
+     open items in one series. With no open sibling (series ended or repeat stopped) it is a plain
+     reopen.
 5. `findItemByName` (`item_reuse.ts`) prefers an *unchecked* active row (then the oldest id, so the
    pick is deterministic when legacy same-name duplicates exist): with checked history rows now
    sharing a name with their open copy, name-based add paths must not "reactivate" the history row.

@@ -153,6 +153,10 @@ transaction (`spawnNextItem` in `item_recurrence_service.ts`; date math is the s
   add-by-name path resolves through `findItemByName`, which orders `checked` ascending so it returns
   the open row — a lookup that ignored that would "reactivate" the history row and leave two open
   duplicates. New name-based paths must keep going through it.
+- Unchecking a completed recurring item *undoes* the spawn: the open copy is soft-deleted and
+  detached (`recurrence_id = NULL`) in the same transaction, so a series never has two open items.
+  Don't "simplify" that away — without it, an accidental check + uncheck leaves duplicates that each
+  spawn more copies.
 - There is no unique `(list_id, name)` constraint on `items`; don't add one — spawning depends on it.
 - The spawn happens server-side only. An offline check is just a queued `checked: true`; the next
   item arrives via the realtime `create` broadcast (or the next fetch) once the queue flushes.

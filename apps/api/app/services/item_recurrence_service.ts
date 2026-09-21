@@ -164,6 +164,34 @@ export async function nextDueDate(
 }
 
 /**
+ * What reopening (unchecking) a completed repeating item should do about the successor that
+ * completing it spawned.
+ *
+ * - `null`: the series has no other open item (it ended, or the repeat was stopped) — a plain
+ *   uncheck.
+ * - an `Item`: the open item is exactly the copy spawned by completing this one, and nothing
+ *   later exists. Unchecking is an "undo", so that copy is to be discarded rather than left
+ *   open beside the reopened row (the caller does it, atomically).
+ * - `'blocked'`: any other open sibling (a later occurrence already moved on, or legacy
+ *   duplicates). Reopening would leave two open items in one series, so it's refused.
+ */
+export async function openSuccessorOf(item: Item): Promise<Item | 'blocked' | null> {
+  const open = await Item.query()
+    .where('recurrenceId', item.recurrenceId as number)
+    .whereNull('deletedAt')
+    .where('checked', false)
+    .whereNot('id', item.id)
+  if (open.length === 0) return null
+
+  const later = await Item.query()
+    .where('recurrenceId', item.recurrenceId as number)
+    .where('id', '>', item.id)
+  return open.length === 1 && later.length === 1 && later[0]!.id === open[0]!.id
+    ? open[0]!
+    : 'blocked'
+}
+
+/**
  * Creates the next item in `item`'s series: same name/quantity/notes/category/store/price and
  * sub-tasks (reset to unchecked), due `nextDate` at the same time of day, unchecked. Runs on the
  * caller's transaction so the checked row, the copy and the series counter commit together.

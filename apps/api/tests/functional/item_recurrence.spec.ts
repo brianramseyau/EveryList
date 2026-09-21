@@ -21,6 +21,16 @@ const daily = {
   end: { type: 'never' as const },
 }
 
+async function occurrencesCreated() {
+  const series = await ItemRecurrence.firstOrFail()
+  return series.occurrencesCreated
+}
+
+async function isChecked(itemId: number) {
+  const row = await Item.findOrFail(itemId)
+  return row.checked
+}
+
 async function createList(client: ApiClient, token: string, extra: object = {}) {
   const response = await client
     .post('/api/v1/lists')
@@ -322,20 +332,99 @@ test.group('Recurring items (PLAN_30_PHASE_RECURRING_ITEMS.md)', (group) => {
     assert.lengthOf(await Item.query().where('listId', listId), 1)
   })
 
-  test('unchecking a completed item does not spawn another', async ({ client, assert }) => {
+  test('unchecking a completed repeating item undoes it: the spawned copy is discarded', async ({
+    client,
+    assert,
+  }) => {
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
     const item = bodyData<ItemDto>(
       await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
     )
     await patchItem(client, token, listId, item.id, { checked: true })
-    await patchItem(client, token, listId, item.id, { checked: false })
-    // Re-checking an already-checked item is a no-op too.
+    const copy = await Item.query().where('listId', listId).where('checked', false).firstOrFail()
+
+    const undo = await patchItem(client, token, listId, item.id, { checked: false })
+    undo.assertStatus(200)
+    assert.isFalse(bodyData<ItemDto>(undo).checked)
+
+    // Exactly one open item in the series again; the copy is soft-deleted and detached so
+    // restoring or re-adding it can't bring back a second repeating item.
+    const open = await Item.query().where('listId', listId).whereNull('deletedAt')
+    assert.deepEqual(
+      open.map((row) => row.id),
+      [item.id]
+    )
+    const discarded = await Item.findOrFail(copy.id)
+    assert.isNotNull(discarded.deletedAt)
+    assert.isNull(discarded.recurrenceId)
+    assert.equal(await occurrencesCreated(), 1)
+
+    const events = await SyncEvent.query().where('listId', listId).where('entityType', 'item')
+    assert.isTrue(events.some((e) => e.entityId === copy.id && e.op === 'delete'))
+
+    // Completing it again spawns a fresh copy, so the count and the series stay consistent.
     await patchItem(client, token, listId, item.id, { checked: true })
+    const next = await Item.query().where('listId', listId).where('checked', false).firstOrFail()
+    assert.equal(next.deadline, '2099-01-06')
+    assert.equal(await occurrencesCreated(), 2)
+  })
+
+  test('undo works even when the list is at its open-item limit', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token, { maxUncheckedItems: 1 })
+    const item = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
     await patchItem(client, token, listId, item.id, { checked: true })
 
-    // 1 original + 1 spawn from the first check + 1 from re-checking after the uncheck.
-    assert.lengthOf(await Item.query().where('listId', listId), 3)
+    // The copy fills the only slot; the discard frees it for the reopened row.
+    const undo = await patchItem(client, token, listId, item.id, { checked: false })
+    undo.assertStatus(200)
+    assert.lengthOf(await Item.query().where('listId', listId).whereNull('deletedAt'), 1)
+  })
+
+  test('refuses to reopen an older occurrence once a later one is open', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const first = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
+    await patchItem(client, token, listId, first.id, { checked: true })
+    const second = await Item.query().where('listId', listId).where('checked', false).firstOrFail()
+    await patchItem(client, token, listId, second.id, { checked: true })
+
+    const refused = await patchItem(client, token, listId, first.id, { checked: false })
+    refused.assertStatus(422)
+    assert.match(refused.body().message, /open occurrence/)
+    assert.isTrue(await isChecked(first.id))
+
+    // The most recent completed occurrence can still be undone.
+    const undo = await patchItem(client, token, listId, second.id, { checked: false })
+    undo.assertStatus(200)
+  })
+
+  test('uncheck is a plain reopen when the series has no open successor', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const item = bodyData<ItemDto>(
+      await createItem(client, token, listId, {
+        deadline: FUTURE,
+        recurrence: { ...daily, end: { type: 'after', count: 1 } },
+      })
+    )
+    await patchItem(client, token, listId, item.id, { checked: true })
+    assert.lengthOf(await Item.query().where('listId', listId), 1)
+
+    const reopen = await patchItem(client, token, listId, item.id, { checked: false })
+    reopen.assertStatus(200)
+    assert.isFalse(await isChecked(item.id))
   })
 
   test('editing the rule updates the shared series row', async ({ client, assert }) => {
