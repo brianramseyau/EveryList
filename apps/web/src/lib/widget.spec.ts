@@ -32,10 +32,10 @@ const existingToken = {
 	createdAt: new Date().toISOString()
 };
 
-function mockNativeClient(configure: ReturnType<typeof vi.fn>, hasToken = false) {
+function mockNativeClient(configure: ReturnType<typeof vi.fn>, tokenId: number | null = null) {
 	const client = {
 		configure,
-		status: vi.fn().mockResolvedValue({ deviceId: 'abc123', hasToken })
+		status: vi.fn().mockResolvedValue({ deviceId: 'abc123', tokenId })
 	};
 	vi.mocked(registerPlugin).mockReturnValue(client as never);
 	return client;
@@ -76,6 +76,7 @@ describe('widget', () => {
 		expect(registerPlugin).toHaveBeenCalledWith('EveryListWidget');
 		expect(configure).toHaveBeenCalledWith({
 			token: 'elt_widget123',
+			tokenId: 42,
 			listIds: [3],
 			serverUrl: 'https://everylist.example.com'
 		});
@@ -85,7 +86,7 @@ describe('widget', () => {
 		isNativePlatform.mockReturnValue(true);
 		vi.mocked(getServerUrl).mockReturnValue('https://everylist.example.com');
 		const configure = vi.fn().mockResolvedValue(undefined);
-		mockNativeClient(configure, true);
+		mockNativeClient(configure, 42);
 		vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
 
 		expect(await configureWidget([3, 4])).toBe(true);
@@ -97,11 +98,23 @@ describe('widget', () => {
 		});
 	});
 
+	it('replaces the token when the widget holds a different account’s PAT', async () => {
+		isNativePlatform.mockReturnValue(true);
+		vi.mocked(getServerUrl).mockReturnValue('https://everylist.example.com');
+		mockNativeClient(vi.fn().mockResolvedValue(undefined), 99);
+		vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
+		vi.mocked(createToken).mockResolvedValue({ ...existingToken, token: 'elt_new' });
+
+		await configureWidget([3]);
+		expect(updateToken).not.toHaveBeenCalled();
+		expect(revokeToken).toHaveBeenCalledWith(42);
+	});
+
 	it('replaces a server token whose plaintext this device lost', async () => {
 		isNativePlatform.mockReturnValue(true);
 		vi.mocked(getServerUrl).mockReturnValue('https://everylist.example.com');
 		const configure = vi.fn().mockResolvedValue(undefined);
-		mockNativeClient(configure, false);
+		mockNativeClient(configure, null);
 		vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
 		vi.mocked(createToken).mockResolvedValue({ ...existingToken, token: 'elt_new' });
 
@@ -118,20 +131,34 @@ describe('widget', () => {
 
 		it('is empty before the widget is set up', async () => {
 			isNativePlatform.mockReturnValue(true);
-			mockNativeClient(vi.fn(), false);
+			mockNativeClient(vi.fn(), null);
 			expect(await currentWidgetListIds()).toEqual([]);
 		});
 
 		it('returns the existing token grants', async () => {
 			isNativePlatform.mockReturnValue(true);
-			mockNativeClient(vi.fn(), true);
+			mockNativeClient(vi.fn(), 42);
 			vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
 			expect(await currentWidgetListIds()).toEqual([3]);
 		});
 
+		it('is empty when the widget holds another account’s token', async () => {
+			isNativePlatform.mockReturnValue(true);
+			mockNativeClient(vi.fn(), 99);
+			vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
+			expect(await currentWidgetListIds()).toEqual([]);
+		});
+
+		it('is empty when the token lookup fails (offline)', async () => {
+			isNativePlatform.mockReturnValue(true);
+			mockNativeClient(vi.fn(), 42);
+			vi.mocked(fetchTokens).mockRejectedValue(new Error('offline'));
+			expect(await currentWidgetListIds()).toEqual([]);
+		});
+
 		it('is empty when the server has no matching token', async () => {
 			isNativePlatform.mockReturnValue(true);
-			mockNativeClient(vi.fn(), true);
+			mockNativeClient(vi.fn(), 42);
 			vi.mocked(fetchTokens).mockResolvedValue([]);
 			expect(await currentWidgetListIds()).toEqual([]);
 		});

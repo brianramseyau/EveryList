@@ -299,6 +299,8 @@ export interface WidgetConfigDto {
    *  Omitted when re-configuring an already-provisioned widget (its existing PAT was updated in
    *  place server-side, so the native side keeps the token it already holds). */
   token?: string
+  /** The server id of `token`; sent with it so the native side can report it back via `status`. */
+  tokenId?: number
   /** The list ids the token grants the widget — the user picks which one to display. */
   listIds: number[]
   /** The user-configured server origin (see `apps/web/src/lib/api/server-url.ts`). */
@@ -309,8 +311,9 @@ export interface WidgetConfigDto {
 export interface WidgetStatusDto {
   /** A stable random id for this install, used to suffix the widget's PAT name. */
   deviceId: string
-  /** Whether the widget already holds a PAT (and server URL) in private storage. */
-  hasToken: boolean
+  /** The server id of the PAT the widget holds, or `null` if it holds none. Comparing it to the
+   *  signed-in account's token guards against a widget still holding another account's PAT. */
+  tokenId: number | null
 }
 
 export type BackupFrequency = 'daily' | 'weekly' | 'monthly'

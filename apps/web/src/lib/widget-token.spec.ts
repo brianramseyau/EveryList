@@ -10,6 +10,7 @@ describe('widget-token', () => {
 		expect(isManagedToken('Home-screen widget (abc)')).toBe(true);
 		expect(isManagedToken('Home-screen widget')).toBe(true);
 		expect(isManagedToken('Home Assistant')).toBe(false);
+		expect(isManagedToken('Home-screen widget backup')).toBe(false);
 		expect(isManagedToken(null)).toBe(false);
 	});
 });

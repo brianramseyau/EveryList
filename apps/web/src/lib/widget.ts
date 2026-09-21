@@ -19,11 +19,17 @@ function nativeWidgetClient(): EveryListWidgetNative | null {
 export async function currentWidgetListIds(): Promise<number[]> {
 	const client = nativeWidgetClient();
 	if (!client) return [];
-	const { deviceId, hasToken } = await client.status();
-	if (!hasToken) return [];
-	const name = widgetTokenName(deviceId);
-	const existing = (await fetchTokens()).find((token) => token.name === name);
-	return existing?.grants.map((grant) => grant.listId) ?? [];
+	try {
+		const { deviceId, tokenId } = await client.status();
+		if (tokenId === null) return [];
+		const existing = (await fetchTokens()).find((token) => token.id === tokenId);
+		return existing?.name === widgetTokenName(deviceId)
+			? existing.grants.map((grant) => grant.listId)
+			: [];
+	} catch {
+		// Pre-ticking is a convenience — offline or a transient error shouldn't block the page.
+		return [];
+	}
 }
 
 /**
@@ -52,20 +58,22 @@ export async function configureWidget(listIds: number[]): Promise<boolean> {
 	const serverUrl = getServerUrl();
 	if (!serverUrl) return false;
 
-	const { deviceId, hasToken } = await client.status();
+	const { deviceId, tokenId } = await client.status();
 	const name = widgetTokenName(deviceId);
 	const existing = (await fetchTokens()).find((token) => token.name === name);
 
-	if (existing && hasToken) {
+	// Matching the held token's id (not just the name) rules out a widget still holding another
+	// account's PAT after an account switch.
+	if (existing && existing.id === tokenId) {
 		await updateToken(existing.id, listIds, 'editor', name);
 		await client.configure({ listIds, serverUrl });
 		return true;
 	}
 
-	// The server has a token this device no longer holds the plaintext for (app data cleared) —
+	// The server has a token under this name that this device doesn't hold the plaintext for —
 	// its value can't be recovered, so replace it rather than leave an orphan behind.
 	if (existing) await revokeToken(existing.id);
 	const created = await createToken(name, listIds, 'editor');
-	await client.configure({ token: created.token, listIds, serverUrl });
+	await client.configure({ token: created.token, tokenId: created.id, listIds, serverUrl });
 	return true;
 }

@@ -9,5 +9,10 @@ export function widgetTokenName(deviceId: string): string {
 
 /** Whether a PAT is app-managed (widget-provisioned) rather than user-created. */
 export function isManagedToken(name: string | null): boolean {
-	return name?.startsWith(WIDGET_TOKEN_NAME_PREFIX) ?? false;
+	// The bare prefix is the name earlier versions gave every widget token; anything else must
+	// carry the "(<deviceId>)" suffix so user names like "Home-screen widget backup" stay theirs.
+	return (
+		name === WIDGET_TOKEN_NAME_PREFIX ||
+		(name?.startsWith(`${WIDGET_TOKEN_NAME_PREFIX} (`) ?? false)
+	);
 }

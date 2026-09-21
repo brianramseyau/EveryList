@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 
 import com.getcapacitor.JSObject;
+import org.json.JSONObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -28,7 +29,8 @@ public class EveryListWidgetPlugin extends Plugin {
     public void status(PluginCall call) {
         JSObject result = new JSObject();
         result.put("deviceId", WidgetPrefs.getDeviceId(getContext()));
-        result.put("hasToken", WidgetPrefs.hasGlobalCredentials(getContext()));
+        long tokenId = WidgetPrefs.getTokenId(getContext());
+        result.put("tokenId", tokenId > 0 ? (Object) tokenId : JSONObject.NULL);
         call.resolve(result);
     }
 
@@ -47,7 +49,10 @@ public class EveryListWidgetPlugin extends Plugin {
             return;
         }
 
-        WidgetPrefs.saveGlobalCredentials(getContext(), token, serverUrl, listIds);
+        long tokenId = hasNewToken
+            ? call.getData().optLong("tokenId", -1L)
+            : WidgetPrefs.getTokenId(getContext());
+        WidgetPrefs.saveGlobalCredentials(getContext(), token, tokenId, serverUrl, listIds);
 
         // Bring up the config screen so the user picks which list the widget shows and the
         // show/hide-completed default. Uses the app context, hence NEW_TASK.

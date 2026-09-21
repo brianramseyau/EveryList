@@ -27,7 +27,13 @@
 	async function loadAll() {
 		loading = true;
 		try {
-			[lists, selectedListIds] = await Promise.all([fetchLists(), currentWidgetListIds()]);
+			const [loaded, granted] = await Promise.all([fetchLists(), currentWidgetListIds()]);
+			lists = loaded;
+			// Only tick lists that still render a checkbox — a stale grant (deleted list, lost
+			// ownership) couldn't be unticked and would fail every save.
+			selectedListIds = granted.filter((id) =>
+				loaded.some((list) => list.id === id && list.role === 'owner')
+			);
 			error = null;
 		} catch (err) {
 			error = err instanceof ApiError ? err.message : 'Failed to load lists.';

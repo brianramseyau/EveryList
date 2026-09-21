@@ -55,7 +55,14 @@ describe('Home-screen widget +page.svelte', () => {
 	it('pre-ticks the lists the widget token already grants', async () => {
 		vi.mocked(currentWidgetListIds).mockResolvedValue([1]);
 		render(WidgetPage);
-		await expect.element(page.getByRole('button', { name: 'Save widget access' })).toBeEnabled();
+		await expect.element(page.getByRole('checkbox', { name: 'Groceries' })).toBeChecked();
+	});
+
+	it('drops granted list ids the user no longer owns', async () => {
+		vi.mocked(currentWidgetListIds).mockResolvedValue([99]);
+		render(WidgetPage);
+		await expect.element(page.getByRole('checkbox', { name: 'Groceries' })).not.toBeChecked();
+		await expect.element(page.getByRole('button', { name: 'Save widget access' })).toBeDisabled();
 	});
 
 	it('sets the document title', async () => {
