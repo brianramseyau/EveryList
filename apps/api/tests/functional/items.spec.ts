@@ -1143,6 +1143,36 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     assert.equal(res.body().data[0], 'Beer')
   })
 
+  test('deleting a checked item unchecks it, and re-adding by name restores that same row unchecked', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const created = (
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bread' }))
+    ).body().data as ItemDto
+    await auth(client.patch(`/api/v1/lists/${listId}/items/${created.id}`).json({ checked: true }))
+    await auth(client.delete(`/api/v1/lists/${listId}/items/${created.id}`))
+
+    const row = await db.from('items').where('id', created.id).first()
+    assert.isNotNull(row.deleted_at)
+    assert.equal(Number(row.checked), 0)
+    assert.isNull(row.checked_at)
+
+    const readded = (
+      await auth(client.post(`/api/v1/lists/${listId}/items`).json({ name: ' bread ' }))
+    ).body().data as ItemDto
+    assert.equal(
+      readded.id,
+      created.id,
+      'matched the deleted row case-insensitively instead of duplicating'
+    )
+    assert.isFalse(readded.checked)
+  })
+
   test('recent-names is viewer-accessible but requires list membership', async ({ client }) => {
     const owner = await signupAndGetUser(client)
     const listId = await createList(client, owner.token)

@@ -438,7 +438,13 @@ export async function deleteItem(listId: number, itemId: number): Promise<void> 
 		applyOptimistically: async (db) => {
 			const existing = await db.items.get(itemId);
 			if (!existing) return 0;
-			await db.items.put({ ...existing, deletedAt: new Date().toISOString(), _dirty: true });
+			await db.items.put({
+				...existing,
+				deletedAt: new Date().toISOString(),
+				checked: false,
+				checkedAt: null,
+				_dirty: true
+			});
 			return existing.version;
 		},
 		onSuccess: async (db) => {

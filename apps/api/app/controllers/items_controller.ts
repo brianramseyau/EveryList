@@ -694,6 +694,10 @@ export default class ItemsController {
     }
 
     item.deletedAt = DateTime.now()
+    // A deleted row is reused later (re-add, Alexa, restore) as a fresh open item, so don't leave
+    // it looking checked off.
+    item.checked = false
+    item.checkedAt = null
     item.version += 1
     await item.save()
 
