@@ -137,9 +137,7 @@ public class WidgetUpdater {
             rv.setViewVisibility(R.id.widget_add, View.GONE);
         }
 
-        Intent adapter = new Intent(context, WidgetListService.class);
-        adapter.putExtra(EveryListWidget.EXTRA_APPWIDGET_ID, appWidgetId);
-        rv.setRemoteAdapter(R.id.widget_list, adapter);
+        rv.setRemoteAdapter(R.id.widget_list, adapterIntent(context, appWidgetId));
         rv.setEmptyView(R.id.widget_list, R.id.widget_empty);
 
         Intent template = new Intent(context, EveryListWidget.class).setAction(EveryListWidget.ACTION_ITEM);
@@ -164,8 +162,13 @@ public class WidgetUpdater {
         rv.setViewVisibility(R.id.widget_toggle_completed, View.GONE);
         rv.setViewVisibility(R.id.widget_refresh, View.GONE);
         rv.setViewVisibility(R.id.widget_add, View.GONE);
-        // No empty view set, so the empty ListView just stays blank.
-        rv.setRemoteAdapter(R.id.widget_list, new Intent(context, WidgetListService.class));
+        // No empty view set, so the empty ListView just stays blank. Deliberately no appWidgetId
+        // extra (unlike adapterIntent): the factory then reads no instance snapshot, so the setup
+        // state stays empty even if this widget once persisted rows. Its own URI scheme keeps its
+        // factory distinct from this widget's normal one (adapterIntent) too, so a factory cached
+        // with real rows can't be handed back here.
+        rv.setRemoteAdapter(R.id.widget_list, new Intent(context, WidgetListService.class)
+            .setData(Uri.fromParts("widget-setup", String.valueOf(appWidgetId), null)));
 
         rv.setOnClickPendingIntent(R.id.widget_list_button, pendingActivity(context, appWidgetId,
             new Intent(Intent.ACTION_VIEW,
@@ -176,6 +179,17 @@ public class WidgetUpdater {
                 .putExtra(EveryListWidget.EXTRA_APPWIDGET_ID, appWidgetId)));
 
         manager.updateAppWidget(appWidgetId, rv);
+    }
+
+    /** The RemoteViewsService intent for one widget. Android caches a service's factory by {@link
+     *  Intent#filterEquals}, which ignores extras — so with only an appWidgetId extra, every widget
+     *  instance shared the first one's factory and showed its list's rows. The per-widget data URI
+     *  makes each instance's intent distinct. */
+    private static Intent adapterIntent(Context context, int appWidgetId) {
+        Intent adapter = new Intent(context, WidgetListService.class);
+        adapter.putExtra(EveryListWidget.EXTRA_APPWIDGET_ID, appWidgetId);
+        adapter.setData(Uri.fromParts("widget", String.valueOf(appWidgetId), null));
+        return adapter;
     }
 
     /** Records the failed attempt and, while under {@link #RETRY_MAX_ATTEMPTS}, arms an alarm to
