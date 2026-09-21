@@ -108,14 +108,14 @@ describe('widget', () => {
 		const configure = vi.fn().mockResolvedValue(undefined);
 		mockNativeClient(configure, 99);
 		vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
-		vi.mocked(createToken).mockResolvedValue({ ...existingToken, token: 'elt_new' });
+		vi.mocked(createToken).mockResolvedValue({ ...existingToken, id: 77, token: 'elt_new' });
 
 		await configureWidget([3]);
 		expect(updateToken).not.toHaveBeenCalled();
 		expect(revokeToken).toHaveBeenCalledWith(42);
 		expect(configure).toHaveBeenCalledWith({
 			token: 'elt_new',
-			tokenId: 42,
+			tokenId: 77,
 			listIds: [3],
 			serverUrl: 'https://everylist.example.com'
 		});
@@ -127,14 +127,14 @@ describe('widget', () => {
 		const configure = vi.fn().mockResolvedValue(undefined);
 		mockNativeClient(configure, 42);
 		vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
-		vi.mocked(createToken).mockResolvedValue({ ...existingToken, token: 'elt_new' });
+		vi.mocked(createToken).mockResolvedValue({ ...existingToken, id: 77, token: 'elt_new' });
 
 		await configureWidget([3]);
 		expect(updateToken).not.toHaveBeenCalled();
 		expect(revokeToken).toHaveBeenCalledWith(42);
 		expect(configure).toHaveBeenCalledWith({
 			token: 'elt_new',
-			tokenId: 42,
+			tokenId: 77,
 			listIds: [3],
 			serverUrl: 'https://other.example.com'
 		});
@@ -146,7 +146,7 @@ describe('widget', () => {
 		const configure = vi.fn().mockResolvedValue(undefined);
 		mockNativeClient(configure, null);
 		vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
-		vi.mocked(createToken).mockResolvedValue({ ...existingToken, token: 'elt_new' });
+		vi.mocked(createToken).mockResolvedValue({ ...existingToken, id: 77, token: 'elt_new' });
 
 		await configureWidget([3]);
 		expect(revokeToken).toHaveBeenCalledWith(42);
