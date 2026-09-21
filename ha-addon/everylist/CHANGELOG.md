@@ -5,7 +5,7 @@
 Updates from v1.5.0 (the add-on skipped v1.5.1–v1.6.1, so this covers all of
 them). **Upgrading:** automatic, additive database migrations run on first
 boot (sub-tasks, per-user last-active time, and one-time repairs of stale
-store/category references on items); no foreign keys or table rebuilds.
+store/category references on items); no foreign keys added to existing tables, and no table rebuilds.
 
 - **Sub-tasks** — give any list item its own checklist, with an optional
   auto-complete of the parent (per-list toggle, off by default).
