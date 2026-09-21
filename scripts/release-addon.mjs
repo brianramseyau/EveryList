@@ -55,7 +55,7 @@ if (lsRemote.status === 2) {
 }
 if (lsRemote.status !== 0) {
   console.error(
-    `Could not check origin for ${tag}: ${lsRemote.error?.message ?? lsRemote.stderr.trim() ?? `git exited ${lsRemote.status}`}`
+    `Could not check origin for ${tag}: ${lsRemote.error?.message || lsRemote.stderr.trim() || `git exited ${lsRemote.status}`}`
   )
   process.exit(1)
 }
@@ -74,8 +74,14 @@ if (!versionLine.test(config)) {
 // resulting one-line diff looks innocuous in review. `--allow-downgrade` is the deliberate
 // rollback opt-in.
 const semver = (value) => value.replace(/^v/, '').split('.').map(Number)
-const current = /^version: ['"]?(v\d+\.\d+\.\d+)/m.exec(config)?.[1]
-if (current && !allowDowngrade) {
+const current = /^version: ['"]?(v\d+\.\d+\.\d+)['"]?\s*$/m.exec(config)?.[1]
+if (!current) {
+  console.error(
+    `${configPath}'s "version:" isn't a plain vX.Y.Z tag, so the downgrade check can't run. Fix it by hand first.`
+  )
+  process.exit(1)
+}
+if (!allowDowngrade) {
   const [next, prev] = [semver(tag), semver(current)]
   const older = next.findIndex((part, i) => part !== prev[i])
   if (older !== -1 && next[older] < prev[older]) {
