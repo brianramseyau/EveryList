@@ -165,12 +165,14 @@ export default class ItemsController {
     const user = auth.getUserOrFail()
     const list = await ListPolicy.requireList(user, params.listId, 'viewer')
 
-    // createdAt has only second-level precision, so ties are common between
-    // requests in the same second — break ties by id desc so the most
-    // recently *inserted* row still wins the earlier dedup slot.
+    // Ordered by last use, not creation: re-adding a name reuses its existing row (unchecking or
+    // restoring it), so `createdAt` never moves and would age out staples like "Beer" no matter
+    // how often they're bought. Timestamps have only second-level precision, so ties are common —
+    // break them by id desc. Unbounded on purpose: autocomplete filters client-side, and a cap
+    // would silently hide older names from suggestions (a list's distinct names stay small).
     const rows = await Item.query()
       .where('listId', list.id)
-      .orderBy('createdAt', 'desc')
+      .orderByRaw('COALESCE(updated_at, created_at) DESC')
       .orderBy('id', 'desc')
       .select('name')
 
@@ -181,7 +183,6 @@ export default class ItemsController {
       if (seen.has(key)) continue
       seen.add(key)
       names.push(row.name.trim())
-      if (names.length >= 50) break
     }
 
     // `serialize()` only wraps Lucid models/transformer output — a plain

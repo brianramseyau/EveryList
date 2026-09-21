@@ -648,7 +648,7 @@ describe('fetchRecentItemNames', () => {
 		await expect(fetchRecentItemNames(1)).resolves.toEqual(['bananas', 'Bread']);
 	});
 
-	it('caps the offline fallback at 50 distinct names', async () => {
+	it('does not truncate the offline fallback at 50 names', async () => {
 		vi.mocked(apiGet).mockRejectedValue(new TypeError('network down'));
 		const db = getDb()!;
 		const base = {
@@ -677,7 +677,7 @@ describe('fetchRecentItemNames', () => {
 		}
 
 		const names = await fetchRecentItemNames(1);
-		expect(names).toHaveLength(50);
+		expect(names).toHaveLength(55);
 	});
 });
 

@@ -353,7 +353,9 @@ export async function fetchRecentItemNames(listId: number): Promise<string[]> {
 		if (!db) return [];
 
 		const rows = await db.items.filter((item) => item.listId === listId).toArray();
-		rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+		// Last-use order, matching the server: re-adding a name reuses its row, so createdAt never moves.
+		const lastUsed = (row: (typeof rows)[number]) => row.updatedAt ?? row.createdAt;
+		rows.sort((a, b) => lastUsed(b).localeCompare(lastUsed(a)));
 
 		const seen = new Set<string>();
 		const names: string[] = [];
@@ -362,7 +364,6 @@ export async function fetchRecentItemNames(listId: number): Promise<string[]> {
 			if (seen.has(key)) continue;
 			seen.add(key);
 			names.push(row.name.trim());
-			if (names.length >= 50) break;
 		}
 		return names;
 	}

@@ -1,5 +1,6 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
+import db from '@adonisjs/lucid/services/db'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
 import type { CategoryDto, ItemDto, ListDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
@@ -1105,7 +1106,7 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     assert.isNull(restored.checkedAt)
   })
 
-  test('recent-names caps out at 50 distinct names', async ({ client, assert }) => {
+  test('recent-names returns more than 50 distinct names', async ({ client, assert }) => {
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
@@ -1114,7 +1115,32 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     await auth(client.post(`/api/v1/lists/${listId}/items/import`).json({ text: names.join('\n') }))
 
     const recentNames = await auth(client.get(`/api/v1/lists/${listId}/items/recent-names`))
-    assert.lengthOf(recentNames.body().data, 50)
+    assert.lengthOf(recentNames.body().data, 55)
+  })
+
+  test('recent-names orders by last use, so an old but recently re-added item outranks newer ones', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    await auth(
+      client.post(`/api/v1/lists/${listId}/items/import`).json({ text: 'Beer\nMilk\nBread' })
+    )
+    // Beer was created first but used most recently; Milk is the oldest touch.
+    await db.from('items').where('list_id', listId).where('name', 'Beer').update({
+      created_at: '2026-01-01 00:00:00',
+      updated_at: '2026-09-19 12:00:00',
+    })
+    await db.from('items').where('list_id', listId).whereNot('name', 'Beer').update({
+      created_at: '2026-08-01 00:00:00',
+      updated_at: '2026-08-01 00:00:00',
+    })
+
+    const res = await auth(client.get(`/api/v1/lists/${listId}/items/recent-names`))
+    assert.equal(res.body().data[0], 'Beer')
   })
 
   test('recent-names is viewer-accessible but requires list membership', async ({ client }) => {
