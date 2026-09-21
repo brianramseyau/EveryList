@@ -163,6 +163,17 @@ export async function nextDueDate(
   )
 }
 
+/** True when `item`'s series already has another open (unchecked, not deleted) item. */
+export async function seriesHasOtherOpenItem(item: Item): Promise<boolean> {
+  const other = await Item.query()
+    .where('recurrenceId', item.recurrenceId as number)
+    .whereNull('deletedAt')
+    .where('checked', false)
+    .whereNot('id', item.id)
+    .first()
+  return other !== null
+}
+
 /**
  * What reopening (unchecking) a completed repeating item should do about the successor that
  * completing it spawned.
@@ -185,6 +196,7 @@ export async function openSuccessorOf(item: Item): Promise<Item | 'blocked' | nu
 
   const later = await Item.query()
     .where('recurrenceId', item.recurrenceId as number)
+    .whereNull('deletedAt')
     .where('id', '>', item.id)
   return open.length === 1 && later.length === 1 && later[0]!.id === open[0]!.id
     ? open[0]!

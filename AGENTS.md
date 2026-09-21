@@ -156,7 +156,8 @@ transaction (`spawnNextItem` in `item_recurrence_service.ts`; date math is the s
 - Unchecking a completed recurring item *undoes* the spawn: the open copy is soft-deleted and
   detached (`recurrence_id = NULL`) in the same transaction, so a series never has two open items.
   Don't "simplify" that away — without it, an accidental check + uncheck leaves duplicates that each
-  spawn more copies.
+  spawn more copies. The same invariant is why `restoreItemRow` detaches a restored row when its
+  series already has another open item.
 - There is no unique `(list_id, name)` constraint on `items`; don't add one — spawning depends on it.
 - The spawn happens server-side only. An offline check is just a queued `checked: true`; the next
   item arrives via the realtime `create` broadcast (or the next fetch) once the queue flushes.

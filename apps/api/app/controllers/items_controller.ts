@@ -165,6 +165,20 @@ export default class ItemsController {
 
     logger.debug({ listId: list.id, name: payload.name }, 'item store requested')
 
+    // Validated up front so a malformed or deadline-less rule is rejected the same way whether or not
+    // the name matches an existing row. On a name match `store()` is get-or-create: the existing row
+    // is returned as-is and — like every other field in the payload (deadline, price, notes …) —
+    // the rule is only applied when a row is actually created.
+    let recurrenceRule = null
+    if (payload.recurrence) {
+      const parsed = ruleFromPayload(payload.recurrence)
+      if ('problem' in parsed) return response.unprocessableEntity({ message: parsed.problem })
+      if (!payload.deadline) {
+        return response.unprocessableEntity({ message: 'A repeating item needs a deadline.' })
+      }
+      recurrenceRule = parsed.rule
+    }
+
     const match = await findItemByName(list, payload.name)
     const existing = match && !match.deleted ? match.item : null
 
@@ -234,16 +248,6 @@ export default class ItemsController {
         message: limitReachedMessage(list),
         code: UNCHECKED_LIMIT_REACHED,
       })
-    }
-
-    let recurrenceRule = null
-    if (payload.recurrence) {
-      const parsed = ruleFromPayload(payload.recurrence)
-      if ('problem' in parsed) return response.unprocessableEntity({ message: parsed.problem })
-      if (!payload.deadline) {
-        return response.unprocessableEntity({ message: 'A repeating item needs a deadline.' })
-      }
-      recurrenceRule = parsed.rule
     }
 
     const sortOrder = await nextSortOrder(list, { respectInsertPosition: true })

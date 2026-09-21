@@ -1,6 +1,7 @@
 import type List from '#models/list'
 import Item from '#models/item'
 import { broadcastSync } from '#services/sync_broadcaster'
+import { seriesHasOtherOpenItem } from '#services/item_recurrence_service'
 
 /** The row a name resolves to when adding it to a list: an active row if there is one, otherwise
  * the most recently deleted one. Every path that adds an item by name (manual add, bulk import,
@@ -77,6 +78,10 @@ export async function restoreItemRow(
   item.deletedAt = null
   item.checked = false
   item.checkedAt = null
+  // A deleted row can still be linked to a repeat series whose open item has since moved on (the
+  // completed one was unchecked, or a later one spawned). Bringing it back linked would leave two
+  // open items in one series, each spawning a copy — so it returns as a plain, non-repeating item.
+  if (item.recurrenceId && (await seriesHasOtherOpenItem(item))) item.recurrenceId = null
   item.sortOrder = options?.sortOrder ?? (await nextSortOrder(list, options))
   item.version += 1
   await item.save()

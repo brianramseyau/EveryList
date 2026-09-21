@@ -427,6 +427,100 @@ test.group('Recurring items (PLAN_30_PHASE_RECURRING_ITEMS.md)', (group) => {
     assert.isFalse(await isChecked(item.id))
   })
 
+  test('a soft-deleted later sibling does not block undoing the latest completion', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = { Authorization: `Bearer ${token}` }
+    const a = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
+    await patchItem(client, token, listId, a.id, { checked: true })
+    const b = await Item.query().where('listId', listId).where('checked', false).firstOrFail()
+    // Deleting the open copy keeps its series link (like any soft delete).
+    await client.delete(`/api/v1/lists/${listId}/items/${b.id}`).headers(auth)
+    // No open sibling now, so this is a plain reopen; completing again spawns a third row.
+    await patchItem(client, token, listId, a.id, { checked: false })
+    await patchItem(client, token, listId, a.id, { checked: true })
+
+    const undo = await patchItem(client, token, listId, a.id, { checked: false })
+    undo.assertStatus(200)
+    assert.isFalse(bodyData<ItemDto>(undo).checked)
+  })
+
+  test('restoring a deleted row whose series already has an open item brings it back plain', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = { Authorization: `Bearer ${token}` }
+    const a = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
+    await patchItem(client, token, listId, a.id, { checked: true })
+    const b = await Item.query().where('listId', listId).where('checked', false).firstOrFail()
+    await client.delete(`/api/v1/lists/${listId}/items/${b.id}`).headers(auth)
+    await patchItem(client, token, listId, a.id, { checked: false })
+
+    const restore = await client.post(`/api/v1/lists/${listId}/items/${b.id}/restore`).headers(auth)
+    restore.assertStatus(200)
+    // Two open items would each spawn a copy — the restored one returns as a one-off.
+    assert.isNull(bodyData<ItemDto>(restore).recurrence)
+    const restored = await Item.findOrFail(b.id)
+    assert.isNull(restored.recurrenceId)
+    const series = await Item.query()
+      .where('listId', listId)
+      .whereNotNull('recurrenceId')
+      .whereNull('deletedAt')
+      .where('checked', false)
+    assert.lengthOf(series, 1)
+  })
+
+  test('restoring a deleted repeating item nobody else has replaced keeps its repeat', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = { Authorization: `Bearer ${token}` }
+    const item = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
+    await client.delete(`/api/v1/lists/${listId}/items/${item.id}`).headers(auth)
+
+    const restore = await client
+      .post(`/api/v1/lists/${listId}/items/${item.id}/restore`)
+      .headers(auth)
+    assert.equal(bodyData<ItemDto>(restore).recurrence?.id, item.recurrence?.id)
+  })
+
+  test('a name match returns the existing row unchanged but still validates the rule', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const existing = bodyData<ItemDto>(await createItem(client, token, listId, {}))
+
+    // Get-or-create: the rule only applies when a row is actually created.
+    const valid = await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    valid.assertStatus(200)
+    assert.equal(bodyData<ItemDto>(valid).id, existing.id)
+    assert.isNull(bodyData<ItemDto>(valid).recurrence)
+
+    // ...but a malformed or deadline-less rule is rejected either way.
+    const invalid = await createItem(client, token, listId, {
+      deadline: FUTURE,
+      recurrence: { ...daily, weekdays: [1] },
+    })
+    invalid.assertStatus(422)
+    const noDeadline = await createItem(client, token, listId, { recurrence: daily })
+    noDeadline.assertStatus(422)
+  })
+
   test('editing the rule updates the shared series row', async ({ client, assert }) => {
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)

@@ -96,7 +96,13 @@ sync entity are needed.
      frees the slot the reopened row takes, so it bypasses the open-item limit gate. Any other open
      sibling (a later occurrence already moved on) makes the uncheck a 422, since it would leave two
      open items in one series. With no open sibling (series ended or repeat stopped) it is a plain
-     reopen.
+     reopen. Soft-deleted rows never count as siblings.
+   - **Restoring a deleted row** (the restore endpoint or `store()`'s deleted-name match, both via
+     `restoreItemRow`) whose series already has another open item brings it back detached, as a
+     plain non-repeating item — otherwise two open items would each spawn a copy.
+   - `store()` is get-or-create by name: on a match the existing row is returned unchanged and the
+     payload's rule (like its deadline, price, notes …) only applies when a row is actually
+     created. A malformed or deadline-less rule is still rejected up front either way.
 5. `findItemByName` (`item_reuse.ts`) prefers an *unchecked* active row (then the oldest id, so the
    pick is deterministic when legacy same-name duplicates exist): with checked history rows now
    sharing a name with their open copy, name-based add paths must not "reactivate" the history row.
