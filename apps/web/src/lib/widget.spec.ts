@@ -124,12 +124,20 @@ describe('widget', () => {
 	it('does not trust a held token id issued by a different server', async () => {
 		isNativePlatform.mockReturnValue(true);
 		vi.mocked(getServerUrl).mockReturnValue('https://other.example.com');
-		mockNativeClient(vi.fn().mockResolvedValue(undefined), 42);
+		const configure = vi.fn().mockResolvedValue(undefined);
+		mockNativeClient(configure, 42);
 		vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
 		vi.mocked(createToken).mockResolvedValue({ ...existingToken, token: 'elt_new' });
 
 		await configureWidget([3]);
 		expect(updateToken).not.toHaveBeenCalled();
+		expect(revokeToken).toHaveBeenCalledWith(42);
+		expect(configure).toHaveBeenCalledWith({
+			token: 'elt_new',
+			tokenId: 42,
+			listIds: [3],
+			serverUrl: 'https://other.example.com'
+		});
 	});
 
 	it('replaces a server token whose plaintext this device lost', async () => {
