@@ -164,10 +164,11 @@ public class WidgetUpdater {
         rv.setViewVisibility(R.id.widget_add, View.GONE);
         // No empty view set, so the empty ListView just stays blank. Deliberately no appWidgetId
         // extra (unlike adapterIntent): the factory then reads no instance snapshot, so the setup
-        // state stays empty even if this widget once persisted rows. The data URI is still
-        // per-widget so each instance's factory is distinct.
+        // state stays empty even if this widget once persisted rows. Its own URI scheme keeps its
+        // factory distinct from this widget's normal one (adapterIntent) too, so a factory cached
+        // with real rows can't be handed back here.
         rv.setRemoteAdapter(R.id.widget_list, new Intent(context, WidgetListService.class)
-            .setData(Uri.fromParts("widget", String.valueOf(appWidgetId), null)));
+            .setData(Uri.fromParts("widget-setup", String.valueOf(appWidgetId), null)));
 
         rv.setOnClickPendingIntent(R.id.widget_list_button, pendingActivity(context, appWidgetId,
             new Intent(Intent.ACTION_VIEW,
