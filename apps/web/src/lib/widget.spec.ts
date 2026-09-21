@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@capacitor/core', () => ({
 	Capacitor: { isNativePlatform: vi.fn(), registerPlugin: vi.fn() }
@@ -35,7 +35,11 @@ const existingToken = {
 function mockNativeClient(configure: ReturnType<typeof vi.fn>, tokenId: number | null = null) {
 	const client = {
 		configure,
-		status: vi.fn().mockResolvedValue({ deviceId: 'abc123', tokenId })
+		status: vi.fn().mockResolvedValue({
+			deviceId: 'abc123',
+			tokenId,
+			serverUrl: 'https://everylist.example.com'
+		})
 	};
 	vi.mocked(registerPlugin).mockReturnValue(client as never);
 	return client;
@@ -101,13 +105,31 @@ describe('widget', () => {
 	it('replaces the token when the widget holds a different account’s PAT', async () => {
 		isNativePlatform.mockReturnValue(true);
 		vi.mocked(getServerUrl).mockReturnValue('https://everylist.example.com');
-		mockNativeClient(vi.fn().mockResolvedValue(undefined), 99);
+		const configure = vi.fn().mockResolvedValue(undefined);
+		mockNativeClient(configure, 99);
 		vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
 		vi.mocked(createToken).mockResolvedValue({ ...existingToken, token: 'elt_new' });
 
 		await configureWidget([3]);
 		expect(updateToken).not.toHaveBeenCalled();
 		expect(revokeToken).toHaveBeenCalledWith(42);
+		expect(configure).toHaveBeenCalledWith({
+			token: 'elt_new',
+			tokenId: 42,
+			listIds: [3],
+			serverUrl: 'https://everylist.example.com'
+		});
+	});
+
+	it('does not trust a held token id issued by a different server', async () => {
+		isNativePlatform.mockReturnValue(true);
+		vi.mocked(getServerUrl).mockReturnValue('https://other.example.com');
+		mockNativeClient(vi.fn().mockResolvedValue(undefined), 42);
+		vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
+		vi.mocked(createToken).mockResolvedValue({ ...existingToken, token: 'elt_new' });
+
+		await configureWidget([3]);
+		expect(updateToken).not.toHaveBeenCalled();
 	});
 
 	it('replaces a server token whose plaintext this device lost', async () => {
@@ -124,6 +146,10 @@ describe('widget', () => {
 	});
 
 	describe('currentWidgetListIds', () => {
+		beforeEach(() => {
+			vi.mocked(getServerUrl).mockReturnValue('https://everylist.example.com');
+		});
+
 		it('is empty on the web build', async () => {
 			isNativePlatform.mockReturnValue(false);
 			expect(await currentWidgetListIds()).toEqual([]);
@@ -146,6 +172,13 @@ describe('widget', () => {
 			isNativePlatform.mockReturnValue(true);
 			mockNativeClient(vi.fn(), 99);
 			vi.mocked(fetchTokens).mockResolvedValue([existingToken]);
+			expect(await currentWidgetListIds()).toEqual([]);
+		});
+
+		it('is empty when the held token came from a different server', async () => {
+			isNativePlatform.mockReturnValue(true);
+			vi.mocked(getServerUrl).mockReturnValue('https://other.example.com');
+			mockNativeClient(vi.fn(), 42);
 			expect(await currentWidgetListIds()).toEqual([]);
 		});
 

@@ -20,8 +20,8 @@ export async function currentWidgetListIds(): Promise<number[]> {
 	const client = nativeWidgetClient();
 	if (!client) return [];
 	try {
-		const { deviceId, tokenId } = await client.status();
-		if (tokenId === null) return [];
+		const { deviceId, tokenId, serverUrl } = await client.status();
+		if (tokenId === null || serverUrl !== getServerUrl()) return [];
 		const existing = (await fetchTokens()).find((token) => token.id === tokenId);
 		return existing?.name === widgetTokenName(deviceId)
 			? existing.grants.map((grant) => grant.listId)
@@ -58,7 +58,10 @@ export async function configureWidget(listIds: number[]): Promise<boolean> {
 	const serverUrl = getServerUrl();
 	if (!serverUrl) return false;
 
-	const { deviceId, tokenId } = await client.status();
+	const status = await client.status();
+	const { deviceId } = status;
+	// Token ids are per-server, so the held id only counts if it was issued by this server.
+	const tokenId = status.serverUrl === serverUrl ? status.tokenId : null;
 	const name = widgetTokenName(deviceId);
 	const existing = (await fetchTokens()).find((token) => token.name === name);
 

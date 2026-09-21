@@ -314,6 +314,9 @@ export interface WidgetStatusDto {
   /** The server id of the PAT the widget holds, or `null` if it holds none. Comparing it to the
    *  signed-in account's token guards against a widget still holding another account's PAT. */
   tokenId: number | null
+  /** The server origin the held PAT was issued by (`''` if none) — PAT ids are per-server, so a
+   *  `tokenId` only means something against this same origin. */
+  serverUrl: string
 }
 
 export type BackupFrequency = 'daily' | 'weekly' | 'monthly'

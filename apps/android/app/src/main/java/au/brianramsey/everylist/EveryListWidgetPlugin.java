@@ -29,6 +29,7 @@ public class EveryListWidgetPlugin extends Plugin {
     public void status(PluginCall call) {
         JSObject result = new JSObject();
         result.put("deviceId", WidgetPrefs.getDeviceId(getContext()));
+        result.put("serverUrl", WidgetPrefs.getGlobalServerUrl(getContext()));
         long tokenId = WidgetPrefs.getTokenId(getContext());
         result.put("tokenId", tokenId > 0 ? (Object) tokenId : JSONObject.NULL);
         call.resolve(result);
@@ -50,7 +51,7 @@ public class EveryListWidgetPlugin extends Plugin {
         }
 
         long tokenId = hasNewToken
-            ? call.getData().optLong("tokenId", -1L)
+            ? call.getData().optLong("tokenId", WidgetPrefs.getTokenId(getContext()))
             : WidgetPrefs.getTokenId(getContext());
         WidgetPrefs.saveGlobalCredentials(getContext(), token, tokenId, serverUrl, listIds);
 
