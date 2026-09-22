@@ -97,9 +97,17 @@ sync entity are needed.
      sibling (a later occurrence already moved on) makes the uncheck a 422, since it would leave two
      open items in one series. With no open sibling (series ended or repeat stopped) it is a plain
      reopen. Soft-deleted rows never count as siblings.
+     - This "other open item" check matches by **list + name**, not `recurrenceId`. Stopping an
+       item's repeat nulls only that item's `recurrenceId`, so a checked history row further back
+       in the series can still carry the shared `recurrenceId` after its own successor has
+       detached — matching by `recurrenceId` alone would miss that detached successor and let
+       reopening the history row spawn a duplicate copy of the same chore. The same check runs
+       again, transaction-scoped, immediately before the spawn itself (defense in depth), since
+       the uncheck-time guard only covers the reopen step, not a later recheck of the same row.
    - **Restoring a deleted row** (the restore endpoint or `store()`'s deleted-name match, both via
-     `restoreItemRow`) whose series already has another open item brings it back detached, as a
-     plain non-repeating item — otherwise two open items would each spawn a copy.
+     `restoreItemRow`) whose series already has another open item (by the same list + name check)
+     brings it back detached, as a plain non-repeating item — otherwise two open items would each
+     spawn a copy.
    - `store()` is get-or-create by name: on a match the existing row is returned unchanged and the
      payload's rule (like its deadline, price, notes …) only applies when a row is actually
      created. A malformed or deadline-less rule is still rejected up front either way.

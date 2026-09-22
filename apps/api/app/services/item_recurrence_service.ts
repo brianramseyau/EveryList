@@ -1,4 +1,5 @@
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import type { ModelQueryBuilderContract } from '@adonisjs/lucid/types/model'
 import {
   nextOccurrence,
   recurrenceRuleProblem,
@@ -163,15 +164,51 @@ export async function nextDueDate(
   )
 }
 
-/** True when `item`'s series already has another open (unchecked, not deleted) item. */
-export async function seriesHasOtherOpenItem(item: Item): Promise<boolean> {
-  const other = await Item.query()
-    .where('recurrenceId', item.recurrenceId as number)
+/** Same case/whitespace-insensitive match `findItemByName` (item_reuse.ts) uses, so a name-based
+ * duplicate check here can't miss a row that add-item's own lookup would have treated as the
+ * same item. */
+function sameName(
+  query: ModelQueryBuilderContract<typeof Item, Item>,
+  name: string
+): ModelQueryBuilderContract<typeof Item, Item> {
+  return query.whereRaw('LOWER(TRIM(name)) = ?', [name.trim().toLowerCase()])
+}
+
+/**
+ * Open (unchecked, not deleted) items that share `item`'s list and name — matched by name, not
+ * `recurrenceId`: stopping an item's repeat nulls only *that item's* `recurrenceId` (older
+ * checked siblings keep it as history), so a checked history row can still carry the series'
+ * `recurrenceId` after its own successor has detached. Matching by `recurrenceId` alone would
+ * then miss that detached successor and let reopening the history row spawn a second, duplicate
+ * copy alongside it — the same visible chore under two open rows.
+ */
+async function openNamesakesOf(item: Item, client?: TransactionClientContract): Promise<Item[]> {
+  const query = client ? Item.query({ client }) : Item.query()
+  return sameName(query, item.name)
+    .where('listId', item.listId)
     .whereNull('deletedAt')
     .where('checked', false)
     .whereNot('id', item.id)
-    .first()
-  return other !== null
+}
+
+/** True when `item`'s series already has another open (unchecked, not deleted) item. */
+export async function seriesHasOtherOpenItem(item: Item): Promise<boolean> {
+  const other = await openNamesakesOf(item)
+  return other.length > 0
+}
+
+/**
+ * True when spawning `item`'s next occurrence right now would duplicate an already-open item of
+ * the same name. Checked again inside the spawn transaction as a defense in depth:
+ * `openSuccessorOf`'s check (below) only guards the uncheck path, which runs before that
+ * transaction opens.
+ */
+export async function hasOpenNamesake(
+  item: Item,
+  client: TransactionClientContract
+): Promise<boolean> {
+  const other = await openNamesakesOf(item, client)
+  return other.length > 0
 }
 
 /**
@@ -187,17 +224,21 @@ export async function seriesHasOtherOpenItem(item: Item): Promise<boolean> {
  *   duplicates). Reopening would leave two open items in one series, so it's refused.
  */
 export async function openSuccessorOf(item: Item): Promise<Item | 'blocked' | null> {
-  const open = await Item.query()
-    .where('recurrenceId', item.recurrenceId as number)
-    .whereNull('deletedAt')
-    .where('checked', false)
-    .whereNot('id', item.id)
+  const open = await openNamesakesOf(item)
   if (open.length === 0) return null
 
-  const later = await Item.query()
-    .where('recurrenceId', item.recurrenceId as number)
+  // Counts a later row as belonging to this timeline when it's either still linked to the same
+  // series (catches an in-between completion that hasn't detached) or open under the same name
+  // (catches a detached successor). A *checked* same-named row that was never part of this
+  // series — a legacy duplicate `findItemByName` already tolerates elsewhere — is excluded, or
+  // it would inflate this count and wrongly refuse a legitimate undo.
+  const later = await sameName(Item.query(), item.name)
+    .where('listId', item.listId)
     .whereNull('deletedAt')
     .where('id', '>', item.id)
+    .andWhere((query) => {
+      query.where('checked', false).orWhere('recurrenceId', item.recurrenceId as number)
+    })
   return open.length === 1 && later.length === 1 && later[0]!.id === open[0]!.id
     ? open[0]!
     : 'blocked'
