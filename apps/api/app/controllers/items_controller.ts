@@ -21,6 +21,7 @@ import db from '@adonisjs/lucid/services/db'
 import { todayLocalIso } from '#services/deadline_notification_service'
 import ItemRecurrence from '#models/item_recurrence'
 import {
+  hasOpenNamesake,
   nextDueDate,
   openSuccessorOf,
   ruleFromPayload,
@@ -573,6 +574,10 @@ export default class ItemsController {
         }
         await item.useTransaction(trx).save()
         if (!completing || alreadyCompleted) return null
+        // A namesake that detached from the series (its own repeat was stopped) is invisible to
+        // `recurrenceId`-based checks, so this re-checks right before spawning — the uncheck-time
+        // guard above only covers the reopen step, not a later recheck of the same row.
+        if (await hasOpenNamesake(item, trx)) return null
         const nextDate = await nextDueDate(item, today, trx)
         return nextDate ? spawnNextItem(item, nextDate, sortOrder, trx) : null
       })

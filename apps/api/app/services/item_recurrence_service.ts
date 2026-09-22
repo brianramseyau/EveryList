@@ -163,15 +163,42 @@ export async function nextDueDate(
   )
 }
 
-/** True when `item`'s series already has another open (unchecked, not deleted) item. */
-export async function seriesHasOtherOpenItem(item: Item): Promise<boolean> {
-  const other = await Item.query()
-    .where('recurrenceId', item.recurrenceId as number)
+/**
+ * Open (unchecked, not deleted) items that share `item`'s list and name — matched by name, not
+ * `recurrenceId`: stopping an item's repeat nulls only *that item's* `recurrenceId` (older
+ * checked siblings keep it as history), so a checked history row can still carry the series'
+ * `recurrenceId` after its own successor has detached. Matching by `recurrenceId` alone would
+ * then miss that detached successor and let reopening the history row spawn a second, duplicate
+ * copy alongside it — the same visible chore under two open rows.
+ */
+async function openNamesakesOf(item: Item, client?: TransactionClientContract): Promise<Item[]> {
+  const query = client ? Item.query({ client }) : Item.query()
+  return query
+    .where('listId', item.listId)
+    .where('name', item.name)
     .whereNull('deletedAt')
     .where('checked', false)
     .whereNot('id', item.id)
-    .first()
-  return other !== null
+}
+
+/** True when `item`'s series already has another open (unchecked, not deleted) item. */
+export async function seriesHasOtherOpenItem(item: Item): Promise<boolean> {
+  const other = await openNamesakesOf(item)
+  return other.length > 0
+}
+
+/**
+ * True when spawning `item`'s next occurrence right now would duplicate an already-open item of
+ * the same name. Checked again inside the spawn transaction as a defense in depth:
+ * `openSuccessorOf`'s check (below) only guards the uncheck path, which runs before that
+ * transaction opens.
+ */
+export async function hasOpenNamesake(
+  item: Item,
+  client: TransactionClientContract
+): Promise<boolean> {
+  const other = await openNamesakesOf(item, client)
+  return other.length > 0
 }
 
 /**
@@ -187,15 +214,12 @@ export async function seriesHasOtherOpenItem(item: Item): Promise<boolean> {
  *   duplicates). Reopening would leave two open items in one series, so it's refused.
  */
 export async function openSuccessorOf(item: Item): Promise<Item | 'blocked' | null> {
-  const open = await Item.query()
-    .where('recurrenceId', item.recurrenceId as number)
-    .whereNull('deletedAt')
-    .where('checked', false)
-    .whereNot('id', item.id)
+  const open = await openNamesakesOf(item)
   if (open.length === 0) return null
 
   const later = await Item.query()
-    .where('recurrenceId', item.recurrenceId as number)
+    .where('listId', item.listId)
+    .where('name', item.name)
     .whereNull('deletedAt')
     .where('id', '>', item.id)
   return open.length === 1 && later.length === 1 && later[0]!.id === open[0]!.id

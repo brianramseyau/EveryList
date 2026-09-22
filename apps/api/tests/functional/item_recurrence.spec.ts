@@ -384,6 +384,76 @@ test.group('Recurring items (PLAN_30_PHASE_RECURRING_ITEMS.md)', (group) => {
     assert.lengthOf(await Item.query().where('listId', listId).whereNull('deletedAt'), 1)
   })
 
+  test('undoing an older occurrence discards a successor that stopped repeating, instead of duplicating it', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const original = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
+    await patchItem(client, token, listId, original.id, { checked: true })
+    const successor = await Item.query()
+      .where('listId', listId)
+      .where('checked', false)
+      .firstOrFail()
+
+    // The successor's own repeat is turned off — it's still the visible open occurrence of this
+    // chore, but it's no longer linked to the series by `recurrenceId`.
+    const stop = await patchItem(client, token, listId, successor.id, { recurrence: null })
+    stop.assertStatus(200)
+    const stopped = await Item.findOrFail(successor.id)
+    assert.isNull(stopped.recurrenceId)
+
+    // Reopening the *original* (an older, already-checked occurrence) must not leave both it and
+    // the detached successor open under the same name — matching by `recurrenceId` alone would
+    // miss the successor entirely and let this through as a bare reopen.
+    const undo = await patchItem(client, token, listId, original.id, { checked: false })
+    undo.assertStatus(200)
+
+    const open = await Item.query().where('listId', listId).whereNull('deletedAt')
+    assert.deepEqual(
+      open.map((row) => row.id),
+      [original.id]
+    )
+    const discardedSuccessor = await Item.findOrFail(successor.id)
+    assert.isNotNull(discardedSuccessor.deletedAt)
+
+    // Completing the original again spawns exactly one fresh copy — no duplicate.
+    await patchItem(client, token, listId, original.id, { checked: true })
+    assert.lengthOf(
+      await Item.query().where('listId', listId).where('checked', false).whereNull('deletedAt'),
+      1
+    )
+  })
+
+  test('does not spawn a duplicate when an unrelated open item already shares the name (defense in depth)', async ({
+    client,
+    assert,
+  }) => {
+    const { token, id: userId } = await signupAndGetUser(client)
+    const listId = await createList(client, token)
+    const item = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
+    // Bypasses the controller entirely, so the only thing standing between this and a duplicate
+    // is the spawn-time check inside the transaction, not the uncheck-time guard.
+    await Item.create({
+      listId,
+      name: item.name,
+      checked: false,
+      sortOrder: 1,
+      createdBy: userId,
+      version: 1,
+    })
+
+    await patchItem(client, token, listId, item.id, { checked: true })
+
+    assert.lengthOf(await Item.query().where('listId', listId).where('checked', false), 1)
+    assert.equal(await occurrencesCreated(), 1)
+  })
+
   test('refuses to reopen an older occurrence once a later one is open', async ({
     client,
     assert,
