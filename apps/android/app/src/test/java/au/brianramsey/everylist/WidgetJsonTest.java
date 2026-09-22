@@ -30,12 +30,13 @@ public class WidgetJsonTest {
 
     @Test
     public void parseWidgetSnapshot_readsListNameAndItems() throws Exception {
-        String body = "{\"data\":{\"listName\":\"Groceries\",\"items\":["
+        String body = "{\"data\":{\"listName\":\"Groceries\",\"useDeadline\":true,\"items\":["
             + "{\"id\":2,\"name\":\"Milk\",\"quantity\":\"1 gal\",\"checked\":false,\"deadline\":\"2026-09-05T14:30\"},"
             + "{\"id\":3,\"name\":\"Bread\",\"quantity\":null,\"checked\":true,\"deadline\":null}"
             + "]}}";
         WidgetModels.WidgetSnapshot snapshot = WidgetJson.parseWidgetSnapshot(body);
         assertEquals("Groceries", snapshot.listName);
+        assertTrue(snapshot.useDeadline);
         assertEquals(2, snapshot.items.size());
 
         WidgetModels.WidgetItem milk = snapshot.items.get(0);
@@ -56,7 +57,14 @@ public class WidgetJsonTest {
     public void parseWidgetSnapshot_missingDataYieldsEmptySnapshot() throws Exception {
         WidgetModels.WidgetSnapshot snapshot = WidgetJson.parseWidgetSnapshot("{}");
         assertEquals("", snapshot.listName);
+        assertFalse(snapshot.useDeadline);
         assertEquals(0, snapshot.items.size());
+    }
+
+    @Test
+    public void parseWidgetSnapshot_useDeadlineDefaultsFalseWhenMissing() throws Exception {
+        String body = "{\"data\":{\"listName\":\"Groceries\",\"items\":[]}}";
+        assertFalse(WidgetJson.parseWidgetSnapshot(body).useDeadline);
     }
 
     @Test

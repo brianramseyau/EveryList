@@ -21,6 +21,7 @@ public class WidgetListViewsFactory implements RemoteViewsService.RemoteViewsFac
     private final int appWidgetId;
     private List<WidgetModels.WidgetItem> items = new ArrayList<>();
     private long listId = -1L;
+    private boolean useDeadline = false;
 
     WidgetListViewsFactory(Context context, int appWidgetId) {
         this.context = context;
@@ -36,6 +37,7 @@ public class WidgetListViewsFactory implements RemoteViewsService.RemoteViewsFac
         WidgetPrefs prefs = new WidgetPrefs(context, appWidgetId);
         items = prefs.loadSnapshot();
         listId = prefs.getListId();
+        useDeadline = prefs.getUseDeadline();
     }
 
     @Override
@@ -74,7 +76,7 @@ public class WidgetListViewsFactory implements RemoteViewsService.RemoteViewsFac
             row.setInt(R.id.item_name, "setPaintFlags", 0);
         }
 
-        if (item.deadline != null && !item.deadline.isEmpty()) {
+        if (useDeadline && item.deadline != null && !item.deadline.isEmpty()) {
             DeadlineMath.Chip chip = DeadlineMath.deadlineChip(item.deadline, Calendar.getInstance());
             int color = context.getColor(chip.overdue
                 ? R.color.widget_overdue

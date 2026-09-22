@@ -43,10 +43,16 @@ final class WidgetModels {
     /** `GET /api/v1/lists/:id/widget-snapshot`'s response. */
     static final class WidgetSnapshot {
         final String listName;
+        /** Whether the list has deadlines turned on — an item can carry a {@link
+         *  WidgetItem#deadline} value even when this is false (setting one isn't itself blocked
+         *  by the toggle), so the chip's visibility has to be gated on this separately, matching
+         *  the web/app list view's `list?.useDeadline === true` check. */
+        final boolean useDeadline;
         final List<WidgetItem> items;
 
-        WidgetSnapshot(String listName, List<WidgetItem> items) {
+        WidgetSnapshot(String listName, boolean useDeadline, List<WidgetItem> items) {
             this.listName = listName;
+            this.useDeadline = useDeadline;
             this.items = items;
         }
     }

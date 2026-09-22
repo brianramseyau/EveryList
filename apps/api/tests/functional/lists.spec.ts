@@ -561,6 +561,7 @@ test.group('Widget snapshot', (group) => {
 
     const snapshot = bodyData<{
       listName: string
+      useDeadline: boolean
       items: {
         id: number
         name: string
@@ -571,6 +572,9 @@ test.group('Widget snapshot', (group) => {
       }[]
     }>(response)
     assert.equal(snapshot.listName, 'Groceries')
+    // Not opted into deadlines — the widget uses this to hide the chip even on an item that
+    // still carries a `deadline` value (setting one isn't itself blocked by the toggle).
+    assert.equal(snapshot.useDeadline, false)
     // Dairy (reordered first) before Produce, uncategorized last — matches
     // buildFlatDisplayOrder/apl_view.ts's ordering, just without category headers.
     assert.deepEqual(
@@ -581,6 +585,29 @@ test.group('Widget snapshot', (group) => {
     assert.equal(snapshot.items[1]?.quantity, '3')
     assert.equal(snapshot.items[0]?.deadline, '2026-09-05T14:30')
     assert.equal(snapshot.items[1]?.deadline, null)
+  })
+
+  test('reports useDeadline so the widget can hide the chip when the list has deadlines off', async ({
+    client,
+    assert,
+  }) => {
+    const owner = await signupAndGetUser(client)
+    const create = await client
+      .post('/api/v1/lists')
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ name: 'Groceries' })
+    const listId = bodyData<ListDto>(create).id
+
+    await client
+      .patch(`/api/v1/lists/${listId}`)
+      .header('Authorization', `Bearer ${owner.token}`)
+      .json({ useDeadline: true })
+
+    const response = await client
+      .get(`/api/v1/lists/${listId}/widget-snapshot`)
+      .header('Authorization', `Bearer ${owner.token}`)
+    response.assertStatus(200)
+    assert.equal(bodyData<{ useDeadline: boolean }>(response).useDeadline, true)
   })
 
   test('includeChecked=false hides checked items', async ({ client, assert }) => {

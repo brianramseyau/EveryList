@@ -81,6 +81,7 @@ public class WidgetUpdater {
             WidgetModels.WidgetSnapshot snapshot =
                 WidgetApiClient.fetchWidgetSnapshot(token, serverUrl, listId, prefs.getShowCompleted());
             prefs.setListName(snapshot.listName);
+            prefs.setUseDeadline(snapshot.useDeadline);
             prefs.saveSnapshot(snapshot.items);
             prefs.setLastError(null);
             prefs.setRetryCount(0);
