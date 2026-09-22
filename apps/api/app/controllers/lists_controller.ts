@@ -161,12 +161,17 @@ export default class ListsController {
 
     return serialize({
       listName: list.name,
+      // So the widget can hide the deadline chip on a list that doesn't use them, the same as
+      // the web/app list view's `list?.useDeadline === true` gate — an item can carry a
+      // `deadline` value even when its list has the feature toggled off.
+      useDeadline: list.useDeadline,
       items: ordered.map((item) => ({
         id: item.id,
         name: item.name,
         checked: item.checked,
         quantity: item.quantity,
         price: item.price,
+        deadline: item.deadline,
       })),
     })
   }

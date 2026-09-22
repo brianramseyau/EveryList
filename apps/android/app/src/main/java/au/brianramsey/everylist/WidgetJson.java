@@ -30,9 +30,10 @@ final class WidgetJson {
      *  so there's no client-side sorting/grouping logic left to test here beyond field mapping. */
     static WidgetModels.WidgetSnapshot parseWidgetSnapshot(String body) throws JSONException {
         JSONObject data = new JSONObject(body).optJSONObject("data");
-        if (data == null) return new WidgetModels.WidgetSnapshot("", new ArrayList<>());
+        if (data == null) return new WidgetModels.WidgetSnapshot("", false, new ArrayList<>());
 
         String listName = data.optString("listName", "");
+        boolean useDeadline = data.optBoolean("useDeadline");
         JSONArray itemsJson = data.optJSONArray("items");
         List<WidgetModels.WidgetItem> items = new ArrayList<>();
         if (itemsJson != null) {
@@ -42,10 +43,11 @@ final class WidgetJson {
                     o.optLong("id", 0L),
                     o.optString("name", ""),
                     o.optBoolean("checked"),
-                    o.isNull("quantity") ? null : o.optString("quantity")));
+                    o.isNull("quantity") ? null : o.optString("quantity"),
+                    o.isNull("deadline") ? null : o.optString("deadline")));
             }
         }
-        return new WidgetModels.WidgetSnapshot(listName, items);
+        return new WidgetModels.WidgetSnapshot(listName, useDeadline, items);
     }
 
     /** Serializes a snapshot's items for `WidgetPrefs` storage — already filtered/ordered, so this
@@ -58,6 +60,7 @@ final class WidgetJson {
             o.put("name", it.name);
             o.put("checked", it.checked);
             if (it.quantity != null) o.put("quantity", it.quantity);
+            if (it.deadline != null) o.put("deadline", it.deadline);
             arr.put(o);
         }
         return arr.toString();
@@ -73,7 +76,8 @@ final class WidgetJson {
                 o.optLong("id", 0L),
                 o.optString("name", ""),
                 o.optBoolean("checked"),
-                o.isNull("quantity") ? null : o.optString("quantity")));
+                o.isNull("quantity") ? null : o.optString("quantity"),
+                o.isNull("deadline") ? null : o.optString("deadline")));
         }
         return out;
     }

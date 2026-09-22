@@ -27,22 +27,32 @@ final class WidgetModels {
         final String name;
         final boolean checked;
         final String quantity;
+        /** Naive-local ISO 8601 — 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm' — or null when unset. See
+         *  {@link DeadlineMath} for the chip rendering rules. */
+        final String deadline;
 
-        WidgetItem(long id, String name, boolean checked, String quantity) {
+        WidgetItem(long id, String name, boolean checked, String quantity, String deadline) {
             this.id = id;
             this.name = name;
             this.checked = checked;
             this.quantity = quantity;
+            this.deadline = deadline;
         }
     }
 
     /** `GET /api/v1/lists/:id/widget-snapshot`'s response. */
     static final class WidgetSnapshot {
         final String listName;
+        /** Whether the list has deadlines turned on — an item can carry a {@link
+         *  WidgetItem#deadline} value even when this is false (setting one isn't itself blocked
+         *  by the toggle), so the chip's visibility has to be gated on this separately, matching
+         *  the web/app list view's `list?.useDeadline === true` check. */
+        final boolean useDeadline;
         final List<WidgetItem> items;
 
-        WidgetSnapshot(String listName, List<WidgetItem> items) {
+        WidgetSnapshot(String listName, boolean useDeadline, List<WidgetItem> items) {
             this.listName = listName;
+            this.useDeadline = useDeadline;
             this.items = items;
         }
     }

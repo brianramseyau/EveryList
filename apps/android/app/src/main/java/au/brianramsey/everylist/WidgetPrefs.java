@@ -36,6 +36,7 @@ final class WidgetPrefs {
 
     private static final String KEY_LIST_ID = "listId";
     private static final String KEY_LIST_NAME = "listName";
+    private static final String KEY_USE_DEADLINE = "useDeadline";
     private static final String KEY_SHOW_COMPLETED = "showCompleted";
     private static final String KEY_SNAPSHOT = "snapshot";
     private static final String KEY_LAST_ERROR = "lastError";
@@ -184,6 +185,16 @@ final class WidgetPrefs {
 
     void setListName(String name) {
         instance.edit().putString(KEY_LIST_NAME, name).apply();
+    }
+
+    /** Whether the selected list has deadlines turned on — persisted alongside the snapshot so
+     *  the offline fallback still gates the deadline chip correctly, not just a live fetch. */
+    boolean getUseDeadline() {
+        return instance.getBoolean(KEY_USE_DEADLINE, false);
+    }
+
+    void setUseDeadline(boolean useDeadline) {
+        instance.edit().putBoolean(KEY_USE_DEADLINE, useDeadline).apply();
     }
 
     boolean getShowCompleted() {

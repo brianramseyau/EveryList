@@ -23,5 +23,8 @@
          "this is done" (signal green) never looks like "this is a tappable control" (accent slate). -->
     <color name="widget_signal">#2E8B57</color>
     <color name="widget_warn">#B45309</color>
+    <!-- The deadline chip's overdue state — matches the web app's text-red-600 (dark:text-red-400
+         below), same Tailwind red used for the "Overdue" chip in +page.svelte. -->
+    <color name="widget_overdue">#DC2626</color>
     <color name="widget_white">#FFFFFF</color>
 </resources>
