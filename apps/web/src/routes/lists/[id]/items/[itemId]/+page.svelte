@@ -274,7 +274,11 @@
 
 		// The API needs a deadline to repeat from, so a rule without a date is dropped. An invalid
 		// rule is already flagged by the editor's own inline alert, so Save just declines to send it.
-		const recurrence = draftDeadlineDate ? draftRecurrence : null;
+		// `$state.snapshot` strips the $state proxy (including nested `weekdays`/`monthly`/`end`)
+		// down to a plain object — IndexedDB's structured clone can't serialize a reactive proxy,
+		// and `updateItem`'s cache write only spreads the top level, so a nested proxy survives
+		// into the `db.items.put` call and throws DataCloneError.
+		const recurrence = draftDeadlineDate ? $state.snapshot(draftRecurrence) : null;
 		if (recurrence && recurrenceRuleProblem(recurrence)) return;
 		// Creating or editing a rule lands the deadline on its grid (a weekly-on-Monday rule can't
 		// leave the item due on a Thursday). An unchanged rule leaves the deadline alone — it may
