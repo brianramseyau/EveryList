@@ -547,7 +547,7 @@ test.group('Widget snapshot', (group) => {
     await client
       .post(`/api/v1/lists/${listId}/items`)
       .header('Authorization', `Bearer ${owner.token}`)
-      .json({ name: 'Milk', categoryId: dairy.id })
+      .json({ name: 'Milk', categoryId: dairy.id, deadline: '2026-09-05T14:30' })
     await client
       .post(`/api/v1/lists/${listId}/items`)
       .header('Authorization', `Bearer ${owner.token}`)
@@ -567,6 +567,7 @@ test.group('Widget snapshot', (group) => {
         checked: boolean
         quantity: string | null
         price: number | null
+        deadline: string | null
       }[]
     }>(response)
     assert.equal(snapshot.listName, 'Groceries')
@@ -578,6 +579,8 @@ test.group('Widget snapshot', (group) => {
     )
     assert.equal(snapshot.items[0]?.quantity, null)
     assert.equal(snapshot.items[1]?.quantity, '3')
+    assert.equal(snapshot.items[0]?.deadline, '2026-09-05T14:30')
+    assert.equal(snapshot.items[1]?.deadline, null)
   })
 
   test('includeChecked=false hides checked items', async ({ client, assert }) => {

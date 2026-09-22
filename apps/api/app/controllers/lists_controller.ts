@@ -167,6 +167,7 @@ export default class ListsController {
         checked: item.checked,
         quantity: item.quantity,
         price: item.price,
+        deadline: item.deadline,
       })),
     })
   }

@@ -42,7 +42,8 @@ final class WidgetJson {
                     o.optLong("id", 0L),
                     o.optString("name", ""),
                     o.optBoolean("checked"),
-                    o.isNull("quantity") ? null : o.optString("quantity")));
+                    o.isNull("quantity") ? null : o.optString("quantity"),
+                    o.isNull("deadline") ? null : o.optString("deadline")));
             }
         }
         return new WidgetModels.WidgetSnapshot(listName, items);
@@ -58,6 +59,7 @@ final class WidgetJson {
             o.put("name", it.name);
             o.put("checked", it.checked);
             if (it.quantity != null) o.put("quantity", it.quantity);
+            if (it.deadline != null) o.put("deadline", it.deadline);
             arr.put(o);
         }
         return arr.toString();
@@ -73,7 +75,8 @@ final class WidgetJson {
                 o.optLong("id", 0L),
                 o.optString("name", ""),
                 o.optBoolean("checked"),
-                o.isNull("quantity") ? null : o.optString("quantity")));
+                o.isNull("quantity") ? null : o.optString("quantity"),
+                o.isNull("deadline") ? null : o.optString("deadline")));
         }
         return out;
     }

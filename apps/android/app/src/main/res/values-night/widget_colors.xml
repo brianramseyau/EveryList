@@ -18,5 +18,6 @@
     <!-- Lightened a step from the light-mode signal green for the same reason. -->
     <color name="widget_signal">#3FAF74</color>
     <color name="widget_warn">#D97706</color>
+    <color name="widget_overdue">#F87171</color>
     <color name="widget_white">#FFFFFF</color>
 </resources>

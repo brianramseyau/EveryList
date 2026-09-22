@@ -31,8 +31,8 @@ public class WidgetJsonTest {
     @Test
     public void parseWidgetSnapshot_readsListNameAndItems() throws Exception {
         String body = "{\"data\":{\"listName\":\"Groceries\",\"items\":["
-            + "{\"id\":2,\"name\":\"Milk\",\"quantity\":\"1 gal\",\"checked\":false},"
-            + "{\"id\":3,\"name\":\"Bread\",\"quantity\":null,\"checked\":true}"
+            + "{\"id\":2,\"name\":\"Milk\",\"quantity\":\"1 gal\",\"checked\":false,\"deadline\":\"2026-09-05T14:30\"},"
+            + "{\"id\":3,\"name\":\"Bread\",\"quantity\":null,\"checked\":true,\"deadline\":null}"
             + "]}}";
         WidgetModels.WidgetSnapshot snapshot = WidgetJson.parseWidgetSnapshot(body);
         assertEquals("Groceries", snapshot.listName);
@@ -43,11 +43,13 @@ public class WidgetJsonTest {
         assertEquals("Milk", milk.name);
         assertEquals("1 gal", milk.quantity);
         assertFalse(milk.checked);
+        assertEquals("2026-09-05T14:30", milk.deadline);
 
         WidgetModels.WidgetItem bread = snapshot.items.get(1);
         assertEquals("Bread", bread.name);
         assertNull(bread.quantity);
         assertTrue(bread.checked);
+        assertNull(bread.deadline);
     }
 
     @Test
@@ -60,7 +62,7 @@ public class WidgetJsonTest {
     @Test
     public void snapshotRoundTrips() throws Exception {
         String body = "{\"data\":{\"listName\":\"Groceries\",\"items\":["
-            + "{\"id\":2,\"name\":\"Milk\",\"quantity\":\"1 gal\",\"checked\":true}]}}";
+            + "{\"id\":2,\"name\":\"Milk\",\"quantity\":\"1 gal\",\"checked\":true,\"deadline\":\"2026-09-05\"}]}}";
         List<WidgetModels.WidgetItem> original = WidgetJson.parseWidgetSnapshot(body).items;
 
         String json = WidgetJson.itemsToJson(original);
@@ -71,14 +73,16 @@ public class WidgetJsonTest {
         assertEquals("Milk", item.name);
         assertEquals("1 gal", item.quantity);
         assertTrue(item.checked);
+        assertEquals("2026-09-05", item.deadline);
     }
 
     @Test
-    public void snapshotRoundTrips_nullQuantity() throws Exception {
+    public void snapshotRoundTrips_nullQuantityAndDeadline() throws Exception {
         List<WidgetModels.WidgetItem> original = List.of(
-            new WidgetModels.WidgetItem(5, "Batteries", false, null));
+            new WidgetModels.WidgetItem(5, "Batteries", false, null, null));
         List<WidgetModels.WidgetItem> restored = WidgetJson.itemsFromJson(WidgetJson.itemsToJson(original));
         assertEquals(1, restored.size());
         assertNull(restored.get(0).quantity);
+        assertNull(restored.get(0).deadline);
     }
 }

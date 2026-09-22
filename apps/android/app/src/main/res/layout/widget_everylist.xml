@@ -7,7 +7,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="12dp"
+    android:paddingHorizontal="12dp"
+    android:paddingVertical="8dp"
     android:background="@drawable/widget_background">
 
     <LinearLayout
@@ -16,7 +17,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingBottom="8dp">
+        android:paddingBottom="6dp">
 
         <TextView
             android:id="@+id/widget_list_button"
@@ -70,7 +71,7 @@
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginBottom="4dp"
+        android:layout_marginBottom="2dp"
         android:background="@color/widget_border" />
 
     <TextView
@@ -93,11 +94,17 @@
         android:textSize="13sp"
         android:visibility="gone" />
 
+    <!-- Rows deliberately render dense (see widget_everylist_item.xml's tightened row padding):
+         a short list that doesn't fill this ListView's height leaves empty space below the last
+         row that isn't part of any list item view, and a swipe there doesn't register as an
+         internal scroll — it's passed through to whatever's under the widget, which on some
+         launchers opens the notification shade instead. Denser rows make that empty-space case
+         less common by fitting more real content in the same widget height. -->
     <ListView
         android:id="@+id/widget_list"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:paddingTop="2dp"
+        android:paddingTop="0dp"
         android:divider="@null"
         android:dividerHeight="0dp" />
 </LinearLayout>

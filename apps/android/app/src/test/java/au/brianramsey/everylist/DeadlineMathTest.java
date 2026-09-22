@@ -1,9 +1,12 @@
 package au.brianramsey.everylist;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
+import java.util.Calendar;
 import java.util.Date;
 
 /** Parity test for {@link DeadlineMath#addHoursToDeadline} — same test vectors as
@@ -118,5 +121,96 @@ public class DeadlineMathTest {
             "2026-09-14",
             DeadlineMath.nextWeekDeadline("2026-09-01", new Date(2026 - 1900, 8, 7, 10, 0))
         );
+    }
+
+    // Same NOW as deadline.spec.ts's isOverdue/isDueToday/formatDeadline/deadlineChip blocks:
+    // 2026-09-05 15:00 local time, a Saturday.
+    private static Calendar calendar(int year, int month, int day, int hour, int minute) {
+        Calendar cal = Calendar.getInstance();
+        cal.clear();
+        cal.set(year, month - 1, day, hour, minute);
+        return cal;
+    }
+
+    private static final Calendar CAL_NOW = calendar(2026, 9, 5, 15, 0);
+
+    @Test
+    public void isOverdue_dateOnlyIsDueByEndOfDay() {
+        assertFalse(DeadlineMath.isOverdue("2026-09-05", CAL_NOW));
+        assertFalse(DeadlineMath.isOverdue("2026-09-05", calendar(2026, 9, 5, 23, 59)));
+        assertTrue(DeadlineMath.isOverdue("2026-09-05", calendar(2026, 9, 6, 0, 0)));
+    }
+
+    @Test
+    public void isOverdue_datetimeIsOverdueTheMinuteAfterItsTimePasses() {
+        assertTrue(DeadlineMath.isOverdue("2026-09-05T14:30", CAL_NOW));
+        assertFalse(DeadlineMath.isOverdue("2026-09-05T15:00", CAL_NOW));
+        assertFalse(DeadlineMath.isOverdue("2026-09-05T15:00", calendar(2026, 9, 5, 15, 0)));
+        assertFalse(DeadlineMath.isOverdue("2026-09-05T15:01", calendar(2026, 9, 5, 15, 0)));
+        assertTrue(DeadlineMath.isOverdue("2026-09-04T23:59", CAL_NOW));
+    }
+
+    @Test
+    public void isOverdue_pastAndFutureDates() {
+        assertTrue(DeadlineMath.isOverdue("2026-09-04", CAL_NOW));
+        assertFalse(DeadlineMath.isOverdue("2026-09-06", CAL_NOW));
+    }
+
+    @Test
+    public void isDueToday_dateOnlyIsDueTodayAllDay() {
+        assertTrue(DeadlineMath.isDueToday("2026-09-05", CAL_NOW));
+        assertFalse(DeadlineMath.isDueToday("2026-09-06", CAL_NOW));
+        assertFalse(DeadlineMath.isDueToday("2026-09-04", CAL_NOW));
+    }
+
+    @Test
+    public void isDueToday_datetimeOnlyUntilItsTimePasses() {
+        assertTrue(DeadlineMath.isDueToday("2026-09-05T16:00", CAL_NOW));
+        assertFalse(DeadlineMath.isDueToday("2026-09-05T14:30", CAL_NOW));
+    }
+
+    @Test
+    public void formatDeadline_dateOnly() {
+        assertEquals("Sep 5", DeadlineMath.formatDeadline("2026-09-05"));
+    }
+
+    @Test
+    public void formatDeadline_withTime() {
+        assertTrue(DeadlineMath.formatDeadline("2026-09-05T14:30").matches("^Sep 5, \\d{1,2}:\\d{2} (AM|PM)$"));
+        assertTrue(DeadlineMath.formatDeadlineTime("2026-09-05T14:30").matches("^\\d{1,2}:\\d{2} (AM|PM)$"));
+        assertEquals("", DeadlineMath.formatDeadlineTime("2026-09-05"));
+    }
+
+    @Test
+    public void deadlineChip_neutralRequiredByChipForFutureDeadlines() {
+        DeadlineMath.Chip chip = DeadlineMath.deadlineChip("2026-09-11", CAL_NOW);
+        assertEquals("Required by Sep 11", chip.label);
+        assertFalse(chip.overdue);
+        assertFalse(chip.dueToday);
+    }
+
+    @Test
+    public void deadlineChip_amberTodayChipWithTimeAppendedWhenSet() {
+        DeadlineMath.Chip dateOnly = DeadlineMath.deadlineChip("2026-09-05", CAL_NOW);
+        assertEquals("Today", dateOnly.label);
+        assertFalse(dateOnly.overdue);
+        assertTrue(dateOnly.dueToday);
+
+        DeadlineMath.Chip laterToday = DeadlineMath.deadlineChip("2026-09-05T16:00", CAL_NOW);
+        assertTrue(laterToday.dueToday);
+        assertFalse(laterToday.overdue);
+        assertTrue(laterToday.label.matches("^Today, \\d{1,2}:\\d{2} (AM|PM)$"));
+    }
+
+    @Test
+    public void deadlineChip_redOverdueChipIncludingTheDate() {
+        DeadlineMath.Chip overdueDate = DeadlineMath.deadlineChip("2026-09-04", CAL_NOW);
+        assertTrue(overdueDate.overdue);
+        assertFalse(overdueDate.dueToday);
+        assertEquals("Overdue (Sep 4)", overdueDate.label);
+
+        DeadlineMath.Chip overdueTime = DeadlineMath.deadlineChip("2026-09-05T14:30", CAL_NOW);
+        assertTrue(overdueTime.overdue);
+        assertTrue(overdueTime.label.matches("^Overdue \\(Sep 5, \\d{1,2}:\\d{2} (AM|PM)\\)$"));
     }
 }

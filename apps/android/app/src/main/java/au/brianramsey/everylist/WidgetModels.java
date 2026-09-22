@@ -27,12 +27,16 @@ final class WidgetModels {
         final String name;
         final boolean checked;
         final String quantity;
+        /** Naive-local ISO 8601 — 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm' — or null when unset. See
+         *  {@link DeadlineMath} for the chip rendering rules. */
+        final String deadline;
 
-        WidgetItem(long id, String name, boolean checked, String quantity) {
+        WidgetItem(long id, String name, boolean checked, String quantity, String deadline) {
             this.id = id;
             this.name = name;
             this.checked = checked;
             this.quantity = quantity;
+            this.deadline = deadline;
         }
     }
 

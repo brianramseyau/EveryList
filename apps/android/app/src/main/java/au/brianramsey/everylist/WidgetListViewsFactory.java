@@ -8,6 +8,7 @@ import android.widget.RemoteViews;
 import android.widget.RemoteViewsService;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 /** Builds the widget's ListView rows from the last-fetched snapshot (the offline fallback when
@@ -71,6 +72,19 @@ public class WidgetListViewsFactory implements RemoteViewsService.RemoteViewsFac
         } else {
             row.setTextColor(R.id.item_name, context.getColor(R.color.widget_ink));
             row.setInt(R.id.item_name, "setPaintFlags", 0);
+        }
+
+        if (item.deadline != null && !item.deadline.isEmpty()) {
+            DeadlineMath.Chip chip = DeadlineMath.deadlineChip(item.deadline, Calendar.getInstance());
+            int color = context.getColor(chip.overdue
+                ? R.color.widget_overdue
+                : chip.dueToday ? R.color.widget_warn : R.color.widget_muted);
+            row.setViewVisibility(R.id.item_deadline_row, View.VISIBLE);
+            row.setTextViewText(R.id.item_deadline, chip.label);
+            row.setTextColor(R.id.item_deadline, color);
+            row.setInt(R.id.item_deadline_icon, "setColorFilter", color);
+        } else {
+            row.setViewVisibility(R.id.item_deadline_row, View.GONE);
         }
 
         Intent openFill = new Intent();
