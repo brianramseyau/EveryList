@@ -17,6 +17,16 @@ import { parseBulkImport } from '#services/bulk_import_parser'
 import { matchCategoryIcon, titleCaseCategoryName } from '#services/category_bulk_import'
 import type { CategorizeSuggestionDto } from '@everylist/shared'
 import { DateTime } from 'luxon'
+import db from '@adonisjs/lucid/services/db'
+import { todayLocalIso } from '#services/deadline_notification_service'
+import ItemRecurrence from '#models/item_recurrence'
+import {
+  nextDueDate,
+  openSuccessorOf,
+  ruleFromPayload,
+  spawnNextItem,
+  upsertRecurrence,
+} from '#services/item_recurrence_service'
 import { broadcastSync } from '#services/sync_broadcaster'
 import { findItemByName, nextSortOrder, restoreItemRow } from '#services/item_reuse'
 import {
@@ -66,6 +76,16 @@ export function computeMidpointSortOrder(
   return (before + after) / 2
 }
 
+/** Loads `item`'s repeat rule so every single-item response carries it — a response without it
+ * would let a client that replaces its cached row wholesale drop a stored rule. */
+async function withRecurrence(item: Item): Promise<Item> {
+  // A row created in this request hasn't been re-read, so its FK is `undefined` (not `null`), which
+  // Lucid refuses to load a relation from — it has no rule by definition.
+  if (item.recurrenceId === undefined) item.$setRelated('recurrence', null)
+  else await item.load('recurrence')
+  return item
+}
+
 export default class ItemsController {
   async index({ auth, params, request, serialize }: HttpContext) {
     const user = auth.getUserOrFail()
@@ -76,6 +96,7 @@ export default class ItemsController {
       .where('listId', list.id)
       .whereNull('deletedAt')
       .preload('subItems', (subItemsQuery) => subItemsQuery.orderBy('sortOrder', 'asc'))
+      .preload('recurrence')
     if (!includeChecked) query.where('checked', false)
 
     const items = await query.orderBy('sortOrder', 'asc')
@@ -99,6 +120,7 @@ export default class ItemsController {
     const items = await Item.query()
       .where('listId', list.id)
       .whereNotNull('deletedAt')
+      .preload('recurrence')
       .orderBy('deletedAt', 'desc')
       .limit(50)
 
@@ -143,6 +165,20 @@ export default class ItemsController {
 
     logger.debug({ listId: list.id, name: payload.name }, 'item store requested')
 
+    // Validated up front so a malformed or deadline-less rule is rejected the same way whether or not
+    // the name matches an existing row. On a name match `store()` is get-or-create: the existing row
+    // is returned as-is and — like every other field in the payload (deadline, price, notes …) —
+    // the rule is only applied when a row is actually created.
+    let recurrenceRule = null
+    if (payload.recurrence) {
+      const parsed = ruleFromPayload(payload.recurrence)
+      if ('problem' in parsed) return response.unprocessableEntity({ message: parsed.problem })
+      if (!payload.deadline) {
+        return response.unprocessableEntity({ message: 'A repeating item needs a deadline.' })
+      }
+      recurrenceRule = parsed.rule
+    }
+
     const match = await findItemByName(list, payload.name)
     const existing = match && !match.deleted ? match.item : null
 
@@ -177,7 +213,7 @@ export default class ItemsController {
         )
       }
 
-      return serialize(ItemTransformer.transform(existing))
+      return serialize(ItemTransformer.transform(await withRecurrence(existing)))
     }
 
     // No active match — re-adding a name that was deleted restores its old row (category, store,
@@ -200,7 +236,7 @@ export default class ItemsController {
         { listId: list.id, itemId: deletedMatch.id },
         'item store matched deleted item, restored'
       )
-      return serialize(ItemTransformer.transform(deletedMatch))
+      return serialize(ItemTransformer.transform(await withRecurrence(deletedMatch)))
     }
 
     const categoryId = await resolveCategoryId(list, payload.name, payload.categoryId)
@@ -214,19 +250,31 @@ export default class ItemsController {
       })
     }
 
-    const item = await Item.create({
-      listId: list.id,
-      name: payload.name,
-      quantity: payload.quantity ?? null,
-      notes: payload.notes ?? null,
-      categoryId,
-      storeId: payload.storeId ?? null,
-      price: payload.price ?? null,
-      deadline: payload.deadline ?? null,
-      checked: false,
-      sortOrder: await nextSortOrder(list, { respectInsertPosition: true }),
-      createdBy: user.id,
-      version: 1,
+    const sortOrder = await nextSortOrder(list, { respectInsertPosition: true })
+    // The item and its series commit together — a failure can't leave a rule with no item.
+    const item = await db.transaction(async (trx) => {
+      const created = await Item.create(
+        {
+          listId: list.id,
+          name: payload.name,
+          quantity: payload.quantity ?? null,
+          notes: payload.notes ?? null,
+          categoryId,
+          storeId: payload.storeId ?? null,
+          price: payload.price ?? null,
+          deadline: payload.deadline ?? null,
+          checked: false,
+          sortOrder,
+          createdBy: user.id,
+          version: 1,
+        },
+        { client: trx }
+      )
+      if (recurrenceRule) {
+        await upsertRecurrence(created, recurrenceRule, trx)
+        await created.useTransaction(trx).save()
+      }
+      return created
     })
 
     // Only an *explicit* category choice teaches the model — never the
@@ -245,7 +293,7 @@ export default class ItemsController {
 
     logger.debug({ listId: list.id, itemId: item.id }, 'item created')
 
-    return serialize(ItemTransformer.transform(item))
+    return serialize(ItemTransformer.transform(await withRecurrence(item)))
   }
 
   async import({ auth, params, request, response, serialize, logger }: HttpContext) {
@@ -408,7 +456,7 @@ export default class ItemsController {
       .firstOrFail()
 
     const payload = await request.validateUsing(updateItemValidator)
-    const { checked, expectedVersion, ...rest } = payload
+    const { checked, expectedVersion, recurrence, ...rest } = payload
 
     if (hasVersionConflict(item, expectedVersion)) {
       reportVersionConflict(request, logger, {
@@ -419,7 +467,7 @@ export default class ItemsController {
         userId: user.id,
       })
       return response.conflict({
-        ...(await serialize(ItemTransformer.transform(item))),
+        ...(await serialize(ItemTransformer.transform(await withRecurrence(item)))),
         conflict: true,
       })
     }
@@ -428,7 +476,22 @@ export default class ItemsController {
     // every intake path (2026-09-03 revision, from manual testing): it turns an
     // invisible (checked) row back into an open one, so it's blocked the same way
     // when the list has no room — check something off or remove an item first.
-    if (checked === false && item.checked && !(await hasCapacityFor(list))) {
+    // Unchecking a completed *repeating* item is an undo of its check-off: the copy that
+    // completing it spawned is discarded (below), so the series never holds two open items. That
+    // discard also frees the slot the reopened row takes, so it bypasses the limit gate.
+    let discarded: Item | null = null
+    if (checked === false && item.checked && item.recurrenceId) {
+      const successor = await openSuccessorOf(item)
+      if (successor === 'blocked') {
+        return response.unprocessableEntity({
+          message:
+            'This repeat already has an open occurrence, so this one can’t be reopened. Uncheck the most recent completed occurrence instead.',
+        })
+      }
+      discarded = successor
+    }
+
+    if (checked === false && item.checked && !discarded && !(await hasCapacityFor(list))) {
       return response.badRequest({
         message: limitReachedMessageForUncheck(list),
         code: UNCHECKED_LIMIT_REACHED,
@@ -450,13 +513,72 @@ export default class ItemsController {
 
     const previousCategoryId = item.categoryId
     const previousDeadline = item.deadline
+    const wasChecked = item.checked
     item.merge(rest)
     if (checked !== undefined) {
       item.checked = checked
       item.checkedAt = checked ? DateTime.now() : null
     }
+
+    // Repeat rule (PLAN_30_PHASE_RECURRING_ITEMS.md): a rule needs a deadline to repeat from, and
+    // clearing the deadline stops the repeat. `null` stops repeating (this item only — older
+    // checked siblings keep the series as history).
+    let recurrenceRule = null
+    if (recurrence) {
+      // A rule edit flows into the shared series row, which the *open* item spawns from — so it
+      // can only be made through the open item, never a checked history row of the same series.
+      if (item.checked) {
+        return response.unprocessableEntity({
+          message: 'A repeat rule can only be changed on an open item.',
+        })
+      }
+      const parsed = ruleFromPayload(recurrence)
+      if ('problem' in parsed) return response.unprocessableEntity({ message: parsed.problem })
+      if (!item.deadline) {
+        return response.unprocessableEntity({ message: 'A repeating item needs a deadline.' })
+      }
+      recurrenceRule = parsed.rule
+    }
+    if (recurrence === null || !item.deadline) item.recurrenceId = null
+
     item.version += 1
-    await item.save()
+
+    // A rule edit and/or completing a repeating item commit together with the checked row, and
+    // everything the spawn decision reads (the "already completed" state, the series counter) is
+    // read inside the transaction: SQLite serializes writers on one connection, so a concurrent
+    // check-off that committed first is seen here and cannot spawn a second copy.
+    const completing = checked === true && !wasChecked
+    let spawned: Item | null = null
+    if (recurrenceRule || (completing && item.recurrenceId) || discarded) {
+      const sortOrder = completing ? await nextSortOrder(list, { respectInsertPosition: true }) : 0
+      const today = todayLocalIso(DateTime.now())
+      spawned = await db.transaction(async (trx) => {
+        const alreadyCompleted =
+          completing &&
+          (await Item.query({ client: trx })
+            .where('id', item.id)
+            .where('checked', true)
+            .first()) !== null
+        if (recurrenceRule) await upsertRecurrence(item, recurrenceRule, trx)
+        if (discarded) {
+          // Soft-deleted like `destroy`, and detached from the series so restoring or re-adding
+          // it later can't bring back a second open item that repeats.
+          discarded.deletedAt = DateTime.now()
+          discarded.recurrenceId = null
+          discarded.version += 1
+          await discarded.useTransaction(trx).save()
+          await ItemRecurrence.query({ client: trx })
+            .where('id', item.recurrenceId as number)
+            .decrement('occurrences_created', 1)
+        }
+        await item.useTransaction(trx).save()
+        if (!completing || alreadyCompleted) return null
+        const nextDate = await nextDueDate(item, today, trx)
+        return nextDate ? spawnNextItem(item, nextDate, sortOrder, trx) : null
+      })
+    } else {
+      await item.save()
+    }
 
     // A changed deadline can re-fire a notification that already sent for the
     // old one — see PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md.
@@ -479,9 +601,29 @@ export default class ItemsController {
       version: item.version,
     })
 
+    if (discarded) {
+      await broadcastSync({
+        listId: list.id,
+        entityType: 'item',
+        entityId: discarded.id,
+        op: 'delete',
+        version: discarded.version,
+      })
+    }
+
+    if (spawned) {
+      await broadcastSync({
+        listId: list.id,
+        entityType: 'item',
+        entityId: spawned.id,
+        op: 'create',
+        version: spawned.version,
+      })
+    }
+
     logger.debug({ listId: list.id, itemId: item.id, version: item.version }, 'item updated')
 
-    return serialize(ItemTransformer.transform(item))
+    return serialize(ItemTransformer.transform(await withRecurrence(item)))
   }
 
   /** Repositions a single item within the list — one item, one neighbor reference, one row
@@ -510,7 +652,7 @@ export default class ItemsController {
         userId: user.id,
       })
       return response.conflict({
-        ...(await serialize(ItemTransformer.transform(item))),
+        ...(await serialize(ItemTransformer.transform(await withRecurrence(item)))),
         conflict: true,
       })
     }
@@ -548,7 +690,7 @@ export default class ItemsController {
 
     logger.debug({ listId: list.id, itemId: item.id, sortOrder: item.sortOrder }, 'item moved')
 
-    return serialize(ItemTransformer.transform(item))
+    return serialize(ItemTransformer.transform(await withRecurrence(item)))
   }
 
   /** Moves an item to a different list. Categories and stores are list-scoped (each list owns
@@ -585,7 +727,7 @@ export default class ItemsController {
         userId: user.id,
       })
       return response.conflict({
-        ...(await serialize(ItemTransformer.transform(item))),
+        ...(await serialize(ItemTransformer.transform(await withRecurrence(item)))),
         conflict: true,
       })
     }
@@ -637,7 +779,7 @@ export default class ItemsController {
       'item moved to another list'
     )
 
-    return serialize(ItemTransformer.transform(item))
+    return serialize(ItemTransformer.transform(await withRecurrence(item)))
   }
 
   async destroy({ auth, params, request, response, serialize, logger }: HttpContext) {
@@ -659,7 +801,7 @@ export default class ItemsController {
         userId: user.id,
       })
       return response.conflict({
-        ...(await serialize(ItemTransformer.transform(item))),
+        ...(await serialize(ItemTransformer.transform(await withRecurrence(item)))),
         conflict: true,
       })
     }
@@ -707,7 +849,7 @@ export default class ItemsController {
 
     logger.debug({ listId: list.id, itemId: item.id }, 'item restored')
 
-    return serialize(ItemTransformer.transform(item))
+    return serialize(ItemTransformer.transform(await withRecurrence(item)))
   }
 
   /** Hard-deletes an already-soft-deleted row — the "Recently Deleted" page's permanent-delete

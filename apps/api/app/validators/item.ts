@@ -28,6 +28,42 @@ const calendarDeadline = vine.createRule((value, _options, field) => {
   }
 })
 
+// The repeat rule (PLAN_30_PHASE_RECURRING_ITEMS.md). Only shapes and calendar-real dates are
+// checked here; cross-field rules (a monthly `kind` needs its own fields, an end type needs its
+// date/count, unit-specific fields only on their unit) are `ruleFromPayload`'s job so the
+// message names the actual problem.
+const recurrenceRule = vine.object({
+  interval: vine.number().withoutDecimals().range([1, 999]),
+  unit: vine.enum(['day', 'week', 'month', 'year'] as const),
+  weekdays: vine.array(vine.number().withoutDecimals().range([0, 6])).maxLength(7),
+  monthly: vine
+    .object({
+      kind: vine.enum(['dayOfMonth', 'nthWeekday'] as const),
+      day: vine.number().withoutDecimals().range([1, 31]).nullable().optional(),
+      // 1-4 or -1 (last); the cross-field check in `recurrenceRuleProblem` enforces the exact set.
+      nth: vine.number().withoutDecimals().range([-1, 4]).nullable().optional(),
+      weekday: vine.number().withoutDecimals().range([0, 6]).nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+  startDate: vine
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .use(calendarDeadline()),
+  end: vine.object({
+    type: vine.enum(['never', 'on', 'after'] as const),
+    date: vine
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .use(calendarDeadline())
+      .nullable()
+      .optional(),
+    count: vine.number().withoutDecimals().range([1, 999]).nullable().optional(),
+  }),
+})
+
 export const createItemValidator = vine.create({
   name: vine.string().trim().minLength(1).maxLength(200),
   quantity: vine.string().trim().maxLength(50).nullable().optional(),
@@ -42,6 +78,7 @@ export const createItemValidator = vine.create({
     .use(calendarDeadline())
     .nullable()
     .optional(),
+  recurrence: recurrenceRule.clone().nullable().optional(),
 })
 
 export const updateItemValidator = vine.create({
@@ -58,6 +95,7 @@ export const updateItemValidator = vine.create({
     .use(calendarDeadline())
     .nullable()
     .optional(),
+  recurrence: recurrenceRule.clone().nullable().optional(),
   checked: vine.boolean().optional(),
   sortOrder: vine.number().optional(),
   expectedVersion: vine.number().optional(),

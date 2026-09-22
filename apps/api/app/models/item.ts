@@ -6,6 +6,7 @@ import Category from '#models/category'
 import Store from '#models/store'
 import User from '#models/user'
 import SubItem from '#models/sub_item'
+import ItemRecurrence from '#models/item_recurrence'
 
 export default class Item extends ItemSchema {
   // SQLite has no native boolean type — better-sqlite3 round-trips this
@@ -24,6 +25,9 @@ export default class Item extends ItemSchema {
 
   @belongsTo(() => User, { foreignKey: 'createdBy' })
   declare creator: BelongsTo<typeof User>
+
+  @belongsTo(() => ItemRecurrence, { foreignKey: 'recurrenceId' })
+  declare recurrence: BelongsTo<typeof ItemRecurrence>
 
   @hasMany(() => SubItem, { foreignKey: 'itemId' })
   declare subItems: HasMany<typeof SubItem>

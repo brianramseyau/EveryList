@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { Input, Label, Select, Textarea } from 'flowbite-svelte';
 	import type { CategoryDto, StoreDto } from '@everylist/shared';
+	import type { RecurrenceRule } from '@everylist/shared';
 	import Icon from '$lib/components/Icon.svelte';
+	import RecurrenceFields from '$lib/components/RecurrenceFields.svelte';
 
 	let {
 		name = $bindable(''),
@@ -12,6 +14,7 @@
 		notes = $bindable(''),
 		deadlineDate = $bindable(''),
 		deadlineTime = $bindable(''),
+		recurrence = $bindable(null),
 		categories,
 		stores,
 		showCategory = true,
@@ -19,6 +22,7 @@
 		showPrice = true,
 		showStore = true,
 		showDeadline = false,
+		showRecurrence = false,
 		autofocusName = true
 	}: {
 		name?: string;
@@ -31,6 +35,8 @@
 		deadlineDate?: string;
 		/** 'HH:mm' or '' when unset — only editable once a date is set (PLAN_24). */
 		deadlineTime?: string;
+		/** The item's repeat rule, or null when it doesn't repeat (PLAN_30). */
+		recurrence?: RecurrenceRule | null;
 		categories: CategoryDto[];
 		stores: StoreDto[];
 		showCategory?: boolean;
@@ -38,6 +44,8 @@
 		showPrice?: boolean;
 		showStore?: boolean;
 		showDeadline?: boolean;
+		/** Repeat editor, shown under the deadline once a date is set. Needs `showDeadline`. */
+		showRecurrence?: boolean;
 		autofocusName?: boolean;
 	} = $props();
 </script>
@@ -121,6 +129,10 @@
 			</div>
 		{/if}
 	</div>
+
+	{#if showRecurrence && deadlineDate}
+		<RecurrenceFields bind:recurrence {deadlineDate} />
+	{/if}
 {/if}
 
 {#if showCategory}

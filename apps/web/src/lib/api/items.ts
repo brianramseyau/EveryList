@@ -1,4 +1,10 @@
-import type { CategorizeSuggestionDto, ItemDto, ListDto, SubItemDto } from '@everylist/shared';
+import type {
+	CategorizeSuggestionDto,
+	ItemDto,
+	ListDto,
+	RecurrenceRule,
+	SubItemDto
+} from '@everylist/shared';
 import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared';
 /* v8 ignore start */
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
@@ -384,6 +390,8 @@ export async function updateItem(
 		storeId: number | null;
 		price: number | null;
 		deadline: string | null;
+		/** Repeat rule; `null` stops repeating (PLAN_30_PHASE_RECURRING_ITEMS.md). */
+		recurrence: RecurrenceRule | null;
 		checked: boolean;
 		sortOrder: number;
 	}>
@@ -397,9 +405,20 @@ export async function updateItem(
 		applyOptimistically: async (db) => {
 			const existing = await db.items.get(itemId);
 			if (!existing) return 0;
+			const { recurrence, ...fields } = input;
 			await db.items.put({
 				...existing,
-				...input,
+				...fields,
+				// The request carries a bare rule; the cached row holds the stored series (id +
+				// occurrence), which the server's response replaces once it lands.
+				recurrence:
+					recurrence === undefined
+						? existing.recurrence
+						: recurrence && {
+								...recurrence,
+								id: existing.recurrence?.id ?? 0,
+								occurrence: existing.recurrence?.occurrence ?? 1
+							},
 				checkedAt:
 					input.checked !== undefined
 						? input.checked

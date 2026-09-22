@@ -558,6 +558,37 @@ describe('List detail +page.svelte', () => {
 		);
 	});
 
+	it('marks a repeating item with a repeat icon that carries the rule summary', async () => {
+		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
+		vi.mocked(fetchItems).mockResolvedValue([
+			makeItem({
+				id: 100,
+				name: 'Bins',
+				categoryId: 10,
+				deadline: '2099-09-10',
+				recurrence: {
+					id: 1,
+					occurrence: 1,
+					interval: 2,
+					unit: 'week',
+					weekdays: [1, 4],
+					monthly: null,
+					startDate: '2099-09-10',
+					end: { type: 'never' }
+				}
+			}),
+			makeItem({ id: 101, name: 'Milk', categoryId: 10, deadline: '2099-09-11' })
+		]);
+
+		render(ListDetailPage);
+
+		await expect
+			.element(page.getByRole('img', { name: 'Every 2 weeks on Mon, Thu' }))
+			.toBeInTheDocument();
+		// Only the repeating item carries the icon.
+		expect(page.getByRole('img', { name: /^Every/ }).elements()).toHaveLength(1);
+	});
+
 	it('marks a past deadline with the red Overdue chip', async () => {
 		vi.mocked(fetchList).mockResolvedValue({ ...list, useDeadline: true });
 		vi.mocked(fetchItems).mockResolvedValue([

@@ -1,6 +1,7 @@
 import type List from '#models/list'
 import Item from '#models/item'
 import { broadcastSync } from '#services/sync_broadcaster'
+import { seriesHasOtherOpenItem } from '#services/item_recurrence_service'
 
 /** The row a name resolves to when adding it to a list: an active row if there is one, otherwise
  * the most recently deleted one. Every path that adds an item by name (manual add, bulk import,
@@ -16,6 +17,12 @@ export async function findItemByName(
     .where('listId', list.id)
     .whereNull('deletedAt')
     .whereRaw('LOWER(TRIM(name)) = ?', [normalized])
+    // A recurring item's checked history rows share its name with the open copy — prefer the
+    // open one so a name-based add never "reactivates" history (PLAN_30_PHASE_RECURRING_ITEMS.md).
+    .orderBy('checked', 'asc')
+    // Two open same-name rows can exist (legacy duplicates); a stable order keeps the pick
+    // deterministic — the oldest, which is what an unordered lookup effectively returned.
+    .orderBy('id', 'asc')
     .first()
   if (active) return { item: active, deleted: false }
 
@@ -71,6 +78,10 @@ export async function restoreItemRow(
   item.deletedAt = null
   item.checked = false
   item.checkedAt = null
+  // A deleted row can still be linked to a repeat series whose open item has since moved on (the
+  // completed one was unchecked, or a later one spawned). Bringing it back linked would leave two
+  // open items in one series, each spawning a copy — so it returns as a plain, non-repeating item.
+  if (item.recurrenceId && (await seriesHasOtherOpenItem(item))) item.recurrenceId = null
   item.sortOrder = options?.sortOrder ?? (await nextSortOrder(list, options))
   item.version += 1
   await item.save()
