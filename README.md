@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> 📱 **The Android app is in closed beta — [request an invite](https://github.com/brianramseyau/EveryList/issues/new) to try it out.**
+
 <p align="center">
   <img src="branding/icon-192.png" width="96" height="96" alt="EveryList icon">
 </p>
@@ -5,7 +8,7 @@
 <h1 align="center">EveryList</h1>
 
 <p align="center">
-  A narrower, sharper list app — the 20% of AnyList's feature set that covers 90% of real usage, done well, free, and self-hosted.
+  AnyList meets Google Tasks — one list app for shopping, to-dos, chores, packing, and planning, free and self-hosted with no premium tier.
 </p>
 
 <p align="center">
@@ -16,17 +19,7 @@
 
 ---
 
-<h3 align="center">📱 The Android app is in closed beta</h3>
-
-<p align="center">
-  Want an invite to test it out? <a href="https://github.com/brianramseyau/EveryList/issues/new">Open an issue</a> and let us know.
-</p>
-
----
-
-AnyList is broad, cluttered, and paywalls basic usability. EveryList isn't chasing feature parity — it's a **mobile-first, offline-first, one-tier** app that does the everyday list workflow well: create, share in real time, auto-categorize by aisle, check off, and keep working with zero signal. No premium tier, ever. It ships as an installable PWA, as native iOS/Android apps, and as a desktop app (macOS/Windows/Linux), and can be controlled by voice through Alexa or Home Assistant. See [`foundational/PLAN_00_FOUNDATIONAL_PLAN.md`](foundational/PLAN_00_FOUNDATIONAL_PLAN.md) for the full product plan, architecture, and decision rationale behind everything below.
-
-EveryList is feature-complete and self-hostable today.
+EveryList is a general-purpose list app: real-time shared shopping lists with aisle-style auto-categorization, plus due dates, recurring items, sub-items, and notes for Google Tasks-style task management — all in the same lists, so one app covers shopping, to-dos, chores, packing lists, and anything else worth tracking and checking off (the EveryList team dogfoods it for its own feature ideas). It's **mobile-first, offline-first, one-tier** — no premium tier, ever — and ships as an installable PWA, native iOS/Android apps, and a desktop app (macOS/Windows/Linux), with voice control through Alexa or Home Assistant. EveryList is feature-complete and self-hostable today; see [`foundational/PLAN_00_FOUNDATIONAL_PLAN.md`](foundational/PLAN_00_FOUNDATIONAL_PLAN.md) for the full product plan, architecture, and decision rationale behind everything below.
 
 ## Screenshots
 
@@ -45,42 +38,46 @@ EveryList is feature-complete and self-hostable today.
 
 ## Features
 
-- **Lists & items** — unlimited lists, quantities, notes, prices with a running budget total, soft-delete with recent-items recovery.
+### Lists & items
+
+- **Any kind of list** — unlimited lists for shopping, to-dos, chores, packing, planning, or anything else; quantities, notes, prices with a running budget total, soft-delete with recent-items recovery.
+- **Task management** — due dates/times, recurring items (daily/weekly/monthly, specific weekdays, "nth weekday of the month," with an end date/count), and checkable sub-items, so a list can be a Google Tasks-style to-do list as easily as a grocery list.
 - **Auto-categorization** — items sort into aisle-style categories (Produce, Dairy, Meat, ...) via keyword matching plus a learned model that remembers each list's explicit category choices (with decay, so stale guesses age out), synced to the device so it keeps working offline, fully customizable per list.
 - **Store-aware aisle order** — pick the store you're shopping at and categories reorder to match its real layout; tag items to a store and filter the list down to just that store's items. Store data and aisle order are shared with everyone the list is shared with.
 - **Favorites** — go-to items for one-tap re-adding to the list they belong to; scoped per list, since a grocery list and a packing list don't share go-to items.
 - **Paste import** — paste a block of text and each line gets parsed and auto-categorized.
 - **Folders & badges** — group lists into folders; an uncompleted-item count badges the installed PWA icon (Web Badging API), with per-list exclusion.
+
+### Sync & collaboration
+
 - **Real-time sharing** — SSE-based live updates across everyone on a shared list, with granular `owner`/`editor`/`viewer` roles and join-link invites.
 - **Offline-first** — every core interaction works with zero network via a local IndexedDB store and syncs when back online, with last-write-wins conflict resolution.
 - **Passcode lock** — a client-side PIN gate on sensitive lists; the server never sees the raw PIN.
 - **Print & email export** — a print-friendly stylesheet plus one-click email export of any list.
 - **Light/dark/automatic theme + accent palettes** — four accent themes on top of a real, flash-free light/dark/automatic mode.
+
+### Everywhere you are
+
 - **Installable PWA** — add to your home screen on any device, no app store required.
 - **Native iOS & Android apps** — the same app wrapped via [Capacitor](https://capacitorjs.com), with a runtime-configurable server URL (point it at your own instance from a `/server-setup` screen, no rebuild needed), pull-to-refresh, and the same offline-first sync as the PWA. Debug-signed/simulator builds are attached to every [GitHub Release](https://github.com/brianramseyau/EveryList/releases) — see [Native apps](#native-apps-iosandroid) below.
-- **Android home-screen widget** — a Google-Tasks-style widget (list selector, quick-add `+`, tap-a-row to open, tap-a-checkbox to complete, show/hide-completed) backed by a scoped PAT minted from `Settings → Home-screen widget`.
+- **Android home-screen widget** — a Google-Tasks-style widget (list selector, quick-add `+`, tap-a-row to open, tap-a-checkbox to complete, due date/time display, show/hide-completed) backed by a scoped PAT minted from `Settings → Home-screen widget`.
 - **Desktop app (macOS/Windows/Linux)** — an [Electron](https://www.electronjs.org) shell wrapping the same web build, with the same runtime-configurable server URL and offline-first sync as the native apps. Unsigned, "check and link" updates instead of auto-update. See [Desktop app](#desktop-app-electron) below.
+
+### Voice & automation
+
 - **Voice control** — a private [Alexa custom skill](alexa/README.md) (add/remove/complete items, read a list back, plus an on-screen [APL](https://developer.amazon.com/en-US/docs/alexa/alexa-presentation-language/apl-overview.html) visual list on an Echo Show/Hub) and a [Home Assistant HACS integration](https://github.com/brianramseyau/everylist-hass) exposing each list as a native `todo.*` entity for Voice Assist — both authenticate via scoped Personal Access Tokens, not your login.
 - **Personal Access Tokens** — scoped, per-list, editor/viewer-capped API tokens (`Settings → Access Tokens`) for third-party integrations like the two above, independent of your login session.
-- **Self-hosted, single container** — one Docker image, one process, one SQLite file under `/config`; trivial to back up.
+
+### Self-hosted
+
+- **Single container** — one Docker image, one process, one SQLite file under `/config`; trivial to back up.
 - **Automated backups** — configurable daily/weekly/monthly schedule with a chosen time of day and retention window, taken via SQLite's native online backup API so it's safe to run while the app is live; also triggerable on demand from `Settings → Backups`.
 
 Deliberately out of scope: native Watch apps, Siri voice control, and third-party fulfillment integrations (Instacart, etc.) — see the [feature decision matrix](foundational/PLAN_00_FOUNDATIONAL_PLAN.md#3-feature-decision-matrix) in the plan for the full reasoning.
 
 ## Tech stack
 
-| Layer | Choice |
-|---|---|
-| Frontend | [SvelteKit](https://kit.svelte.dev) (Svelte 5, static adapter) + [Flowbite Svelte](https://flowbite-svelte.com) + Tailwind CSS |
-| PWA | [vite-plugin-pwa](https://vite-pwa-org.netlify.app) (Workbox) + [Dexie.js](https://dexie.org) offline store |
-| Backend | [AdonisJS 6](https://adonisjs.com) — Lucid ORM, VineJS validation, Transmit (SSE) |
-| Database | SQLite 3 (WAL) via `better-sqlite3` — single file, no external DB service |
-| Shared types | `packages/shared` — DTOs/contracts shared between API and web |
-| Testing | Japa + c8 (backend), Vitest + Testing Library + Playwright (frontend) — 100% coverage policy on unit/integration |
-| Deployment | Single Docker image, LinuxServer.io-style (`s6-overlay`, `PUID`/`PGID`), published to GHCR |
-| Native shell | [Capacitor](https://capacitorjs.com) (iOS + Android) — wraps the same SvelteKit build, no separate native codebase |
-
-Full rationale for each choice is in [§4 of the plan](foundational/PLAN_00_FOUNDATIONAL_PLAN.md#4-technology-stack).
+SvelteKit + Flowbite/Tailwind on the frontend, AdonisJS 6 on the backend, SQLite (single file, no external DB service), Capacitor for the native iOS/Android shells, Electron for desktop. Full breakdown and rationale in [`docs/tech-stack.md`](docs/tech-stack.md).
 
 ## Monorepo layout
 
@@ -95,6 +92,7 @@ EveryList/
 ├── packages/
 │   └── shared/         # shared TS types, DTOs, validation contracts
 ├── docker/              # production + dev Dockerfiles, Unraid template
+├── docs/                 # detailed reference docs (tech stack, deployment methods, development/)
 ├── branding/             # app icon source + generated exports, screenshots
 ├── alexa/                # Alexa custom skill deployment assets (interaction model, account linking)
 ├── ha-addon/
@@ -103,63 +101,15 @@ EveryList/
     └── PLAN_00_FOUNDATIONAL_PLAN.md     # single source of truth for scope & architecture
 ```
 
-This repo also doubles as a Home Assistant *add-on repository* — `repository.yaml` at the repo root plus `ha-addon/everylist/` is all Supervisor needs to list EveryList in the Add-on Store; see [Home Assistant](#home-assistant) below.
+This repo also doubles as a Home Assistant _add-on repository_ — `repository.yaml` at the repo root plus `ha-addon/everylist/` is all Supervisor needs to list EveryList in the Add-on Store; see [Home Assistant](#home-assistant) below.
 
 The Home Assistant HACS integration (a separate thing — a `todo.*` entity client against an existing EveryList server, not a way to run the server itself) lives in its own repo, [`everylist-hass`](https://github.com/brianramseyau/everylist-hass) — separate from this monorepo because HACS requires `custom_components/<domain>/` at the repo root and versions the integration via that repo's own GitHub releases.
 
 ## Getting started
 
-### Requirements
-
-- Node.js **24.20.0** (see `.nvmrc`)
-- [pnpm](https://pnpm.io) 10.x (`corepack enable` will pick up the pinned version)
-
-### Local development
-
-No external services (database, cache, etc.) are required — SQLite runs off a local file.
-
-```bash
-git clone https://github.com/brianramseyau/EveryList.git
-cd EveryList
-pnpm install
-cp apps/api/.env.example apps/api/.env
-pnpm db:setup
-
-pnpm dev
-```
-
-`pnpm db:setup` creates `apps/api/tmp/db.sqlite3`, runs all migrations, and seeds dev sample data (users, lists, stores, categories, items) — required once per fresh clone (or whenever you wipe `apps/api/tmp/`) before the API has any tables to query. The sample data is idempotent and only seeds when `NODE_ENV=development`, so it's safe to re-run any time the db gets reset. Log in with `dev@example.com` / `password` (or `partner@example.com` / `password` to see the shared-list side) — see [`apps/api/database/seeders/dev_seeder.ts`](apps/api/database/seeders/dev_seeder.ts) for what's included.
-
-This runs both the API (`http://localhost:3334`) and the web app (`http://localhost:5174`) in parallel with hot reload. Before starting, a pre-flight check (`scripts/dev-preflight.mjs`) verifies both ports are free and aborts with the offending process(es) if something else — e.g. a stale dev server from another project — is already listening.
-
-Other useful scripts, runnable from the repo root across every workspace:
-
-```bash
-pnpm build         # build all apps
-pnpm lint          # ESLint across the monorepo
-pnpm typecheck     # tsc --noEmit in every workspace
-pnpm test          # Japa (api) + Vitest (web)
-pnpm format        # Prettier write
-
-pnpm db:migrate         # run pending migrations
-pnpm db:migrate:status  # show migration status
-pnpm db:migrate:rollback# roll back the last migration batch
-pnpm db:seed            # run seeders (dev sample data)
-pnpm db:reset           # drop all tables, re-migrate, and re-seed
-```
-
-### Local development via Docker Compose
-
-```bash
-cp apps/api/.env.example apps/api/.env
-docker compose up
-```
-
-Runs the API and web app as separate containers with the repo bind-mounted for live editing.
-
 ### Running the production image
 
-EveryList ships as a single self-contained container — one process serves both the API and the built static frontend on one port. No configuration is required to boot it:
+EveryList ships as a single self-contained container — one process serves both the API and the built static frontend on one port:
 
 ```bash
 docker run -d \
@@ -169,24 +119,7 @@ docker run -d \
   ghcr.io/brianramseyau/everylist
 ```
 
-`PUID`/`PGID` default to `99`/`100` (Unraid's `nobody`/`users`) and can be overridden; an `APP_KEY` is generated on first boot and persisted to `/config/app_key` if you don't supply one; database migrations run automatically against `/config/everylist.sqlite3` on every start, so a fresh volume and version upgrades both just work. An [Unraid Community Applications template](docker/unraid-template.xml) is included.
-
-#### Server settings (`/config/config.yaml`)
-
-Most non-core settings — public signups, outbound mail (SMTP), and Alexa account-linking — don't require an env var + redeploy at all: they can be edited at runtime from **Settings → Server settings**, visible only to the instance owner (user id 1). Changes are written to `config.yaml` in the same `/config` volume as the database and backups, and take effect immediately with no restart, including SMTP settings.
-
-An env var always wins over `config.yaml` when both are set, so nothing changes for existing deployments unless you actually open the new settings page. A handful of core, boot-time vars stay env-only and are never exposed there: `DATABASE_FILENAME`, `SESSION_DRIVER`, `LIMITER_STORE`, `NODE_ENV`, `PORT`, `HOST`, `APP_KEY`, `LOG_LEVEL`, `PUID`/`PGID`, and the build-metadata vars.
-
-If `/config` is mounted **read-only** — e.g. a Kubernetes `ConfigMap`/`Secret` volume, the standard way to manage config declaratively instead of through a UI — EveryList detects this and shows the resolved settings read-only, with saving disabled, rather than failing silently or crashing on write. Mount the file at `/config/config.yaml` and it's picked up on boot the same as a UI-written one; hand-edit it directly to change it.
-
-Available image tags:
-
-| Tag | Meaning |
-|---|---|
-| `nightly` | Latest build off `main` — bleeding edge, no stability guarantee |
-| `vX.Y.Z` | Exact release, never moves |
-| `vX` | Latest release within major version `X` |
-| `latest` | Latest stable release |
+No configuration is required to boot it — an `APP_KEY` is generated on first run and migrations run automatically against the volume. See [`docs/docker.md`](docs/docker.md) for runtime server settings, image tags, and Unraid details.
 
 ### Home Assistant
 
@@ -199,20 +132,11 @@ EveryList is also available as a Home Assistant Add-on, for anyone already runni
 
 ### Native apps (iOS/Android)
 
-Every `vX.Y.Z` tag also builds and attaches native app packages to the corresponding [GitHub Release](https://github.com/brianramseyau/EveryList/releases): a debug-signed Android APK (sideload-ready as-is) and an unsigned iOS Simulator build. Neither is store-signed yet — there's no release keystore or Apple Developer Program enrollment behind this build — so today this is a "build it yourself a real release, or sideload/simulate the CI one" situation, not an App/Play Store listing. The app itself doesn't care: on first launch it sends you to a `/server-setup` screen to enter your own instance's URL, so one build works against anyone's self-hosted server with no rebuild.
-
-The Android build also ships a **home-screen widget** (see [Features](#features)): set it up once from `Settings → Home-screen widget` (which mints a scoped token just for the widget), then place it from your launcher's widget picker. It's network-backed against your instance (a native widget can't reach the WebView's offline cache), showing the last fetched snapshot with a "can't reach server" note when offline.
+Every `vX.Y.Z` tag builds and attaches native app packages — a debug-signed Android APK and an unsigned iOS Simulator build — to the corresponding [GitHub Release](https://github.com/brianramseyau/EveryList/releases), each pointed at your own server via a `/server-setup` screen with no rebuild needed. See [`docs/android-ios.md`](docs/android-ios.md) for signing status and the Android home-screen widget.
 
 ### Desktop app (Electron)
 
-Every `vX.Y.Z` tag also attaches macOS (Intel + Apple Silicon), Windows, and Linux desktop builds to the [GitHub Release](https://github.com/brianramseyau/EveryList/releases). Like the iOS/Android apps, this is **a client, not a bundled deployment** — it never runs the API, opens a database, or runs migrations. It loads the exact same web build as everyone else, served from a local loopback HTTP server, and points it at whatever EveryList server you configure on first launch via `/server-setup`.
-
-- **Requires a server running this release or later** — the desktop app needs a CORS entry (`apps/api/config/cors.ts`) that predates-it servers don't have. If login fails immediately with no more specific error, upgrade your server first.
-- **Builds are unsigned.** There's no Apple Developer Program membership or Authenticode certificate behind this project.
-  - **macOS**: Gatekeeper blocks the downloaded `.dmg` with "EveryList is damaged and can't be opened." Right-click the app → **Open**, or run `xattr -dr com.apple.quarantine /Applications/EveryList.app`.
-  - **Windows**: SmartScreen will warn on the unsigned installer — click "More info" → "Run anyway."
-- **Updates are "check and link," not automatic.** Settings → About has a "Check" button that compares your version against the latest GitHub Release and links to the download if one exists — there's no in-place auto-updater (an unsigned macOS build can't use one at all). Updating means downloading the new installer and reinstalling; nothing is lost, since your data lives on the server and the local offline cache rebuilds from it. If you have unsynced offline changes queued, reconnect once before updating so they flush first.
-- **The loopback port is fixed** (default `41783`), not randomized — it's part of the app's stored origin, alongside your server URL, login token, and offline cache. Overriding it (via a `config.json` file in the app's data directory, `{ "port": 41784 }`) resets all of those; only do it if the default port is actually unavailable on your machine.
+Every `vX.Y.Z` tag also attaches unsigned macOS, Windows, and Linux desktop builds to the [GitHub Release](https://github.com/brianramseyau/EveryList/releases) — a client only, pointed at whatever EveryList server you configure on first launch. See [`docs/desktop.md`](docs/desktop.md) for unsigned-build workarounds, update behavior, and the fixed loopback port.
 
 ## Voice control & integrations
 
@@ -225,14 +149,11 @@ EveryList lists can be read and edited by voice through two paths, both authenti
 
 `Settings → Access Tokens` mints tokens like the ones above by hand, for any other script or integration you want to write against the API — see the self-hosted [API docs](#api-docs) for the full surface. A token can cover multiple lists, is capped below `owner` (never full access), and is revocable at any time with immediate effect — no redeploy needed.
 
-## Testing
+## Development
 
-- **Backend:** `pnpm --filter @everylist/api test` (Japa, with `c8` coverage gated at 100%)
-- **Frontend:** `pnpm --filter @everylist/web test` (Vitest + Testing Library, 100% coverage gate; Playwright for E2E)
+No external services are required — SQLite runs off a local file, and `pnpm install && pnpm dev` gets both the API and web app running with hot reload. See [`docs/development/environment.md`](docs/development/environment.md) for setup, seed data, useful scripts, and the Docker Compose alternative.
 
-CI (GitHub Actions) runs lint → typecheck → tests/coverage → Docker build → E2E smoke on every PR; see [`.github/workflows`](.github/workflows).
-
-Full architecture, scope decisions, and the AnyList feature-by-feature decision matrix live in [`foundational/PLAN_00_FOUNDATIONAL_PLAN.md`](foundational/PLAN_00_FOUNDATIONAL_PLAN.md).
+Tests run via `pnpm test` (Japa for the API, Vitest + Playwright for the web app), both gated at 100% coverage in CI. See [`docs/development/testing.md`](docs/development/testing.md) for the full breakdown and CI pipeline.
 
 ## API docs
 

@@ -1,0 +1,10 @@
+# Desktop app (Electron)
+
+Every `vX.Y.Z` tag also attaches macOS (Intel + Apple Silicon), Windows, and Linux desktop builds to the [GitHub Release](https://github.com/brianramseyau/EveryList/releases). Like the iOS/Android apps, this is **a client, not a bundled deployment** — it never runs the API, opens a database, or runs migrations. It loads the exact same web build as everyone else, served from a local loopback HTTP server, and points it at whatever EveryList server you configure on first launch via `/server-setup`.
+
+- **Requires a server running this release or later** — the desktop app needs a CORS entry (`apps/api/config/cors.ts`) that predates-it servers don't have. If login fails immediately with no more specific error, upgrade your server first.
+- **Builds are unsigned.** There's no Apple Developer Program membership or Authenticode certificate behind this project.
+  - **macOS**: Gatekeeper blocks the downloaded `.dmg` with "EveryList is damaged and can't be opened." Right-click the app → **Open**, or run `xattr -dr com.apple.quarantine /Applications/EveryList.app`.
+  - **Windows**: SmartScreen will warn on the unsigned installer — click "More info" → "Run anyway."
+- **Updates are "check and link," not automatic.** Settings → About has a "Check" button that compares your version against the latest GitHub Release and links to the download if one exists — there's no in-place auto-updater (an unsigned macOS build can't use one at all). Updating means downloading the new installer and reinstalling; nothing is lost, since your data lives on the server and the local offline cache rebuilds from it. If you have unsynced offline changes queued, reconnect once before updating so they flush first.
+- **The loopback port is fixed** (default `41783`), not randomized — it's part of the app's stored origin, alongside your server URL, login token, and offline cache. Overriding it (via a `config.json` file in the app's data directory, `{ "port": 41784 }`) resets all of those; only do it if the default port is actually unavailable on your machine.

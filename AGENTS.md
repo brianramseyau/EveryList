@@ -43,7 +43,7 @@ foundational/   PLAN_00_FOUNDATIONAL_PLAN.md and phase plans — the product/arc
 `category_learnings` table and then, in the same `up()`, backfilled it with `await this.db.table('category_learnings').insert(...)`.
 That insert failed on container boot with `no such table: category_learnings`, because AdonisJS
 Lucid's `this.schema.createTable(...)` does **not** execute the DDL immediately. `this.schema` is a
-getter that pushes a *deferred* schema builder onto `BaseSchema`'s `trackedCalls` queue, and the whole
+getter that pushes a _deferred_ schema builder onto `BaseSchema`'s `trackedCalls` queue, and the whole
 queue only runs in `executeQueries()` **after `up()` returns**. The `this.db` backfill, in contrast,
 ran immediately during `up()` — before the table existed. Migrations are transactional, so the failure
 rolled the whole migration back cleanly (no data loss), but it meant the migration could never apply to
@@ -60,7 +60,7 @@ this.defer((db) => this.backfill(db))   // db: QueryClientContract
 
 `defer` tracks a callback into the same queue as the schema builders, so it executes in tracked order
 (DDL first, then the callback) inside the migration's transaction. Only a `CREATE`-only migration that
-*also* seeds/backfills data from `this.db` hits this; pure-DDL migrations and `this.db`-only data
+_also_ seeds/backfills data from `this.db` hits this; pure-DDL migrations and `this.db`-only data
 migrations (e.g. `migrate_default_categories_to_lists.ts`) are unaffected.
 
 **What this means for future work:**
@@ -69,12 +69,12 @@ migrations (e.g. `migrate_default_categories_to_lists.ts`) are unaffected.
   must do that data work inside `this.defer(...)`, never as a bare `await this.db...` after the
   `this.schema` call. `this.schema.createTable`/`alterTable`/`dropTable` queue their DDL; `this.db`
   executes immediately — mixing them in `up()` without `defer` is the exact shape that fails.
-- The existing test suite won't catch this: Japa's `testUtils.db().migrate()` runs against a *fresh*
+- The existing test suite won't catch this: Japa's `testUtils.db().migrate()` runs against a _fresh_
   empty schema, so a backfill loops over zero rows and never touches the insert path. Reproduce it
   manually like the ALTER footgun above — migrate up to the pre-migration state, seed rows, then run
   the new migration against that file (or unit-test an extracted, pure grouping helper the way
   `category_learning_backfill.ts` does).
-- If a migration boots and fails with `no such table: X` where `X` is a table you create in the *same*
+- If a migration boots and fails with `no such table: X` where `X` is a table you create in the _same_
   migration's `up()`, this is the bug — check whether the failing write is a bare `this.db` call that
   should be wrapped in `this.defer()`.
 
@@ -92,7 +92,7 @@ Reproduced directly with curl against `apps/api/start/transmit.ts`'s subscribe p
 bypassing the frontend entirely:
 
 - **Ruled out**: this is not PAT-specific. The identical miss reproduced with a plain login
-  session token — no PAT involved at all — on the *first* write immediately after a fresh
+  session token — no PAT involved at all — on the _first_ write immediately after a fresh
   `node ace serve` boot, in both `--hmr` and static mode.
 - Once a process had handled at least one broadcast successfully (directly via
   `transmit.broadcast()` or through a real write), every subsequent write in that same process
@@ -116,13 +116,13 @@ bypassing the frontend entirely:
 
 ### Re-adding a deleted item's name silently lost its store/price/quantity/notes
 
-**Status (2026-08-22): fixed.** `items_controller.ts#store` used to dedup only against *active*
+**Status (2026-08-22): fixed.** `items_controller.ts#store` used to dedup only against _active_
 items (`whereNull('deletedAt')`), so typing/autocomplete-adding a name that matched a deleted item
 created a fresh, metadata-less row instead of reusing the old one — unlike the explicit
 `/lists/:id/recently-deleted` → `restoreItem()` restore flow, which always preserved
 `categoryId`/`storeId`/`price`/`quantity`/`notes` because it operates on the same row.
 
-Fix: when `store()` finds no active match, it now also checks for the most recently *deleted*
+Fix: when `store()` finds no active match, it now also checks for the most recently _deleted_
 match and restores that row (via a `restoreItemRow` helper shared with the explicit `restore()`
 endpoint) instead of creating a new one. This applies to both the autocomplete-pick and
 typed-and-submitted paths, since the frontend already funnels both through the same
@@ -140,7 +140,7 @@ If this resurfaces: check whether `store()`'s deleted-match lookup is still in p
 assuming it's the same bug — a regression here would look identical to the original report (price/
 store/quantity/notes missing after re-adding a name).
 
-### Recurring items spawn a *new* item on check-off — checked history rows share the open copy's name
+### Recurring items spawn a _new_ item on check-off — checked history rows share the open copy's name
 
 Items can carry a repeat rule ([`PLAN_30`](foundational/PLAN_30_PHASE_RECURRING_ITEMS.md)): the rule
 lives once in `item_recurrences`, every item in the series points at it via `items.recurrence_id`
@@ -149,11 +149,11 @@ recurring item, saves the checked row and **creates a copy** with the next deadl
 transaction (`spawnNextItem` in `item_recurrence_service.ts`; date math is the shared
 `nextOccurrence`). Consequences to remember:
 
-- A list can therefore hold a checked history row *and* an open row with the same name. Every
+- A list can therefore hold a checked history row _and_ an open row with the same name. Every
   add-by-name path resolves through `findItemByName`, which orders `checked` ascending so it returns
   the open row — a lookup that ignored that would "reactivate" the history row and leave two open
   duplicates. New name-based paths must keep going through it.
-- Unchecking a completed recurring item *undoes* the spawn: the open copy is soft-deleted and
+- Unchecking a completed recurring item _undoes_ the spawn: the open copy is soft-deleted and
   detached (`recurrence_id = NULL`) in the same transaction, so a series never has two open items.
   Don't "simplify" that away — without it, an accidental check + uncheck leaves duplicates that each
   spawn more copies. The same invariant is why `restoreItemRow` detaches a restored row when its
@@ -169,13 +169,13 @@ transaction (`spawnNextItem` in `item_recurrence_service.ts`; date math is the s
 
 **Status (2026-08-22): fixed.** `apps/web/e2e/offline-sync.e2e.ts`'s "adds an item while offline
 and syncs it once back online" failed once in CI (Phase 16 PR #79) with a Playwright strict-mode
-violation: `getByText('Milk')` resolved to *two* elements right after `page.reload()`, where the
+violation: `getByText('Milk')` resolved to _two_ elements right after `page.reload()`, where the
 test expects exactly one.
 
 Root cause: `connectivity.svelte.ts`'s own `online` listener and `flush.ts`'s own `online`
 listener both race to clear the "Server unavailable" indicator on reconnect. The connectivity
 listener calls `pingNow()` (a single cheap `/api/v1/ping` round trip); the flush listener calls
-`attemptFlush()`, which replays the queued create — a slower `POST` — and only *then* deletes the
+`attemptFlush()`, which replays the queued create — a slower `POST` — and only _then_ deletes the
 optimistic temp row from Dexie (`flush.ts`'s `replay()`). The ping routinely wins, clearing the
 indicator before the temp row is gone. `page.reload()` timed right after the indicator clears (as
 the test does, matching real usage — the indicator is the natural "safe to reload" signal) could
@@ -203,7 +203,7 @@ reproduce this exact symptom).
 twice with the same shape of Playwright strict-mode violation — first in PR #83's "keeps a
 multi-step same-category reorder stable across reloads" (`getByText('Charlie Item', { exact: true
 })` resolved to two elements right after the test's second `page.reload()`), then again in PR #217
-(unrelated to that PR's diff) in the *other* test, "drags an item across category sections with a
+(unrelated to that PR's diff) in the _other_ test, "drags an item across category sections with a
 real mouse gesture," this time with **no reload at all** — `getByRole('link', { name: 'Edit Vexnal
 Item' }).click()` failed immediately after creating the item, because two `<a>` elements existed for
 it under two different item ids (a negative temp id and the real server id).
@@ -213,21 +213,21 @@ That second occurrence is what broke the earlier theory (below) and pointed at t
 - **Root cause**: `offlineCreate` (`sync-engine.ts`) writes an optimistic temp-id row to Dexie, then
   awaits the create request; on success it deletes the temp row and returns. But it never calls
   `markSelfMutation`, unlike `offlineMutate` — so the server's realtime broadcast of this client's
-  *own* create isn't suppressed the way an update/delete broadcast is. That broadcast (a separate SSE
+  _own_ create isn't suppressed the way an update/delete broadcast is. That broadcast (a separate SSE
   connection, no ordering guarantee against the create's own HTTP response) can arrive and trigger
-  the list page's `loadAll()` → `fetchItems()` *before* the create's own response resolves and
+  the list page's `loadAll()` → `fetchItems()` _before_ the create's own response resolves and
   deletes the temp row. `fetchItems()`'s merge logic appends every `_dirty` Dexie row it finds
   (correct for a genuinely still-offline create) without knowing the temp row and the just-fetched
   server row are the same logical item — so both survive under different ids, rendered twice, until
   something else reloads the page.
 - **Why the earlier theory (mitigated, PR #83) missed it**: that pass only checked whether
-  `offlineCreate`'s *own* await sequence could leave a duplicate (it can't — the temp row is deleted
-  before the function returns) and didn't consider a *second*, independent trigger — the realtime
+  `offlineCreate`'s _own_ await sequence could leave a duplicate (it can't — the temp row is deleted
+  before the function returns) and didn't consider a _second_, independent trigger — the realtime
   listener — reloading concurrently. The `dragRowOnto` PATCH-wait mitigation from that pass is still
-  correct and still in place; it closes a related but distinct race on the *update* path.
+  correct and still in place; it closes a related but distinct race on the _update_ path.
 - **Fix**: the list page's realtime handler (`routes/lists/[id]/+page.svelte`) now checks
   `hasPendingCreateForList('item', listId)` (`offline/sync-queue.ts`) before reloading on a `create`
-  event — if this list has one of our own item creates queued *and enqueued within the last 10s*, the
+  event — if this list has one of our own item creates queued _and enqueued within the last 10s_, the
   broadcast is assumed to be our own in-flight create and the reload is skipped; the create's own
   resolution already patches `items` directly once it lands. The 10s cap (not "any pending create,
   however old") matters: an offline create can stay queued far longer than the single request round
@@ -251,16 +251,16 @@ against it today.
 separate generators that fire on different commands**, which is why the committed files drift from
 each other and from `start/routes.ts`:
 
-| Files | Generator | Fires on |
-|---|---|---|
-| `server/controllers.ts`, `server/events.ts`, `server/listeners.ts`, `client/data.d.ts`, `client/manifest.d.ts` | `indexEntities` (assembler `IndexGenerator`) | `serve --hmr` **and** `build` |
-| `client/registry/*` | Tuyau `generateRegistry` (`routesScanned` hook) | **only** `serve --hmr` |
-| `server/routes.d.ts` | `app_provider.ready()` `emitRoutes` | only when `!inProduction && router.commited` |
+| Files                                                                                                          | Generator                                       | Fires on                                     |
+| -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------- |
+| `server/controllers.ts`, `server/events.ts`, `server/listeners.ts`, `client/data.d.ts`, `client/manifest.d.ts` | `indexEntities` (assembler `IndexGenerator`)    | `serve --hmr` **and** `build`                |
+| `client/registry/*`                                                                                            | Tuyau `generateRegistry` (`routesScanned` hook) | **only** `serve --hmr`                       |
+| `server/routes.d.ts`                                                                                           | `app_provider.ready()` `emitRoutes`             | only when `!inProduction && router.commited` |
 
 They're committed because `tsc --noEmit` (CI typecheck) resolves `#generated/controllers` and
 `tests/bootstrap.ts`'s `Registry` import, and because the Docker build's `openapi_build`
 (`buildFinished`) hook reads `client/registry/schema.d.ts` — which `node ace build` itself does
-*not* regenerate. The historical "non-determinism" (fresh-clone regeneration producing inconsistent
+_not_ regenerate. The historical "non-determinism" (fresh-clone regeneration producing inconsistent
 results) was the consequence of running `node ace build`/`test`/plain `serve`, none of which wire up
 the full codegen chain — only the `--hmr` dev server (`pnpm dev`) regenerates every file. PR #96
 added `alexa.*` (and #122/#130 added `debug`, `categories.bulkImport`, `items.moveToList`,
@@ -270,7 +270,7 @@ added `alexa.*` (and #122/#130 added `debug`, `categories.bulkImport`, `items.mo
 **What this means for future work:**
 
 - **After adding/changing any route or controller, regenerate and commit `.adonisjs/`** by running
-  `pnpm dev` (in `apps/api`) and confirming *both* log lines appear — `[ info ] generating indexes...`
+  `pnpm dev` (in `apps/api`) and confirming _both_ log lines appear — `[ info ] generating indexes...`
   (`codegen: created 5 file(s)`) and `[ info ] tuyau: created api client registry` — then stop it and
   `git add apps/api/.adonisjs/`. Only the `--hmr` server produces the full set; `node ace build` /
   `list:routes` / `test` will not.
@@ -290,7 +290,7 @@ added `alexa.*` (and #122/#130 added `debug`, `categories.bulkImport`, `items.mo
 **Status (2026-08-27): platform limitation, mitigated in code (not fixed at the root — there's no web-side fix).**
 
 A user reporting "orientation lock still not working on the Android PWA" after #132 (which fixed the
-*native* app via `@capacitor/screen-orientation`) was hitting the Web Screen Orientation API's Android
+_native_ app via `@capacitor/screen-orientation`) was hitting the Web Screen Orientation API's Android
 behavior, not a code bug. On Chrome/Android the PWA path calls `screen.orientation.lock('portrait'|'landscape')`,
 which:
 
@@ -300,7 +300,7 @@ which:
   the app already detected this and showed the "install to your home screen" hint.
 - **Rejects even in an installed standalone PWA on many Chrome builds** — the W3C pre-lock conditions
   allow user agents to require element-level fullscreen; Chrome frequently does.
-- The one thing Android *reliably* honors for an installed PWA is the web-manifest `orientation`
+- The one thing Android _reliably_ honors for an installed PWA is the web-manifest `orientation`
   member, but it's baked into the WebAPK at **install** time — it can't express a per-user runtime
   Auto/Portrait/Landscape choice without a reinstall. (Don't "fix" this by adding `"orientation"` to
   `pwa.config.mjs`: it would break Landscape/Auto on Android and the installed copy still wouldn't
@@ -362,10 +362,10 @@ any Dockerfile change, and one shouldn't be added "just in case."
 - Full-stack features go migration → backend (model/validator/controller/policy) → shared DTO → frontend, in that order — see any `Phase 6:` commit for the pattern.
 - **Run `pnpm check` before opening a PR.** It mirrors the GitHub Actions PR gate (`.github/workflows/ci.yml` → `test.yml`, plus the `e2e` job — see `foundational/PLAN_00_FOUNDATIONAL_PLAN.md` §12): builds `@everylist/shared`, lints and typechecks every workspace, installs Playwright Chromium, runs every workspace's coverage-gated test suite, then the web E2E suite. `pnpm check --skip-e2e` drops the E2E suite for fast iteration. This catches issues locally instead of burning (at times multiple) CI round trips. The CI `docker-smoke` job (production Docker image build + smoke test) isn't part of `pnpm check` but **is** reproducible locally now that Docker is available (colima): `docker build -f docker/Dockerfile -t everylist:ci .`, then `docker run -d --name everylist-ci -p 3000:3000 -e APP_KEY=<a 32-char dev key> everylist:ci`, wait for `curl -fsS http://localhost:3000/` to succeed, run the same smoke checks as the job in `.github/workflows/ci.yml`, and clean up with `docker rm -f everylist-ci`. (Lighthouse's CI gate was removed in PR #30 — `scripts/lighthouse-check.mjs` still exists for manual/local runs, but nothing in CI invokes it.)
 - **Cutting a release (`vX.Y.Z`)** — three steps, in this order; nothing is automated and `main` is PR-only, so each version change goes through a branch + PR (see the PR review loop below):
-  1. **Package versions.** On a branch: `pnpm prepare-release vX.Y.Z` (`scripts/prepare-release.mjs`) sets every workspace `package.json` `"version"` (bare semver). Commit, PR, merge. Land it *before* tagging so the tagged commit carries the right versions. CI doesn't depend on it (Docker uses the tag; `native-build.yml` injects the tag's version into `apps/desktop` before packaging), but `apps/api`'s version is real — `config/openapi.ts` reads it for the OpenAPI `info.version` (`/docs`, `/openapi`) — so don't leave them stale or set them to `0.0.0`. Don't hand-edit these.
+  1. **Package versions.** On a branch: `pnpm prepare-release vX.Y.Z` (`scripts/prepare-release.mjs`) sets every workspace `package.json` `"version"` (bare semver). Commit, PR, merge. Land it _before_ tagging so the tagged commit carries the right versions. CI doesn't depend on it (Docker uses the tag; `native-build.yml` injects the tag's version into `apps/desktop` before packaging), but `apps/api`'s version is real — `config/openapi.ts` reads it for the OpenAPI `info.version` (`/docs`, `/openapi`) — so don't leave them stale or set them to `0.0.0`. Don't hand-edit these.
   2. **Tag + notes.** Tag the merge commit and push it: `git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`. The tag triggers `docker-publish.yml` (GHCR image `vX.Y.Z`) and `native-build.yml`. Then `gh release create vX.Y.Z --verify-tag --notes-file …`; write the notes like earlier releases (`gh release view <prev-tag>`): a one-paragraph summary, a bullet per user-visible change with its PR number, an **Upgrading:** paragraph (migrations, required app builds, known gaps) and a `**Full diff:** vPREV...vX.Y.Z` line. Cover everything from `git log vPREV..HEAD`.
   3. **HA add-on, last.** Only after `docker-publish.yml` has finished green: on a branch, `pnpm release-addon vX.Y.Z` (`scripts/release-addon.mjs`) sets `ha-addon/everylist/config.yaml`'s `version` (`'vX.Y.Z'`, "v" prefix kept) — the exact GHCR tag Supervisor pulls, so it must never land on `main` ahead of the image. Also add a `vX.Y.Z` entry to `ha-addon/everylist/CHANGELOG.md` (prose). Commit, PR, merge. This is deliberately a separate script from step 1 so neither has to be partially reverted; it refuses to run if the tag isn't on origin.
-  If a tag ever has to be moved, cancel its in-flight workflow runs before re-pushing and expect the image to be republished under the same tag.
+     If a tag ever has to be moved, cancel its in-flight workflow runs before re-pushing and expect the image to be republished under the same tag.
 - Don't force-push, don't skip hooks, don't merge/deploy without explicit confirmation — this is a solo-maintained app with no staging environment, so anything that touches `main` effectively touches production on the next deploy.
 - **Stop any dev server process you started (`pnpm dev`, `node ace serve`, `vite`/`vitest` in watch mode, etc.) once you're done with it** — including any child processes it spawned. The one exception: a dev server that was already running before you started (the user's own persistent session) — leave that alone; check process start times if unsure whether something predates your session.
 - **PR review loop: Kilo Code is the reviewer, and every thread it opens must end resolved before merge — never left open on a merged PR.** After opening a PR, wait for its `Kilo Code Review` check and any inline comments (`gh pr checks <n>` / `gh api repos/<owner>/<repo>/pulls/<n>/comments`) alongside the rest of CI — don't merge on green CI alone while a Kilo comment sits unaddressed. For each finding: fix it (or give a clear reason if you're not going to), **reply on that exact review thread** stating what changed and why (`gh api repos/<owner>/<repo>/pulls/comments -f body="..." -F in_reply_to=<comment_id>` — note `-F`, not `-f`, for `in_reply_to`: the API rejects it as a string), then resolve the thread (GraphQL `resolveReviewThread`, thread id from `reviewThreads` under the PR). Do this even if you fix the issue in a later commit on the same PR — the original comment stays open until you close the loop on it explicitly; pushing a fix alone does not resolve or reply to anything. If you only realize a thread was left open after merging, still go back and reply + resolve it on the merged PR — don't leave it dangling because the PR is already closed.
