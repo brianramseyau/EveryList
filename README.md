@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> 📱 **The Android app is in closed beta — [request an invite](https://github.com/brianramseyau/EveryList/issues/new) to try it out.**
+> 📱 **The Android app is in closed beta — [email beta@everylist.dev](mailto:beta@everylist.dev?subject=EveryList%20Android%20beta%20request&body=Google%20account%20email%20for%20Play%20testing%3A%20) with the Google account email you want added as a Play tester.**
 
 <p align="center">
   <img src="branding/icon-192.png" width="96" height="96" alt="EveryList icon">
