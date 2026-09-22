@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.7.0
+
+**Upgrading:** one automatic, additive database migration runs on first boot
+(a new table for recurring items' repeat rules, plus a foreign key on items);
+no table rebuilds, no existing rows affected.
+
+- **Recurring items** — an item on a deadline-enabled list can repeat every
+  N days/weeks/months/years (weekday chips for weekly rules, day-of-month or
+  "First/Second/.../Last + weekday" for monthly rules), with an end condition
+  of never, on a date, or after N occurrences. Checking one off spawns the
+  next occurrence right away; the checked item stays as history.
+- Android home-screen widget items now show their due date/time, colored for
+  overdue/due-today/later, matching the app's deadline chip.
+
+See the [full EveryList release notes](https://github.com/brianramseyau/EveryList/releases/tag/v1.7.0)
+for everything else in this release.
+
 ## v1.6.2
 
 Updates from v1.5.0 (the add-on skipped v1.5.1–v1.6.1, so this covers all of
