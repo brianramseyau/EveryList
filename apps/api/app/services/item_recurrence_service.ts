@@ -1,4 +1,5 @@
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import type { ModelQueryBuilderContract } from '@adonisjs/lucid/types/model'
 import {
   nextOccurrence,
   recurrenceRuleProblem,
@@ -163,6 +164,16 @@ export async function nextDueDate(
   )
 }
 
+/** Same case/whitespace-insensitive match `findItemByName` (item_reuse.ts) uses, so a name-based
+ * duplicate check here can't miss a row that add-item's own lookup would have treated as the
+ * same item. */
+function sameName(
+  query: ModelQueryBuilderContract<typeof Item, Item>,
+  name: string
+): ModelQueryBuilderContract<typeof Item, Item> {
+  return query.whereRaw('LOWER(TRIM(name)) = ?', [name.trim().toLowerCase()])
+}
+
 /**
  * Open (unchecked, not deleted) items that share `item`'s list and name — matched by name, not
  * `recurrenceId`: stopping an item's repeat nulls only *that item's* `recurrenceId` (older
@@ -173,9 +184,8 @@ export async function nextDueDate(
  */
 async function openNamesakesOf(item: Item, client?: TransactionClientContract): Promise<Item[]> {
   const query = client ? Item.query({ client }) : Item.query()
-  return query
+  return sameName(query, item.name)
     .where('listId', item.listId)
-    .where('name', item.name)
     .whereNull('deletedAt')
     .where('checked', false)
     .whereNot('id', item.id)
@@ -217,11 +227,18 @@ export async function openSuccessorOf(item: Item): Promise<Item | 'blocked' | nu
   const open = await openNamesakesOf(item)
   if (open.length === 0) return null
 
-  const later = await Item.query()
+  // Counts a later row as belonging to this timeline when it's either still linked to the same
+  // series (catches an in-between completion that hasn't detached) or open under the same name
+  // (catches a detached successor). A *checked* same-named row that was never part of this
+  // series — a legacy duplicate `findItemByName` already tolerates elsewhere — is excluded, or
+  // it would inflate this count and wrongly refuse a legitimate undo.
+  const later = await sameName(Item.query(), item.name)
     .where('listId', item.listId)
-    .where('name', item.name)
     .whereNull('deletedAt')
     .where('id', '>', item.id)
+    .andWhere((query) => {
+      query.where('checked', false).orWhere('recurrenceId', item.recurrenceId as number)
+    })
   return open.length === 1 && later.length === 1 && later[0]!.id === open[0]!.id
     ? open[0]!
     : 'blocked'

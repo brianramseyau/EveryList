@@ -454,6 +454,65 @@ test.group('Recurring items (PLAN_30_PHASE_RECURRING_ITEMS.md)', (group) => {
     assert.equal(await occurrencesCreated(), 1)
   })
 
+  test('an unrelated checked duplicate with a higher id does not block undoing the latest completion', async ({
+    client,
+    assert,
+  }) => {
+    const { token, id: userId } = await signupAndGetUser(client)
+    const listId = await createList(client, token)
+    const item = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
+    await patchItem(client, token, listId, item.id, { checked: true })
+    const successor = await Item.query()
+      .where('listId', listId)
+      .where('checked', false)
+      .firstOrFail()
+
+    // Same name, already checked, never part of this series, created after the successor — a
+    // legacy duplicate `findItemByName` already tolerates elsewhere. Counting it as a "later"
+    // occurrence would wrongly refuse this undo.
+    await Item.create({
+      listId,
+      name: item.name,
+      checked: true,
+      sortOrder: 2,
+      createdBy: userId,
+      version: 1,
+    })
+
+    const undo = await patchItem(client, token, listId, item.id, { checked: false })
+    undo.assertStatus(200)
+    assert.isFalse(bodyData<ItemDto>(undo).checked)
+    const discardedSuccessor = await Item.findOrFail(successor.id)
+    assert.isNotNull(discardedSuccessor.deletedAt)
+  })
+
+  test('the open-item guard matches names case- and whitespace-insensitively, like findItemByName', async ({
+    client,
+    assert,
+  }) => {
+    const { token, id: userId } = await signupAndGetUser(client)
+    const listId = await createList(client, token)
+    const item = bodyData<ItemDto>(
+      await createItem(client, token, listId, { deadline: FUTURE, recurrence: daily })
+    )
+    // Differs only by case and surrounding whitespace from `item.name` ("Take out bins").
+    await Item.create({
+      listId,
+      name: `  ${item.name.toUpperCase()}  `,
+      checked: false,
+      sortOrder: 1,
+      createdBy: userId,
+      version: 1,
+    })
+
+    await patchItem(client, token, listId, item.id, { checked: true })
+
+    assert.lengthOf(await Item.query().where('listId', listId).where('checked', false), 1)
+    assert.equal(await occurrencesCreated(), 1)
+  })
+
   test('refuses to reopen an older occurrence once a later one is open', async ({
     client,
     assert,
