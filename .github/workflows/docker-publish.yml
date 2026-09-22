@@ -21,16 +21,16 @@ name: Docker Publish
 # already on main for the same reason - tagging an arbitrary unverified commit bypasses that
 # guarantee.
 #
-# ha-addon/everylist/config.yaml's `version` (the Home Assistant add-on's pinned image tag) is
-# bumped by hand with `pnpm release-addon` (scripts/release-addon.mjs) after this workflow finishes - not automated
-# here. An earlier version of this workflow tried to bump it from a job on this trigger,
-# pushing straight to main after the tag; that always failed, since main's required status
-# checks only run on `pull_request` and a direct push (bot-authored or not) can never satisfy
-# them. Routing it through a bot-authored PR instead doesn't work either - GitHub suppresses
-# the `pull_request` event for anything created with the workflow's own GITHUB_TOKEN, so those
-# checks would never run and auto-merge would sit pending forever. Run the script (and merge
-# its PR) only *after* this workflow has finished publishing the tag's image - see the
-# script's own comment for why the order matters.
+# The `bump-ha-addon` job below bumps the Home Assistant add-on repo's (brianramseyau/
+# everylist-ha-app) pinned version once the `merge` job proves the tag's image is fully
+# published. An earlier version of this bump lived in-repo (ha-addon/everylist/config.yaml,
+# a `pnpm release-addon` step) and tried to push/PR it with GITHUB_TOKEN - that always failed,
+# since main's required status checks only run on `pull_request` events, and GitHub suppresses
+# `pull_request` events for anything authored by the workflow's own GITHUB_TOKEN, whether pushed
+# directly or opened as a bot PR. The fix: authenticate as a GitHub App installation instead
+# (HA_ADDON_APP_ID / HA_ADDON_APP_PRIVATE_KEY, installed only on everylist-ha-app) - a real,
+# distinct identity, so the PR it opens fires normal `pull_request` events there and that repo's
+# own required check can actually run before auto-merge.
 #
 # Multi-arch (amd64 + arm64): each platform builds on its own *native* runner
 # (ubuntu-latest / ubuntu-24.04-arm) rather than cross-compiling one arch under QEMU
@@ -169,3 +169,44 @@ jobs:
         run: |
           tag="$(head -n1 <<< "${{ steps.meta.outputs.tags }}")"
           docker buildx imagetools inspect "$tag"
+
+  bump-ha-addon:
+    name: Bump Home Assistant add-on repo
+    needs: merge
+    runs-on: ubuntu-latest
+    # Stable release tags only (vX.Y.Z, no -rc/-beta suffix) - matches the same guard the old
+    # release-addon.mjs script enforced, so a prerelease tag never touches the add-on.
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.HA_ADDON_APP_ID }}
+          private-key: ${{ secrets.HA_ADDON_APP_PRIVATE_KEY }}
+          owner: brianramseyau
+          repositories: everylist-ha-app
+
+      - uses: actions/checkout@v4
+        with:
+          repository: brianramseyau/everylist-ha-app
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Bump version + changelog
+        run: node .github/scripts/bump-version.mjs ${{ github.ref_name }}
+
+      - uses: peter-evans/create-pull-request@v6
+        id: cpr
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          commit-message: "Bump to ${{ github.ref_name }}"
+          title: "Bump to ${{ github.ref_name }}"
+          body: Automated bump after `docker-publish.yml` published this tag's image.
+          branch: bump-${{ github.ref_name }}
+
+      - name: Auto-merge once checks pass
+        if: steps.cpr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh pr merge --repo brianramseyau/everylist-ha-app --auto --squash \
+            "${{ steps.cpr.outputs.pull-request-number }}"
