@@ -1,7 +1,7 @@
 {
   "name": "everylist",
   "private": true,
-  "version": "1.6.2",
+  "version": "1.7.0",
   "description": "EveryList — a narrower, sharper shopping-list PWA.",
   "license": "MIT",
   "type": "module",
