@@ -400,18 +400,29 @@ async function enableStandalone() {
 
   try {
     await bootStandalone(userDataDir)
-    // No form is shown for this — see PLAN_31 §"First-run flow" step 4. The renderer picks the
-    // token up via consumeStandaloneToken() once it reloads at the new origin below.
-    const { token, email, password } = await provisionOwner(appPort)
-    pendingStandaloneToken = token
-    if (safeStorage.isEncryptionAvailable()) {
-      persistOwnerCredentials(
-        getDataDir(userDataDir),
-        { email, password },
-        { encryptImpl: encryptOwnerCredentials }
-      )
+    // An owner can already exist here — mode.json was deleted and standalone re-chosen (see
+    // docs/desktop.md's reset instructions, which keep server/everylist.sqlite3), or the app
+    // crashed/quit between provisionOwner and writeMode below on a previous attempt.
+    // bootStandalone has then already re-authenticated from the credentials persisted last time,
+    // populating pendingStandaloneToken — calling provisionOwner again would only get a 409 from
+    // an instance that already has its one allowed user, permanently blocking every retry. No
+    // form is shown for the first-run provisioning case — see PLAN_31 §"First-run flow" step 4.
+    // The renderer picks the token up via consumeStandaloneToken() once it reloads below.
+    if (!pendingStandaloneToken) {
+      const { token, email, password } = await provisionOwner(appPort)
+      pendingStandaloneToken = token
+      if (safeStorage.isEncryptionAvailable()) {
+        persistOwnerCredentials(
+          getDataDir(userDataDir),
+          { email, password },
+          { encryptImpl: encryptOwnerCredentials }
+        )
+      }
     }
   } catch (error) {
+    // Never left set from a failed attempt — the thin-client origin this rolls back to must not
+    // consume a token minted for a server that's no longer running.
+    pendingStandaloneToken = null
     suppressEmbeddedServerExitDialog = true
     if (embeddedServerChild) await stopEmbeddedServer(embeddedServerChild)
     suppressEmbeddedServerExitDialog = false
