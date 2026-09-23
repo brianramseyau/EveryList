@@ -2,7 +2,7 @@ name: Docker Publish
 
 # Publishes the EveryList image to GHCR on two triggers:
 #
-#   - every push to `main`      -> tagged `nightly` (moving, tracks the tip of main)
+#   - every push to `main`      -> tagged `develop` (moving, tracks the tip of main)
 #   - every pushed tag vX.Y.Z   -> tagged:
 #         vX.Y.Z   exact pin, never moves again      (safe to pin forever)
 #         vX       major pin, moves to the newest vX.y.z on each release within that major
@@ -78,10 +78,10 @@ jobs:
         # Baked into the image (ARG/ENV, not read at container startup) and served
         # from GET /api/v1/meta - see foundational/PLAN_00_FOUNDATIONAL_PLAN.md §8/§9 - so the in-app
         # Settings page footer can show exactly what build is running, which matters
-        # for anyone tracking a moving tag (nightly or a major-version pin).
+        # for anyone tracking a moving tag (develop or a major-version pin).
         id: buildinfo
         run: |
-          echo "version=${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'nightly' }}" >> "$GITHUB_OUTPUT"
+          echo "version=${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'develop' }}" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
@@ -139,13 +139,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute tags (nightly / semver exact / semver major / latest)
+      - name: Compute tags (develop / semver exact / semver major / latest)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/brianramseyau/everylist
           tags: |
-            type=raw,value=nightly,enable={{is_default_branch}}
+            type=raw,value=develop,enable={{is_default_branch}}
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-') }}
@@ -163,7 +163,7 @@ jobs:
 
       - name: Inspect merged image
         # Uses the first line of `tags` rather than `steps.meta.outputs.version` - flagged by
-        # review as possibly empty on a plain `main` push, where only the raw `nightly` rule
+        # review as possibly empty on a plain `main` push, where only the raw `develop` rule
         # (not a semver rule) matches. `tags` is guaranteed non-empty any time this job runs at
         # all, regardless of which rule produced it, so this sidesteps the question entirely.
         run: |

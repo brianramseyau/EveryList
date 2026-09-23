@@ -24,7 +24,7 @@ If `/config` is mounted **read-only** — e.g. a Kubernetes `ConfigMap`/`Secret`
 
 | Tag       | Meaning                                                         |
 | --------- | --------------------------------------------------------------- |
-| `nightly` | Latest build off `main` — bleeding edge, no stability guarantee |
+| `develop` | Latest build off `main` — bleeding edge, no stability guarantee |
 | `vX.Y.Z`  | Exact release, never moves                                      |
 | `vX`      | Latest release within major version `X`                         |
 | `latest`  | Latest stable release                                           |

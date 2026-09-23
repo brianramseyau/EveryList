@@ -104,7 +104,7 @@ COPY --from=build-api /app/packages/shared/dist node_modules/@everylist/shared/d
 FROM node:24.20.0-bookworm-slim AS release
 
 ARG S6_OVERLAY_VERSION=3.2.0.2
-ARG APP_VERSION=nightly
+ARG APP_VERSION=develop
 ARG GIT_SHA=unknown
 ARG BUILD_DATE=unknown
 

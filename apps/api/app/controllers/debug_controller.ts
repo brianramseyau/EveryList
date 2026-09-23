@@ -36,7 +36,7 @@ export default class DebugController {
 
     const body: DebugResponse = {
       app: {
-        version: env.get('APP_VERSION', 'nightly'),
+        version: env.get('APP_VERSION', 'develop'),
         commit: env.get('GIT_SHA', 'unknown'),
         builtAt: env.get('BUILD_DATE', 'unknown'),
         nodeEnv: env.get('NODE_ENV'),

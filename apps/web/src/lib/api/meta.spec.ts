@@ -8,7 +8,7 @@ describe('fetchMeta', () => {
 
 	it('returns the parsed meta response on success', async () => {
 		const body = {
-			version: 'nightly',
+			version: 'develop',
 			commit: 'abc123',
 			builtAt: '2026-08-12T00:00:00.000Z',
 			publicSignupEnabled: true
