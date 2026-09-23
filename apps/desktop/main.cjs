@@ -511,6 +511,13 @@ async function enableStandaloneOnce() {
       // renderer picks the token up via consumeStandaloneToken() once it reloads below.
       pendingStandaloneToken = await provisionOwner(appPort, credentials)
     }
+    // Inside the try, deliberately: writeMode is a filesystem write and can itself fail (full
+    // disk, a permissions problem on userDataDir) — if it did while sitting after this block, the
+    // embedded server and its owner would already exist with no mode recorded and no rollback,
+    // since the catch below would never run for a throw outside its own try. Keeping it in here
+    // means that failure gets the same rollback (stop the child, restore the thin-client server)
+    // as every other failure in this switch.
+    writeMode(userDataDir, 'standalone')
   } catch (error) {
     // Never left set from a failed attempt — the thin-client origin this rolls back to must not
     // consume a token minted for a server that's no longer running.
@@ -526,7 +533,6 @@ async function enableStandaloneOnce() {
     suppressEmbeddedServerExitDialog = false
   }
 
-  writeMode(userDataDir, 'standalone')
   await mainWindow?.loadURL(`http://127.0.0.1:${appPort}/`)
   return { port: appPort }
 }
