@@ -462,14 +462,17 @@ async function enableStandaloneOnce() {
       // own doc comment.
       const needsSetup = await needsOwnerSetup(appPort)
       if (!needsSetup) {
-        // An owner does exist, and bootStandalone's reauth attempt above still failed (or there
-        // was no credentials file to even try) — never overwrite/regenerate here, since that
-        // would strand the real owner behind an account /api/v1/setup only rejects as
-        // already-configured. Surface the failure instead; it may be transient (this machine's
-        // network hiccuping) rather than proof the account is unrecoverable.
+        // An owner does exist — never overwrite/regenerate here, since that would strand the real
+        // owner behind an account /api/v1/setup only rejects as already-configured. Two different
+        // reasons land here, worth telling apart in the message: reauth was attempted and failed
+        // (possibly transient — worth retrying) versus no credentials file existed to even try
+        // (retrying changes nothing; there's no local record of this owner's password at all).
         throw new Error(
-          'An owner account already exists for this standalone instance, but signing back in ' +
-            'with its saved credentials failed. Nothing has been changed — try again.'
+          hadExistingCredentials
+            ? 'An owner account already exists for this standalone instance, but signing back ' +
+                'in with its saved credentials failed. Nothing has been changed — try again.'
+            : 'An owner account already exists for this standalone instance, but no readable ' +
+                'saved credentials were found to sign back in with. Retrying will not help.'
         )
       }
       // No owner exists yet, so it's safe to (re)provision. Reuses credentials already on disk
