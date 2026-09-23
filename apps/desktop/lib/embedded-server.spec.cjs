@@ -24,17 +24,24 @@ const {
  * subcommands this module shells out to, driven entirely by env vars so each test can pick
  * exactly what it needs without a real AdonisJS build.
  * @param {string} appDir
- * @param {{ generateKeyOutput?: string, generateKeyExit?: number, migrateExit?: number, migrateStderr?: string }} [options]
+ * @param {{ generateKeyOutput?: string, generateKeyExit?: number, generateKeyStderr?: string, migrateExit?: number, migrateStderr?: string }} [options]
  */
 function writeAceFixture(
   appDir,
-  { generateKeyOutput = 'APP_KEY = testkey123\n', generateKeyExit = 0, migrateExit = 0, migrateStderr = '' } = {}
+  {
+    generateKeyOutput = 'APP_KEY = testkey123\n',
+    generateKeyExit = 0,
+    generateKeyStderr = '',
+    migrateExit = 0,
+    migrateStderr = ''
+  } = {}
 ) {
   fs.writeFileSync(
     path.join(appDir, 'ace.js'),
     `
     const [, , command] = process.argv
     if (command === 'generate:key') {
+      process.stderr.write(${JSON.stringify(generateKeyStderr)})
       process.stdout.write(${JSON.stringify(generateKeyOutput)})
       process.exit(${generateKeyExit})
     } else if (command === 'migration:run') {
@@ -69,30 +76,35 @@ describe('ensureAppKey', () => {
     fs.rmSync(dataDir, { recursive: true, force: true })
   })
 
-  it('generates and persists a key on first boot', () => {
+  it('generates and persists a key on first boot', async () => {
     writeAceFixture(appDir)
-    const key = ensureAppKey(appDir, dataDir)
+    const key = await ensureAppKey(appDir, dataDir)
     expect(key).toBe('testkey123')
     expect(fs.readFileSync(path.join(dataDir, 'app_key'), 'utf8')).toBe('testkey123')
   })
 
-  it('reuses a persisted key on a later boot without shelling out again', () => {
+  it('reuses a persisted key on a later boot without shelling out again', async () => {
     writeAceFixture(appDir)
-    const first = ensureAppKey(appDir, dataDir)
+    const first = await ensureAppKey(appDir, dataDir)
     // Break generate:key so a second real invocation would fail — proves the cached path is taken.
     writeAceFixture(appDir, { generateKeyExit: 1 })
-    const second = ensureAppKey(appDir, dataDir)
+    const second = await ensureAppKey(appDir, dataDir)
     expect(second).toBe(first)
   })
 
-  it('throws when generate:key exits non-zero', () => {
-    writeAceFixture(appDir, { generateKeyExit: 1 })
-    expect(() => ensureAppKey(appDir, dataDir)).toThrow(/generate:key failed/)
+  it('throws with the captured stderr when generate:key exits non-zero', async () => {
+    writeAceFixture(appDir, { generateKeyExit: 1, generateKeyStderr: 'boom: bad key' })
+    await expect(ensureAppKey(appDir, dataDir)).rejects.toThrow(/generate:key failed.*boom: bad key/s)
   })
 
-  it('throws when generate:key produces no APP_KEY line', () => {
+  it('throws with the spawn error when the process cannot even start', async () => {
+    const missingAppDir = path.join(appDir, 'does', 'not', 'exist')
+    await expect(ensureAppKey(missingAppDir, dataDir)).rejects.toThrow(/generate:key failed/)
+  })
+
+  it('throws when generate:key produces no APP_KEY line', async () => {
     writeAceFixture(appDir, { generateKeyOutput: 'nothing useful\n' })
-    expect(() => ensureAppKey(appDir, dataDir)).toThrow(/produced no APP_KEY line/)
+    await expect(ensureAppKey(appDir, dataDir)).rejects.toThrow(/produced no APP_KEY line/)
   })
 })
 
@@ -108,19 +120,21 @@ describe('runMigrations', () => {
     fs.rmSync(appDir, { recursive: true, force: true })
   })
 
-  it('resolves when migration:run succeeds', () => {
+  it('resolves when migration:run succeeds', async () => {
     writeAceFixture(appDir)
-    expect(() => runMigrations(appDir, process.env)).not.toThrow()
+    await expect(runMigrations(appDir, process.env)).resolves.toBeUndefined()
   })
 
-  it('throws with the captured stderr when migration:run fails', () => {
+  it('throws with the captured stderr when migration:run fails', async () => {
     writeAceFixture(appDir, { migrateExit: 1, migrateStderr: 'boom: bad migration' })
-    expect(() => runMigrations(appDir, process.env)).toThrow(/migration:run failed.*boom: bad migration/s)
+    await expect(runMigrations(appDir, process.env)).rejects.toThrow(
+      /migration:run failed.*boom: bad migration/s
+    )
   })
 
-  it('throws with the spawn error when the process cannot even start', () => {
+  it('throws with the spawn error when the process cannot even start', async () => {
     const missingAppDir = path.join(appDir, 'does', 'not', 'exist')
-    expect(() => runMigrations(missingAppDir, process.env)).toThrow(/migration:run failed/)
+    await expect(runMigrations(missingAppDir, process.env)).rejects.toThrow(/migration:run failed/)
   })
 })
 
@@ -178,7 +192,7 @@ describe('startEmbeddedServer', () => {
 
     /** @type {string[]} */
     const logs = []
-    const result = startEmbeddedServer({
+    const result = await startEmbeddedServer({
       appDir,
       userDataDir,
       port: 41790,
@@ -191,9 +205,9 @@ describe('startEmbeddedServer', () => {
     expect(logs.join('')).toContain('listening')
   })
 
-  it('propagates a migration failure before ever spawning the server', () => {
+  it('propagates a migration failure before ever spawning the server', async () => {
     writeAceFixture(appDir, { migrateExit: 1 })
-    expect(() => startEmbeddedServer({ appDir, userDataDir, port: 41790 })).toThrow(
+    await expect(startEmbeddedServer({ appDir, userDataDir, port: 41790 })).rejects.toThrow(
       /migration:run failed/
     )
   })
@@ -204,7 +218,7 @@ describe('startEmbeddedServer', () => {
       path.join(appDir, 'bin', 'server.js'),
       "process.stdout.write('listening\\n'); setInterval(() => {}, 1000)"
     )
-    const result = startEmbeddedServer({ appDir, userDataDir, port: 41790 })
+    const result = await startEmbeddedServer({ appDir, userDataDir, port: 41790 })
     child = result.child
     await new Promise((resolvePromise) => pipe(result.child.stdout).once('data', resolvePromise))
   })
@@ -217,7 +231,7 @@ describe('startEmbeddedServer', () => {
     )
     /** @type {string[]} */
     const logs = []
-    const result = startEmbeddedServer({
+    const result = await startEmbeddedServer({
       appDir,
       userDataDir,
       port: 41790,

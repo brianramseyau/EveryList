@@ -161,9 +161,18 @@ describe('Server setup +page.svelte', () => {
 		await expect.poll(() => enableStandalone.mock.calls.length).toBe(1);
 	});
 
-	it('shows an error and re-enables the button when standalone mode fails to start', async () => {
+	it('shows the underlying error detail and re-enables the button when standalone mode fails to start', async () => {
 		vi.mocked(isDesktop).mockReturnValue(true);
-		const enableStandalone = vi.fn().mockRejectedValue(new Error('boom'));
+		// main.cjs's enableStandaloneOnce throws specific, actionable messages — verifying one of
+		// them reaches the UI (not just a generic "try again", which is actively wrong for cases
+		// like this one) is the whole point of this test.
+		const enableStandalone = vi
+			.fn()
+			.mockRejectedValue(
+				new Error(
+					"Error invoking remote method 'everylist:enable-standalone': Error: An owner account already exists for this standalone instance, but no readable saved credentials were found to sign back in with. Retrying will not help."
+				)
+			);
 		window.everylistDesktop = {
 			version: '1.0.0',
 			platform: 'darwin',
@@ -179,11 +188,37 @@ describe('Server setup +page.svelte', () => {
 		await page.getByRole('button', { name: 'Use EveryList on this device only' }).click();
 
 		await expect
-			.element(page.getByText("Couldn't start the local server.", { exact: false }))
+			.element(
+				page.getByText('An owner account already exists for this standalone instance', {
+					exact: false
+				})
+			)
 			.toBeInTheDocument();
 		await expect
 			.element(page.getByRole('button', { name: 'Use EveryList on this device only' }))
 			.toBeEnabled();
+	});
+
+	it('falls back to a generic message when the rejection has no usable detail', async () => {
+		vi.mocked(isDesktop).mockReturnValue(true);
+		const enableStandalone = vi.fn().mockRejectedValue('not an Error instance');
+		window.everylistDesktop = {
+			version: '1.0.0',
+			platform: 'darwin',
+			mode: null,
+			checkForUpdate: vi.fn(),
+			setBackgroundRun: vi.fn(),
+			enableStandalone,
+			recordRemoteMode: vi.fn(),
+			consumeStandaloneToken: vi.fn()
+		};
+
+		await renderPage();
+		await page.getByRole('button', { name: 'Use EveryList on this device only' }).click();
+
+		await expect
+			.element(page.getByText("Couldn't start the local server. Try again", { exact: false }))
+			.toBeInTheDocument();
 	});
 
 	it('records remote mode once a server is saved from the desktop build', async () => {

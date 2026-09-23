@@ -33,11 +33,21 @@
 			// component is torn down by that navigation, so there's nothing further to do here on
 			// success.
 			await window.everylistDesktop?.enableStandalone();
-		} catch {
+		} catch (err) {
 			// The embedded server failed to start or become healthy — leave this screen in place
 			// with the button re-enabled to try again rather than stranding the user on a blank page.
-			standaloneError =
-				"Couldn't start the local server. Try again, or connect to a server instead.";
+			// main.cjs's enableStandaloneOnce throws specific, actionable messages (an owner already
+			// exists and reauth failed, safeStorage is unavailable, this install already recorded
+			// remote mode, ...) — ipcRenderer.invoke wraps them in a generic
+			// "Error invoking remote method '...': " prefix, stripped here so the real reason (not
+			// just "try again", which is actively wrong for some of those cases) reaches the user.
+			const detail =
+				err instanceof Error
+					? err.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
+					: '';
+			standaloneError = detail
+				? `Couldn't start the local server: ${detail}`
+				: "Couldn't start the local server. Try again, or connect to a server instead.";
 		} finally {
 			enablingStandalone = false;
 		}

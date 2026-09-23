@@ -1200,6 +1200,8 @@ describe('Settings +page.svelte', () => {
 		await expect.element(page.getByText('Change password')).not.toBeInTheDocument();
 		await expect.element(page.getByText('Access Tokens')).not.toBeInTheDocument();
 		await expect.element(page.getByText('Alexa')).not.toBeInTheDocument();
+		await expect.element(page.getByText('http://127.0.0.1:41790')).not.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Change' })).not.toBeInTheDocument();
 	});
 
 	it('hides Screen Orientation and Shake to undo on the desktop build', async () => {

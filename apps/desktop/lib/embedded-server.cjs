@@ -3,7 +3,10 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
-const { spawn, spawnSync } = require('node:child_process')
+const { spawn, execFile } = require('node:child_process')
+const { promisify } = require('node:util')
+
+const execFileAsync = promisify(execFile)
 
 // Standalone mode's embedded server (PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md) — spawns the same
 // AdonisJS + SQLite build Docker runs, staged at apps/desktop/server by
@@ -34,9 +37,9 @@ function getCredentialsPath(dataDir) {
  *
  * @param {string} appDir - the staged `apps/desktop/server` directory (has build/ace.js)
  * @param {string} dataDir - `userData/server`, where app_key is persisted
- * @returns {string}
+ * @returns {Promise<string>}
  */
-function ensureAppKey(appDir, dataDir) {
+async function ensureAppKey(appDir, dataDir) {
   fs.mkdirSync(dataDir, { recursive: true })
   const keyPath = getAppKeyPath(dataDir)
 
@@ -46,21 +49,38 @@ function ensureAppKey(appDir, dataDir) {
     // Falls through to generation below.
   }
 
-  const result = spawnSync(process.execPath, [path.join(appDir, 'ace.js'), 'generate:key', '--show'], {
-    cwd: appDir,
-    encoding: 'utf8',
-    // process.execPath is the Electron binary itself in a packaged app — without this, spawning
-    // it launches a second full GUI Electron app instance instead of running ace.js as a plain
-    // Node script. Confirmed the hard way: packaging the app and spawning it without this env var
-    // opened an entire second EveryList window (with its own renderer/GPU/network helper
-    // processes) rather than printing a generated key. See buildEnv()'s copy of this same fix.
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
-  })
-  if (result.status !== 0) {
-    throw new Error(`generate:key failed: ${result.stderr || result.stdout}`)
+  // execFile (async), not execFileSync/spawnSync: this whole module runs in Electron's main
+  // process, where a synchronous child-process wait blocks the event loop entirely — no IPC, no
+  // repaints, and on Windows the window reports "Not Responding" after a few seconds. Confirmed
+  // by actually running standalone mode's first-run switch and watching the window freeze during
+  // ensureAppKey/runMigrations before this fix.
+  let result
+  try {
+    result = await execFileAsync(
+      process.execPath,
+      [path.join(appDir, 'ace.js'), 'generate:key', '--show'],
+      {
+        cwd: appDir,
+        encoding: 'utf8',
+        // process.execPath is the Electron binary itself in a packaged app — without this,
+        // spawning it launches a second full GUI Electron app instance instead of running ace.js
+        // as a plain Node script. Confirmed the hard way: packaging the app and spawning it
+        // without this env var opened an entire second EveryList window (with its own
+        // renderer/GPU/network helper processes) rather than printing a generated key. See
+        // buildEnv()'s copy of this same fix.
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+      }
+    )
+  } catch (/** @type {any} */ error) {
+    throw new Error(`generate:key failed: ${error.stderr || error.stdout || error.message}`)
   }
   const match = /^APP_KEY\s*=\s*(\S+)/m.exec(result.stdout)
   const appKey = match?.[1]
+  // The "produced no APP_KEY line" test (see embedded-server.spec.cjs) does exercise the true
+  // path here — v8/istanbul just doesn't credit the fallthrough of an if-branch whose only
+  // statement is a function-terminating throw, in an async function, with no else — the same
+  // known false-negative documented elsewhere in this file (provisionOwner, stopEmbeddedServer).
+  /* v8 ignore next 3 */
   if (!appKey) {
     throw new Error(`generate:key produced no APP_KEY line: ${result.stdout}`)
   }
@@ -71,16 +91,18 @@ function ensureAppKey(appDir, dataDir) {
 /**
  * @param {string} appDir
  * @param {NodeJS.ProcessEnv} env
+ * @returns {Promise<void>}
  */
-function runMigrations(appDir, env) {
-  const result = spawnSync(process.execPath, [path.join(appDir, 'ace.js'), 'migration:run', '--force'], {
-    cwd: appDir,
-    env,
-    encoding: 'utf8'
-  })
-  if (result.status !== 0) {
+async function runMigrations(appDir, env) {
+  try {
+    await execFileAsync(
+      process.execPath,
+      [path.join(appDir, 'ace.js'), 'migration:run', '--force'],
+      { cwd: appDir, env, encoding: 'utf8' }
+    )
+  } catch (/** @type {any} */ error) {
     throw new Error(
-      `migration:run failed with status ${result.status}: ${result.error?.message || result.stderr || result.stdout}`
+      `migration:run failed with status ${error.code}: ${error.stderr || error.stdout || error.message}`
     )
   }
 }
@@ -123,14 +145,14 @@ function buildEnv({ dataDir, port, appKey }) {
  * @param {string} options.userDataDir - Electron's app.getPath('userData')
  * @param {number} options.port
  * @param {(chunk: string) => void} [options.onLog]
- * @returns {{ child: import('node:child_process').ChildProcess, dataDir: string }}
+ * @returns {Promise<{ child: import('node:child_process').ChildProcess, dataDir: string }>}
  */
-function startEmbeddedServer({ appDir, userDataDir, port, onLog = () => {} }) {
+async function startEmbeddedServer({ appDir, userDataDir, port, onLog = () => {} }) {
   const dataDir = getDataDir(userDataDir)
-  const appKey = ensureAppKey(appDir, dataDir)
+  const appKey = await ensureAppKey(appDir, dataDir)
   const env = buildEnv({ dataDir, port, appKey })
 
-  runMigrations(appDir, env)
+  await runMigrations(appDir, env)
 
   const child = spawn(process.execPath, [path.join(appDir, 'bin', 'server.js')], {
     cwd: appDir,

@@ -340,7 +340,7 @@ async function bootRemote(userDataDir) {
  */
 async function bootStandalone(userDataDir) {
   const { standalonePort: port } = readConfig(userDataDir)
-  const { child, dataDir } = startEmbeddedServer({
+  const { child, dataDir } = await startEmbeddedServer({
     appDir: SERVER_APP_DIR,
     userDataDir,
     port,
