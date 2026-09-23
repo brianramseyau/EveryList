@@ -30,9 +30,19 @@ const apiBuild = join(apiRoot, 'build')
 const serverOut = join(here, '..', 'server')
 
 function run(command, args, options) {
-  const result = spawnSync(command, args, { stdio: 'inherit', ...options })
+  // shell: true on Windows only — there's no bare `pnpm` binary there, only `pnpm.cmd`, which
+  // spawnSync can't exec directly without a shell (it would fail with ENOENT/EINVAL). Every other
+  // platform keeps direct invocation, same as before.
+  const result = spawnSync(command, args, {
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+    ...options
+  })
   if (result.status !== 0) {
-    console.error(`${command} ${args.join(' ')} failed with status ${result.status}`)
+    console.error(
+      `${command} ${args.join(' ')} failed with status ${result.status}` +
+        (result.error ? `: ${result.error.message}` : '')
+    )
     process.exit(result.status ?? 1)
   }
 }

@@ -22,6 +22,11 @@ function getAppKeyPath(serverAppDir) {
   return path.join(serverAppDir, 'app_key')
 }
 
+/** @param {string} dataDir */
+function getCredentialsPath(dataDir) {
+  return path.join(dataDir, 'owner-credentials.enc')
+}
+
 /**
  * Generates a persisted APP_KEY the first time standalone mode boots (mirrors
  * docker/root/etc/cont-init.d/20-app-key), reusing it on every later boot so the loopback
@@ -168,18 +173,22 @@ async function waitForHealth(port, { timeoutMs = 15000, intervalMs = 150, fetchI
  * `POST /api/v1/setup` endpoint the setup wizard's form calls, with a generated placeholder
  * identity that's never shown anywhere — standalone mode has exactly one user and hides the
  * login/logout UI entirely, so there's nothing for a human-readable email/password to be used
- * for. Returns the session token so the caller can hand it to the renderer.
+ * for. Returns the session token plus the generated credentials, so the caller can persist the
+ * latter (see persistOwnerCredentials) for a later boot to recover with if the token in the
+ * renderer's localStorage is ever lost (cleared, or its 30-day expiry lapses — see
+ * app/models/user.ts's `accessTokens` config) — there's no login screen to fall back to.
  *
  * @param {number} port
  * @param {object} [options]
  * @param {typeof fetch} [options.fetchImpl] - overridable for tests
- * @returns {Promise<string>} the session token
+ * @returns {Promise<{ token: string, email: string, password: string }>}
  */
 async function provisionOwner(port, { fetchImpl = fetch } = {}) {
   const password = crypto.randomBytes(24).toString('base64url')
+  const email = `owner-${crypto.randomBytes(6).toString('hex')}@standalone.everylist.local`
   const body = {
     fullName: null,
-    email: `owner-${crypto.randomBytes(6).toString('hex')}@standalone.everylist.local`,
+    email,
     password,
     passwordConfirmation: password,
     backup: { frequency: 'weekly', timeOfDay: '03:00', retentionCount: 4 }
@@ -197,9 +206,83 @@ async function provisionOwner(port, { fetchImpl = fetch } = {}) {
   /* v8 ignore next 4 */
   if (response.ok) {
     const parsed = /** @type {{ data: { token: string } }} */ (await response.json())
-    return parsed.data.token
+    return { token: parsed.data.token, email, password }
   }
   throw new Error(`Owner provisioning failed with status ${response.status}`)
+}
+
+/**
+ * Persists the owner credentials `provisionOwner` generated, encrypted at rest via Electron's
+ * `safeStorage` (injected rather than required directly, so this module stays plain-Node testable
+ * — see main.cjs for the real `safeStorage`-backed implementation). Best-effort: a failure here
+ * (e.g. `safeStorage` unavailable on this OS/session) just means a later boot can't auto-recover
+ * from a lost token, exactly the pre-existing behavior this is additive on top of — never fatal to
+ * standalone mode working for the current session.
+ *
+ * @param {string} dataDir
+ * @param {{ email: string, password: string }} credentials
+ * @param {{ encryptImpl: (plainText: string) => Buffer }} deps
+ */
+function persistOwnerCredentials(dataDir, credentials, { encryptImpl }) {
+  try {
+    const encrypted = encryptImpl(JSON.stringify(credentials))
+    fs.writeFileSync(getCredentialsPath(dataDir), encrypted, { mode: 0o600 })
+  } catch {
+    // Best-effort — see the doc comment above.
+  }
+}
+
+/**
+ * Reads back what persistOwnerCredentials wrote, or null on any failure (missing file, corrupt
+ * encryption, malformed JSON) — every failure mode is treated the same: no stored credentials to
+ * recover with, not an error worth surfacing.
+ *
+ * @param {string} dataDir
+ * @param {{ decryptImpl: (buffer: Buffer) => string }} deps
+ * @returns {{ email: string, password: string } | null}
+ */
+function loadOwnerCredentials(dataDir, { decryptImpl }) {
+  let raw
+  try {
+    raw = fs.readFileSync(getCredentialsPath(dataDir))
+  } catch {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(decryptImpl(raw))
+    if (typeof parsed?.email === 'string' && typeof parsed?.password === 'string') {
+      return { email: parsed.email, password: parsed.password }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Mints a fresh session token from persisted owner credentials via the normal `POST /api/v1/login`
+ * — called on every standalone boot after the first (see main.cjs's bootStandalone), so a token
+ * that expired or was cleared client-side doesn't strand the owner with no way to sign back in
+ * (standalone mode has no login screen to fall back to).
+ *
+ * @param {number} port
+ * @param {{ email: string, password: string }} credentials
+ * @param {object} [options]
+ * @param {typeof fetch} [options.fetchImpl] - overridable for tests
+ * @returns {Promise<string>} the session token
+ */
+async function reauthenticateOwner(port, { email, password }, { fetchImpl = fetch } = {}) {
+  const response = await fetchImpl(`http://127.0.0.1:${port}/api/v1/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  })
+  /* v8 ignore next 4 -- same false-negative as provisionOwner's identical shape, see above */
+  if (response.ok) {
+    const parsed = /** @type {{ data: { token: string } }} */ (await response.json())
+    return parsed.data.token
+  }
+  throw new Error(`Owner re-authentication failed with status ${response.status}`)
 }
 
 /**
@@ -243,5 +326,8 @@ module.exports = {
   startEmbeddedServer,
   waitForHealth,
   provisionOwner,
+  persistOwnerCredentials,
+  loadOwnerCredentials,
+  reauthenticateOwner,
   stopEmbeddedServer
 }

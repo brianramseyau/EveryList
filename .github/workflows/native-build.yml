@@ -302,7 +302,6 @@ jobs:
           npm pkg set version=${{ needs.meta.outputs.version_name }}
           node scripts/copy-renderer.mjs
           node scripts/copy-api-server.mjs
-          npm run rebuild-native
           pnpm exec electron-builder --publish never
 
       - uses: actions/upload-artifact@v4

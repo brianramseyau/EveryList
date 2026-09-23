@@ -14,7 +14,7 @@
 
 const path = require('node:path')
 const fs = require('node:fs')
-const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, shell, safeStorage } = require('electron')
 
 const { readConfig, STANDALONE_DEFAULT_PORT } = require('./lib/config.cjs')
 const { createStaticServer, listen } = require('./lib/static-server.cjs')
@@ -25,9 +25,13 @@ const { readBackgroundRunEnabled, writeBackgroundRunEnabled } = require('./lib/b
 const { buildTrayMenuTemplate, shouldHideInsteadOfClose } = require('./lib/tray.cjs')
 const { readMode, writeMode } = require('./lib/standalone-mode.cjs')
 const {
+  getDataDir,
   startEmbeddedServer,
   waitForHealth,
   provisionOwner,
+  persistOwnerCredentials,
+  loadOwnerCredentials,
+  reauthenticateOwner,
   stopEmbeddedServer
 } = require('./lib/embedded-server.cjs')
 const packageJson = require('./package.json')
@@ -68,6 +72,10 @@ let pendingStandaloneToken = null
 let tray = null
 let backgroundRunEnabled = false
 let isQuitting = false
+// Suppresses the embedded server's "stopped unexpectedly" dialog for a stop *we* triggered (e.g.
+// enableStandalone rolling back after a failed switch) — that dialog is only meant for a genuine
+// unexpected exit while standalone mode is the app's normal, settled state.
+let suppressEmbeddedServerExitDialog = false
 
 /** @param {Error} error */
 function logStartupError(error) {
@@ -78,6 +86,30 @@ function logStartupError(error) {
     // A packaged GUI launch has no terminal to print to, and if userData itself isn't
     // writable there's nothing more useful to do than let the dialog below carry the error.
   }
+}
+
+/** Appends the embedded server's stdout/stderr to its own log file — a separate file from
+ * startup-error.log (not routed through logStartupError) because the server streams many chunks,
+ * and writeFileSync there would truncate to just the last chunk, destroying whatever startup
+ * error it was meant to capture along with all but the final line of server output.
+ * @param {string} userDataDir
+ * @param {string} chunk
+ */
+function appendEmbeddedServerLog(userDataDir, chunk) {
+  const logPath = path.join(userDataDir, 'embedded-server.log')
+  fs.promises.appendFile(logPath, chunk).catch(() => {
+    // Same reasoning as logStartupError's catch — nowhere else to report a logging failure.
+  })
+}
+
+/** @param {string} plainText */
+function encryptOwnerCredentials(plainText) {
+  return safeStorage.encryptString(plainText)
+}
+
+/** @param {Buffer} buffer */
+function decryptOwnerCredentials(buffer) {
+  return safeStorage.decryptString(buffer)
 }
 
 function buildMenu() {
@@ -303,16 +335,16 @@ async function bootRemote(userDataDir) {
  */
 async function bootStandalone(userDataDir) {
   const port = STANDALONE_DEFAULT_PORT
-  const { child } = startEmbeddedServer({
+  const { child, dataDir } = startEmbeddedServer({
     appDir: SERVER_APP_DIR,
     userDataDir,
     port,
-    onLog: (chunk) => logStartupError(new Error(`[embedded-server] ${chunk}`))
+    onLog: (chunk) => appendEmbeddedServerLog(userDataDir, chunk)
   })
   embeddedServerChild = child
   child.on('exit', (code, signal) => {
     embeddedServerChild = null
-    if (isQuitting) return
+    if (isQuitting || suppressEmbeddedServerExitDialog) return
     dialog.showErrorBox(
       'EveryList — local server stopped',
       `The embedded server exited unexpectedly (code=${code}, signal=${signal}). ` +
@@ -321,31 +353,73 @@ async function bootStandalone(userDataDir) {
   })
   await waitForHealth(port)
   appPort = port
+
+  // Recovers a token that expired (30-day lifetime — see apps/api's User.accessTokens config) or
+  // was otherwise lost from the renderer's storage, since standalone mode hides the login screen
+  // entirely and has no other way back in. A no-op on the very first boot: enableStandalone()
+  // provisions fresh credentials (and persists them) right after this function returns, so no
+  // credentials file exists yet at this point in that call.
+  if (safeStorage.isEncryptionAvailable()) {
+    const credentials = loadOwnerCredentials(dataDir, { decryptImpl: decryptOwnerCredentials })
+    if (credentials) {
+      try {
+        pendingStandaloneToken = await reauthenticateOwner(port, credentials)
+      } catch (error) {
+        logStartupError(error instanceof Error ? error : new Error(String(error)))
+      }
+    }
+  }
 }
 
 /**
  * IPC handler backing `window.everylistDesktop.enableStandalone()` — the one-time choice a user
  * makes from /server-setup's "Use EveryList on this device only" button. Idempotent: a second
  * call (e.g. a double-click) after the first has already switched modes just reports the current
- * port rather than trying to boot a second embedded server.
+ * port rather than trying to boot a second embedded server — checked via `embeddedServerChild`
+ * actually running, not just the saved mode marker, so a *failed* previous attempt (mode never
+ * written — see below) correctly falls through to retry rather than reporting stale success.
+ *
+ * The mode marker is written only after the embedded server has booted and the owner has been
+ * provisioned — writing it earlier would mean a failure partway through (port in use, a migration
+ * error, provisioning rejected) leaves `readMode()` reporting 'standalone' with no server actually
+ * running and no owner account, which every later launch (and every retry of this same button)
+ * would then also try and fail to recover from. On failure, the embedded server (if it started at
+ * all) is stopped and the thin static server is restored, so the app is left exactly as it was
+ * before the attempt and the error propagates to /server-setup's own error message.
  */
 async function enableStandalone() {
   const userDataDir = app.getPath('userData')
-  if (readMode(userDataDir) === 'standalone') {
+  if (embeddedServerChild && readMode(userDataDir) === 'standalone') {
     return { port: appPort }
   }
-  writeMode(userDataDir, 'standalone')
 
   if (staticServer) {
     staticServer.close()
     staticServer = null
   }
 
-  await bootStandalone(userDataDir)
-  // No form is shown for this — see PLAN_31 §"First-run flow" step 4. The renderer picks the
-  // token up via consumeStandaloneToken() once it reloads at the new origin below.
-  pendingStandaloneToken = await provisionOwner(appPort)
+  try {
+    await bootStandalone(userDataDir)
+    // No form is shown for this — see PLAN_31 §"First-run flow" step 4. The renderer picks the
+    // token up via consumeStandaloneToken() once it reloads at the new origin below.
+    const { token, email, password } = await provisionOwner(appPort)
+    pendingStandaloneToken = token
+    if (safeStorage.isEncryptionAvailable()) {
+      persistOwnerCredentials(
+        getDataDir(userDataDir),
+        { email, password },
+        { encryptImpl: encryptOwnerCredentials }
+      )
+    }
+  } catch (error) {
+    suppressEmbeddedServerExitDialog = true
+    if (embeddedServerChild) await stopEmbeddedServer(embeddedServerChild)
+    suppressEmbeddedServerExitDialog = false
+    await bootRemote(userDataDir)
+    throw error
+  }
 
+  writeMode(userDataDir, 'standalone')
   await mainWindow?.loadURL(`http://127.0.0.1:${appPort}/`)
   return { port: appPort }
 }

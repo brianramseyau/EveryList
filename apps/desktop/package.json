@@ -9,9 +9,8 @@
   "scripts": {
     "copy-renderer": "node scripts/copy-renderer.mjs",
     "copy-api-server": "node scripts/copy-api-server.mjs",
-    "rebuild-native": "electron-rebuild --module-dir server --force -w better-sqlite3",
     "start": "node scripts/copy-renderer.mjs && electron .",
-    "package": "node scripts/copy-renderer.mjs && node scripts/copy-api-server.mjs && npm run rebuild-native && electron-builder",
+    "package": "node scripts/copy-renderer.mjs && node scripts/copy-api-server.mjs && electron-builder",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --coverage",
@@ -44,6 +43,7 @@
       "package.json"
     ],
     "asar": true,
+    "afterPack": "scripts/rebuild-native-hook.cjs",
     "extraResources": [
       {
         "from": "server",

@@ -11,6 +11,9 @@ const {
   startEmbeddedServer,
   waitForHealth,
   provisionOwner,
+  persistOwnerCredentials,
+  loadOwnerCredentials,
+  reauthenticateOwner,
   stopEmbeddedServer
 } = require('./embedded-server.cjs')
 
@@ -255,18 +258,22 @@ describe('waitForHealth', () => {
 })
 
 describe('provisionOwner', () => {
-  it('posts a placeholder identity and returns the minted token', async () => {
+  it('posts a placeholder identity and returns the minted token plus the generated credentials', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ data: { token: 'minted-token' } })
     })
-    const token = await provisionOwner(41790, { fetchImpl })
-    expect(token).toBe('minted-token')
+    const result = await provisionOwner(41790, { fetchImpl })
+    expect(result.token).toBe('minted-token')
+    expect(result.email).toMatch(/^owner-[0-9a-f]{12}@standalone\.everylist\.local$/)
+    expect(result.password).toEqual(expect.any(String))
 
     const [url, init] = /** @type {[string, RequestInit]} */ (fetchImpl.mock.calls[0])
     expect(url).toBe('http://127.0.0.1:41790/api/v1/setup')
     const body = JSON.parse(/** @type {string} */ (init.body))
     expect(body.fullName).toBeNull()
+    expect(body.email).toBe(result.email)
+    expect(body.password).toBe(result.password)
     expect(body.password).toBe(body.passwordConfirmation)
     expect(body.backup).toEqual({ frequency: 'weekly', timeOfDay: '03:00', retentionCount: 4 })
   })
@@ -282,7 +289,110 @@ describe('provisionOwner', () => {
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { token: 'x' } }) })
     )
     try {
-      await expect(provisionOwner(41790)).resolves.toBe('x')
+      await expect(provisionOwner(41790)).resolves.toMatchObject({ token: 'x' })
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+})
+
+/** A stand-in for Electron's `safeStorage` (unavailable outside a real Electron process) — plain
+ * base64, sufficient to exercise persistOwnerCredentials/loadOwnerCredentials's own logic (file
+ * I/O, JSON round-tripping, failure handling) independent of real encryption. */
+/** @param {string} plainText */
+function fakeEncrypt(plainText) {
+  return Buffer.from(plainText, 'utf8')
+}
+/** @param {Buffer} buffer */
+function fakeDecrypt(buffer) {
+  return buffer.toString('utf8')
+}
+
+describe('persistOwnerCredentials / loadOwnerCredentials', () => {
+  /** @type {string} */
+  let dataDir
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'everylist-embedded-creds-'))
+  })
+
+  afterEach(() => {
+    fs.rmSync(dataDir, { recursive: true, force: true })
+  })
+
+  it('is null when no credentials file exists', () => {
+    expect(loadOwnerCredentials(dataDir, { decryptImpl: fakeDecrypt })).toBeNull()
+  })
+
+  it('round-trips credentials through encrypt/decrypt', () => {
+    const credentials = { email: 'owner@standalone.everylist.local', password: 'sekret' }
+    persistOwnerCredentials(dataDir, credentials, { encryptImpl: fakeEncrypt })
+    expect(loadOwnerCredentials(dataDir, { decryptImpl: fakeDecrypt })).toEqual(credentials)
+  })
+
+  it('does not throw when encryption fails, and simply leaves nothing to load', () => {
+    const encryptImpl = () => {
+      throw new Error('safeStorage unavailable')
+    }
+    expect(() =>
+      persistOwnerCredentials(dataDir, { email: 'a', password: 'b' }, { encryptImpl })
+    ).not.toThrow()
+    expect(loadOwnerCredentials(dataDir, { decryptImpl: fakeDecrypt })).toBeNull()
+  })
+
+  it('is null when decryption throws', () => {
+    persistOwnerCredentials(dataDir, { email: 'a', password: 'b' }, { encryptImpl: fakeEncrypt })
+    const decryptImpl = () => {
+      throw new Error('bad key')
+    }
+    expect(loadOwnerCredentials(dataDir, { decryptImpl })).toBeNull()
+  })
+
+  it('is null when the decrypted content is not valid JSON', () => {
+    fs.writeFileSync(path.join(dataDir, 'owner-credentials.enc'), fakeEncrypt('not json'))
+    expect(loadOwnerCredentials(dataDir, { decryptImpl: fakeDecrypt })).toBeNull()
+  })
+
+  it.each([
+    ['missing password', '{"email": "a"}'],
+    ['missing email', '{"password": "b"}'],
+    ['root is a number', '42'],
+    ['root is null', 'null']
+  ])('is null when the decrypted shape is invalid: %s', (_label, plaintext) => {
+    fs.writeFileSync(path.join(dataDir, 'owner-credentials.enc'), fakeEncrypt(plaintext))
+    expect(loadOwnerCredentials(dataDir, { decryptImpl: fakeDecrypt })).toBeNull()
+  })
+})
+
+describe('reauthenticateOwner', () => {
+  it('posts the stored credentials and returns a fresh token', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { token: 'fresh-token' } })
+    })
+    const credentials = { email: 'owner@standalone.everylist.local', password: 'sekret' }
+    const token = await reauthenticateOwner(41790, credentials, { fetchImpl })
+    expect(token).toBe('fresh-token')
+
+    const [url, init] = /** @type {[string, RequestInit]} */ (fetchImpl.mock.calls[0])
+    expect(url).toBe('http://127.0.0.1:41790/api/v1/login')
+    expect(JSON.parse(/** @type {string} */ (init.body))).toEqual(credentials)
+  })
+
+  it('throws on a non-ok response', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 401 })
+    await expect(
+      reauthenticateOwner(41790, { email: 'a', password: 'b' }, { fetchImpl })
+    ).rejects.toThrow(/status 401/)
+  })
+
+  it('uses the real global fetch when not overridden', async () => {
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = /** @type {any} */ (
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { token: 'x' } }) })
+    )
+    try {
+      await expect(reauthenticateOwner(41790, { email: 'a', password: 'b' })).resolves.toBe('x')
     } finally {
       globalThis.fetch = originalFetch
     }
