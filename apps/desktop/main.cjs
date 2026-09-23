@@ -353,7 +353,10 @@ async function bootStandalone(userDataDir) {
         'Restart EveryList to try again; your data on disk is untouched.'
     )
   })
-  await waitForHealth(port)
+  // Passing `child` closes the port-collision gap where our own spawn's bind fails and it exits,
+  // but the port still answers /api/v1/meta because something else (or a stale prior instance) is
+  // listening there — see waitForHealth's own doc comment.
+  await waitForHealth(port, { child })
   appPort = port
 
   // Recovers a token that expired (30-day lifetime — see apps/api's User.accessTokens config) or
@@ -413,6 +416,18 @@ async function enableStandaloneOnce() {
     return { port: appPort }
   }
 
+  // Refused up front rather than silently proceeding without a recovery net: standalone mode
+  // hides the login screen entirely, so the generated owner credentials persisted below are the
+  // *only* way back in if the renderer's token is ever lost (cleared, or its 30-day expiry
+  // lapses). Without safeStorage there's nowhere safe to persist them, and enabling standalone
+  // anyway would mean that loss permanently strands the owner with no recourse.
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error(
+      'Standalone mode requires this OS session to support secure credential storage ' +
+        '(Electron safeStorage), which is unavailable right now.'
+    )
+  }
+
   if (staticServer) {
     staticServer.close()
     staticServer = null
@@ -431,13 +446,12 @@ async function enableStandaloneOnce() {
     if (!pendingStandaloneToken) {
       const { token, email, password } = await provisionOwner(appPort)
       pendingStandaloneToken = token
-      if (safeStorage.isEncryptionAvailable()) {
-        persistOwnerCredentials(
-          getDataDir(userDataDir),
-          { email, password },
-          { encryptImpl: encryptOwnerCredentials }
-        )
-      }
+      // safeStorage availability was already asserted above, before anything was booted.
+      persistOwnerCredentials(
+        getDataDir(userDataDir),
+        { email, password },
+        { encryptImpl: encryptOwnerCredentials }
+      )
     }
   } catch (error) {
     // Never left set from a failed attempt — the thin-client origin this rolls back to must not

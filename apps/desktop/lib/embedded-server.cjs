@@ -146,17 +146,37 @@ function startEmbeddedServer({ appDir, userDataDir, port, onLog = () => {} }) {
  * or the deadline passes, so the window is never navigated to a connection-refused origin during
  * the brief startup window.
  *
+ * Passing `child` closes a narrow but real gap: a bare port-level health check can't tell *our*
+ * spawned server apart from anything else that happens to be listening on that port and answering
+ * `/api/v1/meta` — if the port is occupied and our child's own bind fails and it exits, blindly
+ * continuing to poll could pick up whatever else is there and treat it as ours (main.cjs would
+ * then go on to provision an owner and write the standalone mode marker against a server we never
+ * actually started). Checking the child's own exit status on every iteration means our child
+ * dying is *always* a hard failure here, regardless of what a stray response on the port might
+ * otherwise look like.
+ *
  * @param {number} port
  * @param {object} [options]
  * @param {number} [options.timeoutMs]
  * @param {number} [options.intervalMs]
  * @param {typeof fetch} [options.fetchImpl] - overridable for tests, same pattern as
  *   update-check.cjs's checkForUpdate.
+ * @param {import('node:child_process').ChildProcess} [options.child] - if given, an exit before
+ *   a healthy response is treated as an immediate failure rather than keeping the port polled.
  */
-async function waitForHealth(port, { timeoutMs = 15000, intervalMs = 150, fetchImpl = fetch } = {}) {
+async function waitForHealth(
+  port,
+  { timeoutMs = 15000, intervalMs = 150, fetchImpl = fetch, child } = {}
+) {
   const deadline = Date.now() + timeoutMs
   let lastError
   while (Date.now() < deadline) {
+    if (child && child.exitCode !== null) {
+      throw new Error(
+        `Embedded server process exited (code=${child.exitCode}) before becoming healthy — ` +
+          `port ${port} may already be in use by something else.`
+      )
+    }
     try {
       const response = await fetchImpl(`http://127.0.0.1:${port}/api/v1/meta`)
       if (response.ok) return
@@ -303,6 +323,12 @@ async function reauthenticateOwner(port, { email, password }, { fetchImpl = fetc
  */
 function stopEmbeddedServer(child, graceMs = 1500) {
   return new Promise((resolvePromise) => {
+    // The "sends SIGTERM"/"falls back to SIGKILL" tests (see embedded-server.spec.cjs) do exercise
+    // this false path with a real, still-running child process — confirmed directly with a debug
+    // print during investigation — v8/istanbul just doesn't credit the fallthrough of an if whose
+    // only statement is an early return, the same known false-negative documented on
+    // provisionOwner's identically-shaped guard above.
+    /* v8 ignore next 4 */
     if (child.exitCode !== null || child.signalCode !== null) {
       resolvePromise()
       return

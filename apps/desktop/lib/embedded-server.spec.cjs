@@ -246,6 +246,36 @@ describe('waitForHealth', () => {
     ).rejects.toThrow(/did not become healthy/)
   })
 
+  it('does not throw when a live child never exits during a successful wait', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true })
+    const child = /** @type {any} */ ({ exitCode: null })
+    await expect(waitForHealth(41790, { fetchImpl, child })).resolves.toBeUndefined()
+  })
+
+  it('throws immediately if the child has already exited, even if the port answers', async () => {
+    // Simulates the port-collision case this guards against: something else on the port answers
+    // ok, but our own spawned server already died (e.g. its bind failed) — see the doc comment on
+    // waitForHealth for why this can't be trusted just because *a* response came back.
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true })
+    const child = /** @type {any} */ ({ exitCode: 1 })
+    await expect(waitForHealth(41790, { fetchImpl, child, intervalMs: 1 })).rejects.toThrow(
+      /exited \(code=1\) before becoming healthy/
+    )
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('throws once the child exits partway through polling', async () => {
+    const child = /** @type {any} */ ({ exitCode: null })
+    const fetchImpl = vi.fn().mockImplementation(async () => {
+      child.exitCode = 1
+      return { ok: false }
+    })
+    await expect(waitForHealth(41790, { fetchImpl, child, intervalMs: 1 })).rejects.toThrow(
+      /exited \(code=1\) before becoming healthy/
+    )
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
   it('uses the real global fetch when not overridden', async () => {
     const originalFetch = globalThis.fetch
     globalThis.fetch = /** @type {any} */ (vi.fn().mockResolvedValue({ ok: true }))
