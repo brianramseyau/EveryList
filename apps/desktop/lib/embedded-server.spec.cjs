@@ -10,6 +10,7 @@ const {
   buildEnv,
   startEmbeddedServer,
   waitForHealth,
+  needsOwnerSetup,
   generateOwnerCredentials,
   provisionOwner,
   persistOwnerCredentials,
@@ -288,6 +289,42 @@ describe('waitForHealth', () => {
   })
 })
 
+describe('needsOwnerSetup', () => {
+  it('returns true when the server reports setup is still needed', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { needsSetup: true } })
+    })
+    await expect(needsOwnerSetup(41790, { fetchImpl })).resolves.toBe(true)
+    expect(fetchImpl).toHaveBeenCalledWith('http://127.0.0.1:41790/api/v1/setup/status')
+  })
+
+  it('returns false once an owner already exists', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { needsSetup: false } })
+    })
+    await expect(needsOwnerSetup(41790, { fetchImpl })).resolves.toBe(false)
+  })
+
+  it('throws on a non-ok response', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 500 })
+    await expect(needsOwnerSetup(41790, { fetchImpl })).rejects.toThrow(/status 500/)
+  })
+
+  it('uses the real global fetch when not overridden', async () => {
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = /** @type {any} */ (
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { needsSetup: true } }) })
+    )
+    try {
+      await expect(needsOwnerSetup(41790)).resolves.toBe(true)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+})
+
 describe('generateOwnerCredentials', () => {
   it('generates a placeholder email and a random password', () => {
     const a = generateOwnerCredentials()
@@ -428,7 +465,7 @@ describe('reauthenticateOwner', () => {
     expect(token).toBe('fresh-token')
 
     const [url, init] = /** @type {[string, RequestInit]} */ (fetchImpl.mock.calls[0])
-    expect(url).toBe('http://127.0.0.1:41790/api/v1/login')
+    expect(url).toBe('http://127.0.0.1:41790/api/v1/auth/login')
     expect(JSON.parse(/** @type {string} */ (init.body))).toEqual(credentials)
   })
 

@@ -189,6 +189,30 @@ async function waitForHealth(
 }
 
 /**
+ * Asks the embedded server directly (via the same `GET /api/v1/setup/status` the setup wizard's
+ * own first load calls) whether an owner account exists yet — the authoritative source of truth
+ * for that, rather than inferring it from whether a local credentials file happens to exist. That
+ * inference is wrong in a real case: if a previous provisionOwner call itself failed (network
+ * blip, validation error) *after* persistOwnerCredentials already wrote the file, the file exists
+ * but no owner was ever created — treating file-existence as "owner exists" would then wrongly
+ * refuse every future setup attempt as if a real owner were already there to be locked out of.
+ *
+ * @param {number} port
+ * @param {object} [options]
+ * @param {typeof fetch} [options.fetchImpl] - overridable for tests
+ * @returns {Promise<boolean>}
+ */
+async function needsOwnerSetup(port, { fetchImpl = fetch } = {}) {
+  const response = await fetchImpl(`http://127.0.0.1:${port}/api/v1/setup/status`)
+  /* v8 ignore next 4 -- same false-negative as provisionOwner's identically-shaped guard above */
+  if (response.ok) {
+    const parsed = /** @type {{ data: { needsSetup: boolean } }} */ (await response.json())
+    return parsed.data.needsSetup
+  }
+  throw new Error(`Checking setup status failed with status ${response.status}`)
+}
+
+/**
  * Generates the placeholder owner identity standalone mode provisions on first boot — never
  * shown anywhere, since standalone mode hides the login/logout UI entirely. Split out from
  * provisionOwner so the caller can persist these credentials (see persistOwnerCredentials)
@@ -288,7 +312,7 @@ function loadOwnerCredentials(dataDir, { decryptImpl }) {
 }
 
 /**
- * Mints a fresh session token from persisted owner credentials via the normal `POST /api/v1/login`
+ * Mints a fresh session token from persisted owner credentials via the normal `POST /api/v1/auth/login`
  * — called on every standalone boot after the first (see main.cjs's bootStandalone), so a token
  * that expired or was cleared client-side doesn't strand the owner with no way to sign back in
  * (standalone mode has no login screen to fall back to).
@@ -300,7 +324,7 @@ function loadOwnerCredentials(dataDir, { decryptImpl }) {
  * @returns {Promise<string>} the session token
  */
 async function reauthenticateOwner(port, { email, password }, { fetchImpl = fetch } = {}) {
-  const response = await fetchImpl(`http://127.0.0.1:${port}/api/v1/login`, {
+  const response = await fetchImpl(`http://127.0.0.1:${port}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
@@ -359,6 +383,7 @@ module.exports = {
   buildEnv,
   startEmbeddedServer,
   waitForHealth,
+  needsOwnerSetup,
   generateOwnerCredentials,
   provisionOwner,
   persistOwnerCredentials,

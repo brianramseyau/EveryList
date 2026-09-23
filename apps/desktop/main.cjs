@@ -28,6 +28,7 @@ const {
   getDataDir,
   startEmbeddedServer,
   waitForHealth,
+  needsOwnerSetup,
   generateOwnerCredentials,
   provisionOwner,
   persistOwnerCredentials,
@@ -453,28 +454,42 @@ async function enableStandaloneOnce() {
     // crashed/quit between provisionOwner and writeMode below on a previous attempt.
     const { hadExistingCredentials } = await bootStandalone(userDataDir)
     if (!pendingStandaloneToken) {
-      // hadExistingCredentials but reauth still failed (see bootStandalone) — generating and
-      // persisting a *new* placeholder owner here would overwrite the one working recovery
-      // record with credentials for an account /api/v1/setup only rejects as already-configured
-      // (permanently losing the ability to sign back in as the real owner), and the failure could
-      // be transient (this machine's network hiccuping) rather than proof the account is gone.
-      if (hadExistingCredentials) {
+      // The authoritative check, straight from the server — NOT whether a local credentials file
+      // happens to exist. A file can exist with no owner ever having been created if a *previous*
+      // provisionOwner call itself failed after persistOwnerCredentials already wrote it (network
+      // blip, validation error); trusting the file alone would then wrongly treat that as an
+      // existing owner and permanently refuse every future setup attempt. See needsOwnerSetup's
+      // own doc comment.
+      const needsSetup = await needsOwnerSetup(appPort)
+      if (!needsSetup) {
+        // An owner does exist, and bootStandalone's reauth attempt above still failed (or there
+        // was no credentials file to even try) — never overwrite/regenerate here, since that
+        // would strand the real owner behind an account /api/v1/setup only rejects as
+        // already-configured. Surface the failure instead; it may be transient (this machine's
+        // network hiccuping) rather than proof the account is unrecoverable.
         throw new Error(
           'An owner account already exists for this standalone instance, but signing back in ' +
             'with its saved credentials failed. Nothing has been changed — try again.'
         )
       }
+      // No owner exists yet, so it's safe to (re)provision. Reuses credentials already on disk
+      // when present (exactly the "previous attempt failed after persisting" case above) instead
+      // of generating and persisting yet another identity that would orphan the first one.
+      const dataDir = getDataDir(userDataDir)
+      const existingCredentials = hadExistingCredentials
+        ? loadOwnerCredentials(dataDir, { decryptImpl: decryptOwnerCredentials })
+        : null
+      const credentials = existingCredentials ?? generateOwnerCredentials()
+      if (!existingCredentials) {
+        // Persisted *before* calling provisionOwner below, deliberately: safeStorage availability
+        // was already asserted above, but the write itself can still fail (full disk, a
+        // permissions problem on the data directory) — doing this first means that failure aborts
+        // the whole switch before any account exists on the server, rather than after, which
+        // would leave an owner with no way to recover the very credentials that failure lost.
+        persistOwnerCredentials(dataDir, credentials, { encryptImpl: encryptOwnerCredentials })
+      }
       // No form is shown for this first-run case — see PLAN_31 §"First-run flow" step 4. The
       // renderer picks the token up via consumeStandaloneToken() once it reloads below.
-      const credentials = generateOwnerCredentials()
-      // Persisted *before* calling provisionOwner below, deliberately: safeStorage availability
-      // was already asserted above, but the write itself can still fail (full disk, a
-      // permissions problem on the data directory) — doing this first means that failure aborts
-      // the whole switch before any account exists on the server, rather than after, which would
-      // leave an owner with no way to recover the very credentials that failure lost.
-      persistOwnerCredentials(getDataDir(userDataDir), credentials, {
-        encryptImpl: encryptOwnerCredentials
-      })
       pendingStandaloneToken = await provisionOwner(appPort, credentials)
     }
   } catch (error) {
