@@ -75,10 +75,13 @@ function ensureAppKey(appDir, dataDir) {
 function runMigrations(appDir, env) {
   const result = spawnSync(process.execPath, [path.join(appDir, 'ace.js'), 'migration:run', '--force'], {
     cwd: appDir,
-    env
+    env,
+    encoding: 'utf8'
   })
   if (result.status !== 0) {
-    throw new Error(`migration:run failed with status ${result.status}`)
+    throw new Error(
+      `migration:run failed with status ${result.status}: ${result.error?.message || result.stderr || result.stdout}`
+    )
   }
 }
 

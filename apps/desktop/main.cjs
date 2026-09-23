@@ -427,8 +427,18 @@ function enableStandalone() {
 /** @returns {Promise<{ port: number }>} */
 async function enableStandaloneOnce() {
   const userDataDir = app.getPath('userData')
-  if (embeddedServerChild && readMode(userDataDir) === 'standalone') {
+  const currentMode = readMode(userDataDir)
+  if (embeddedServerChild && currentMode === 'standalone') {
     return { port: appPort }
+  }
+
+  // Defense in depth: switching *out of* standalone once chosen already can't happen (there's no
+  // UI path back to /server-setup in standalone mode — see settings/+page.svelte's gating), but
+  // this closes the same door explicitly for the other direction too, in case anything ever calls
+  // this after 'remote' has been explicitly recorded (see recordRemoteMode) — mode switching isn't
+  // supported in either direction (PLAN_31 §"A one-time choice").
+  if (currentMode === 'remote') {
+    throw new Error('This install is already using a remote server — switching to standalone mode is not supported.')
   }
 
   // Refused up front rather than silently proceeding without a recovery net: standalone mode
@@ -549,8 +559,14 @@ async function boot() {
     syncTray()
   })
   ipcMain.handle('everylist:enable-standalone', () => enableStandalone())
+  ipcMain.handle('everylist:record-remote-mode', () => {
+    // Never overwrites an already-recorded 'standalone' — this only ever fires from
+    // /server-setup's plain "connect to my own server" form, which standalone mode never shows
+    // (see settings/+page.svelte's isStandaloneApp gating on the equivalent "Change server" entry).
+    if (readMode(userDataDir) !== 'standalone') writeMode(userDataDir, 'remote')
+  })
   ipcMain.on('everylist:get-mode', (event) => {
-    event.returnValue = readMode(userDataDir) ?? 'remote'
+    event.returnValue = readMode(userDataDir)
   })
   ipcMain.on('everylist:consume-standalone-token', (event) => {
     event.returnValue = pendingStandaloneToken

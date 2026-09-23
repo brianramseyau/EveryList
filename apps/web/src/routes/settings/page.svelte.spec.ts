@@ -1187,7 +1187,7 @@ describe('Settings +page.svelte', () => {
 		await expect.element(page.getByText('Home-screen widget')).toBeInTheDocument();
 	});
 
-	it('hides logout, Server, and Access Tokens/Alexa for a standalone desktop build', async () => {
+	it('hides logout, Change password, Server, and Access Tokens/Alexa for a standalone desktop build', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 		vi.mocked(isDesktop).mockReturnValue(true);
 		vi.mocked(isStandalone).mockReturnValue(true);
@@ -1197,6 +1197,7 @@ describe('Settings +page.svelte', () => {
 
 		await expect.element(page.getByText('Integrations')).toBeInTheDocument();
 		await expect.element(page.getByText('Signed in')).not.toBeInTheDocument();
+		await expect.element(page.getByText('Change password')).not.toBeInTheDocument();
 		await expect.element(page.getByText('Access Tokens')).not.toBeInTheDocument();
 		await expect.element(page.getByText('Alexa')).not.toBeInTheDocument();
 	});

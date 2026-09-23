@@ -146,7 +146,8 @@ describe('enableDeadlineNotifications', () => {
 			checkForUpdate: vi.fn(),
 			setBackgroundRun,
 			enableStandalone: vi.fn(),
-			consumeStandaloneToken: vi.fn()
+			consumeStandaloneToken: vi.fn(),
+			recordRemoteMode: vi.fn()
 		};
 
 		expect(await enableDeadlineNotifications()).toBe(true);
@@ -219,7 +220,8 @@ describe('disableDeadlineNotifications', () => {
 			checkForUpdate: vi.fn(),
 			setBackgroundRun,
 			enableStandalone: vi.fn(),
-			consumeStandaloneToken: vi.fn()
+			consumeStandaloneToken: vi.fn(),
+			recordRemoteMode: vi.fn()
 		};
 
 		await disableDeadlineNotifications();

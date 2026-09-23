@@ -5,7 +5,7 @@ vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: vi.fn(() => f
 const { Capacitor } = await import('@capacitor/core');
 const { desktopInfo, isDesktop, isRemoteClient, isStandalone } = await import('./desktop');
 
-function fakeBridge(mode: 'remote' | 'standalone' = 'remote'): Window['everylistDesktop'] {
+function fakeBridge(mode: 'remote' | 'standalone' | null = 'remote'): Window['everylistDesktop'] {
 	return {
 		version: '1.2.3',
 		platform: 'darwin',
@@ -13,6 +13,7 @@ function fakeBridge(mode: 'remote' | 'standalone' = 'remote'): Window['everylist
 		checkForUpdate: vi.fn(),
 		setBackgroundRun: vi.fn(),
 		enableStandalone: vi.fn(),
+		recordRemoteMode: vi.fn(),
 		consumeStandaloneToken: vi.fn()
 	};
 }

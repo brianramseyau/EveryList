@@ -120,24 +120,38 @@ describe('Server setup +page.svelte', () => {
 	});
 
 	it('does not offer standalone mode when a server is already configured (change-server reentry)', async () => {
+		// Settings → Server → "Change" clears the URL before returning here, but this install's
+		// mode was already explicitly recorded as 'remote' — the URL being empty here must not,
+		// on its own, resurface the standalone option to an established remote install.
 		vi.mocked(isDesktop).mockReturnValue(true);
-		vi.mocked(getServerUrl).mockReturnValue('https://old.example.com');
-
-		await renderPage();
-
-		expect(page.getByText('Use EveryList on this device only').elements()).toHaveLength(0);
-	});
-
-	it('switches into standalone mode on the desktop build with no server configured', async () => {
-		vi.mocked(isDesktop).mockReturnValue(true);
-		const enableStandalone = vi.fn().mockResolvedValue({ port: 41790 });
+		vi.mocked(getServerUrl).mockReturnValue('');
 		window.everylistDesktop = {
 			version: '1.0.0',
 			platform: 'darwin',
 			mode: 'remote',
 			checkForUpdate: vi.fn(),
 			setBackgroundRun: vi.fn(),
+			enableStandalone: vi.fn(),
+			recordRemoteMode: vi.fn(),
+			consumeStandaloneToken: vi.fn()
+		};
+
+		await renderPage();
+
+		expect(page.getByText('Use EveryList on this device only').elements()).toHaveLength(0);
+	});
+
+	it('switches into standalone mode on the desktop build on first run (mode not yet recorded)', async () => {
+		vi.mocked(isDesktop).mockReturnValue(true);
+		const enableStandalone = vi.fn().mockResolvedValue({ port: 41790 });
+		window.everylistDesktop = {
+			version: '1.0.0',
+			platform: 'darwin',
+			mode: null,
+			checkForUpdate: vi.fn(),
+			setBackgroundRun: vi.fn(),
 			enableStandalone,
+			recordRemoteMode: vi.fn(),
 			consumeStandaloneToken: vi.fn()
 		};
 
@@ -153,10 +167,11 @@ describe('Server setup +page.svelte', () => {
 		window.everylistDesktop = {
 			version: '1.0.0',
 			platform: 'darwin',
-			mode: 'remote',
+			mode: null,
 			checkForUpdate: vi.fn(),
 			setBackgroundRun: vi.fn(),
 			enableStandalone,
+			recordRemoteMode: vi.fn(),
 			consumeStandaloneToken: vi.fn()
 		};
 
@@ -169,5 +184,27 @@ describe('Server setup +page.svelte', () => {
 		await expect
 			.element(page.getByRole('button', { name: 'Use EveryList on this device only' }))
 			.toBeEnabled();
+	});
+
+	it('records remote mode once a server is saved from the desktop build', async () => {
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(fetchPing).mockResolvedValue(true);
+		const recordRemoteMode = vi.fn().mockResolvedValue(undefined);
+		window.everylistDesktop = {
+			version: '1.0.0',
+			platform: 'darwin',
+			mode: null,
+			checkForUpdate: vi.fn(),
+			setBackgroundRun: vi.fn(),
+			enableStandalone: vi.fn(),
+			recordRemoteMode,
+			consumeStandaloneToken: vi.fn()
+		};
+
+		await renderPage();
+		await page.getByLabelText('Server URL').fill('https://everylist.example.com');
+		await page.getByRole('button', { name: 'Continue', exact: true }).click();
+
+		await expect.poll(() => recordRemoteMode.mock.calls.length).toBe(1);
 	});
 });

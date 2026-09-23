@@ -24,9 +24,12 @@ const {
  * subcommands this module shells out to, driven entirely by env vars so each test can pick
  * exactly what it needs without a real AdonisJS build.
  * @param {string} appDir
- * @param {{ generateKeyOutput?: string, generateKeyExit?: number, migrateExit?: number }} [options]
+ * @param {{ generateKeyOutput?: string, generateKeyExit?: number, migrateExit?: number, migrateStderr?: string }} [options]
  */
-function writeAceFixture(appDir, { generateKeyOutput = 'APP_KEY = testkey123\n', generateKeyExit = 0, migrateExit = 0 } = {}) {
+function writeAceFixture(
+  appDir,
+  { generateKeyOutput = 'APP_KEY = testkey123\n', generateKeyExit = 0, migrateExit = 0, migrateStderr = '' } = {}
+) {
   fs.writeFileSync(
     path.join(appDir, 'ace.js'),
     `
@@ -35,6 +38,7 @@ function writeAceFixture(appDir, { generateKeyOutput = 'APP_KEY = testkey123\n',
       process.stdout.write(${JSON.stringify(generateKeyOutput)})
       process.exit(${generateKeyExit})
     } else if (command === 'migration:run') {
+      process.stderr.write(${JSON.stringify(migrateStderr)})
       process.exit(${migrateExit})
     }
     `
@@ -109,9 +113,14 @@ describe('runMigrations', () => {
     expect(() => runMigrations(appDir, process.env)).not.toThrow()
   })
 
-  it('throws when migration:run fails', () => {
-    writeAceFixture(appDir, { migrateExit: 1 })
-    expect(() => runMigrations(appDir, process.env)).toThrow(/migration:run failed/)
+  it('throws with the captured stderr when migration:run fails', () => {
+    writeAceFixture(appDir, { migrateExit: 1, migrateStderr: 'boom: bad migration' })
+    expect(() => runMigrations(appDir, process.env)).toThrow(/migration:run failed.*boom: bad migration/s)
+  })
+
+  it('throws with the spawn error when the process cannot even start', () => {
+    const missingAppDir = path.join(appDir, 'does', 'not', 'exist')
+    expect(() => runMigrations(missingAppDir, process.env)).toThrow(/migration:run failed/)
   })
 })
 

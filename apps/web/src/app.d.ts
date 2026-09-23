@@ -17,11 +17,16 @@ declare global {
 		everylistDesktop?: {
 			version: string;
 			platform: string;
-			// 'remote' (the default, thin-client mode) or 'standalone' (embedded server, see
-			// PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md and $lib/platform/desktop.ts's isStandalone()).
-			// Read fresh by preload.cjs on every page load — it can change mid-session, since
-			// enableStandalone() below does a full origin navigation.
-			mode: 'remote' | 'standalone';
+			// 'remote' (thin-client mode, explicitly recorded — see recordRemoteMode) or 'standalone'
+			// (embedded server, see PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md and
+			// $lib/platform/desktop.ts's isStandalone()), or null when no choice has been recorded
+			// yet (first run, before /server-setup completes either path) — distinct from 'remote'
+			// specifically so /server-setup can tell "never decided" (offer standalone) apart from
+			// "already an established remote install" (don't re-offer standalone just because the
+			// user is changing which server they point at). Read fresh by preload.cjs on every page
+			// load — it can change mid-session, since enableStandalone() below does a full origin
+			// navigation.
+			mode: 'remote' | 'standalone' | null;
 			checkForUpdate: () => Promise<
 				| { status: 'update-available'; latestVersion: string; url: string }
 				| { status: 'up-to-date' }
@@ -34,6 +39,9 @@ declare global {
 			// One-time switch into Standalone mode, offered from /server-setup on first run. See
 			// PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md's "First-run flow".
 			enableStandalone: () => Promise<{ port: number }>;
+			// Explicitly records the "connect to my own server" choice — called once /server-setup's
+			// plain server-URL form succeeds, so `mode` reads 'remote' (not null) on every later visit.
+			recordRemoteMode: () => Promise<void>;
 			// Reads and clears the session token Standalone mode's auto-provisioned setup minted —
 			// see apps/web/src/routes/+layout.svelte's onMount.
 			consumeStandaloneToken: () => string | null;

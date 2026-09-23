@@ -19,7 +19,11 @@
 	// Standalone mode (PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md) is offered only on first run, not
 	// when this screen is reopened to change an already-configured server — "one-time choice at
 	// first launch", and switching an existing remote-mode install into standalone isn't supported.
-	const offerStandalone = isDesktop() && !getServerUrl();
+	// Gated on the desktop bridge's own recorded mode (null = no choice made yet), not on whether a
+	// server URL happens to be set right now — Settings → Server → "Change" clears the URL before
+	// returning here, which would otherwise make this resurface for an established remote install
+	// that's just pointing at a different server, not deciding between modes at all.
+	const offerStandalone = isDesktop() && window.everylistDesktop?.mode == null;
 
 	async function useStandalone() {
 		enablingStandalone = true;
@@ -54,6 +58,9 @@
 
 	async function save(candidate: string) {
 		setServerUrl(candidate);
+		// A no-op on every visit after the first, and everywhere but desktop — see offerStandalone's
+		// comment for why this needs to be recorded explicitly rather than inferred later.
+		await window.everylistDesktop?.recordRemoteMode();
 		await goto(resolve('/login'));
 	}
 

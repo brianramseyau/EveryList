@@ -431,13 +431,15 @@
 				{/if}
 			</div>
 		{/if}
-		<a
-			href={resolve('/settings/password')}
-			class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
-		>
-			<span>Change password</span>
-			<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
-		</a>
+		{#if !isStandaloneApp}
+			<a
+				href={resolve('/settings/password')}
+				class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+			>
+				<span>Change password</span>
+				<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
+			</a>
+		{/if}
 		{#if !isStandaloneApp}
 			{#if confirmingLogout}
 				<div
