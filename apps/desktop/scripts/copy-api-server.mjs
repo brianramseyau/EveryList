@@ -77,8 +77,20 @@ try {
   delete packageJson.dependencies['@everylist/shared']
   writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2))
 
+  // --config.node-linker=hoisted is required: pnpm's default ("isolated") linker builds
+  // node_modules almost entirely out of symlinks into a `.pnpm` content-addressable store, and
+  // Node's own fs.cpSync's `dereference` option only dereferences a symlink passed directly as
+  // its `src` argument, NOT symlinks encountered while recursively walking a directory tree
+  // (confirmed empirically — see the minimal repro linked from the plan doc) — so a plain
+  // recursive copy of an isolated-mode node_modules produces a `server/` directory that looks
+  // complete but is actually full of symlinks pointing at this now-deleted stagingDir, and
+  // require() fails on everything. The hoisted linker instead installs real directories, which
+  // survive a plain copy correctly. Confirmed by actually running this script end to end and
+  // requiring the copied better-sqlite3 before this fix was added — it does not work without this.
   console.log('Installing production dependencies (this rebuilds better-sqlite3 for this host)...')
-  run('pnpm', ['install', '--prod', '--ignore-workspace'], { cwd: stagingDir })
+  run('pnpm', ['install', '--prod', '--ignore-workspace', '--config.node-linker=hoisted'], {
+    cwd: stagingDir
+  })
 
   const sharedOut = join(stagingDir, 'node_modules', '@everylist', 'shared')
   rmSync(sharedOut, { recursive: true, force: true })

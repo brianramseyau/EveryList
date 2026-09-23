@@ -41,12 +41,17 @@
       "preload.cjs",
       "lib/**/*",
       "renderer/**/*",
-      "server/**/*",
       "package.json"
     ],
     "asar": true,
-    "asarUnpack": [
-      "server/**/*"
+    "extraResources": [
+      {
+        "from": "server",
+        "to": "server",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "mac": {
       "identity": null,

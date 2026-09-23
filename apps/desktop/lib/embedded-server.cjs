@@ -43,7 +43,13 @@ function ensureAppKey(appDir, dataDir) {
 
   const result = spawnSync(process.execPath, [path.join(appDir, 'ace.js'), 'generate:key', '--show'], {
     cwd: appDir,
-    encoding: 'utf8'
+    encoding: 'utf8',
+    // process.execPath is the Electron binary itself in a packaged app — without this, spawning
+    // it launches a second full GUI Electron app instance instead of running ace.js as a plain
+    // Node script. Confirmed the hard way: packaging the app and spawning it without this env var
+    // opened an entire second EveryList window (with its own renderer/GPU/network helper
+    // processes) rather than printing a generated key. See buildEnv()'s copy of this same fix.
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
   })
   if (result.status !== 0) {
     throw new Error(`generate:key failed: ${result.stderr || result.stdout}`)
@@ -81,6 +87,10 @@ function runMigrations(appDir, env) {
 function buildEnv({ dataDir, port, appKey }) {
   return {
     ...process.env,
+    // Required so runMigrations/startEmbeddedServer's `spawn(process.execPath, ...)` calls run
+    // ace.js/bin/server.js as plain Node instead of launching a second Electron app instance — see
+    // ensureAppKey's copy of this same comment for how this was actually confirmed.
+    ELECTRON_RUN_AS_NODE: '1',
     NODE_ENV: 'production',
     HOST: '127.0.0.1',
     PORT: String(port),
@@ -193,14 +203,22 @@ async function provisionOwner(port, { fetchImpl = fetch } = {}) {
 }
 
 /**
- * Graceful-then-forceful shutdown for `before-quit` — SQLite's WAL mode already makes a hard kill
- * safe, but this avoids leaving a stray process behind if the child hangs on SIGTERM.
+ * Graceful-then-forceful shutdown for `before-quit`. In practice the SIGKILL fallback is the path
+ * that actually ends the process, not a rare backstop: confirmed by actually running the built
+ * server and sending it SIGTERM directly — `apps/api`'s scheduler intervals (backup, retention
+ * pruner, deadline notifications; see start/*_scheduler.ts) aren't `.unref()`'d, so the event loop
+ * never empties on its own even once `app.terminate()` finishes closing the HTTP server and DB
+ * connection. Docker masks the same behavior — `docker stop` force-kills after its own timeout
+ * regardless of whether the container exited on its own. Not fixed here since it's an existing
+ * `apps/api` characteristic outside this feature's scope; SQLite's WAL mode already makes the
+ * SIGKILL safe, so a short grace period costs nothing and is kept only in case a future upstream
+ * fix ever makes the graceful path actually complete.
  *
  * @param {import('node:child_process').ChildProcess} child
  * @param {number} [graceMs]
  * @returns {Promise<void>}
  */
-function stopEmbeddedServer(child, graceMs = 3000) {
+function stopEmbeddedServer(child, graceMs = 1500) {
   return new Promise((resolvePromise) => {
     if (child.exitCode !== null || child.signalCode !== null) {
       resolvePromise()

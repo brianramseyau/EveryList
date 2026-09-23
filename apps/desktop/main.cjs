@@ -39,14 +39,20 @@ const packageJson = require('./package.json')
 // has a cwd of "/".
 const RENDERER_ROOT = path.join(__dirname, 'renderer')
 
-// Standalone mode's staged `apps/api` build (scripts/copy-api-server.mjs) — asarUnpack'd (see
-// package.json's `build.asarUnpack`) since it's spawned as a real child process, which can't
-// exec out of an asar archive. electron-builder physically places unpacked files at
-// `app.asar.unpacked/<path>` alongside `app.asar`; __dirname inside a packaged app still resolves
-// to the asar path, so the substitution below is required — this is the documented pattern for
-// reaching asarUnpack'd resources. A no-op in dev, where there is no `app.asar` in the path at
-// all (unpackaged `electron .`, see package.json's `start` script).
-const SERVER_APP_DIR = path.join(__dirname, 'server').replace('app.asar', 'app.asar.unpacked')
+// Standalone mode's staged `apps/api` build (scripts/copy-api-server.mjs) — packaged as an
+// `extraResources` entry (see package.json's `build.extraResources`), not through `files`/asar.
+// `files`-based inclusion runs every entry through electron-builder's own dependency-tree-aware
+// node_modules handling (`app-builder`'s `node-dep-tree`), which only knows about this package's
+// own (empty) `dependencies` field and silently drops the entire vendored `server/node_modules`
+// regardless of `asarUnpack` — confirmed by actually packaging the app and inspecting the
+// resulting .app bundle before this fix. `extraResources` copies the directory verbatim into
+// `Resources/server` with no such handling, and needs no asar-unpack path substitution since it's
+// never asar-packed in the first place. `process.resourcesPath` only points at this project's own
+// resources once packaged (`app.isPackaged`); in dev (`electron .`) it points at Electron's own
+// bundled Resources folder instead, so dev falls back to the plain on-disk path.
+const SERVER_APP_DIR = app.isPackaged
+  ? path.join(process.resourcesPath, 'server')
+  : path.join(__dirname, 'server')
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null
