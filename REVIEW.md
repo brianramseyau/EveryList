@@ -1,6 +1,6 @@
 # REVIEW.md
 
-Guidance for the automated reviewer (Kilo Code) on PRs in this repo. See [`AGENTS.md`](AGENTS.md) for everything else agent-facing — this file is scoped to review policy only, not general conventions.
+Guidance for the automated reviewer (CodeRabbit or Kilo Code) on PRs in this repo. See [`AGENTS.md`](AGENTS.md) for everything else agent-facing — this file is scoped to review policy only, not general conventions.
 
 EveryList is a self-hosted, offline-first shared-list app with no staging environment (see AGENTS.md's Working conventions) — a bad change on `main` reaches production on the next deploy, and a bad migration reaches real users' data with no rollback safety net beyond the migration file itself. Review accordingly: this is a small solo-maintained app, not an enterprise codebase, so most things should be lgtm — but the handful of areas below are where a mistake is expensive.
 
