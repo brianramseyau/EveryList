@@ -335,6 +335,7 @@ async function bootRemote(userDataDir) {
  * server and waits for it to report healthy before returning, so nothing ever navigates to a
  * connection-refused origin.
  * @param {string} userDataDir
+ * @returns {Promise<{ hadExistingCredentials: boolean }>}
  */
 async function bootStandalone(userDataDir) {
   const port = STANDALONE_DEFAULT_PORT
@@ -362,12 +363,23 @@ async function bootStandalone(userDataDir) {
 
   // Recovers a token that expired (30-day lifetime — see apps/api's User.accessTokens config) or
   // was otherwise lost from the renderer's storage, since standalone mode hides the login screen
-  // entirely and has no other way back in. A no-op on the very first boot: enableStandalone()
+  // entirely and has no other way back in. A no-op on the very first boot: enableStandaloneOnce()
   // provisions fresh credentials (and persists them) right after this function returns, so no
   // credentials file exists yet at this point in that call.
+  //
+  // `hadExistingCredentials` (returned below) tells enableStandaloneOnce whether a credentials
+  // file was found here at all, regardless of whether reauthenticating with it succeeded — that
+  // distinction matters there specifically: generating and persisting a *new* placeholder owner
+  // when one already exists on disk would overwrite the one working recovery record with
+  // credentials for an account /api/v1/setup is just going to reject as already-configured,
+  // permanently losing the ability to sign back in as the real owner. A reauth failure here on a
+  // normal launch (this machine's network hiccuping, say) is deliberately not fatal to booting —
+  // the renderer's own already-stored token may still be perfectly valid.
+  let hadExistingCredentials = false
   if (safeStorage.isEncryptionAvailable()) {
     const credentials = loadOwnerCredentials(dataDir, { decryptImpl: decryptOwnerCredentials })
     if (credentials) {
+      hadExistingCredentials = true
       try {
         pendingStandaloneToken = await reauthenticateOwner(port, credentials)
       } catch (error) {
@@ -375,6 +387,7 @@ async function bootStandalone(userDataDir) {
       }
     }
   }
+  return { hadExistingCredentials }
 }
 
 /**
@@ -435,16 +448,24 @@ async function enableStandaloneOnce() {
   }
 
   try {
-    await bootStandalone(userDataDir)
     // An owner can already exist here — mode.json was deleted and standalone re-chosen (see
     // docs/desktop.md's reset instructions, which keep server/everylist.sqlite3), or the app
     // crashed/quit between provisionOwner and writeMode below on a previous attempt.
-    // bootStandalone has then already re-authenticated from the credentials persisted last time,
-    // populating pendingStandaloneToken — calling provisionOwner again would only get a 409 from
-    // an instance that already has its one allowed user, permanently blocking every retry. No
-    // form is shown for the first-run provisioning case — see PLAN_31 §"First-run flow" step 4.
-    // The renderer picks the token up via consumeStandaloneToken() once it reloads below.
+    const { hadExistingCredentials } = await bootStandalone(userDataDir)
     if (!pendingStandaloneToken) {
+      // hadExistingCredentials but reauth still failed (see bootStandalone) — generating and
+      // persisting a *new* placeholder owner here would overwrite the one working recovery
+      // record with credentials for an account /api/v1/setup only rejects as already-configured
+      // (permanently losing the ability to sign back in as the real owner), and the failure could
+      // be transient (this machine's network hiccuping) rather than proof the account is gone.
+      if (hadExistingCredentials) {
+        throw new Error(
+          'An owner account already exists for this standalone instance, but signing back in ' +
+            'with its saved credentials failed. Nothing has been changed — try again.'
+        )
+      }
+      // No form is shown for this first-run case — see PLAN_31 §"First-run flow" step 4. The
+      // renderer picks the token up via consumeStandaloneToken() once it reloads below.
       const credentials = generateOwnerCredentials()
       // Persisted *before* calling provisionOwner below, deliberately: safeStorage availability
       // was already asserted above, but the write itself can still fail (full disk, a
