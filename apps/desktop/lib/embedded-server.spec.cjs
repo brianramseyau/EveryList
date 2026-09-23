@@ -257,6 +257,22 @@ describe('waitForHealth', () => {
     ).rejects.toThrow(/did not become healthy/)
   })
 
+  it('aborts a request that connects but never responds, once the deadline passes', async () => {
+    // Real fetch rejects when its signal aborts — this fetchImpl mimics that instead of ever
+    // resolving on its own, so the only way this test finishes is if waitForHealth's own abort
+    // timer actually fires.
+    const fetchImpl = /** @type {any} */ (
+      vi.fn((/** @type {string | URL | Request} */ _url, /** @type {RequestInit} */ { signal }) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('The operation was aborted')))
+        })
+      )
+    )
+    await expect(
+      waitForHealth(41790, { fetchImpl, timeoutMs: 20, intervalMs: 1000 })
+    ).rejects.toThrow(/did not become healthy/)
+  })
+
   it('does not throw when a live child never exits during a successful wait', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true })
     const child = /** @type {any} */ ({ exitCode: null })

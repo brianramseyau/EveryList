@@ -63,6 +63,12 @@ if (!existsSync(sharedDist)) {
 console.log(`Copying ${webBuild} -> ${apiPublic}`)
 rmSync(apiPublic, { recursive: true, force: true })
 cpSync(webBuild, apiPublic, { recursive: true })
+// apps/api/.gitignore ignores public/* but tracks public/.gitkeep (so the otherwise-empty
+// directory survives a fresh checkout) — the wholesale rmSync above deletes it just like every
+// other file in the directory. Docker's own build does the equivalent replace inside a throwaway
+// container filesystem, where that doesn't matter; here it's the real working tree, so restore it
+// rather than leaving `git status` dirty after every local run of this script.
+writeFileSync(join(apiPublic, '.gitkeep'), '')
 
 console.log('Building @everylist/api...')
 run('pnpm', ['--filter', '@everylist/api', 'build'], { cwd: repoRoot })

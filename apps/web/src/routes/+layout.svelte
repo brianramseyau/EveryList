@@ -132,6 +132,17 @@
 		if (isDesktop()) {
 			const provisionedToken = window.everylistDesktop?.consumeStandaloneToken?.();
 			if (provisionedToken) setToken(provisionedToken);
+
+			// Backfills the mode marker for a desktop install that reached remote mode before
+			// recordRemoteMode() existed (an existing install from before this exact check shipped,
+			// or one still on an older build) — such an install has a real server URL already saved
+			// but a null mode, which /server-setup's offerStandalone would otherwise read as "no
+			// choice made yet" and incorrectly offer the standalone option again the next time this
+			// install's user changes servers. A one-time correction: once mode is anything but null,
+			// this is a no-op forever after.
+			if (window.everylistDesktop?.mode == null && getServerUrl()) {
+				void window.everylistDesktop?.recordRemoteMode?.();
+			}
 		}
 
 		// Native/desktop builds have no baked-in server address (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1,

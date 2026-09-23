@@ -180,11 +180,20 @@ async function waitForHealth(
           `port ${port} may already be in use by something else.`
       )
     }
+    // Bounded by whatever's left of the overall deadline: without this, a single request that
+    // connects but never responds (a hung process, still alive per the check above) could block
+    // past timeoutMs entirely, defeating the point of having one.
+    const controller = new AbortController()
+    const abortTimer = setTimeout(() => controller.abort(), Math.max(deadline - Date.now(), 0))
     try {
-      const response = await fetchImpl(`http://127.0.0.1:${port}/api/v1/meta`)
+      const response = await fetchImpl(`http://127.0.0.1:${port}/api/v1/meta`, {
+        signal: controller.signal
+      })
       if (response.ok) return
     } catch (error) {
       lastError = error
+    } finally {
+      clearTimeout(abortTimer)
     }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, intervalMs))
   }

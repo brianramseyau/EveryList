@@ -458,6 +458,12 @@ async function enableStandaloneOnce() {
     staticServer = null
   }
 
+  // Set before bootStandalone (not just around the catch block's own stopEmbeddedServer call
+  // below): the embedded server can exit *during* bootStandalone itself — e.g. waitForHealth's own
+  // child.exitCode check throwing because the child died — and that exit would otherwise trigger
+  // the "stopped unexpectedly" dialog immediately, racing with (and duplicating) the clear error
+  // this function's own catch block and /server-setup's UI already surface for the same failure.
+  suppressEmbeddedServerExitDialog = true
   try {
     // An owner can already exist here — mode.json was deleted and standalone re-chosen (see
     // docs/desktop.md's reset instructions, which keep server/everylist.sqlite3), or the app
@@ -509,11 +515,15 @@ async function enableStandaloneOnce() {
     // Never left set from a failed attempt — the thin-client origin this rolls back to must not
     // consume a token minted for a server that's no longer running.
     pendingStandaloneToken = null
-    suppressEmbeddedServerExitDialog = true
     if (embeddedServerChild) await stopEmbeddedServer(embeddedServerChild)
-    suppressEmbeddedServerExitDialog = false
     await bootRemote(userDataDir)
     throw error
+  } finally {
+    // Reached on both success (standalone is now the settled state — a later unexpected exit
+    // should show the dialog again) and failure (rollback above already handled the child; the
+    // dialog would be redundant, or would fire again for a *different*, later exit that has
+    // nothing to do with this attempt).
+    suppressEmbeddedServerExitDialog = false
   }
 
   writeMode(userDataDir, 'standalone')
