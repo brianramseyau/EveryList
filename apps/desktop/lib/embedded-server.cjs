@@ -189,23 +189,33 @@ async function waitForHealth(
 }
 
 /**
- * Auto-provisions the instance owner (PLAN_31's "First-run flow" step 4) by calling the same
- * `POST /api/v1/setup` endpoint the setup wizard's form calls, with a generated placeholder
- * identity that's never shown anywhere — standalone mode has exactly one user and hides the
- * login/logout UI entirely, so there's nothing for a human-readable email/password to be used
- * for. Returns the session token plus the generated credentials, so the caller can persist the
- * latter (see persistOwnerCredentials) for a later boot to recover with if the token in the
- * renderer's localStorage is ever lost (cleared, or its 30-day expiry lapses — see
- * app/models/user.ts's `accessTokens` config) — there's no login screen to fall back to.
+ * Generates the placeholder owner identity standalone mode provisions on first boot — never
+ * shown anywhere, since standalone mode hides the login/logout UI entirely. Split out from
+ * provisionOwner so the caller can persist these credentials (see persistOwnerCredentials)
+ * *before* sending them to the server: if persistence fails, the caller can abort without ever
+ * having created an account it has no recovery record for (see main.cjs's enableStandaloneOnce).
  *
- * @param {number} port
- * @param {object} [options]
- * @param {typeof fetch} [options.fetchImpl] - overridable for tests
- * @returns {Promise<{ token: string, email: string, password: string }>}
+ * @returns {{ email: string, password: string }}
  */
-async function provisionOwner(port, { fetchImpl = fetch } = {}) {
+function generateOwnerCredentials() {
   const password = crypto.randomBytes(24).toString('base64url')
   const email = `owner-${crypto.randomBytes(6).toString('hex')}@standalone.everylist.local`
+  return { email, password }
+}
+
+/**
+ * Auto-provisions the instance owner (PLAN_31's "First-run flow" step 4) by calling the same
+ * `POST /api/v1/setup` endpoint the setup wizard's form calls, with the given placeholder
+ * identity (see generateOwnerCredentials). Returns the session token so the caller can hand it to
+ * the renderer.
+ *
+ * @param {number} port
+ * @param {{ email: string, password: string }} credentials
+ * @param {object} [options]
+ * @param {typeof fetch} [options.fetchImpl] - overridable for tests
+ * @returns {Promise<string>} the session token
+ */
+async function provisionOwner(port, { email, password }, { fetchImpl = fetch } = {}) {
   const body = {
     fullName: null,
     email,
@@ -226,30 +236,28 @@ async function provisionOwner(port, { fetchImpl = fetch } = {}) {
   /* v8 ignore next 4 */
   if (response.ok) {
     const parsed = /** @type {{ data: { token: string } }} */ (await response.json())
-    return { token: parsed.data.token, email, password }
+    return parsed.data.token
   }
   throw new Error(`Owner provisioning failed with status ${response.status}`)
 }
 
 /**
- * Persists the owner credentials `provisionOwner` generated, encrypted at rest via Electron's
+ * Persists owner credentials (see generateOwnerCredentials) encrypted at rest via Electron's
  * `safeStorage` (injected rather than required directly, so this module stays plain-Node testable
- * — see main.cjs for the real `safeStorage`-backed implementation). Best-effort: a failure here
- * (e.g. `safeStorage` unavailable on this OS/session) just means a later boot can't auto-recover
- * from a lost token, exactly the pre-existing behavior this is additive on top of — never fatal to
- * standalone mode working for the current session.
+ * — see main.cjs for the real `safeStorage`-backed implementation).
+ *
+ * Deliberately throws rather than swallowing a failure (e.g. a full disk, or a permissions
+ * problem on the data directory): the caller persists these *before* calling provisionOwner
+ * specifically so a persistence failure aborts the switch before any account is created on the
+ * server, rather than succeeding at creating an owner this module then has no way to recover.
  *
  * @param {string} dataDir
  * @param {{ email: string, password: string }} credentials
  * @param {{ encryptImpl: (plainText: string) => Buffer }} deps
  */
 function persistOwnerCredentials(dataDir, credentials, { encryptImpl }) {
-  try {
-    const encrypted = encryptImpl(JSON.stringify(credentials))
-    fs.writeFileSync(getCredentialsPath(dataDir), encrypted, { mode: 0o600 })
-  } catch {
-    // Best-effort — see the doc comment above.
-  }
+  const encrypted = encryptImpl(JSON.stringify(credentials))
+  fs.writeFileSync(getCredentialsPath(dataDir), encrypted, { mode: 0o600 })
 }
 
 /**
@@ -351,6 +359,7 @@ module.exports = {
   buildEnv,
   startEmbeddedServer,
   waitForHealth,
+  generateOwnerCredentials,
   provisionOwner,
   persistOwnerCredentials,
   loadOwnerCredentials,

@@ -28,6 +28,7 @@ const {
   getDataDir,
   startEmbeddedServer,
   waitForHealth,
+  generateOwnerCredentials,
   provisionOwner,
   persistOwnerCredentials,
   loadOwnerCredentials,
@@ -444,14 +445,16 @@ async function enableStandaloneOnce() {
     // form is shown for the first-run provisioning case — see PLAN_31 §"First-run flow" step 4.
     // The renderer picks the token up via consumeStandaloneToken() once it reloads below.
     if (!pendingStandaloneToken) {
-      const { token, email, password } = await provisionOwner(appPort)
-      pendingStandaloneToken = token
-      // safeStorage availability was already asserted above, before anything was booted.
-      persistOwnerCredentials(
-        getDataDir(userDataDir),
-        { email, password },
-        { encryptImpl: encryptOwnerCredentials }
-      )
+      const credentials = generateOwnerCredentials()
+      // Persisted *before* calling provisionOwner below, deliberately: safeStorage availability
+      // was already asserted above, but the write itself can still fail (full disk, a
+      // permissions problem on the data directory) — doing this first means that failure aborts
+      // the whole switch before any account exists on the server, rather than after, which would
+      // leave an owner with no way to recover the very credentials that failure lost.
+      persistOwnerCredentials(getDataDir(userDataDir), credentials, {
+        encryptImpl: encryptOwnerCredentials
+      })
+      pendingStandaloneToken = await provisionOwner(appPort, credentials)
     }
   } catch (error) {
     // Never left set from a failed attempt — the thin-client origin this rolls back to must not

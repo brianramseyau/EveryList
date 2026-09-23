@@ -10,6 +10,7 @@ const {
   buildEnv,
   startEmbeddedServer,
   waitForHealth,
+  generateOwnerCredentials,
   provisionOwner,
   persistOwnerCredentials,
   loadOwnerCredentials,
@@ -287,30 +288,42 @@ describe('waitForHealth', () => {
   })
 })
 
+describe('generateOwnerCredentials', () => {
+  it('generates a placeholder email and a random password', () => {
+    const a = generateOwnerCredentials()
+    const b = generateOwnerCredentials()
+    expect(a.email).toMatch(/^owner-[0-9a-f]{12}@standalone\.everylist\.local$/)
+    expect(a.password).toEqual(expect.any(String))
+    // Distinct across calls — proves it's not a fixed placeholder.
+    expect(a.email).not.toBe(b.email)
+    expect(a.password).not.toBe(b.password)
+  })
+})
+
 describe('provisionOwner', () => {
-  it('posts a placeholder identity and returns the minted token plus the generated credentials', async () => {
+  const credentials = { email: 'owner-abc@standalone.everylist.local', password: 'sekret-pw' }
+
+  it('posts the given identity and returns the minted token', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ data: { token: 'minted-token' } })
     })
-    const result = await provisionOwner(41790, { fetchImpl })
-    expect(result.token).toBe('minted-token')
-    expect(result.email).toMatch(/^owner-[0-9a-f]{12}@standalone\.everylist\.local$/)
-    expect(result.password).toEqual(expect.any(String))
+    const token = await provisionOwner(41790, credentials, { fetchImpl })
+    expect(token).toBe('minted-token')
 
     const [url, init] = /** @type {[string, RequestInit]} */ (fetchImpl.mock.calls[0])
     expect(url).toBe('http://127.0.0.1:41790/api/v1/setup')
     const body = JSON.parse(/** @type {string} */ (init.body))
     expect(body.fullName).toBeNull()
-    expect(body.email).toBe(result.email)
-    expect(body.password).toBe(result.password)
+    expect(body.email).toBe(credentials.email)
+    expect(body.password).toBe(credentials.password)
     expect(body.password).toBe(body.passwordConfirmation)
     expect(body.backup).toEqual({ frequency: 'weekly', timeOfDay: '03:00', retentionCount: 4 })
   })
 
   it('throws on a non-ok response', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 409 })
-    await expect(provisionOwner(41790, { fetchImpl })).rejects.toThrow(/status 409/)
+    await expect(provisionOwner(41790, credentials, { fetchImpl })).rejects.toThrow(/status 409/)
   })
 
   it('uses the real global fetch when not overridden', async () => {
@@ -319,7 +332,7 @@ describe('provisionOwner', () => {
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { token: 'x' } }) })
     )
     try {
-      await expect(provisionOwner(41790)).resolves.toMatchObject({ token: 'x' })
+      await expect(provisionOwner(41790, credentials)).resolves.toBe('x')
     } finally {
       globalThis.fetch = originalFetch
     }
@@ -360,14 +373,24 @@ describe('persistOwnerCredentials / loadOwnerCredentials', () => {
     expect(loadOwnerCredentials(dataDir, { decryptImpl: fakeDecrypt })).toEqual(credentials)
   })
 
-  it('does not throw when encryption fails, and simply leaves nothing to load', () => {
+  it('propagates an encryption failure rather than silently leaving nothing persisted', () => {
+    // Deliberate: the caller persists before calling provisionOwner specifically so a failure
+    // here aborts the whole switch before any account is created on the server — see
+    // persistOwnerCredentials's own doc comment.
     const encryptImpl = () => {
       throw new Error('safeStorage unavailable')
     }
     expect(() =>
       persistOwnerCredentials(dataDir, { email: 'a', password: 'b' }, { encryptImpl })
-    ).not.toThrow()
+    ).toThrow(/safeStorage unavailable/)
     expect(loadOwnerCredentials(dataDir, { decryptImpl: fakeDecrypt })).toBeNull()
+  })
+
+  it('propagates a filesystem write failure', () => {
+    const missingDataDir = path.join(dataDir, 'does', 'not', 'exist')
+    expect(() =>
+      persistOwnerCredentials(missingDataDir, { email: 'a', password: 'b' }, { encryptImpl: fakeEncrypt })
+    ).toThrow()
   })
 
   it('is null when decryption throws', () => {
