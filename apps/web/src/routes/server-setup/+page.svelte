@@ -4,6 +4,7 @@
 	import { Button, Label, Input, Helper } from 'flowbite-svelte';
 	import { fetchPing } from '$lib/api/ping';
 	import { getServerUrl, setServerUrl } from '$lib/api/server-url';
+	import { isDesktop } from '$lib/platform/desktop';
 
 	// Pre-filled with whatever's already configured, so this screen doubles as the "change server"
 	// entry point (Settings routes back here) as well as first-run setup.
@@ -11,7 +12,32 @@
 	let error = $state<string | null>(null);
 	let unreachable = $state(false);
 	let checking = $state(false);
+	let enablingStandalone = $state(false);
+	let standaloneError = $state<string | null>(null);
 	let lastCandidate: string | null = null;
+
+	// Standalone mode (PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md) is offered only on first run, not
+	// when this screen is reopened to change an already-configured server — "one-time choice at
+	// first launch", and switching an existing remote-mode install into standalone isn't supported.
+	const offerStandalone = isDesktop() && !getServerUrl();
+
+	async function useStandalone() {
+		enablingStandalone = true;
+		standaloneError = null;
+		try {
+			// Resolves once the window has navigated to the embedded server's own origin — this
+			// component is torn down by that navigation, so there's nothing further to do here on
+			// success.
+			await window.everylistDesktop?.enableStandalone();
+		} catch {
+			// The embedded server failed to start or become healthy — leave this screen in place
+			// with the button re-enabled to try again rather than stranding the user on a blank page.
+			standaloneError =
+				"Couldn't start the local server. Try again, or connect to a server instead.";
+		} finally {
+			enablingStandalone = false;
+		}
+	}
 
 	/** Must be an absolute http(s) URL — anything else (a bare host, a typo, `capacitor://...`)
 	 * can't be a real server address. */
@@ -102,4 +128,24 @@
 
 		<Button type="submit" disabled={checking}>{checking ? 'Checking…' : 'Continue'}</Button>
 	</form>
+
+	{#if offerStandalone}
+		<div class="flex flex-col gap-3 border-t border-gray-200 pt-4 dark:border-gray-700">
+			<p class="text-sm text-gray-600 dark:text-gray-300">
+				No server? EveryList can run entirely on this device instead — your data stays local, with
+				no account to share and nothing else on the network able to reach it.
+			</p>
+			{#if standaloneError}
+				<Helper class="text-red-600 dark:text-red-400">{standaloneError}</Helper>
+			{/if}
+			<Button
+				type="button"
+				color="alternative"
+				onclick={useStandalone}
+				disabled={enablingStandalone}
+			>
+				{enablingStandalone ? 'Starting…' : 'Use EveryList on this device only'}
+			</Button>
+		</div>
+	{/if}
 </main>

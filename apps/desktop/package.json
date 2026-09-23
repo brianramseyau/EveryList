@@ -2,20 +2,23 @@
   "name": "@everylist/desktop",
   "private": true,
   "version": "1.7.0",
-  "description": "EveryList desktop app shell (Electron) — a client for a self-hosted EveryList server, not a bundled deployment. See foundational/PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md.",
+  "description": "EveryList desktop app shell (Electron) — by default a client for a self-hosted EveryList server (PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md), with an opt-in Standalone mode that embeds the server for single-device use (PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md).",
   "license": "MIT",
   "type": "module",
   "main": "main.cjs",
   "scripts": {
     "copy-renderer": "node scripts/copy-renderer.mjs",
+    "copy-api-server": "node scripts/copy-api-server.mjs",
+    "rebuild-native": "electron-rebuild --module-dir server --force -w better-sqlite3",
     "start": "node scripts/copy-renderer.mjs && electron .",
-    "package": "node scripts/copy-renderer.mjs && electron-builder",
+    "package": "node scripts/copy-renderer.mjs && node scripts/copy-api-server.mjs && npm run rebuild-native && electron-builder",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --coverage",
     "generate-icon": "node scripts/generate-icon.mjs"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.7.1",
     "@types/node": "^22",
     "@vitest/coverage-v8": "^4.1.8",
     "electron": "^38.8.6",
@@ -38,9 +41,13 @@
       "preload.cjs",
       "lib/**/*",
       "renderer/**/*",
+      "server/**/*",
       "package.json"
     ],
     "asar": true,
+    "asarUnpack": [
+      "server/**/*"
+    ],
     "mac": {
       "identity": null,
       "category": "public.app-category.productivity",

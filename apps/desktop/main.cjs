@@ -16,13 +16,20 @@ const path = require('node:path')
 const fs = require('node:fs')
 const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, shell } = require('electron')
 
-const { readConfig } = require('./lib/config.cjs')
+const { readConfig, STANDALONE_DEFAULT_PORT } = require('./lib/config.cjs')
 const { createStaticServer, listen } = require('./lib/static-server.cjs')
 const { readWindowState, writeWindowState, clampWindowState } = require('./lib/window-state.cjs')
 const { shouldOpenExternally, isAppOrigin } = require('./lib/navigation.cjs')
 const { checkForUpdate } = require('./lib/update-check.cjs')
 const { readBackgroundRunEnabled, writeBackgroundRunEnabled } = require('./lib/background-run.cjs')
 const { buildTrayMenuTemplate, shouldHideInsteadOfClose } = require('./lib/tray.cjs')
+const { readMode, writeMode } = require('./lib/standalone-mode.cjs')
+const {
+  startEmbeddedServer,
+  waitForHealth,
+  provisionOwner,
+  stopEmbeddedServer
+} = require('./lib/embedded-server.cjs')
 const packageJson = require('./package.json')
 
 // The renderer is the exact same `apps/web/build` output that serves Docker/PWA/Capacitor — see
@@ -32,10 +39,25 @@ const packageJson = require('./package.json')
 // has a cwd of "/".
 const RENDERER_ROOT = path.join(__dirname, 'renderer')
 
+// Standalone mode's staged `apps/api` build (scripts/copy-api-server.mjs) — asarUnpack'd (see
+// package.json's `build.asarUnpack`) since it's spawned as a real child process, which can't
+// exec out of an asar archive. electron-builder physically places unpacked files at
+// `app.asar.unpacked/<path>` alongside `app.asar`; __dirname inside a packaged app still resolves
+// to the asar path, so the substitution below is required — this is the documented pattern for
+// reaching asarUnpack'd resources. A no-op in dev, where there is no `app.asar` in the path at
+// all (unpackaged `electron .`, see package.json's `start` script).
+const SERVER_APP_DIR = path.join(__dirname, 'server').replace('app.asar', 'app.asar.unpacked')
+
 /** @type {BrowserWindow | null} */
 let mainWindow = null
 /** @type {number} */
 let appPort = 0
+/** @type {import('node:http').Server | null} */
+let staticServer = null
+/** @type {import('node:child_process').ChildProcess | null} */
+let embeddedServerChild = null
+/** @type {string | null} */
+let pendingStandaloneToken = null
 /** @type {Tray | null} */
 let tray = null
 let backgroundRunEnabled = false
@@ -238,6 +260,90 @@ async function createWindow() {
   await mainWindow.loadURL(`http://127.0.0.1:${appPort}/`)
 }
 
+/**
+ * Today's thin-client behavior, unchanged: serve `renderer/` from the fixed loopback port.
+ * @param {string} userDataDir
+ */
+async function bootRemote(userDataDir) {
+  const { port } = readConfig(userDataDir)
+  staticServer = createStaticServer(RENDERER_ROOT)
+  try {
+    await listen(staticServer, port)
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      /** @type {NodeJS.ErrnoException} */ (error).code === 'EADDRINUSE'
+    ) {
+      dialog.showErrorBox(
+        'EveryList — port already in use',
+        `EveryList couldn't bind to 127.0.0.1:${port} — something else on this machine is ` +
+          'already using it.\n\n' +
+          `Override the port by creating a config.json file at:\n${path.join(userDataDir, 'config.json')}\n` +
+          'with contents like: { "port": 41784 }\n\n' +
+          "Note: changing the port changes the app's origin, which resets the locally " +
+          'stored server URL, login token and offline cache (your server-side data is untouched).'
+      )
+    }
+    throw error
+  }
+  appPort = port
+}
+
+/**
+ * Standalone mode (PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md): boots the embedded AdonisJS+SQLite
+ * server and waits for it to report healthy before returning, so nothing ever navigates to a
+ * connection-refused origin.
+ * @param {string} userDataDir
+ */
+async function bootStandalone(userDataDir) {
+  const port = STANDALONE_DEFAULT_PORT
+  const { child } = startEmbeddedServer({
+    appDir: SERVER_APP_DIR,
+    userDataDir,
+    port,
+    onLog: (chunk) => logStartupError(new Error(`[embedded-server] ${chunk}`))
+  })
+  embeddedServerChild = child
+  child.on('exit', (code, signal) => {
+    embeddedServerChild = null
+    if (isQuitting) return
+    dialog.showErrorBox(
+      'EveryList — local server stopped',
+      `The embedded server exited unexpectedly (code=${code}, signal=${signal}). ` +
+        'Restart EveryList to try again; your data on disk is untouched.'
+    )
+  })
+  await waitForHealth(port)
+  appPort = port
+}
+
+/**
+ * IPC handler backing `window.everylistDesktop.enableStandalone()` — the one-time choice a user
+ * makes from /server-setup's "Use EveryList on this device only" button. Idempotent: a second
+ * call (e.g. a double-click) after the first has already switched modes just reports the current
+ * port rather than trying to boot a second embedded server.
+ */
+async function enableStandalone() {
+  const userDataDir = app.getPath('userData')
+  if (readMode(userDataDir) === 'standalone') {
+    return { port: appPort }
+  }
+  writeMode(userDataDir, 'standalone')
+
+  if (staticServer) {
+    staticServer.close()
+    staticServer = null
+  }
+
+  await bootStandalone(userDataDir)
+  // No form is shown for this — see PLAN_31 §"First-run flow" step 4. The renderer picks the
+  // token up via consumeStandaloneToken() once it reloads at the new origin below.
+  pendingStandaloneToken = await provisionOwner(appPort)
+
+  await mainWindow?.loadURL(`http://127.0.0.1:${appPort}/`)
+  return { port: appPort }
+}
+
 async function boot() {
   app.setName('EveryList')
 
@@ -254,43 +360,41 @@ async function boot() {
 
   await app.whenReady()
 
-  const { port } = readConfig(app.getPath('userData'))
-  const server = createStaticServer(RENDERER_ROOT)
-  try {
-    await listen(server, port)
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      /** @type {NodeJS.ErrnoException} */ (error).code === 'EADDRINUSE'
-    ) {
-      dialog.showErrorBox(
-        'EveryList — port already in use',
-        `EveryList couldn't bind to 127.0.0.1:${port} — something else on this machine is ` +
-          'already using it.\n\n' +
-          `Override the port by creating a config.json file at:\n${path.join(app.getPath('userData'), 'config.json')}\n` +
-          'with contents like: { "port": 41784 }\n\n' +
-          "Note: changing the port changes the app's origin, which resets the locally " +
-          'stored server URL, login token and offline cache (your server-side data is untouched).'
-      )
-    }
-    throw error
+  const userDataDir = app.getPath('userData')
+  // A missing/null marker means "no choice made yet" — behaves exactly as every desktop install
+  // did before this feature existed (thin static-client server, remote server configured via
+  // /server-setup). Only an explicit 'standalone' marker changes the boot path.
+  if (readMode(userDataDir) === 'standalone') {
+    await bootStandalone(userDataDir)
+  } else {
+    await bootRemote(userDataDir)
   }
-  appPort = port
 
   Menu.setApplicationMenu(buildMenu())
 
-  backgroundRunEnabled = readBackgroundRunEnabled(app.getPath('userData'))
+  backgroundRunEnabled = readBackgroundRunEnabled(userDataDir)
   syncTray()
 
   ipcMain.handle('everylist:check-for-update', () => checkForUpdate(packageJson.version))
   ipcMain.handle('everylist:set-background-run', (_event, enabled) => {
     backgroundRunEnabled = Boolean(enabled)
-    writeBackgroundRunEnabled(app.getPath('userData'), backgroundRunEnabled)
+    writeBackgroundRunEnabled(userDataDir, backgroundRunEnabled)
     syncTray()
+  })
+  ipcMain.handle('everylist:enable-standalone', () => enableStandalone())
+  ipcMain.on('everylist:get-mode', (event) => {
+    event.returnValue = readMode(userDataDir) ?? 'remote'
+  })
+  ipcMain.on('everylist:consume-standalone-token', (event) => {
+    event.returnValue = pendingStandaloneToken
+    pendingStandaloneToken = null
   })
 
   app.on('before-quit', () => {
     isQuitting = true
+    // Best-effort: SQLite's WAL mode already makes a hard kill safe, so this isn't awaited —
+    // blocking app quit on a child process shutdown isn't worth the complexity it'd add here.
+    if (embeddedServerChild) void stopEmbeddedServer(embeddedServerChild)
   })
 
   await createWindow()

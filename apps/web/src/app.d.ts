@@ -17,6 +17,11 @@ declare global {
 		everylistDesktop?: {
 			version: string;
 			platform: string;
+			// 'remote' (the default, thin-client mode) or 'standalone' (embedded server, see
+			// PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md and $lib/platform/desktop.ts's isStandalone()).
+			// Read fresh by preload.cjs on every page load — it can change mid-session, since
+			// enableStandalone() below does a full origin navigation.
+			mode: 'remote' | 'standalone';
 			checkForUpdate: () => Promise<
 				| { status: 'update-available'; latestVersion: string; url: string }
 				| { status: 'up-to-date' }
@@ -26,6 +31,12 @@ declare global {
 			// hides to a tray icon instead of quitting only while this is enabled, so
 			// $lib/notifications/electron.ts's timers keep running in the background.
 			setBackgroundRun: (enabled: boolean) => Promise<void>;
+			// One-time switch into Standalone mode, offered from /server-setup on first run. See
+			// PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md's "First-run flow".
+			enableStandalone: () => Promise<{ port: number }>;
+			// Reads and clears the session token Standalone mode's auto-provisioned setup minted —
+			// see apps/web/src/routes/+layout.svelte's onMount.
+			consumeStandaloneToken: () => string | null;
 		};
 		// Injected as an inline <script> by apps/api's SPA-fallback route (see
 		// #services/ingress_service on the API side) only when the request came through Home

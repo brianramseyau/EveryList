@@ -47,7 +47,7 @@
 		getDeadlineNotificationsPreference,
 		notificationPlatform
 	} from '$lib/notifications/sync';
-	import { desktopInfo, isDesktop } from '$lib/platform/desktop';
+	import { desktopInfo, isDesktop, isStandalone } from '$lib/platform/desktop';
 	import { checkForDesktopUpdate } from '$lib/platform/desktop-update';
 	import { isIngress } from '$lib/api/ingress';
 	import { connectivity } from '$lib/offline/connectivity.svelte';
@@ -73,6 +73,11 @@
 	let isAndroid = $state(false);
 	let isDesktopApp = $state(false);
 	let isRemote = $state(false);
+	// Standalone mode (PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md): a single-user, loopback-only
+	// instance with no server URL and no reachable network — logout, "Change server", and Access
+	// Tokens (which all require another device or session to matter) are hidden entirely rather
+	// than shown but useless.
+	let isStandaloneApp = $state(false);
 	// `any-pointer` (not `pointer`) so a touchscreen tablet paired with a trackpad/keyboard — a
 	// fine primary pointer, but still a device with a screen to lock and an accelerometer to
 	// shake — still counts. Read synchronously (not in onMount) so this is correct on first
@@ -339,6 +344,7 @@
 		isNative = Capacitor.isNativePlatform();
 		isAndroid = isNative && Capacitor.getPlatform() === 'android';
 		isDesktopApp = isDesktop();
+		isStandaloneApp = isStandalone();
 		// Composed locally rather than via $lib/platform/desktop's isRemoteClient() — this
 		// component already tracks isNative and isDesktopApp separately (for nativeInfo vs.
 		// desktopVersionInfo), so this is the same check without a second, independently-mocked
@@ -432,41 +438,43 @@
 			<span>Change password</span>
 			<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
 		</a>
-		{#if confirmingLogout}
-			<div
-				class="flex items-center justify-between gap-2 border-t border-gray-200 px-4 py-3 text-sm dark:border-gray-700"
-			>
-				<p class="text-red-600 dark:text-red-400">{unsyncedLogoutWarning}</p>
-				<div class="flex shrink-0 gap-2">
+		{#if !isStandaloneApp}
+			{#if confirmingLogout}
+				<div
+					class="flex items-center justify-between gap-2 border-t border-gray-200 px-4 py-3 text-sm dark:border-gray-700"
+				>
+					<p class="text-red-600 dark:text-red-400">{unsyncedLogoutWarning}</p>
+					<div class="flex shrink-0 gap-2">
+						<button
+							type="button"
+							onclick={doLogout}
+							disabled={loggingOut}
+							class="w-32 rounded-lg border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+						>
+							{loggingOut ? 'Logging out…' : 'Log out anyway'}
+						</button>
+						<button
+							type="button"
+							onclick={() => (confirmingLogout = false)}
+							disabled={loggingOut}
+							class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			{:else}
+				<div class="flex items-center justify-between px-4 py-3">
+					<span class="text-sm font-medium">Signed in</span>
 					<button
 						type="button"
-						onclick={doLogout}
-						disabled={loggingOut}
-						class="w-32 rounded-lg border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+						onclick={handleLogout}
+						class="text-sm text-gray-600 hover:underline dark:text-gray-400"
 					>
-						{loggingOut ? 'Logging out…' : 'Log out anyway'}
-					</button>
-					<button
-						type="button"
-						onclick={() => (confirmingLogout = false)}
-						disabled={loggingOut}
-						class="rounded-lg border border-gray-200 px-3 py-1.5 text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-					>
-						Cancel
+						Log out
 					</button>
 				</div>
-			</div>
-		{:else}
-			<div class="flex items-center justify-between px-4 py-3">
-				<span class="text-sm font-medium">Signed in</span>
-				<button
-					type="button"
-					onclick={handleLogout}
-					class="text-sm text-gray-600 hover:underline dark:text-gray-400"
-				>
-					Log out
-				</button>
-			</div>
+			{/if}
 		{/if}
 	</section>
 
@@ -729,7 +737,7 @@
 		<InstallPrompt />
 	</section>
 
-	{#if isRemote}
+	{#if isRemote && !isStandaloneApp}
 		<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 			<h2
 				class="border-b border-gray-200 px-4 py-2 text-xs font-semibold tracking-wide text-gray-600 uppercase dark:border-gray-700 dark:text-gray-400"
@@ -801,20 +809,24 @@
 		>
 			Integrations
 		</h2>
-		<a
-			href={resolve('/settings/tokens')}
-			class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
-		>
-			<span>Access Tokens</span>
-			<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
-		</a>
-		<a
-			href={resolve('/settings/alexa')}
-			class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
-		>
-			<span>Alexa</span>
-			<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
-		</a>
+		{#if !isStandaloneApp}
+			<!-- Access Tokens and Alexa both require some other device/service to reach the API over
+			     the network — meaningless for a loopback-only, single-user standalone instance. -->
+			<a
+				href={resolve('/settings/tokens')}
+				class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+			>
+				<span>Access Tokens</span>
+				<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
+			</a>
+			<a
+				href={resolve('/settings/alexa')}
+				class="flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+			>
+				<span>Alexa</span>
+				<Icon name="chevronRight" class="h-5 w-5 text-gray-400" />
+			</a>
+		{/if}
 		{#if isAndroid}
 			<a
 				href={resolve('/settings/widget')}

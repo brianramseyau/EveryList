@@ -36,7 +36,8 @@ vi.mock('$lib/api/server-url', () => ({
 }));
 vi.mock('$lib/platform/desktop', () => ({
 	isDesktop: vi.fn().mockReturnValue(false),
-	desktopInfo: vi.fn().mockReturnValue(null)
+	desktopInfo: vi.fn().mockReturnValue(null),
+	isStandalone: vi.fn().mockReturnValue(false)
 }));
 vi.mock('$lib/platform/desktop-update', () => ({
 	checkForDesktopUpdate: vi.fn()
@@ -57,7 +58,7 @@ const { Capacitor } = await import('@capacitor/core');
 const { App } = await import('@capacitor/app');
 const { getServerUrl, clearServerUrl } = await import('$lib/api/server-url');
 const { getToken, setToken, clearToken } = await import('$lib/api/token');
-const { isDesktop, desktopInfo } = await import('$lib/platform/desktop');
+const { isDesktop, desktopInfo, isStandalone } = await import('$lib/platform/desktop');
 const { checkForDesktopUpdate } = await import('$lib/platform/desktop-update');
 const {
 	notificationPlatform,
@@ -105,6 +106,7 @@ describe('Settings +page.svelte', () => {
 		vi.mocked(App.getInfo).mockRejectedValue(new Error('web'));
 		vi.mocked(getServerUrl).mockReturnValue('');
 		vi.mocked(isDesktop).mockReturnValue(false);
+		vi.mocked(isStandalone).mockReturnValue(false);
 		vi.mocked(desktopInfo).mockReturnValue(null);
 		vi.mocked(notificationPlatform).mockReturnValue('unsupported');
 		vi.mocked(getDeadlineNotificationsPreference).mockReturnValue(false);
@@ -1183,6 +1185,20 @@ describe('Settings +page.svelte', () => {
 		render(SettingsPage);
 
 		await expect.element(page.getByText('Home-screen widget')).toBeInTheDocument();
+	});
+
+	it('hides logout, Server, and Access Tokens/Alexa for a standalone desktop build', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(isStandalone).mockReturnValue(true);
+		vi.mocked(getServerUrl).mockReturnValue('http://127.0.0.1:41790');
+
+		render(SettingsPage);
+
+		await expect.element(page.getByText('Integrations')).toBeInTheDocument();
+		await expect.element(page.getByText('Signed in')).not.toBeInTheDocument();
+		await expect.element(page.getByText('Access Tokens')).not.toBeInTheDocument();
+		await expect.element(page.getByText('Alexa')).not.toBeInTheDocument();
 	});
 
 	it('hides Screen Orientation and Shake to undo on the desktop build', async () => {

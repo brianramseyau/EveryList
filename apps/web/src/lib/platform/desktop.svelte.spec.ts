@@ -3,14 +3,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: vi.fn(() => false) } }));
 
 const { Capacitor } = await import('@capacitor/core');
-const { desktopInfo, isDesktop, isRemoteClient } = await import('./desktop');
+const { desktopInfo, isDesktop, isRemoteClient, isStandalone } = await import('./desktop');
 
-function fakeBridge(): Window['everylistDesktop'] {
+function fakeBridge(mode: 'remote' | 'standalone' = 'remote'): Window['everylistDesktop'] {
 	return {
 		version: '1.2.3',
 		platform: 'darwin',
+		mode,
 		checkForUpdate: vi.fn(),
-		setBackgroundRun: vi.fn()
+		setBackgroundRun: vi.fn(),
+		enableStandalone: vi.fn(),
+		consumeStandaloneToken: vi.fn()
 	};
 }
 
@@ -51,6 +54,25 @@ describe('desktop platform detection (browser)', () => {
 	});
 
 	it('isRemoteClient is false when neither is true', () => {
+		expect(isRemoteClient()).toBe(false);
+	});
+
+	it('isStandalone is false without the bridge', () => {
+		expect(isStandalone()).toBe(false);
+	});
+
+	it('isStandalone is false in remote (thin-client) mode', () => {
+		window.everylistDesktop = fakeBridge('remote');
+		expect(isStandalone()).toBe(false);
+	});
+
+	it('isStandalone is true once the bridge reports standalone mode', () => {
+		window.everylistDesktop = fakeBridge('standalone');
+		expect(isStandalone()).toBe(true);
+	});
+
+	it('isRemoteClient is false for a standalone desktop build (same-origin, like Docker/PWA)', () => {
+		window.everylistDesktop = fakeBridge('standalone');
 		expect(isRemoteClient()).toBe(false);
 	});
 });

@@ -7,11 +7,11 @@
 	import { resolve } from '$app/paths';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
-	import { getToken, syncAuthToNative, syncTokenToServiceWorker } from '$lib/api/token';
+	import { getToken, setToken, syncAuthToNative, syncTokenToServiceWorker } from '$lib/api/token';
 	import { reconcileImpersonation } from '$lib/api/impersonation.svelte';
 	import { getServerUrl } from '$lib/api/server-url';
 	import { fetchSetupStatus } from '$lib/api/setup';
-	import { isRemoteClient } from '$lib/platform/desktop';
+	import { isDesktop, isRemoteClient } from '$lib/platform/desktop';
 	import {
 		isIngress,
 		ingressBase,
@@ -124,6 +124,16 @@
 	}
 
 	onMount(() => {
+		// Standalone mode's embedded server auto-provisions the owner account with no form shown
+		// (PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md's "First-run flow" step 4) — the very first page
+		// load after enableStandalone()'s origin swap picks up the resulting token here, before any
+		// of the logged-out redirect logic below runs. A no-op on every load after the first, and
+		// everywhere but a just-switched-to-standalone desktop build.
+		if (isDesktop()) {
+			const provisionedToken = window.everylistDesktop?.consumeStandaloneToken?.();
+			if (provisionedToken) setToken(provisionedToken);
+		}
+
 		// Native/desktop builds have no baked-in server address (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1,
 		// PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §1/§4) — gate here rather than on /login itself, since a
 		// fresh install also has no token, and every other API call (including login) needs

@@ -7,6 +7,12 @@ const path = require('node:path')
  * PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §2. */
 const DEFAULT_PORT = 41783
 
+/** Standalone mode's embedded server (PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md) binds a distinct
+ * port from the thin-client static server above, so the two modes never collide on
+ * localStorage/IndexedDB keyed by origin if a user (unsupported, manually) ends up with both
+ * having been used on one machine. */
+const STANDALONE_DEFAULT_PORT = 41790
+
 /**
  * Reads `<userData>/config.json`, the escape hatch for overriding the fixed loopback port (see
  * §2 — changing it changes the origin, which resets the local token/server URL/offline cache).
@@ -40,4 +46,4 @@ function readConfig(userDataDir) {
   return { port: DEFAULT_PORT }
 }
 
-module.exports = { readConfig, DEFAULT_PORT }
+module.exports = { readConfig, DEFAULT_PORT, STANDALONE_DEFAULT_PORT }

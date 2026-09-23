@@ -5,19 +5,23 @@ import { render } from 'vitest-browser-svelte';
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/api/ping', () => ({ fetchPing: vi.fn() }));
 vi.mock('$lib/api/server-url', () => ({ getServerUrl: vi.fn(), setServerUrl: vi.fn() }));
+vi.mock('$lib/platform/desktop', () => ({ isDesktop: vi.fn() }));
 
 const { goto } = await import('$app/navigation');
 const { fetchPing } = await import('$lib/api/ping');
 const { getServerUrl, setServerUrl } = await import('$lib/api/server-url');
+const { isDesktop } = await import('$lib/platform/desktop');
 
 describe('Server setup +page.svelte', () => {
 	beforeEach(() => {
 		vi.mocked(goto).mockResolvedValue(undefined);
 		vi.mocked(getServerUrl).mockReturnValue('');
+		vi.mocked(isDesktop).mockReturnValue(false);
 	});
 
 	afterEach(() => {
 		vi.clearAllMocks();
+		delete window.everylistDesktop;
 	});
 
 	async function renderPage() {
@@ -105,5 +109,65 @@ describe('Server setup +page.svelte', () => {
 
 		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
 		expect(goto).toHaveBeenCalledWith('/login');
+	});
+
+	it('does not offer standalone mode outside the desktop build', async () => {
+		vi.mocked(isDesktop).mockReturnValue(false);
+
+		await renderPage();
+
+		expect(page.getByText('Use EveryList on this device only').elements()).toHaveLength(0);
+	});
+
+	it('does not offer standalone mode when a server is already configured (change-server reentry)', async () => {
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(getServerUrl).mockReturnValue('https://old.example.com');
+
+		await renderPage();
+
+		expect(page.getByText('Use EveryList on this device only').elements()).toHaveLength(0);
+	});
+
+	it('switches into standalone mode on the desktop build with no server configured', async () => {
+		vi.mocked(isDesktop).mockReturnValue(true);
+		const enableStandalone = vi.fn().mockResolvedValue({ port: 41790 });
+		window.everylistDesktop = {
+			version: '1.0.0',
+			platform: 'darwin',
+			mode: 'remote',
+			checkForUpdate: vi.fn(),
+			setBackgroundRun: vi.fn(),
+			enableStandalone,
+			consumeStandaloneToken: vi.fn()
+		};
+
+		await renderPage();
+		await page.getByRole('button', { name: 'Use EveryList on this device only' }).click();
+
+		await expect.poll(() => enableStandalone.mock.calls.length).toBe(1);
+	});
+
+	it('shows an error and re-enables the button when standalone mode fails to start', async () => {
+		vi.mocked(isDesktop).mockReturnValue(true);
+		const enableStandalone = vi.fn().mockRejectedValue(new Error('boom'));
+		window.everylistDesktop = {
+			version: '1.0.0',
+			platform: 'darwin',
+			mode: 'remote',
+			checkForUpdate: vi.fn(),
+			setBackgroundRun: vi.fn(),
+			enableStandalone,
+			consumeStandaloneToken: vi.fn()
+		};
+
+		await renderPage();
+		await page.getByRole('button', { name: 'Use EveryList on this device only' }).click();
+
+		await expect
+			.element(page.getByText("Couldn't start the local server.", { exact: false }))
+			.toBeInTheDocument();
+		await expect
+			.element(page.getByRole('button', { name: 'Use EveryList on this device only' }))
+			.toBeEnabled();
 	});
 });
