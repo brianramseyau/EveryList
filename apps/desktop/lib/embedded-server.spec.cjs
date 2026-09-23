@@ -275,7 +275,7 @@ describe('waitForHealth', () => {
 
   it('does not throw when a live child never exits during a successful wait', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true })
-    const child = /** @type {any} */ ({ exitCode: null })
+    const child = /** @type {any} */ ({ exitCode: null, signalCode: null })
     await expect(waitForHealth(41790, { fetchImpl, child })).resolves.toBeUndefined()
   })
 
@@ -284,21 +284,32 @@ describe('waitForHealth', () => {
     // ok, but our own spawned server already died (e.g. its bind failed) — see the doc comment on
     // waitForHealth for why this can't be trusted just because *a* response came back.
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true })
-    const child = /** @type {any} */ ({ exitCode: 1 })
+    const child = /** @type {any} */ ({ exitCode: 1, signalCode: null })
     await expect(waitForHealth(41790, { fetchImpl, child, intervalMs: 1 })).rejects.toThrow(
-      /exited \(code=1\) before becoming healthy/
+      /exited \(code=1, signal=null\) before becoming healthy/
+    )
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('throws immediately if the child was terminated by a signal (no exit code)', async () => {
+    // A process killed by a signal (e.g. OOM-killed) has a null exitCode but a set signalCode —
+    // missing this would let a signal-terminated child slip past the guard above.
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true })
+    const child = /** @type {any} */ ({ exitCode: null, signalCode: 'SIGKILL' })
+    await expect(waitForHealth(41790, { fetchImpl, child, intervalMs: 1 })).rejects.toThrow(
+      /exited \(code=null, signal=SIGKILL\) before becoming healthy/
     )
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 
   it('throws once the child exits partway through polling', async () => {
-    const child = /** @type {any} */ ({ exitCode: null })
+    const child = /** @type {any} */ ({ exitCode: null, signalCode: null })
     const fetchImpl = vi.fn().mockImplementation(async () => {
       child.exitCode = 1
       return { ok: false }
     })
     await expect(waitForHealth(41790, { fetchImpl, child, intervalMs: 1 })).rejects.toThrow(
-      /exited \(code=1\) before becoming healthy/
+      /exited \(code=1, signal=null\) before becoming healthy/
     )
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })

@@ -174,10 +174,10 @@ async function waitForHealth(
   const deadline = Date.now() + timeoutMs
   let lastError
   while (Date.now() < deadline) {
-    if (child && child.exitCode !== null) {
+    if (child && (child.exitCode !== null || child.signalCode !== null)) {
       throw new Error(
-        `Embedded server process exited (code=${child.exitCode}) before becoming healthy — ` +
-          `port ${port} may already be in use by something else.`
+        `Embedded server process exited (code=${child.exitCode}, signal=${child.signalCode}) ` +
+          `before becoming healthy — port ${port} may already be in use by something else.`
       )
     }
     // Bounded by whatever's left of the overall deadline: without this, a single request that

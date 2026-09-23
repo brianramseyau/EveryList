@@ -16,7 +16,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, shell, safeStorage } = require('electron')
 
-const { readConfig, STANDALONE_DEFAULT_PORT } = require('./lib/config.cjs')
+const { readConfig } = require('./lib/config.cjs')
 const { createStaticServer, listen } = require('./lib/static-server.cjs')
 const { readWindowState, writeWindowState, clampWindowState } = require('./lib/window-state.cjs')
 const { shouldOpenExternally, isAppOrigin } = require('./lib/navigation.cjs')
@@ -339,7 +339,7 @@ async function bootRemote(userDataDir) {
  * @returns {Promise<{ hadExistingCredentials: boolean }>}
  */
 async function bootStandalone(userDataDir) {
-  const port = STANDALONE_DEFAULT_PORT
+  const { standalonePort: port } = readConfig(userDataDir)
   const { child, dataDir } = startEmbeddedServer({
     appDir: SERVER_APP_DIR,
     userDataDir,
@@ -583,11 +583,23 @@ async function boot() {
     pendingStandaloneToken = null
   })
 
-  app.on('before-quit', () => {
+  app.on('before-quit', (event) => {
     isQuitting = true
-    // Best-effort: SQLite's WAL mode already makes a hard kill safe, so this isn't awaited —
-    // blocking app quit on a child process shutdown isn't worth the complexity it'd add here.
-    if (embeddedServerChild) void stopEmbeddedServer(embeddedServerChild)
+    // A spawned child isn't automatically killed when its parent (this Electron process) exits —
+    // on both POSIX and Windows, an un-awaited stop here risks the process actually tearing down
+    // before stopEmbeddedServer's SIGTERM/SIGKILL ever reaches the child, orphaning it (still
+    // holding the standalone port, which would then make the *next* launch's own spawn fail to
+    // bind — see waitForHealth's child-liveness check for what that looks like). SQLite's WAL mode
+    // already makes the SIGKILL itself safe; this just makes sure it actually happens before the
+    // app finishes quitting. `embeddedServerChild` is cleared before resuming quit so this
+    // handler's second invocation (from the app.quit() below) takes the plain immediate-quit path
+    // instead of looping.
+    if (embeddedServerChild) {
+      const child = embeddedServerChild
+      embeddedServerChild = null
+      event.preventDefault()
+      void stopEmbeddedServer(child).then(() => app.quit())
+    }
   })
 
   await createWindow()
