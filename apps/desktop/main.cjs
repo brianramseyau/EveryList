@@ -76,6 +76,8 @@ let isQuitting = false
 // enableStandalone rolling back after a failed switch) — that dialog is only meant for a genuine
 // unexpected exit while standalone mode is the app's normal, settled state.
 let suppressEmbeddedServerExitDialog = false
+/** @type {Promise<{ port: number }> | null} */
+let enableStandaloneInFlight = null
 
 /** @param {Error} error */
 function logStartupError(error) {
@@ -386,8 +388,26 @@ async function bootStandalone(userDataDir) {
  * would then also try and fail to recover from. On failure, the embedded server (if it started at
  * all) is stopped and the thin static server is restored, so the app is left exactly as it was
  * before the attempt and the error propagates to /server-setup's own error message.
+ *
+ * Single-flight: two concurrent calls (a double-click before the first `ipcRenderer.invoke`
+ * resolves) would otherwise both read the same "not yet standalone" state and race on
+ * `embeddedServerChild`/`staticServer`/`pendingStandaloneToken` — e.g. one call's rollback closing
+ * the embedded server the other call just booted. A single in-flight promise, shared by every
+ * caller until the attempt settles, makes a second click during setup just await the first click's
+ * outcome instead of starting an independent, colliding attempt.
+ * @returns {Promise<{ port: number }>}
  */
-async function enableStandalone() {
+function enableStandalone() {
+  if (!enableStandaloneInFlight) {
+    enableStandaloneInFlight = enableStandaloneOnce().finally(() => {
+      enableStandaloneInFlight = null
+    })
+  }
+  return enableStandaloneInFlight
+}
+
+/** @returns {Promise<{ port: number }>} */
+async function enableStandaloneOnce() {
   const userDataDir = app.getPath('userData')
   if (embeddedServerChild && readMode(userDataDir) === 'standalone') {
     return { port: appPort }
