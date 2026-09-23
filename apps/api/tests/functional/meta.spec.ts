@@ -10,11 +10,11 @@ test.group('GET /api/v1/meta', () => {
     assert.properties(body, ['version', 'commit', 'builtAt', 'publicSignupEnabled'])
   })
 
-  test('defaults to nightly/unknown when build env vars are absent', async ({ client, assert }) => {
+  test('defaults to develop/unknown when build env vars are absent', async ({ client, assert }) => {
     const response = await client.get('/api/v1/meta')
 
     response.assertStatus(200)
-    assert.equal(response.body().version, 'nightly')
+    assert.equal(response.body().version, 'develop')
     assert.equal(response.body().commit, 'unknown')
     assert.equal(response.body().builtAt, 'unknown')
   })

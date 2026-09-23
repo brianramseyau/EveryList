@@ -9,7 +9,7 @@ describe('fetchDebugInfo', () => {
 	it('returns the parsed debug response on success', async () => {
 		const body = {
 			app: {
-				version: 'nightly',
+				version: 'develop',
 				commit: 'abc123',
 				builtAt: 'unknown',
 				nodeEnv: 'test',

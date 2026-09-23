@@ -6,7 +6,7 @@ import type { MetaResponse } from '@everylist/shared'
 export default class MetasController {
   async show({ response, logger }: HttpContext) {
     const body: MetaResponse = {
-      version: env.get('APP_VERSION', 'nightly'),
+      version: env.get('APP_VERSION', 'develop'),
       commit: env.get('GIT_SHA', 'unknown'),
       builtAt: env.get('BUILD_DATE', 'unknown'),
       publicSignupEnabled: serverConfigValue('PUBLIC_SIGNUP_ENABLED', true),

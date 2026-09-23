@@ -19,7 +19,7 @@ describe('Signup +page.svelte', () => {
 		mockPageState.url.searchParams = new URLSearchParams();
 		vi.mocked(goto).mockResolvedValue(undefined);
 		vi.mocked(fetchMeta).mockResolvedValue({
-			version: 'nightly',
+			version: 'develop',
 			commit: 'abc123',
 			builtAt: '2026-08-01T00:00:00.000Z',
 			publicSignupEnabled: true
@@ -182,7 +182,7 @@ describe('Signup +page.svelte', () => {
 
 	it('redirects to /login without rendering the form when public signup is disabled', async () => {
 		vi.mocked(fetchMeta).mockResolvedValue({
-			version: 'nightly',
+			version: 'develop',
 			commit: 'abc123',
 			builtAt: '2026-08-01T00:00:00.000Z',
 			publicSignupEnabled: false
@@ -198,7 +198,7 @@ describe('Signup +page.svelte', () => {
 	it('carries the next param when redirecting to /login', async () => {
 		mockPageState.url.searchParams = new URLSearchParams({ next: '/lists' });
 		vi.mocked(fetchMeta).mockResolvedValue({
-			version: 'nightly',
+			version: 'develop',
 			commit: 'abc123',
 			builtAt: '2026-08-01T00:00:00.000Z',
 			publicSignupEnabled: false
@@ -213,7 +213,7 @@ describe('Signup +page.svelte', () => {
 	it('still renders the form via an invite token even when public signup is disabled', async () => {
 		mockPageState.url.searchParams = new URLSearchParams({ next: '/join/abc123' });
 		vi.mocked(fetchMeta).mockResolvedValue({
-			version: 'nightly',
+			version: 'develop',
 			commit: 'abc123',
 			builtAt: '2026-08-01T00:00:00.000Z',
 			publicSignupEnabled: false
