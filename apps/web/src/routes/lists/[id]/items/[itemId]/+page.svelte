@@ -268,9 +268,12 @@
 
 	async function save() {
 		if (!draftName.trim() || saving) return;
+		// ItemFields already strips non-numeric characters as the field is edited, so this only
+		// has to handle the residual case of a lone decimal point — treated as no price rather
+		// than silently blocking the rest of the save.
 		const trimmedPrice = draftPrice.trim();
-		const price = trimmedPrice === '' ? null : Math.round(Number(trimmedPrice) * 100);
-		if (price !== null && !Number.isFinite(price)) return;
+		const parsedPrice = trimmedPrice === '' ? null : Math.round(Number(trimmedPrice) * 100);
+		const price = parsedPrice !== null && Number.isFinite(parsedPrice) ? parsedPrice : null;
 
 		// The API needs a deadline to repeat from, so a rule without a date is dropped. An invalid
 		// rule is already flagged by the editor's own inline alert, so Save just declines to send it.

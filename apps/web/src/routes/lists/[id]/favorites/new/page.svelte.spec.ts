@@ -188,15 +188,88 @@ describe('New Favorite +page.svelte', () => {
 		});
 	});
 
-	it('ignores a non-numeric price entry', async () => {
+	it('strips a pasted currency symbol from the price so the favorite still saves', async () => {
+		vi.mocked(createFavorite).mockResolvedValue({
+			id: 2,
+			userId: 1,
+			listId: 5,
+			name: 'Bread',
+			defaultCategoryId: null,
+			defaultQuantity: null,
+			storeId: null,
+			notes: null,
+			price: 350,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+
+		render(NewFavoritePage);
+		await expect.element(page.getByLabelText('Name')).toBeInTheDocument();
+
+		await page.getByLabelText('Name').fill('Bread');
+		await page.getByLabelText('Price (optional)').fill('$3.50');
+		await expect.element(page.getByLabelText('Price (optional)')).toHaveValue('3.50');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(createFavorite).toHaveBeenCalledWith(5, expect.objectContaining({ price: 350 }));
+	});
+
+	it('clears the price to null when the entry has no digits at all', async () => {
+		vi.mocked(createFavorite).mockResolvedValue({
+			id: 2,
+			userId: 1,
+			listId: 5,
+			name: 'Bread',
+			defaultCategoryId: null,
+			defaultQuantity: null,
+			storeId: null,
+			notes: null,
+			price: null,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+
 		render(NewFavoritePage);
 		await expect.element(page.getByLabelText('Name')).toBeInTheDocument();
 
 		await page.getByLabelText('Name').fill('Bread');
 		await page.getByLabelText('Price (optional)').fill('abc');
+		await expect.element(page.getByLabelText('Price (optional)')).toHaveValue('');
 		await page.getByRole('button', { name: 'Save' }).click();
 
-		expect(createFavorite).not.toHaveBeenCalled();
+		expect(createFavorite).toHaveBeenCalledWith(5, expect.objectContaining({ price: null }));
+	});
+
+	it('clears the price to null instead of blocking the save when only a decimal point remains', async () => {
+		vi.mocked(createFavorite).mockResolvedValue({
+			id: 2,
+			userId: 1,
+			listId: 5,
+			name: 'Bread',
+			defaultCategoryId: null,
+			defaultQuantity: null,
+			storeId: null,
+			notes: null,
+			price: null,
+			createdAt: TS,
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+
+		render(NewFavoritePage);
+		await expect.element(page.getByLabelText('Name')).toBeInTheDocument();
+
+		await page.getByLabelText('Name').fill('Bread');
+		await page.getByLabelText('Price (optional)').fill('.');
+		await expect.element(page.getByLabelText('Price (optional)')).toHaveValue('.');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(createFavorite).toHaveBeenCalledWith(5, expect.objectContaining({ price: null }));
 	});
 
 	it('hides the Category field when the list opts out of categories', async () => {
