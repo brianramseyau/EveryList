@@ -99,9 +99,12 @@ export default class DemoSeed extends BaseCommand {
     // behind, and the userCount guard above would then treat that partial
     // state as "already seeded" and refuse to retry on the next boot.
     await db.transaction(async (trx) => {
-      // Created first so it lands on user id 1 — see the ADMIN_ACCOUNT_EMAIL comment above.
+      // Explicit id: 1 (not just created-first) so this still lands on the "owner" id even if
+      // the empty-database guard above is ever satisfied by a users table that was emptied
+      // in place rather than a freshly (re)created database file — SQLite's AUTOINCREMENT
+      // counter survives a DELETE, so a plain create-first wouldn't necessarily get id 1 there.
       await User.create(
-        { fullName: 'Admin', email: ADMIN_ACCOUNT_EMAIL, password: adminPassword },
+        { id: 1, fullName: 'Admin', email: ADMIN_ACCOUNT_EMAIL, password: adminPassword },
         { client: trx }
       )
 
