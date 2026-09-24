@@ -22,13 +22,22 @@ const SHARING_ACCOUNT = {
   email: 'sharing@example.com',
   password: 'password',
 } as const
+/**
+ * The instance's private admin account — created first (below) so it lands on user id 1, the
+ * "owner" account AdminUsersController/SetupController hard-code everywhere instead of a
+ * role/permission flag. Its password is generated at runtime by `ensureDemoAdminPassword`
+ * (never `password` like the two accounts above, which are deliberately public/shared for
+ * app-store review screenshots).
+ */
+const ADMIN_ACCOUNT_EMAIL = 'admin@example.com'
 
 /** A read-only-shared list, owned by the sharing account, to demo co-shopping. */
 const SHARED_LIST = { name: 'Weekend Camping Trip', icon: 'cart', color: '#15803d' } as const
 
 /**
- * Seeds the two fixed demo/review accounts (`demo@example.com` /
- * `sharing@example.com`, both password `password`) used for app-store
+ * Seeds a private admin account (user id 1, password generated at runtime — see
+ * `ensureDemoAdminPassword`) plus the two fixed demo/review accounts (`demo@example.com` /
+ * `sharing@example.com`, both password `password`, ids above the admin's) used for app-store
  * review screenshots and manual QA on the public demo instance.
  *
  * Deliberately conservative about when it's allowed to run, since it's
@@ -48,7 +57,7 @@ const SHARED_LIST = { name: 'Weekend Camping Trip', icon: 'cart', color: '#15803
 export default class DemoSeed extends BaseCommand {
   static commandName = 'demo:seed'
   static description =
-    'Seed the fixed demo/review accounts (gated by DEMO_SEED_ENABLED + empty database)'
+    'Seed a private admin account plus the fixed demo/review accounts (gated by DEMO_SEED_ENABLED + empty database)'
 
   static options: CommandOptions = { startApp: true }
 
@@ -66,6 +75,8 @@ export default class DemoSeed extends BaseCommand {
     const { createOwnedList, STARTER_LIST, TODOS_LIST } = await import('#services/list_creation')
     const { nextListMemberSortOrder } = await import('#services/list_member_sort')
     const { broadcastSync } = await import('#services/sync_broadcaster')
+    const { demoAdminPasswordFilePath, ensureDemoAdminPassword } =
+      await import('#services/demo_admin_account')
 
     const row = await User.query().count('* as total').first()
     const userCount = Number(row?.$extras.total ?? 0)
@@ -76,13 +87,27 @@ export default class DemoSeed extends BaseCommand {
       return
     }
 
-    this.logger.info('demo:seed: seeding demo accounts')
+    // Read/generated before the transaction: it's a filesystem side effect, not a DB write, and
+    // ensureDemoAdminPassword is itself idempotent (reuses the existing file), so there's nothing
+    // to roll back if the transaction below fails.
+    const adminPassword = ensureDemoAdminPassword()
+
+    this.logger.info('demo:seed: seeding admin + demo accounts')
 
     // All writes share one transaction: a failure partway through (e.g. the
     // second createOwnedList call) would otherwise leave real user rows
     // behind, and the userCount guard above would then treat that partial
     // state as "already seeded" and refuse to retry on the next boot.
     await db.transaction(async (trx) => {
+      // Explicit id: 1 (not just created-first) so this still lands on the "owner" id even if
+      // the empty-database guard above is ever satisfied by a users table that was emptied
+      // in place rather than a freshly (re)created database file — SQLite's AUTOINCREMENT
+      // counter survives a DELETE, so a plain create-first wouldn't necessarily get id 1 there.
+      await User.create(
+        { id: 1, fullName: 'Admin', email: ADMIN_ACCOUNT_EMAIL, password: adminPassword },
+        { client: trx }
+      )
+
       const main = await User.create(MAIN_ACCOUNT, { client: trx })
       const sharing = await User.create(SHARING_ACCOUNT, { client: trx })
 
@@ -152,6 +177,9 @@ export default class DemoSeed extends BaseCommand {
       })
     })
 
-    this.logger.success('demo:seed: seeded demo@example.com and sharing@example.com')
+    this.logger.success(
+      `demo:seed: seeded ${ADMIN_ACCOUNT_EMAIL} (password in ${demoAdminPasswordFilePath()}), ` +
+        'demo@example.com and sharing@example.com'
+    )
   }
 }

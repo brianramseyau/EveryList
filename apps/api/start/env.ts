@@ -30,10 +30,10 @@ export default await Env.create(new URL('../', import.meta.url), {
   // Defaults to enabled.
   PUBLIC_SIGNUP_ENABLED: Env.schema.boolean.optional(),
 
-  // Demo/review instance seeding (see commands/demo_seed.ts) — seeds two
-  // fixed accounts (demo@example.com / sharing@example.com) into a fresh
-  // database only. Unset (or false) everywhere except the public demo
-  // instance used for app-store review.
+  // Demo/review instance seeding (see commands/demo_seed.ts) — seeds a
+  // private admin account plus two fixed accounts (demo@example.com /
+  // sharing@example.com) into a fresh database only. Unset (or false)
+  // everywhere except the public demo instance used for app-store review.
   DEMO_SEED_ENABLED: Env.schema.boolean.optional(),
 
   // Outbound email (SMTP2GO) — optional: unset in local dev, so the app
