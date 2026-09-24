@@ -31,6 +31,10 @@ public class MainActivity extends BridgeActivity {
         // DeadlineNotificationActionReceiver can authenticate the deadline notification's
         // "Complete"/"Snooze" actions without a WebView — see AuthMirrorPlugin's doc comment.
         registerPlugin(AuthMirrorPlugin.class);
+        // Lets the web app dismiss an already-shown deadline notification directly — see
+        // DeadlineNotificationPlugin's doc comment for why @capacitor/local-notifications' own
+        // cancel() can't do this itself.
+        registerPlugin(DeadlineNotificationPlugin.class);
         super.onCreate(savedInstanceState);
         if (BuildConfig.DEBUG) {
             // Capacitor serves the app itself over https://localhost, and Chromium's Mixed
