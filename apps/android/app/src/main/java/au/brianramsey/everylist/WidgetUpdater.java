@@ -11,6 +11,7 @@ import android.view.View;
 import android.widget.RemoteViews;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /** Does all of the widget's work off the main thread: fetching the selected list's items,
@@ -70,10 +71,19 @@ public class WidgetUpdater {
         long listId = prefs.getListId();
 
         boolean failed = false;
+        List<WidgetModels.WidgetItem> preToggleSnapshot = null;
         try {
             if (EveryListWidget.ACTION_ITEM.equals(action) && toggleItemId > 0 && toggleListId > 0) {
-                // Optimistic flip from the last-known state, then reconcile with a refetch.
-                boolean nowChecked = !isChecked(prefs.loadSnapshot(), toggleItemId);
+                preToggleSnapshot = prefs.loadSnapshot();
+                boolean nowChecked = !isChecked(preToggleSnapshot, toggleItemId);
+
+                // Apply the toggle to the row locally and render right away — on a slow or flaky
+                // connection (e.g. cellular) the PATCH below can take seconds, and the tap should
+                // never look inert while it's in flight. Reconciled with the real state once the
+                // network calls below return.
+                prefs.saveSnapshot(applyOptimisticToggle(preToggleSnapshot, toggleItemId, nowChecked, prefs.getShowCompleted()));
+                render(context, manager, appWidgetId, prefs, false);
+
                 WidgetApiClient.toggleItem(token, serverUrl, toggleListId, toggleItemId, nowChecked);
             }
             // One round trip for everything we render: list name (for the header) and the rows,
@@ -87,6 +97,9 @@ public class WidgetUpdater {
             prefs.setRetryCount(0);
             cancelPendingRetry(context, appWidgetId);
         } catch (IOException e) {
+            // The toggle (or the refetch confirming it) didn't make it to the server — put the row
+            // back as it was rather than leave it looking applied when it isn't.
+            if (preToggleSnapshot != null) prefs.saveSnapshot(preToggleSnapshot);
             // Stay quiet through the retry backoff — a blip shouldn't flash an error over a still-good
             // snapshot. Only surface it once retries are exhausted, per RETRY_MAX_ATTEMPTS.
             if (scheduleRetry(context, prefs, appWidgetId)) {
@@ -103,6 +116,23 @@ public class WidgetUpdater {
             if (it.id == itemId) return it.checked;
         }
         return false;
+    }
+
+    /** Mirrors the server's own filtering (see {@link WidgetModels.WidgetItem}'s doc comment) so the
+     *  optimistic render matches what the follow-up fetch would show on success: the toggled row is
+     *  dropped when it would no longer pass the show/hide-completed filter, otherwise just re-flagged. */
+    private static List<WidgetModels.WidgetItem> applyOptimisticToggle(
+            List<WidgetModels.WidgetItem> snapshot, long itemId, boolean nowChecked, boolean showCompleted) {
+        List<WidgetModels.WidgetItem> updated = new ArrayList<>(snapshot.size());
+        for (WidgetModels.WidgetItem it : snapshot) {
+            if (it.id != itemId) {
+                updated.add(it);
+                continue;
+            }
+            if (nowChecked && !showCompleted) continue; // checked off, and hidden — drop the row
+            updated.add(new WidgetModels.WidgetItem(it.id, it.name, nowChecked, it.quantity, it.deadline));
+        }
+        return updated;
     }
 
     private static void render(Context context, AppWidgetManager manager, int appWidgetId,
