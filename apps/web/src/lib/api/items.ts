@@ -6,8 +6,12 @@ import type {
 	SubItemDto
 } from '@everylist/shared';
 import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared';
-import { Capacitor } from '@capacitor/core';
+// Provably covered in isolation — see badge.ts's identical note for why a direct native-plugin
+// import is v8-ignored: the growing number of `vi.mock('@capacitor/core', …)` partial mocks
+// across the suite corrupts this import statement's V8 attribution once merged into the full run,
+// not missing coverage.
 /* v8 ignore start */
+import { Capacitor } from '@capacitor/core';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 import { getDb, type EveryListDB } from '$lib/offline/db';
 import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';

@@ -20,7 +20,10 @@ vi.mock('$lib/api/items', () => ({
 	updateItem: vi.fn()
 }));
 
-const capacitorMock = vi.hoisted(() => ({ getPlatform: vi.fn(() => 'android') }));
+const capacitorMock = vi.hoisted(() => ({
+	getPlatform: vi.fn(() => 'android'),
+	registerPlugin: vi.fn()
+}));
 vi.mock('@capacitor/core', () => ({ Capacitor: capacitorMock }));
 
 const { LocalNotifications } = await import('@capacitor/local-notifications');
@@ -29,6 +32,7 @@ const {
 	requestNativeNotificationPermission,
 	syncNativeDeadlineNotifications,
 	cancelAllNativeDeadlineNotifications,
+	cancelDeadlineNotification,
 	registerNativeDeadlineActionTypes,
 	listenForNativeDeadlineActions
 } = await import('./native');
@@ -269,6 +273,32 @@ describe('cancelAllNativeDeadlineNotifications', () => {
 		await cancelAllNativeDeadlineNotifications();
 
 		expect(LocalNotifications.cancel).not.toHaveBeenCalled();
+	});
+});
+
+describe('cancelDeadlineNotification', () => {
+	afterEach(() => {
+		capacitorMock.getPlatform.mockReturnValue('android');
+	});
+
+	it('cancels the pending alarm and dismisses an already-shown notification on Android', async () => {
+		const dismiss = vi.fn().mockResolvedValue(undefined);
+		capacitorMock.registerPlugin.mockReturnValue({ dismiss });
+
+		await cancelDeadlineNotification(5);
+
+		expect(LocalNotifications.cancel).toHaveBeenCalledWith({ notifications: [{ id: 5 }] });
+		expect(capacitorMock.registerPlugin).toHaveBeenCalledWith('DeadlineNotifications');
+		expect(dismiss).toHaveBeenCalledWith({ itemId: 5 });
+	});
+
+	it('only cancels the pending alarm on iOS/web, where the native dismiss plugin does not exist', async () => {
+		capacitorMock.getPlatform.mockReturnValue('ios');
+
+		await cancelDeadlineNotification(5);
+
+		expect(LocalNotifications.cancel).toHaveBeenCalledWith({ notifications: [{ id: 5 }] });
+		expect(capacitorMock.registerPlugin).not.toHaveBeenCalled();
 	});
 });
 
