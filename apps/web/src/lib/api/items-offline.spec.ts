@@ -15,7 +15,14 @@ vi.mock('./client', () => ({
 	}
 }));
 
+const capacitorMock = vi.hoisted(() => ({ isNativePlatform: vi.fn(() => false) }));
+vi.mock('@capacitor/core', () => ({ Capacitor: capacitorMock }));
+vi.mock('$lib/notifications/native', () => ({
+	cancelDeadlineNotification: vi.fn().mockResolvedValue(undefined)
+}));
+
 const { apiGet, apiPost, apiPatch, apiDelete, ApiError } = await import('./client');
+const { cancelDeadlineNotification } = await import('$lib/notifications/native');
 const { getDb, resetDbForTesting } = await import('$lib/offline/db');
 const { pendingMutations } = await import('$lib/offline/sync-queue');
 const {
@@ -330,6 +337,93 @@ describe('updateItem (Dexie available)', () => {
 		const cached = await db.items.get(5);
 		expect(cached?.checked).toBe(true);
 		expect(cached?.checkedAt).not.toBeNull();
+		expect(cancelDeadlineNotification).not.toHaveBeenCalled();
+	});
+
+	it("cancels the item's own deadline notification immediately on native platforms when checked off", async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			deadline: '2026-09-11T17:30',
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 3
+		});
+		vi.mocked(apiPatch).mockResolvedValue({ id: 5, checked: true, version: 4 });
+		capacitorMock.isNativePlatform.mockReturnValueOnce(true);
+
+		await updateItem(1, 5, { checked: true });
+
+		expect(cancelDeadlineNotification).toHaveBeenCalledWith(5);
+	});
+
+	it('does not let a failed notification cancel block checking the item off', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			deadline: '2026-09-11T17:30',
+			checked: false,
+			checkedAt: null,
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 3
+		});
+		vi.mocked(apiPatch).mockResolvedValue({ id: 5, checked: true, version: 4 });
+		capacitorMock.isNativePlatform.mockReturnValueOnce(true);
+		vi.mocked(cancelDeadlineNotification).mockRejectedValueOnce(new Error('plugin unavailable'));
+
+		await expect(updateItem(1, 5, { checked: true })).resolves.toBeDefined();
+	});
+
+	it('does not cancel a notification when unchecking, even on native platforms', async () => {
+		const db = getDb()!;
+		await db.items.put({
+			id: 5,
+			listId: 1,
+			name: 'Milk',
+			quantity: null,
+			notes: null,
+			categoryId: null,
+			storeId: null,
+			price: null,
+			deadline: '2026-09-11T17:30',
+			checked: true,
+			checkedAt: '2026-08-01T00:00:00.000Z',
+			sortOrder: 0,
+			createdBy: 1,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 3
+		});
+		vi.mocked(apiPatch).mockResolvedValue({ id: 5, checked: false, version: 4 });
+
+		await updateItem(1, 5, { checked: false });
+
+		expect(capacitorMock.isNativePlatform).not.toHaveBeenCalled();
+		expect(cancelDeadlineNotification).not.toHaveBeenCalled();
 	});
 
 	describe('repeat rule', () => {

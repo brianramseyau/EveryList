@@ -111,6 +111,10 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
                 HttpJson.request(
                     "PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token, body.toString()
                 );
+                // Same handoff the app itself uses after a mutation (EveryListWidgetPlugin#refresh)
+                // — without it, a placed widget still showing this item stays stale until its next
+                // periodic tick, since this PATCH goes straight to the server, bypassing the app.
+                EveryListWidget.broadcastRefreshAll(context);
             }
         } catch (IOException | org.json.JSONException | RuntimeException e) {
             // RuntimeException here is deliberately broad: this runs on a background thread with

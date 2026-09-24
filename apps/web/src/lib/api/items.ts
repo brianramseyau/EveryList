@@ -6,7 +6,12 @@ import type {
 	SubItemDto
 } from '@everylist/shared';
 import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared';
+// Provably covered in isolation — see badge.ts's identical note for why a direct native-plugin
+// import is v8-ignored: the growing number of `vi.mock('@capacitor/core', …)` partial mocks
+// across the suite corrupts this import statement's V8 attribution once merged into the full run,
+// not missing coverage.
 /* v8 ignore start */
+import { Capacitor } from '@capacitor/core';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 import { getDb, type EveryListDB } from '$lib/offline/db';
 import { offlineCreate, offlineMutate } from '$lib/offline/sync-engine';
@@ -427,6 +432,20 @@ export async function updateItem(
 						: existing.checkedAt,
 				_dirty: true
 			});
+			// Checking an item off in-app is the one path that neither `completeFromNotification`
+			// nor the periodic `resyncDeadlineNotifications` pass (at most every 5 minutes) covers —
+			// without this its own deadline notification would sit there stale until that next
+			// resync. Dynamically imported to avoid a static cycle: native.ts imports `updateItem`
+			// from this module.
+			if (input.checked === true && Capacitor.isNativePlatform()) {
+				try {
+					const { cancelDeadlineNotification } = await import('$lib/notifications/native');
+					await cancelDeadlineNotification(itemId);
+				} catch {
+					// Notification cleanup must not block the item mutation — including a failure to
+					// load this dynamically-imported chunk itself, not just the cancel call.
+				}
+			}
 			return existing.version;
 		},
 		onSuccess: async (db, result) => {

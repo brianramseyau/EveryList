@@ -11,6 +11,18 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { updateItem } from '$lib/api/items';
 import { computeScheduledDeadlines } from './scheduled-deadlines';
 
+/** The native handoff for dismissing an already-*shown* deadline notification (Android-only —
+ * see `cancelDeadlineNotification`'s doc comment for why `LocalNotifications.cancel()` alone
+ * can't do this). Same `Capacitor.registerPlugin` pattern as `auth-mirror.ts`'s `AuthMirror`. */
+interface DeadlineNotificationsNative {
+	dismiss(options: { itemId: number }): Promise<void>;
+}
+
+function nativeDeadlineNotificationsClient(): DeadlineNotificationsNative | null {
+	if (Capacitor.getPlatform() !== 'android') return null;
+	return Capacitor.registerPlugin<DeadlineNotificationsNative>('DeadlineNotifications');
+}
+
 /** Tags every notification this module schedules, so cancel logic below only ever touches
  * its own notifications — not some future feature's unrelated `@capacitor/local-notifications`
  * entries that happen to land in the same pending set. */
@@ -168,6 +180,36 @@ export async function registerNativeDeadlineActionTypes(): Promise<void> {
 async function completeFromNotification(listId: number, itemId: number): Promise<void> {
 	await updateItem(listId, itemId, { checked: true });
 	await LocalNotifications.cancel({ notifications: [{ id: itemId }] });
+}
+
+/** Cancels a single item's deadline notification immediately — used when the item is checked off
+ * from inside the app itself (unlike `completeFromNotification` above, which handles the
+ * notification-originated path), so it doesn't sit there until the next
+ * `resyncDeadlineNotifications` pass (at most every 5 minutes, see `+layout.svelte`). Same id
+ * scheme as `syncNativeDeadlineNotifications`, which schedules with the item's own id.
+ *
+ * Two calls, not one: `LocalNotifications.cancel()` only cancels a still-*pending* notification's
+ * alarm — the plugin's own Kotlin implementation deliberately leaves an already-*delivered*
+ * notification's storage record and on-screen post alone (confirmed against
+ * `LocalNotificationManager.cancel()`'s source: "cancel only affects pending ones"), so calling
+ * it alone here silently did nothing for an already-fired deadline notification. The
+ * `DeadlineNotifications` native plugin (Android-only; see its own doc comment) makes the direct
+ * `NotificationManagerCompat.cancel()` call that actually dismisses one already showing —
+ * `WidgetUpdater`'s own post-toggle cancel uses that same direct call rather than going through
+ * this plugin, which is why it never hit this gap. Still calling `LocalNotifications.cancel()`
+ * too keeps its pending-alarm/storage bookkeeping correct for a notification that hasn't fired
+ * yet, and is a no-op on iOS/web, where this limitation doesn't apply.
+ *
+ * iOS has the same already-*delivered*-notification gap as Android, but its own plugin exposes a
+ * direct fix already — `removeDeliveredNotificationsById` — so no extra native plugin is needed
+ * there. */
+export async function cancelDeadlineNotification(itemId: number): Promise<void> {
+	await LocalNotifications.cancel({ notifications: [{ id: itemId }] });
+	if (Capacitor.getPlatform() === 'ios') {
+		await LocalNotifications.removeDeliveredNotificationsById({ ids: [itemId] });
+	}
+	const client = nativeDeadlineNotificationsClient();
+	if (client) await client.dismiss({ itemId });
 }
 
 /** Wires the "Complete" notification action to its effect, and a plain tap on the notification

@@ -10,6 +10,7 @@ vi.mock('@capacitor/local-notifications', () => ({
 		getPending: vi.fn(),
 		schedule: vi.fn(),
 		cancel: vi.fn(),
+		removeDeliveredNotificationsById: vi.fn(),
 		registerActionTypes: vi.fn(),
 		addListener: vi.fn()
 	}
@@ -20,7 +21,10 @@ vi.mock('$lib/api/items', () => ({
 	updateItem: vi.fn()
 }));
 
-const capacitorMock = vi.hoisted(() => ({ getPlatform: vi.fn(() => 'android') }));
+const capacitorMock = vi.hoisted(() => ({
+	getPlatform: vi.fn(() => 'android'),
+	registerPlugin: vi.fn()
+}));
 vi.mock('@capacitor/core', () => ({ Capacitor: capacitorMock }));
 
 const { LocalNotifications } = await import('@capacitor/local-notifications');
@@ -29,6 +33,7 @@ const {
 	requestNativeNotificationPermission,
 	syncNativeDeadlineNotifications,
 	cancelAllNativeDeadlineNotifications,
+	cancelDeadlineNotification,
 	registerNativeDeadlineActionTypes,
 	listenForNativeDeadlineActions
 } = await import('./native');
@@ -269,6 +274,43 @@ describe('cancelAllNativeDeadlineNotifications', () => {
 		await cancelAllNativeDeadlineNotifications();
 
 		expect(LocalNotifications.cancel).not.toHaveBeenCalled();
+	});
+});
+
+describe('cancelDeadlineNotification', () => {
+	afterEach(() => {
+		capacitorMock.getPlatform.mockReturnValue('android');
+	});
+
+	it('cancels the pending alarm and dismisses an already-shown notification on Android', async () => {
+		const dismiss = vi.fn().mockResolvedValue(undefined);
+		capacitorMock.registerPlugin.mockReturnValue({ dismiss });
+
+		await cancelDeadlineNotification(5);
+
+		expect(LocalNotifications.cancel).toHaveBeenCalledWith({ notifications: [{ id: 5 }] });
+		expect(capacitorMock.registerPlugin).toHaveBeenCalledWith('DeadlineNotifications');
+		expect(dismiss).toHaveBeenCalledWith({ itemId: 5 });
+	});
+
+	it('also removes the delivered notification on iOS, where there is no native dismiss plugin', async () => {
+		capacitorMock.getPlatform.mockReturnValue('ios');
+
+		await cancelDeadlineNotification(5);
+
+		expect(LocalNotifications.cancel).toHaveBeenCalledWith({ notifications: [{ id: 5 }] });
+		expect(LocalNotifications.removeDeliveredNotificationsById).toHaveBeenCalledWith({ ids: [5] });
+		expect(capacitorMock.registerPlugin).not.toHaveBeenCalled();
+	});
+
+	it('does not remove delivered notifications on web, where neither native gap applies', async () => {
+		capacitorMock.getPlatform.mockReturnValue('web');
+
+		await cancelDeadlineNotification(5);
+
+		expect(LocalNotifications.cancel).toHaveBeenCalledWith({ notifications: [{ id: 5 }] });
+		expect(LocalNotifications.removeDeliveredNotificationsById).not.toHaveBeenCalled();
+		expect(capacitorMock.registerPlugin).not.toHaveBeenCalled();
 	});
 });
 

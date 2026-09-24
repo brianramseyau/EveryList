@@ -2,6 +2,7 @@ package au.brianramsey.everylist;
 
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -35,6 +36,20 @@ public class EveryListWidget extends AppWidgetProvider {
 
     /** Shared across broadcasts so overlapping updates queue up rather than each spawning a thread. */
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
+
+    /** Sends the same refresh broadcast the widget's own refresh button does to every placed
+     *  widget instance. Shared by {@link EveryListWidgetPlugin#refresh} (the app's post-mutation
+     *  hook) and {@link DeadlineNotificationActionReceiver} (a notification's "Complete" action),
+     *  so neither leaves the widget showing a since-completed item until its next periodic tick. */
+    static void broadcastRefreshAll(Context context) {
+        int[] ids = AppWidgetManager.getInstance(context)
+            .getAppWidgetIds(new ComponentName(context, EveryListWidget.class));
+        for (int appWidgetId : ids) {
+            context.sendBroadcast(new Intent(context, EveryListWidget.class)
+                .setAction(ACTION_REFRESH)
+                .putExtra(EXTRA_APPWIDGET_ID, appWidgetId));
+        }
+    }
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
