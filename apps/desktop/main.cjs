@@ -523,7 +523,16 @@ async function enableStandaloneOnce() {
     // consume a token minted for a server that's no longer running.
     pendingStandaloneToken = null
     if (embeddedServerChild) await stopEmbeddedServer(embeddedServerChild)
-    await bootRemote(userDataDir)
+    try {
+      await bootRemote(userDataDir)
+    } catch (restoreError) {
+      // A failure restoring the thin-client server (e.g. its own port is now also unexpectedly
+      // occupied) must not replace the original error — that's the one /server-setup's UI and the
+      // caller actually need to see. Logged separately rather than silently dropped.
+      logStartupError(
+        restoreError instanceof Error ? restoreError : new Error(String(restoreError))
+      )
+    }
     throw error
   } finally {
     // Reached on both success (standalone is now the settled state — a later unexpected exit

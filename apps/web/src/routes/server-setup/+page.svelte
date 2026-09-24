@@ -68,9 +68,12 @@
 
 	async function save(candidate: string) {
 		setServerUrl(candidate);
-		// A no-op on every visit after the first, and everywhere but desktop — see offerStandalone's
-		// comment for why this needs to be recorded explicitly rather than inferred later.
-		await window.everylistDesktop?.recordRemoteMode();
+		// Best-effort: a no-op on every visit after the first, and everywhere but desktop — see
+		// offerStandalone's comment for why this needs to be recorded explicitly rather than
+		// inferred later. Not awaited into the critical path — an IPC failure here must not block
+		// navigating to /login after the server URL itself was already saved successfully; the root
+		// layout's onMount backfills a missing mode marker on a later launch if this doesn't land.
+		void window.everylistDesktop?.recordRemoteMode()?.catch(() => {});
 		await goto(resolve('/login'));
 	}
 

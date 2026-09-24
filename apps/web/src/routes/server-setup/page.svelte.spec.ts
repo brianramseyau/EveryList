@@ -242,4 +242,29 @@ describe('Server setup +page.svelte', () => {
 
 		await expect.poll(() => recordRemoteMode.mock.calls.length).toBe(1);
 	});
+
+	it('still navigates to /login when recordRemoteMode itself fails', async () => {
+		// Best-effort by design — see save()'s comment. The root layout's onMount backfills a
+		// missing mode marker later, so a failure here must not block the user from signing in.
+		vi.mocked(isDesktop).mockReturnValue(true);
+		vi.mocked(fetchPing).mockResolvedValue(true);
+		const recordRemoteMode = vi.fn().mockRejectedValue(new Error('ipc boom'));
+		window.everylistDesktop = {
+			version: '1.0.0',
+			platform: 'darwin',
+			mode: null,
+			checkForUpdate: vi.fn(),
+			setBackgroundRun: vi.fn(),
+			enableStandalone: vi.fn(),
+			recordRemoteMode,
+			consumeStandaloneToken: vi.fn()
+		};
+
+		await renderPage();
+		await page.getByLabelText('Server URL').fill('https://everylist.example.com');
+		await page.getByRole('button', { name: 'Continue', exact: true }).click();
+
+		await expect.poll(() => vi.mocked(goto).mock.calls.length).toBe(1);
+		expect(goto).toHaveBeenCalledWith('/login');
+	});
 });
