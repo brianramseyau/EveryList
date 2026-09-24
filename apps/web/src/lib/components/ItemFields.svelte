@@ -4,6 +4,7 @@
 	import type { RecurrenceRule } from '@everylist/shared';
 	import Icon from '$lib/components/Icon.svelte';
 	import RecurrenceFields from '$lib/components/RecurrenceFields.svelte';
+	import { sanitizePriceInput } from '$lib/price';
 
 	let {
 		name = $bindable(''),
@@ -89,7 +90,20 @@
 					<Icon name="currencyUsd" class="h-4 w-4" />
 					Price (optional)
 				</Label>
-				<Input id="item-price" inputmode="decimal" placeholder="0.00" bind:value={price} />
+				<Input
+					id="item-price"
+					inputmode="decimal"
+					placeholder="0.00"
+					bind:value={price}
+					oninput={(event) => {
+						// Strips anything but digits/a decimal point (currency symbols, thousands
+						// separators, a pasted "USD" suffix, …) so a pasted price parses instead of
+						// silently failing to save — see the price/paste-sanitization incident.
+						const input = event.currentTarget as HTMLInputElement;
+						const sanitized = sanitizePriceInput(input.value);
+						if (sanitized !== input.value) price = sanitized;
+					}}
+				/>
 			</div>
 		{/if}
 	</div>

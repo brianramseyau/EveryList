@@ -963,17 +963,49 @@ describe('Item detail +page.svelte', () => {
 		expect(updateItem).not.toHaveBeenCalled();
 	});
 
-	it('ignores a non-numeric price entry', async () => {
+	it('strips a pasted currency symbol from the price so the edit still saves', async () => {
 		const db = getDb()!;
 		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await page.getByLabelText('Price (optional)').fill('$4.50');
+		await expect.element(page.getByLabelText('Price (optional)')).toHaveValue('4.50');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ price: 450 }));
+	});
+
+	it('clears the price to null when the entry has no digits at all', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(updateItem).mockResolvedValue(undefined);
 
 		render(ItemDetailPage);
 		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
 
 		await page.getByLabelText('Price (optional)').fill('abc');
+		await expect.element(page.getByLabelText('Price (optional)')).toHaveValue('');
 		await page.getByRole('button', { name: 'Save' }).click();
 
-		expect(updateItem).not.toHaveBeenCalled();
+		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ price: null }));
+	});
+
+	it('clears the price to null instead of blocking the save when only a decimal point remains', async () => {
+		const db = getDb()!;
+		await db.items.put(makeItem({ id: 100, name: 'Bananas' }));
+		vi.mocked(updateItem).mockResolvedValue(undefined);
+
+		render(ItemDetailPage);
+		await expect.element(page.getByLabelText('Name')).toHaveValue('Bananas');
+
+		await page.getByLabelText('Price (optional)').fill('.');
+		await expect.element(page.getByLabelText('Price (optional)')).toHaveValue('.');
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		expect(updateItem).toHaveBeenCalledWith(1, 100, expect.objectContaining({ price: null }));
 	});
 
 	it('picks a category via the select', async () => {
