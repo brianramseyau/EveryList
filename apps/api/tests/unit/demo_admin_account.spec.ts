@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import { test } from '@japa/runner'
 import { demoAdminPasswordFilePath, ensureDemoAdminPassword } from '#services/demo_admin_account'
 
@@ -8,9 +9,20 @@ test.group('Demo admin password', (group) => {
   group.each.setup(() => {
     const filePath = demoAdminPasswordFilePath()
     const originalWriteFileSync = fs.writeFileSync
+    const originalLinkSync = fs.linkSync
     return () => {
       fs.writeFileSync = originalWriteFileSync
+      fs.linkSync = originalLinkSync
       fs.rmSync(filePath, { force: true })
+      // Temp files are named `<filePath>.<pid>.<random>.tmp` — sweep any a failed/interrupted
+      // test left behind so it can't leak into a later test's directory listing.
+      const dir = path.dirname(filePath)
+      const prefix = `${path.basename(filePath)}.`
+      for (const entry of fs.readdirSync(dir)) {
+        if (entry.startsWith(prefix) && entry.endsWith('.tmp')) {
+          fs.rmSync(path.join(dir, entry), { force: true })
+        }
+      }
     }
   })
 
@@ -63,17 +75,18 @@ test.group('Demo admin password', (group) => {
 
   test('reads back the winning password when it loses a concurrent create race', ({ assert }) => {
     const filePath = demoAdminPasswordFilePath()
-    const originalWriteFileSync = fs.writeFileSync
+    const originalLinkSync = fs.linkSync
 
-    // Simulates a second demo:seed process creating the file between our existsSync check and
-    // our own write — the write below should fall back to reading whatever that process wrote.
-    fs.writeFileSync = (() => {
-      fs.writeFileSync = originalWriteFileSync
-      originalWriteFileSync(filePath, 'winning-password\n', { mode: 0o600 })
+    // Simulates a second demo:seed process publishing the file between our existsSync check and
+    // our own link — the call below should fall back to reading whatever that process published,
+    // instead of returning its own now-orphaned password.
+    fs.linkSync = (() => {
+      fs.linkSync = originalLinkSync
+      fs.writeFileSync(filePath, 'winning-password\n', { mode: 0o600 })
       const error = new Error('EEXIST') as NodeJS.ErrnoException
       error.code = 'EEXIST'
       throw error
-    }) as typeof fs.writeFileSync
+    }) as typeof fs.linkSync
 
     assert.equal(ensureDemoAdminPassword(), 'winning-password')
   })
@@ -84,5 +97,17 @@ test.group('Demo admin password', (group) => {
     }) as typeof fs.writeFileSync
 
     assert.throws(() => ensureDemoAdminPassword(), 'disk full')
+  })
+
+  test('cleans up the temporary file after a successful publish', ({ assert }) => {
+    const filePath = demoAdminPasswordFilePath()
+
+    ensureDemoAdminPassword()
+
+    const dir = path.dirname(filePath)
+    const leftoverTmpFiles = fs
+      .readdirSync(dir)
+      .filter((entry) => entry.startsWith(`${path.basename(filePath)}.`) && entry.endsWith('.tmp'))
+    assert.deepEqual(leftoverTmpFiles, [])
   })
 })

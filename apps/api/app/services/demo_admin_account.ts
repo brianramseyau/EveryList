@@ -34,18 +34,33 @@ export function ensureDemoAdminPassword(): string {
   // bounds (see validators/user.ts and friends) with no padding characters to strip.
   const password = randomBytes(18).toString('base64url')
   try {
-    // 'wx' (O_CREAT | O_EXCL) makes the create+write atomic and fails with EEXIST instead of
-    // silently overwriting a file a concurrent demo:seed run just created — two processes racing
-    // to seed the same fresh database would otherwise each generate a different password, and
-    // whichever wrote the file last would leave it out of sync with whichever transaction
-    // actually committed the admin account's row.
-    fs.writeFileSync(filePath, `${password}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+    publishPasswordFile(filePath, password)
     return password
   } catch (error) {
     if (!isFileExistsError(error)) throw error
-    // Lost the race — another process created the file between our existsSync check above and
-    // this write. Read back whatever it wrote instead of returning our own, now-orphaned password.
+    // Lost the race — another process published the file between our existsSync check above and
+    // this write. Read back whatever it published instead of returning our own, now-orphaned
+    // password.
     return fs.readFileSync(filePath, 'utf8').trim()
+  }
+}
+
+/**
+ * Publish via write-temp + link + unlink-temp rather than a direct writeFileSync(..., { flag:
+ * 'wx' }): 'wx' only makes the file's *creation* exclusive, not its content atomic — a
+ * concurrent demo:seed process racing past `ensureDemoAdminPassword`'s existsSync check could
+ * open the file for read between its create and its write finishing, and see empty/partial
+ * content. A hard link can only be created once the temp file's write has been fully flushed and
+ * closed, and `linkSync` itself fails with EEXIST rather than replacing an existing target, so
+ * whichever process's link wins is guaranteed to expose fully-written content.
+ */
+function publishPasswordFile(filePath: string, password: string): void {
+  const tmpPath = `${filePath}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`
+  try {
+    fs.writeFileSync(tmpPath, `${password}\n`, { encoding: 'utf8', mode: 0o600 })
+    fs.linkSync(tmpPath, filePath)
+  } finally {
+    fs.rmSync(tmpPath, { force: true })
   }
 }
 
