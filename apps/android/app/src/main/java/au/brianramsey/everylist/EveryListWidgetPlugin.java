@@ -1,7 +1,5 @@
 package au.brianramsey.everylist;
 
-import android.appwidget.AppWidgetManager;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 
@@ -70,14 +68,7 @@ public class EveryListWidgetPlugin extends Plugin {
      *  the fetch runs through {@link WidgetUpdater} off the main thread like any other refresh. */
     @PluginMethod
     public void refresh(PluginCall call) {
-        Context context = getContext();
-        int[] ids = AppWidgetManager.getInstance(context)
-            .getAppWidgetIds(new ComponentName(context, EveryListWidget.class));
-        for (int appWidgetId : ids) {
-            context.sendBroadcast(new Intent(context, EveryListWidget.class)
-                .setAction(EveryListWidget.ACTION_REFRESH)
-                .putExtra(EveryListWidget.EXTRA_APPWIDGET_ID, appWidgetId));
-        }
+        EveryListWidget.broadcastRefreshAll(getContext());
         call.resolve();
     }
 

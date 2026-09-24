@@ -170,6 +170,15 @@ async function completeFromNotification(listId: number, itemId: number): Promise
 	await LocalNotifications.cancel({ notifications: [{ id: itemId }] });
 }
 
+/** Cancels a single item's pending deadline notification immediately — used when the item is
+ * checked off from inside the app itself (unlike `completeFromNotification` above, which handles
+ * the notification-originated path), so it doesn't sit there until the next
+ * `resyncDeadlineNotifications` pass (at most every 5 minutes, see `+layout.svelte`). Same id
+ * scheme as `syncNativeDeadlineNotifications`, which schedules with the item's own id. */
+export async function cancelDeadlineNotification(itemId: number): Promise<void> {
+	await LocalNotifications.cancel({ notifications: [{ id: itemId }] });
+}
+
 /** Wires the "Complete" notification action to its effect, and a plain tap on the notification
  * body (`onTap`) or the "Reschedule" action (`onReschedule`) to navigating to the specific
  * list/item the notification was about (the OS opens the app either way — this only decides

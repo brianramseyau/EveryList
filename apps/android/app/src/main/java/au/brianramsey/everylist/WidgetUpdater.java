@@ -10,6 +10,8 @@ import android.os.SystemClock;
 import android.view.View;
 import android.widget.RemoteViews;
 
+import androidx.core.app.NotificationManagerCompat;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -85,6 +87,12 @@ public class WidgetUpdater {
                 render(context, manager, appWidgetId, prefs, false);
 
                 WidgetApiClient.toggleItem(token, serverUrl, toggleListId, toggleItemId, nowChecked);
+
+                // Checking it off here bypasses the app/JS entirely, so nothing else cancels this
+                // item's own deadline notification (native.ts schedules it with the item's id as
+                // the notification id — see syncNativeDeadlineNotifications). Without this it would
+                // sit there until the next periodic resync.
+                if (nowChecked) NotificationManagerCompat.from(context).cancel((int) toggleItemId);
             }
             // One round trip for everything we render: list name (for the header) and the rows,
             // already filtered (show/hide-completed) and ordered server-side.

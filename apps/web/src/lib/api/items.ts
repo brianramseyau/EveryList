@@ -6,6 +6,7 @@ import type {
 	SubItemDto
 } from '@everylist/shared';
 import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared';
+import { Capacitor } from '@capacitor/core';
 /* v8 ignore start */
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 import { getDb, type EveryListDB } from '$lib/offline/db';
@@ -427,6 +428,15 @@ export async function updateItem(
 						: existing.checkedAt,
 				_dirty: true
 			});
+			// Checking an item off in-app is the one path that neither `completeFromNotification`
+			// nor the periodic `resyncDeadlineNotifications` pass (at most every 5 minutes) covers —
+			// without this its own deadline notification would sit there stale until that next
+			// resync. Dynamically imported to avoid a static cycle: native.ts imports `updateItem`
+			// from this module.
+			if (input.checked === true && Capacitor.isNativePlatform()) {
+				const { cancelDeadlineNotification } = await import('$lib/notifications/native');
+				await cancelDeadlineNotification(itemId).catch(() => {});
+			}
 			return existing.version;
 		},
 		onSuccess: async (db, result) => {
