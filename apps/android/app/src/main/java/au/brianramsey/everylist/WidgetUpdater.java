@@ -73,6 +73,7 @@ public class WidgetUpdater {
         long listId = prefs.getListId();
 
         boolean failed = false;
+        boolean toggleSucceeded = false;
         List<WidgetModels.WidgetItem> preToggleSnapshot = null;
         try {
             if (EveryListWidget.ACTION_ITEM.equals(action) && toggleItemId > 0 && toggleListId > 0) {
@@ -87,6 +88,7 @@ public class WidgetUpdater {
                 render(context, manager, appWidgetId, prefs, false);
 
                 WidgetApiClient.toggleItem(token, serverUrl, toggleListId, toggleItemId, nowChecked);
+                toggleSucceeded = true;
 
                 // Checking it off here bypasses the app/JS entirely, so nothing else cancels this
                 // item's own deadline notification (native.ts schedules it with the item's id as
@@ -105,9 +107,11 @@ public class WidgetUpdater {
             prefs.setRetryCount(0);
             cancelPendingRetry(context, appWidgetId);
         } catch (IOException e) {
-            // The toggle (or the refetch confirming it) didn't make it to the server — put the row
-            // back as it was rather than leave it looking applied when it isn't.
-            if (preToggleSnapshot != null) prefs.saveSnapshot(preToggleSnapshot);
+            // Only roll back if the toggle itself didn't make it to the server. If it succeeded and
+            // just the follow-up refetch failed, the server already has the new state — restoring
+            // the pre-toggle snapshot here would show a stale row until the retry's plain refresh
+            // (which never re-sends the toggle) catches up.
+            if (preToggleSnapshot != null && !toggleSucceeded) prefs.saveSnapshot(preToggleSnapshot);
             // Stay quiet through the retry backoff — a blip shouldn't flash an error over a still-good
             // snapshot. Only surface it once retries are exhausted, per RETRY_MAX_ATTEMPTS.
             if (scheduleRetry(context, prefs, appWidgetId)) {

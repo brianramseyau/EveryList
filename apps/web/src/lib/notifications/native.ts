@@ -198,9 +198,16 @@ async function completeFromNotification(listId: number, itemId: number): Promise
  * `WidgetUpdater`'s own post-toggle cancel uses that same direct call rather than going through
  * this plugin, which is why it never hit this gap. Still calling `LocalNotifications.cancel()`
  * too keeps its pending-alarm/storage bookkeeping correct for a notification that hasn't fired
- * yet, and is a no-op on iOS/web, where this limitation doesn't apply. */
+ * yet, and is a no-op on iOS/web, where this limitation doesn't apply.
+ *
+ * iOS has the same already-*delivered*-notification gap as Android, but its own plugin exposes a
+ * direct fix already — `removeDeliveredNotificationsById` — so no extra native plugin is needed
+ * there. */
 export async function cancelDeadlineNotification(itemId: number): Promise<void> {
 	await LocalNotifications.cancel({ notifications: [{ id: itemId }] });
+	if (Capacitor.getPlatform() === 'ios') {
+		await LocalNotifications.removeDeliveredNotificationsById({ ids: [itemId] });
+	}
 	const client = nativeDeadlineNotificationsClient();
 	if (client) await client.dismiss({ itemId });
 }

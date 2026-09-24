@@ -438,8 +438,13 @@ export async function updateItem(
 			// resync. Dynamically imported to avoid a static cycle: native.ts imports `updateItem`
 			// from this module.
 			if (input.checked === true && Capacitor.isNativePlatform()) {
-				const { cancelDeadlineNotification } = await import('$lib/notifications/native');
-				await cancelDeadlineNotification(itemId).catch(() => {});
+				try {
+					const { cancelDeadlineNotification } = await import('$lib/notifications/native');
+					await cancelDeadlineNotification(itemId);
+				} catch {
+					// Notification cleanup must not block the item mutation — including a failure to
+					// load this dynamically-imported chunk itself, not just the cancel call.
+				}
 			}
 			return existing.version;
 		},
