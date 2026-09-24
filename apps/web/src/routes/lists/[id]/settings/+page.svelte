@@ -12,6 +12,7 @@
 	import { buildPasscodeHash } from '$lib/passcode';
 	import { refreshBadgeCount } from '$lib/pwa/badge';
 	import { consumeListOrigin } from '$lib/nav-direction';
+	import { isStandalone } from '$lib/platform/desktop';
 	import IconPicker from '$lib/components/IconPicker.svelte';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -324,12 +325,16 @@
 					Categories
 				</a>
 			{/if}
-			<a
-				href={resolve('/lists/[id]/members', { id: String(listId) })}
-				class="rounded-lg border border-gray-200 px-3 py-3 text-primary-700 hover:bg-gray-100 dark:border-gray-700 dark:text-primary-400 dark:hover:bg-gray-800"
-			>
-				Members
-			</a>
+			{#if !isStandalone()}
+				<!-- Sharing/members is meaningless with a single user and no reachable network — see
+				     PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md's "Single-user simplifications". -->
+				<a
+					href={resolve('/lists/[id]/members', { id: String(listId) })}
+					class="rounded-lg border border-gray-200 px-3 py-3 text-primary-700 hover:bg-gray-100 dark:border-gray-700 dark:text-primary-400 dark:hover:bg-gray-800"
+				>
+					Members
+				</a>
+			{/if}
 		</nav>
 
 		{#if error}

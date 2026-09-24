@@ -16,7 +16,11 @@ describe('checkForDesktopUpdate (browser)', () => {
 		window.everylistDesktop = {
 			version: '1.0.0',
 			platform: 'darwin',
+			mode: 'remote',
 			setBackgroundRun: vi.fn(),
+			enableStandalone: vi.fn(),
+			consumeStandaloneToken: vi.fn(),
+			recordRemoteMode: vi.fn(),
 			checkForUpdate: vi.fn().mockResolvedValue({
 				status: 'update-available',
 				latestVersion: 'v1.1.0',
@@ -34,7 +38,11 @@ describe('checkForDesktopUpdate (browser)', () => {
 		window.everylistDesktop = {
 			version: '1.0.0',
 			platform: 'darwin',
+			mode: 'remote',
 			setBackgroundRun: vi.fn(),
+			enableStandalone: vi.fn(),
+			consumeStandaloneToken: vi.fn(),
+			recordRemoteMode: vi.fn(),
 			checkForUpdate: vi.fn().mockResolvedValue({ status: 'up-to-date' })
 		};
 		expect(await checkForDesktopUpdate()).toEqual({ status: 'up-to-date' });
@@ -44,7 +52,11 @@ describe('checkForDesktopUpdate (browser)', () => {
 		window.everylistDesktop = {
 			version: '1.0.0',
 			platform: 'darwin',
+			mode: 'remote',
 			setBackgroundRun: vi.fn(),
+			enableStandalone: vi.fn(),
+			consumeStandaloneToken: vi.fn(),
+			recordRemoteMode: vi.fn(),
 			checkForUpdate: vi.fn().mockResolvedValue({ status: 'error', message: 'nope' })
 		};
 		expect(await checkForDesktopUpdate()).toEqual({ status: 'error', message: 'nope' });

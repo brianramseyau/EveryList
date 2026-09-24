@@ -7,11 +7,11 @@
 	import { resolve } from '$app/paths';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
-	import { getToken, syncAuthToNative, syncTokenToServiceWorker } from '$lib/api/token';
+	import { getToken, setToken, syncAuthToNative, syncTokenToServiceWorker } from '$lib/api/token';
 	import { reconcileImpersonation } from '$lib/api/impersonation.svelte';
 	import { getServerUrl } from '$lib/api/server-url';
 	import { fetchSetupStatus } from '$lib/api/setup';
-	import { isRemoteClient } from '$lib/platform/desktop';
+	import { isDesktop, isRemoteClient } from '$lib/platform/desktop';
 	import {
 		isIngress,
 		ingressBase,
@@ -124,6 +124,27 @@
 	}
 
 	onMount(() => {
+		// Standalone mode's embedded server auto-provisions the owner account with no form shown
+		// (PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md's "First-run flow" step 4) — the very first page
+		// load after enableStandalone()'s origin swap picks up the resulting token here, before any
+		// of the logged-out redirect logic below runs. A no-op on every load after the first, and
+		// everywhere but a just-switched-to-standalone desktop build.
+		if (isDesktop()) {
+			const provisionedToken = window.everylistDesktop?.consumeStandaloneToken?.();
+			if (provisionedToken) setToken(provisionedToken);
+
+			// Backfills the mode marker for a desktop install that reached remote mode before
+			// recordRemoteMode() existed (an existing install from before this exact check shipped,
+			// or one still on an older build) — such an install has a real server URL already saved
+			// but a null mode, which /server-setup's offerStandalone would otherwise read as "no
+			// choice made yet" and incorrectly offer the standalone option again the next time this
+			// install's user changes servers. A one-time correction: once mode is anything but null,
+			// this is a no-op forever after.
+			if (window.everylistDesktop?.mode == null && getServerUrl()) {
+				void window.everylistDesktop?.recordRemoteMode?.();
+			}
+		}
+
 		// Native/desktop builds have no baked-in server address (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1,
 		// PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §1/§4) — gate here rather than on /login itself, since a
 		// fresh install also has no token, and every other API call (including login) needs
@@ -228,18 +249,22 @@
 		// (a random, per-install token path Supervisor can rotate) isn't a coherent concept —
 		// skipped entirely under ingress, same reasoning as the native/desktop skip below, rather
 		// than trying to scope it. See PLAN_27_PHASE_HOME_ASSISTANT_ADDON.md.
-		if (!isIngress()) {
+		if (!isIngress() && !isDesktop()) {
 			initInstallPrompt();
 		}
 		// The Workbox service worker is meaningful for the browser/PWA build (offline caching,
 		// update prompts) but Capacitor's WebView already loads the bundle from local files —
 		// there's no real network layer for it to usefully intercept there, and registering one
 		// against a `capacitor://`/local `https://` origin is unsupported/unreliable in practice
-		// (PLAN_13_PHASE_NATIVE_APP_SHELL.md §3). The Electron build is served from local disk too
-		// (PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §2/§4) — a Workbox precache over that loopback origin adds
-		// nothing and reintroduces the same stale-asset bug class. Skip it entirely on either
-		// rather than relying on it merely no-oping harmlessly.
-		if (!isRemoteClient() && !isIngress()) {
+		// (PLAN_13_PHASE_NATIVE_APP_SHELL.md §3). The Electron build is served from local disk too,
+		// in both its thin-client (PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §2/§4) and Standalone
+		// (PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md) modes — a Workbox precache over either loopback
+		// origin adds nothing and reintroduces the same stale-asset bug class. Skip it entirely on
+		// any desktop or native build rather than relying on it merely no-oping harmlessly. Checked
+		// via `isDesktop()` explicitly (not just `isRemoteClient()`) because Standalone mode is
+		// same-origin like Docker/PWA and so isn't a "remote client" by that check's own definition
+		// — it still needs this skip for the reasoning above, just not for that reasoning.
+		if (!isRemoteClient() && !isDesktop() && !isIngress()) {
 			// Belt-and-suspenders for a device that logged in before the service worker's
 			// "Complete"/"Snooze" notification actions shipped: setToken/clearToken keep the mirror
 			// current from here on, but a token set before that point never went through them.

@@ -23,7 +23,9 @@ export default tseslint.config(
   // keys (as it was before) it only scopes that one block's own rules, leaving renderer/**'s
   // copied-in, unlinted production web bundle to every *other* block (baseConfig's
   // recommended configs included) instead of actually excluding it.
-  { ignores: ['coverage/**', 'release/**', 'renderer/**'] },
+  // server/** is scripts/copy-api-server.mjs's staged production apps/api build (gitignored,
+  // vendored code with its own lint conventions) — same reasoning as renderer/**.
+  { ignores: ['coverage/**', 'release/**', 'renderer/**', 'server/**'] },
   ...baseConfig,
   {
     languageOptions: { globals: { ...globals.node, ...vitestGlobals } },

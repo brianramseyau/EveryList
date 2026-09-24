@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { desktopInfo, isDesktop, isRemoteClient } from './desktop';
+import { desktopInfo, isDesktop, isRemoteClient, isStandalone } from './desktop';
 
 // This runs in the "server" (node) project, which has no `window` — it exercises the
 // SSR/prerendering guard. See desktop.svelte.spec.ts for the real-browser behavior.
@@ -14,5 +14,9 @@ describe('desktop platform detection (no window)', () => {
 
 	it('isRemoteClient is false (Capacitor is also not native here)', () => {
 		expect(isRemoteClient()).toBe(false);
+	});
+
+	it('isStandalone is false without throwing', () => {
+		expect(isStandalone()).toBe(false);
 	});
 });

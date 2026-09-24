@@ -142,8 +142,12 @@ describe('enableDeadlineNotifications', () => {
 		window.everylistDesktop = {
 			version: '1.0.0',
 			platform: 'darwin',
+			mode: 'remote',
 			checkForUpdate: vi.fn(),
-			setBackgroundRun
+			setBackgroundRun,
+			enableStandalone: vi.fn(),
+			consumeStandaloneToken: vi.fn(),
+			recordRemoteMode: vi.fn()
 		};
 
 		expect(await enableDeadlineNotifications()).toBe(true);
@@ -212,8 +216,12 @@ describe('disableDeadlineNotifications', () => {
 		window.everylistDesktop = {
 			version: '1.0.0',
 			platform: 'darwin',
+			mode: 'remote',
 			checkForUpdate: vi.fn(),
-			setBackgroundRun
+			setBackgroundRun,
+			enableStandalone: vi.fn(),
+			consumeStandaloneToken: vi.fn(),
+			recordRemoteMode: vi.fn()
 		};
 
 		await disableDeadlineNotifications();

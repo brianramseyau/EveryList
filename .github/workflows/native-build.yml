@@ -264,8 +264,10 @@ jobs:
       matrix:
         # windows-latest pinned to windows-2022, not the newer image: its bundled node-gyp
         # doesn't recognize the VS 2026 (v18) toolchain that image ships, so any workspace
-        # package needing a native build (better-sqlite3, pulled in by apps/api even though
-        # this job never touches it — pnpm installs the whole workspace) fails to compile.
+        # package needing a native build fails to compile. That now includes this job itself —
+        # Standalone mode's embedded server (PLAN_31_PHASE_DESKTOP_STANDALONE_MODE.md) vendors
+        # better-sqlite3, rebuilt below against Electron's ABI per OS/arch — matrixing per-OS is
+        # required for that now, on top of dmg/nsis/AppImage each needing their own toolchain.
         os: [macos-latest, windows-2022, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -278,6 +280,11 @@ jobs:
           node-version: 24.20.0
           cache: pnpm
 
+      # Linux only: build-essential/python3 for node-gyp (better-sqlite3's native rebuild below) —
+      # macos-latest ships Xcode CLT and windows-2022 ships the VS toolchain already.
+      - if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+
       # Unlike test.yml/ci.yml, this job actually needs Electron's runtime binary — leave
       # ELECTRON_SKIP_BINARY_DOWNLOAD unset here (see pnpm-workspace.yaml's onlyBuiltDependencies
       # comment and PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §6).
@@ -287,8 +294,6 @@ jobs:
 
       - run: pnpm --filter @everylist/web build
 
-      # Matrix builds per-OS not because of native modules (there are none — see §6) but because
-      # dmg/nsis/AppImage each need their own OS toolchain.
       - name: Package the desktop app
         working-directory: apps/desktop
         # electron-builder reads `version` from package.json; inject the tag's version rather
@@ -296,6 +301,7 @@ jobs:
         run: |
           npm pkg set version=${{ needs.meta.outputs.version_name }}
           node scripts/copy-renderer.mjs
+          node scripts/copy-api-server.mjs
           pnpm exec electron-builder --publish never
 
       - uses: actions/upload-artifact@v4

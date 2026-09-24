@@ -3,6 +3,12 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     globals: true,
+    // `server/` (scripts/copy-api-server.mjs's staged production apps/api build) and `release/`
+    // (electron-builder's packaged output, which also embeds a copy of `server/`) are both
+    // gitignored build artifacts that carry apps/api's own compiled test files — picked up by
+    // vitest's default glob otherwise, since they physically live under this project's root.
+    // Excluded rather than relying on nobody ever running `pnpm test` right after packaging.
+    exclude: ['**/node_modules/**', 'server/**', 'release/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
