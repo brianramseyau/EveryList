@@ -151,13 +151,29 @@ export function thisWeekendDeadline(deadline: string, now: Date = new Date()): s
 /**
  * The reschedule overlay's "Next week" shortcut — the deadline's own calendar date advanced a full
  * week (so it keeps the same weekday), keeping the deadline's time-of-day if it had one.
+ *
+ * A deadline more than a week overdue is still in the past after a single +7, so whole weeks are
+ * added until the result is actually ahead of `now`. That keeps the shortcut's promise (same
+ * weekday and time-of-day, pushed forward a week at a time) without ever producing an already-
+ * overdue deadline the moment it's set — the same invariant the other shortcuts' shared
+ * `withSameTimeOfDay` floor enforces.
  */
 export function nextWeekDeadline(deadline: string, now: Date = new Date()): string {
-	const { date } = splitDeadline(deadline);
+	const { date, time } = splitDeadline(deadline);
 	const [year, month, day] = date.split('-').map(Number);
 	const target = new Date(year, month - 1, day);
-	target.setDate(target.getDate() + 7);
-	return withSameTimeOfDay(deadline, target, now);
+	if (hasTime(deadline)) {
+		const [hour, minute] = time.split(':').map(Number);
+		target.setHours(hour, minute, 0, 0);
+		do {
+			target.setDate(target.getDate() + 7);
+		} while (target <= now);
+		return formatLocalMinuteIso(target);
+	}
+	do {
+		target.setDate(target.getDate() + 7);
+	} while (todayLocalIso(target) < todayLocalIso(now));
+	return todayLocalIso(target);
 }
 
 export interface DeadlineChip {

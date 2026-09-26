@@ -125,6 +125,16 @@ public class DeadlineMathTest {
         );
     }
 
+    @Test
+    public void nextWeekAdvancesWholeWeeksWhenTheDeadlineIsMoreThanAWeekOverdue() {
+        // 2026-08-01 (a Saturday) + 7 is still in the past relative to NOW (Sat 2026-09-05
+        // 15:00), so it rolls forward whole weeks — same weekday, same time-of-day, and never an
+        // already-overdue result. The timed case lands on the next occurrence of its 09:00, while
+        // the date-only one is still "due today" (due by end of day), so 2026-09-05 is fine.
+        assertEquals("2026-09-12T09:00", DeadlineMath.nextWeekDeadline("2026-08-01T09:00", NOW));
+        assertEquals("2026-09-05", DeadlineMath.nextWeekDeadline("2026-08-01", NOW));
+    }
+
     // Same NOW as deadline.spec.ts's isOverdue/isDueToday/formatDeadline/deadlineChip blocks:
     // 2026-09-05 15:00 local time, a Saturday.
     private static Calendar calendar(int year, int month, int day, int hour, int minute) {

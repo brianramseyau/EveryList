@@ -123,6 +123,15 @@ describe('nextWeekDeadline', () => {
 		// Monday 2026-09-07 deadline -> Monday 2026-09-14, not "today"/next Monday from `now`.
 		expect(nextWeekDeadline('2026-09-07', new Date(2026, 8, 7, 10, 0))).toBe('2026-09-14');
 	});
+
+	it('advances whole weeks when the deadline is more than a week overdue', () => {
+		// 2026-08-01 (a Saturday) + 7 is still in the past relative to NOW (Sat 2026-09-05
+		// 15:00), so it rolls forward whole weeks — same weekday, same time-of-day, and never an
+		// already-overdue result. The timed case lands on the next occurrence of its 09:00, while
+		// the date-only one is still "due today" (due by end of day), so 2026-09-05 is fine.
+		expect(nextWeekDeadline('2026-08-01T09:00', NOW)).toBe('2026-09-12T09:00');
+		expect(nextWeekDeadline('2026-08-01', NOW)).toBe('2026-09-05');
+	});
 });
 
 describe('hasTime / splitDeadline', () => {

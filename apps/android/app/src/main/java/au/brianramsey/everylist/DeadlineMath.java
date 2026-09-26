@@ -85,11 +85,25 @@ final class DeadlineMath {
         return withSameTimeOfDay(deadline, target, now);
     }
 
-    /** Mirrors deadline.ts's `nextWeekDeadline`. */
+    /** Mirrors deadline.ts's `nextWeekDeadline`. A deadline more than a week overdue is still in
+     *  the past after a single +7, so whole weeks are added until the result is actually ahead of
+     *  `now` — keeping the same weekday and time-of-day without ever producing an already-overdue
+     *  deadline the moment it's set (the same invariant `withSameTimeOfDay`'s floor enforces). */
     static String nextWeekDeadline(String deadline, Date now) {
         Calendar target = triggerDate(deadline);
-        target.add(Calendar.DAY_OF_MONTH, 7);
-        return withSameTimeOfDay(deadline, target, now);
+        Calendar nowCal = Calendar.getInstance();
+        nowCal.setTime(now);
+
+        if (hasTime(deadline)) {
+            do {
+                target.add(Calendar.DAY_OF_MONTH, 7);
+            } while (!target.after(nowCal));
+            return nowLocalMinuteIso(target);
+        }
+        do {
+            target.add(Calendar.DAY_OF_MONTH, 7);
+        } while (todayLocalIso(target).compareTo(todayLocalIso(nowCal)) < 0);
+        return todayLocalIso(target);
     }
 
     /** 'YYYY-MM-DD' for `now`'s local calendar day. Mirrors deadline.ts's `todayLocalIso`. */
