@@ -132,6 +132,21 @@ describe('nextWeekDeadline', () => {
 		expect(nextWeekDeadline('2026-08-01T09:00', NOW)).toBe('2026-09-12T09:00');
 		expect(nextWeekDeadline('2026-08-01', NOW)).toBe('2026-09-05');
 	});
+
+	it('restores the deadline time across a spring-forward DST gap', () => {
+		// Pinned to a DST-observing zone so this is deterministic regardless of the runner's own
+		// TZ: 2026-03-08 is US spring-forward, so a local 02:30 doesn't exist (it normalises to
+		// 03:30). A weekly advance must re-apply 02:30 on the next candidate rather than carry the
+		// normalised 03:30 forward.
+		const originalTz = process.env.TZ;
+		process.env.TZ = 'America/New_York';
+		try {
+			const dstNow = new Date(2026, 2, 8, 4, 0);
+			expect(nextWeekDeadline('2026-03-01T02:30', dstNow)).toBe('2026-03-15T02:30');
+		} finally {
+			process.env.TZ = originalTz;
+		}
+	});
 });
 
 describe('hasTime / splitDeadline', () => {

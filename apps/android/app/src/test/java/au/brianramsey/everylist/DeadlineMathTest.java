@@ -8,6 +8,7 @@ import org.junit.Test;
 
 import java.util.Calendar;
 import java.util.Date;
+import java.util.TimeZone;
 
 /** Parity test for {@link DeadlineMath#addHoursToDeadline} — same test vectors as
  *  apps/web/src/lib/deadline.spec.ts's `addHoursToDeadline` describe block, run against this
@@ -133,6 +134,24 @@ public class DeadlineMathTest {
         // the date-only one is still "due today" (due by end of day), so 2026-09-05 is fine.
         assertEquals("2026-09-12T09:00", DeadlineMath.nextWeekDeadline("2026-08-01T09:00", NOW));
         assertEquals("2026-09-05", DeadlineMath.nextWeekDeadline("2026-08-01", NOW));
+    }
+
+    @Test
+    public void nextWeekRestoresTheDeadlineTimeAcrossASpringForwardDstGap() {
+        // Pinned to a DST-observing zone so this is deterministic regardless of the runner's own
+        // default TZ: 2026-03-08 is US spring-forward, so a local 02:30 doesn't exist (it
+        // normalises to 03:30). A weekly advance must re-apply 02:30 on the next candidate rather
+        // than carry the normalised 03:30 forward.
+        TimeZone original = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
+        try {
+            assertEquals(
+                "2026-03-15T02:30",
+                DeadlineMath.nextWeekDeadline("2026-03-01T02:30", new Date(2026 - 1900, 2, 8, 4, 0))
+            );
+        } finally {
+            TimeZone.setDefault(original);
+        }
     }
 
     // Same NOW as deadline.spec.ts's isOverdue/isDueToday/formatDeadline/deadlineChip blocks:
