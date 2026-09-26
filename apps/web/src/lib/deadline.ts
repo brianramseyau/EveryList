@@ -149,14 +149,14 @@ export function thisWeekendDeadline(deadline: string, now: Date = new Date()): s
 }
 
 /**
- * The reschedule overlay's "Next week" shortcut — next Monday, always a future date even if
- * today is already Monday, keeping the deadline's time-of-day if it had one.
+ * The reschedule overlay's "Next week" shortcut — the deadline's own calendar date advanced a full
+ * week (so it keeps the same weekday), keeping the deadline's time-of-day if it had one.
  */
 export function nextWeekDeadline(deadline: string, now: Date = new Date()): string {
-	const dayOfWeek = now.getDay(); // 0 = Sunday .. 6 = Saturday
-	const daysUntilNextMonday = (8 - dayOfWeek) % 7 || 7;
-	const target = new Date(now);
-	target.setDate(target.getDate() + daysUntilNextMonday);
+	const { date } = splitDeadline(deadline);
+	const [year, month, day] = date.split('-').map(Number);
+	const target = new Date(year, month - 1, day);
+	target.setDate(target.getDate() + 7);
 	return withSameTimeOfDay(deadline, target, now);
 }
 

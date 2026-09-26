@@ -87,12 +87,8 @@ final class DeadlineMath {
 
     /** Mirrors deadline.ts's `nextWeekDeadline`. */
     static String nextWeekDeadline(String deadline, Date now) {
-        Calendar target = Calendar.getInstance();
-        target.setTime(now);
-        int dayOfWeek = target.get(Calendar.DAY_OF_WEEK); // SUNDAY=1 .. SATURDAY=7
-        int daysUntilNextMonday = (9 - dayOfWeek) % 7;
-        if (daysUntilNextMonday == 0) daysUntilNextMonday = 7;
-        target.add(Calendar.DAY_OF_MONTH, daysUntilNextMonday);
+        Calendar target = triggerDate(deadline);
+        target.add(Calendar.DAY_OF_MONTH, 7);
         return withSameTimeOfDay(deadline, target, now);
     }
 

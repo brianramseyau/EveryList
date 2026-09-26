@@ -111,15 +111,17 @@ public class DeadlineMathTest {
     }
 
     @Test
-    public void nextWeekLandsOnNextMondayFromAWeekday() {
-        assertEquals("2026-09-07T14:30", DeadlineMath.nextWeekDeadline("2026-09-01T14:30", NOW));
+    public void nextWeekAdvancesTheDeadlinesOwnDateByAWeek() {
+        // Tuesday 2026-09-01 -> Tuesday 2026-09-08, regardless of what day NOW is.
+        assertEquals("2026-09-08T14:30", DeadlineMath.nextWeekDeadline("2026-09-01T14:30", NOW));
     }
 
     @Test
-    public void nextWeekSkipsTodayEvenWhenTodayIsAlreadyMonday() {
+    public void nextWeekKeepsTheSameWeekdayEvenWhenTheDeadlineIsOnAMonday() {
+        // Monday 2026-09-07 deadline -> Monday 2026-09-14, not "today"/next Monday from NOW.
         assertEquals(
             "2026-09-14",
-            DeadlineMath.nextWeekDeadline("2026-09-01", new Date(2026 - 1900, 8, 7, 10, 0))
+            DeadlineMath.nextWeekDeadline("2026-09-07", new Date(2026 - 1900, 8, 7, 10, 0))
         );
     }
 

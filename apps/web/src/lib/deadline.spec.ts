@@ -114,14 +114,14 @@ describe('thisWeekendDeadline', () => {
 });
 
 describe('nextWeekDeadline', () => {
-	it('lands on next Monday from a weekday', () => {
-		// Saturday NOW -> Monday 2026-09-07.
-		expect(nextWeekDeadline('2026-09-01T14:30', NOW)).toBe('2026-09-07T14:30');
+	it("advances the deadline's own date by a full week, keeping its weekday", () => {
+		// Tuesday 2026-09-01 -> Tuesday 2026-09-08, regardless of what day `now` is.
+		expect(nextWeekDeadline('2026-09-01T14:30', NOW)).toBe('2026-09-08T14:30');
 	});
 
-	it('skips today even when today is already Monday', () => {
-		// Monday 2026-09-07 -> Monday 2026-09-14, not today.
-		expect(nextWeekDeadline('2026-09-01', new Date(2026, 8, 7, 10, 0))).toBe('2026-09-14');
+	it('keeps the same weekday even when the deadline is on a Monday', () => {
+		// Monday 2026-09-07 deadline -> Monday 2026-09-14, not "today"/next Monday from `now`.
+		expect(nextWeekDeadline('2026-09-07', new Date(2026, 8, 7, 10, 0))).toBe('2026-09-14');
 	});
 });
 
