@@ -345,7 +345,7 @@ jobs:
     # away from `success()` but still omitted `always()`, so it didn't actually fix anything. The
     # sibling `release` job works because it already carries `always()`. The needs.*.result checks
     # below are what actually decide whether to prune.
-    if: ${{ always() && needs.meta.outputs.is_rc == 'false' && needs.release.result == 'success' && needs.publish-play.result == 'success' }}
+    if: ${{ always() && !cancelled() && needs.meta.outputs.is_rc == 'false' && needs.release.result == 'success' && needs.publish-play.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
