@@ -164,9 +164,12 @@ export function nextWeekDeadline(deadline: string, now: Date = new Date()): stri
 	const target = new Date(year, month - 1, day);
 	if (hasTime(deadline)) {
 		const [hour, minute] = time.split(':').map(Number);
-		target.setHours(hour, minute, 0, 0);
 		do {
 			target.setDate(target.getDate() + 7);
+			// Re-apply the original time each iteration: a spring-forward DST gap normalises a
+			// non-existent local time (e.g. 02:30), and without this the shifted value would be
+			// carried into later, otherwise-valid dates.
+			target.setHours(hour, minute, 0, 0);
 		} while (target <= now);
 		return formatLocalMinuteIso(target);
 	}

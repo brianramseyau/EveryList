@@ -95,8 +95,18 @@ final class DeadlineMath {
         nowCal.setTime(now);
 
         if (hasTime(deadline)) {
+            String[] timeFields = deadline.substring(11).split(":");
+            int hour = Integer.parseInt(timeFields[0]);
+            int minute = Integer.parseInt(timeFields[1]);
             do {
                 target.add(Calendar.DAY_OF_MONTH, 7);
+                // Re-apply the original time each iteration: a spring-forward DST gap normalises a
+                // non-existent local time (e.g. 02:30), and without this the shifted value would
+                // be carried into later, otherwise-valid dates.
+                target.set(Calendar.HOUR_OF_DAY, hour);
+                target.set(Calendar.MINUTE, minute);
+                target.set(Calendar.SECOND, 0);
+                target.set(Calendar.MILLISECOND, 0);
             } while (!target.after(nowCal));
             return nowLocalMinuteIso(target);
         }
