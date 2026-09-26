@@ -144,7 +144,11 @@ describe('nextWeekDeadline', () => {
 			const dstNow = new Date(2026, 2, 8, 4, 0);
 			expect(nextWeekDeadline('2026-03-01T02:30', dstNow)).toBe('2026-03-15T02:30');
 		} finally {
-			process.env.TZ = originalTz;
+			if (originalTz === undefined) {
+				delete process.env.TZ;
+			} else {
+				process.env.TZ = originalTz;
+			}
 		}
 	});
 });
