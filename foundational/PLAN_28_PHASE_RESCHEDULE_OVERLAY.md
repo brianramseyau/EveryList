@@ -24,7 +24,8 @@ Three new functions in `apps/web/src/lib/deadline.ts`, alongside the existing
   time-of-day if it had one, else date-only.
 - `thisWeekendDeadline(deadline, now)` — the coming Saturday, or today if today is already
   Saturday/Sunday.
-- `nextWeekDeadline(deadline, now)` — next Monday, always a future date even if today is Monday.
+- `nextWeekDeadline(deadline, now)` — the deadline's own calendar date advanced a full week
+  (same weekday), keeping its time-of-day if it had one.
 
 These three are only needed client-side in the SvelteKit app and in Android's native popup — not
 in `push-sw.js`, since the PWA path now opens the app to show the overlay instead of computing

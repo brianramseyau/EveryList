@@ -85,15 +85,35 @@ final class DeadlineMath {
         return withSameTimeOfDay(deadline, target, now);
     }
 
-    /** Mirrors deadline.ts's `nextWeekDeadline`. */
+    /** Mirrors deadline.ts's `nextWeekDeadline`. A deadline more than a week overdue is still in
+     *  the past after a single +7, so whole weeks are added until the result is actually ahead of
+     *  `now` — keeping the same weekday and time-of-day without ever producing an already-overdue
+     *  deadline the moment it's set (the same invariant `withSameTimeOfDay`'s floor enforces). */
     static String nextWeekDeadline(String deadline, Date now) {
-        Calendar target = Calendar.getInstance();
-        target.setTime(now);
-        int dayOfWeek = target.get(Calendar.DAY_OF_WEEK); // SUNDAY=1 .. SATURDAY=7
-        int daysUntilNextMonday = (9 - dayOfWeek) % 7;
-        if (daysUntilNextMonday == 0) daysUntilNextMonday = 7;
-        target.add(Calendar.DAY_OF_MONTH, daysUntilNextMonday);
-        return withSameTimeOfDay(deadline, target, now);
+        Calendar target = triggerDate(deadline);
+        Calendar nowCal = Calendar.getInstance();
+        nowCal.setTime(now);
+
+        if (hasTime(deadline)) {
+            String[] timeFields = deadline.substring(11).split(":");
+            int hour = Integer.parseInt(timeFields[0]);
+            int minute = Integer.parseInt(timeFields[1]);
+            do {
+                target.add(Calendar.DAY_OF_MONTH, 7);
+                // Re-apply the original time each iteration: a spring-forward DST gap normalises a
+                // non-existent local time (e.g. 02:30), and without this the shifted value would
+                // be carried into later, otherwise-valid dates.
+                target.set(Calendar.HOUR_OF_DAY, hour);
+                target.set(Calendar.MINUTE, minute);
+                target.set(Calendar.SECOND, 0);
+                target.set(Calendar.MILLISECOND, 0);
+            } while (!target.after(nowCal));
+            return nowLocalMinuteIso(target);
+        }
+        do {
+            target.add(Calendar.DAY_OF_MONTH, 7);
+        } while (todayLocalIso(target).compareTo(todayLocalIso(nowCal)) < 0);
+        return todayLocalIso(target);
     }
 
     /** 'YYYY-MM-DD' for `now`'s local calendar day. Mirrors deadline.ts's `todayLocalIso`. */

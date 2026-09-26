@@ -114,14 +114,42 @@ describe('thisWeekendDeadline', () => {
 });
 
 describe('nextWeekDeadline', () => {
-	it('lands on next Monday from a weekday', () => {
-		// Saturday NOW -> Monday 2026-09-07.
-		expect(nextWeekDeadline('2026-09-01T14:30', NOW)).toBe('2026-09-07T14:30');
+	it("advances the deadline's own date by a full week, keeping its weekday", () => {
+		// Tuesday 2026-09-01 -> Tuesday 2026-09-08, regardless of what day `now` is.
+		expect(nextWeekDeadline('2026-09-01T14:30', NOW)).toBe('2026-09-08T14:30');
 	});
 
-	it('skips today even when today is already Monday', () => {
-		// Monday 2026-09-07 -> Monday 2026-09-14, not today.
-		expect(nextWeekDeadline('2026-09-01', new Date(2026, 8, 7, 10, 0))).toBe('2026-09-14');
+	it('keeps the same weekday even when the deadline is on a Monday', () => {
+		// Monday 2026-09-07 deadline -> Monday 2026-09-14, not "today"/next Monday from `now`.
+		expect(nextWeekDeadline('2026-09-07', new Date(2026, 8, 7, 10, 0))).toBe('2026-09-14');
+	});
+
+	it('advances whole weeks when the deadline is more than a week overdue', () => {
+		// 2026-08-01 (a Saturday) + 7 is still in the past relative to NOW (Sat 2026-09-05
+		// 15:00), so it rolls forward whole weeks — same weekday, same time-of-day, and never an
+		// already-overdue result. The timed case lands on the next occurrence of its 09:00, while
+		// the date-only one is still "due today" (due by end of day), so 2026-09-05 is fine.
+		expect(nextWeekDeadline('2026-08-01T09:00', NOW)).toBe('2026-09-12T09:00');
+		expect(nextWeekDeadline('2026-08-01', NOW)).toBe('2026-09-05');
+	});
+
+	it('restores the deadline time across a spring-forward DST gap', () => {
+		// Pinned to a DST-observing zone so this is deterministic regardless of the runner's own
+		// TZ: 2026-03-08 is US spring-forward, so a local 02:30 doesn't exist (it normalises to
+		// 03:30). A weekly advance must re-apply 02:30 on the next candidate rather than carry the
+		// normalised 03:30 forward.
+		const originalTz = process.env.TZ;
+		process.env.TZ = 'America/New_York';
+		try {
+			const dstNow = new Date(2026, 2, 8, 4, 0);
+			expect(nextWeekDeadline('2026-03-01T02:30', dstNow)).toBe('2026-03-15T02:30');
+		} finally {
+			if (originalTz === undefined) {
+				delete process.env.TZ;
+			} else {
+				process.env.TZ = originalTz;
+			}
+		}
 	});
 });
 
