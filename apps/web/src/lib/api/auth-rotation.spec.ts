@@ -212,41 +212,26 @@ describe('startAuthRotation', () => {
 		(globalThis.document as unknown as EventTarget).dispatchEvent(new Event('visibilitychange'));
 	}
 
-	it('rotates immediately when the session has never been rotated', async () => {
+	it('does not rotate at start — page-load rotations race mount-time data fetches', async () => {
 		fakeToken = 'old-token';
 
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(0);
 
+		expect(apiPost).not.toHaveBeenCalled();
+	});
+
+	it('rotates on the daily interval tick once due', async () => {
+		fakeToken = 'old-token';
+
+		startAuthRotation();
+		// The first tick fires a full interval after start (no rotation has happened yet, so
+		// the very first tick is due).
+		await vi.advanceTimersByTimeAsync(ROTATION_INTERVAL_MS);
 		expect(apiPost).toHaveBeenCalledTimes(1);
 		expect(fakeToken).toBe('new-token');
-	});
 
-	it('does not rotate on start when the session was rotated within the interval', async () => {
-		fakeToken = 'old-token';
-		storage.set(LAST_ROTATION_KEY, String(Date.now() - 1000));
-
-		startAuthRotation();
-		await vi.advanceTimersByTimeAsync(0);
-
-		expect(apiPost).not.toHaveBeenCalled();
-	});
-
-	it('does nothing on start when logged out', async () => {
-		startAuthRotation();
-		await vi.advanceTimersByTimeAsync(0);
-
-		expect(apiPost).not.toHaveBeenCalled();
-	});
-
-	it('checks again after the daily interval and rotates once due', async () => {
-		fakeToken = 'old-token';
-
-		startAuthRotation();
-		await vi.advanceTimersByTimeAsync(0);
-		expect(apiPost).toHaveBeenCalledTimes(1);
-
-		// The rotation timestamp is now stored; a tick strictly inside the interval must skip...
+		// A tick strictly inside the (now updated) interval skips...
 		await vi.advanceTimersByTimeAsync(ROTATION_INTERVAL_MS - 1000);
 		expect(apiPost).toHaveBeenCalledTimes(1);
 
@@ -255,38 +240,46 @@ describe('startAuthRotation', () => {
 		expect(apiPost).toHaveBeenCalledTimes(2);
 	});
 
+	it('does not rotate on the daily tick when logged out', async () => {
+		startAuthRotation();
+		await vi.advanceTimersByTimeAsync(ROTATION_INTERVAL_MS);
+
+		expect(apiPost).not.toHaveBeenCalled();
+	});
+
 	it('rotates on returning to the foreground when due', async () => {
 		fakeToken = 'old-token';
 		storage.set(LAST_ROTATION_KEY, String(Date.now() - ROTATION_INTERVAL_MS - 1));
 
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(0);
-		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(apiPost).not.toHaveBeenCalled();
 
 		fireVisibilityChange('visible');
 		await vi.advanceTimersByTimeAsync(0);
-		// The start attempt already rotated; the visibility trigger fires again but is still
-		// within the (now updated) interval, so no second request.
 		expect(apiPost).toHaveBeenCalledTimes(1);
 	});
 
-	it('does not rotate when the document becomes hidden', async () => {
+	it('does not rotate on returning to the foreground while inside the interval', async () => {
 		fakeToken = 'old-token';
+		storage.set(LAST_ROTATION_KEY, String(Date.now() - 1000));
 
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(0);
-		expect(apiPost).toHaveBeenCalledTimes(1);
 
-		fireVisibilityChange('hidden');
+		fireVisibilityChange('visible');
 		await vi.advanceTimersByTimeAsync(0);
-		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(apiPost).not.toHaveBeenCalled();
 	});
 
 	it('is idempotent — a second start does not register more work', async () => {
 		fakeToken = 'old-token';
+		storage.set(LAST_ROTATION_KEY, String(Date.now() - ROTATION_INTERVAL_MS - 1));
 
 		startAuthRotation();
 		startAuthRotation();
+		await vi.advanceTimersByTimeAsync(0);
+		fireVisibilityChange('visible');
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(apiPost).toHaveBeenCalledTimes(1);

@@ -78,13 +78,20 @@ export async function rotateToken(): Promise<void> {
 }
 
 /**
- * Starts proactive session-token rotation: a due check immediately (covers the primary scenario —
- * an app cold start after days asleep, whose stored token is nearing its fixed 30-day expiry),
- * then a check on every daily interval tick, plus on every return-to-foreground (mobile OSes
- * suspend timers while backgrounded, so a device resuming after days asleep otherwise wouldn't
- * rotate until the next tick). All three are no-ops unless the stored session was last rotated
- * more than ROTATION_INTERVAL_MS ago. Call once, e.g. from the root layout; safe to call from a
- * server-rendering context (no-ops without `window`) and idempotent across remounts.
+ * Starts proactive session-token rotation: a due check on every daily interval tick, plus on
+ * every return-to-foreground (mobile OSes suspend timers while backgrounded, so a device
+ * resuming after days asleep otherwise wouldn't rotate until the next tick). Both are no-ops
+ * unless the stored session was last rotated more than ROTATION_INTERVAL_MS ago.
+ *
+ * Deliberately NOT at page load: the layout mounts on every cold start and reload, and a
+ * rotation fired there races the page's own mount-time data fetches — refresh revokes the
+ * request's token, so fetches still in flight with the old token 401 (observed live: every
+ * reload could log the session out, failing the offline-sync/sortable E2E suites). Both
+ * remaining triggers fire only while the app is already running (a foreground return after the
+ * load has settled), so no mount-time fetch can be in flight.
+ *
+ * Call once, e.g. from the root layout; safe to call from a server-rendering context (no-ops
+ * without `window`) and idempotent across remounts.
  *
  * Impersonation is deliberately left alone: the 1-hour impersonation token is intentionally
  * short-lived and `refresh` rejects it server-side, so its 401 is the expected lifecycle, not a
@@ -94,7 +101,6 @@ export function startAuthRotation(): void {
 	if (started || typeof window === 'undefined') return;
 	started = true;
 
-	void rotateToken();
 	interval = setInterval(() => void rotateToken(), ROTATION_INTERVAL_MS);
 	visibilityHandler = () => {
 		if (document.visibilityState === 'visible') void rotateToken();
