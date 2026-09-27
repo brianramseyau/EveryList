@@ -272,6 +272,19 @@ describe('startAuthRotation', () => {
 		expect(apiPost).not.toHaveBeenCalled();
 	});
 
+	it('does not rotate when the document becomes hidden', async () => {
+		fakeToken = 'old-token';
+		storage.set(LAST_ROTATION_KEY, String(Date.now() - ROTATION_INTERVAL_MS - 1));
+
+		startAuthRotation();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(apiPost).not.toHaveBeenCalled();
+
+		fireVisibilityChange('hidden');
+		await vi.advanceTimersByTimeAsync(0);
+		expect(apiPost).not.toHaveBeenCalled();
+	});
+
 	it('is idempotent — a second start does not register more work', async () => {
 		fakeToken = 'old-token';
 		storage.set(LAST_ROTATION_KEY, String(Date.now() - ROTATION_INTERVAL_MS - 1));
