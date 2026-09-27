@@ -8,6 +8,7 @@
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { getToken, syncAuthToNative, syncTokenToServiceWorker } from '$lib/api/token';
+	import { startAuthRotation } from '$lib/api/auth-rotation';
 	import { reconcileImpersonation } from '$lib/api/impersonation.svelte';
 	import { getServerUrl } from '$lib/api/server-url';
 	import { fetchSetupStatus } from '$lib/api/setup';
@@ -224,6 +225,10 @@
 		startFlushLoop();
 		startConnectivityMonitor();
 		startBackgroundSync();
+		// Keeps an actively-used session's token rotated ahead of the server's fixed 30-day expiry
+		// — without this a daily user is logged out on schedule no matter how much they use the
+		// app (see auth-rotation.ts). No-op when logged out; a no-op under SSR.
+		startAuthRotation();
 		// Installing a PWA / registering the Service Worker pointed at Home Assistant's Ingress URL
 		// (a random, per-install token path Supervisor can rotate) isn't a coherent concept —
 		// skipped entirely under ingress, same reasoning as the native/desktop skip below, rather
