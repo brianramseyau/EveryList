@@ -127,6 +127,40 @@ describe('rotateToken', () => {
 		expect(fakeToken).toBeNull();
 	});
 
+	it('treats a corrupt stored timestamp as "never rotated"', async () => {
+		fakeToken = 'old-token';
+		storage.set(LAST_ROTATION_KEY, 'not-a-number');
+
+		await rotateToken();
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
+		expect(fakeToken).toBe('new-token');
+	});
+
+	it('treats a missing window (SSR) as "never rotated" without touching storage', async () => {
+		// A truthy token is mocked above regardless of window, so the module's own storage path
+		// runs with window absent — the SSR/prerender case.
+		fakeToken = 'old-token';
+		const hadWindow = 'window' in (globalThis as unknown as Record<string, unknown>);
+		const saved = (globalThis as unknown as Record<string, unknown>)['window'];
+		if (hadWindow) Reflect.deleteProperty(globalThis, 'window');
+		try {
+			await rotateToken();
+		} finally {
+			if (hadWindow)
+				Object.defineProperty(globalThis, 'window', {
+					value: saved,
+					writable: true,
+					configurable: true
+				});
+		}
+
+		// getToken (faked) still reports a token, but the module cannot read/mirror storage
+		// without a window: no rotation is attempted and nothing is stored.
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
+		expect(storage.get(LAST_ROTATION_KEY)).toBeUndefined();
+	});
+
 	it('skips the attempt entirely while another rotation is already in flight', async () => {
 		fakeToken = 'old-token';
 		let release!: (value: { token: string }) => void;
