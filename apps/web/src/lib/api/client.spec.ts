@@ -164,6 +164,20 @@ describe('apiFetch', () => {
 		await expect(apiFetch('/x')).rejects.toBeInstanceOf(ApiError);
 		expect(getToken()).toBeNull();
 	});
+
+	it('preserves a replacement token on a 401 of an older in-flight request', async () => {
+		setToken('old-token');
+		const fetchMock = vi.fn().mockImplementation(async () => {
+			// A concurrent token rotation replaces the stored token while this
+			// request is in flight, then the stale request's response arrives.
+			setToken('rotated-token');
+			return jsonResponse(401, { message: 'Unauthorized' });
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(apiFetch('/x')).rejects.toBeInstanceOf(ApiError);
+		expect(getToken()).toBe('rotated-token');
+	});
 });
 
 describe('apiFetch base URL prefixing', () => {

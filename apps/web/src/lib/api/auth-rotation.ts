@@ -17,6 +17,13 @@ const ROTATION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 let interval: ReturnType<typeof setInterval> | null = null;
 let visibilityHandler: (() => void) | null = null;
 let started = false;
+/** Set while a rotation request is in flight — overlapping attempts (the immediate attempt vs a
+ * return-to-foreground trigger landing milliseconds later) would both send the same token, and
+ * since `refresh` revokes the request's own token, the second one 401s and — via `apiFetch`'s
+ * 401 handling — can clear the first attempt's replacement before it's stored. Serializing is
+ * enough here (this module is the only caller); cross-tab coordination isn't attempted because
+ * tabs each hold their own independent token, so there is no shared session to race. */
+let rotationInFlight = false;
 
 /**
  * Rotates the session token once, if one is stored. Best-effort by design: a failure (offline,
@@ -25,14 +32,20 @@ let started = false;
  * never by this module.
  */
 export async function rotateToken(): Promise<void> {
-	if (!getToken()) return;
+	const requestToken = getToken();
+	if (!requestToken) return;
+	if (rotationInFlight) return;
+	rotationInFlight = true;
 	try {
 		const response = await apiPost<AuthResponse>('/api/v1/account/refresh');
-		// Only adopt the new token while a token is still stored at all — a concurrent logout
-		// (or a 401 elsewhere clearing it) must not be overwritten with the rotated one.
-		if (getToken()) setToken(response.token);
+		// Only adopt the new token while the very session that started this request is still the
+		// stored one — a concurrent logout (clears it), a 401 elsewhere (clears it), or a
+		// different user logging in mid-request must never be overwritten with the rotated one.
+		if (getToken() === requestToken) setToken(response.token);
 	} catch {
 		// Best-effort — see above.
+	} finally {
+		rotationInFlight = false;
 	}
 }
 
@@ -66,4 +79,5 @@ export function resetAuthRotationForTesting(): void {
 	if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler);
 	visibilityHandler = null;
 	started = false;
+	rotationInFlight = false;
 }

@@ -65,6 +65,42 @@ describe('rotateToken', () => {
 		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
 		expect(fakeToken).toBeNull();
 	});
+
+	it('discards the rotated token when a different user logged in mid-request', async () => {
+		fakeToken = 'old-token';
+		apiPost.mockImplementation(async () => {
+			// A different session's token replaced this one while the refresh was in flight.
+			fakeToken = 'other-login-token';
+			return { token: 'new-token' };
+		});
+
+		await rotateToken();
+
+		expect(fakeToken).toBe('other-login-token');
+	});
+
+	it('skips the attempt entirely while another rotation is already in flight', async () => {
+		fakeToken = 'old-token';
+		let release!: (value: { token: string }) => void;
+		apiPost.mockReturnValue(
+			new Promise<{ token: string }>((resolve) => {
+				release = resolve;
+			})
+		);
+
+		const first = rotateToken();
+		// A second trigger (e.g. the visibility listener firing while the first request is
+		// still pending) must not send the same token again.
+		const second = rotateToken();
+		expect(apiPost).toHaveBeenCalledTimes(1);
+		void second;
+
+		release({ token: 'new-token' });
+		await first;
+
+		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(fakeToken).toBe('new-token');
+	});
 });
 
 describe('startAuthRotation', () => {

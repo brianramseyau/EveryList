@@ -58,7 +58,11 @@ export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}
 	const response = await fetch(`${apiBaseUrl()}${path}`, { ...init, headers });
 
 	if (!response.ok) {
-		if (response.status === 401) clearToken();
+		// A 401 means this request's token is no longer valid, but only clear storage when the
+		// *stored* token is still the one this request was sent with — if a concurrent token
+		// rotation (auth-rotation.ts) replaced it while this request was in flight, the
+		// replacement is valid and must survive the stale request's 401.
+		if (response.status === 401 && getToken() === token) clearToken();
 		const body = await parseErrorBody(response);
 		throw new ApiError(response.status, extractErrorMessage(body, response.status), body);
 	}
