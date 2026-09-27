@@ -18,23 +18,49 @@ vi.mock('./client', () => ({
 	apiPost: (...args: unknown[]) => apiPost(...args)
 }));
 
+// The server (Node) project has no window/localStorage — install a minimal shim matching what
+// the browser project provides natively, so the specs (and the module's own storage access)
+// behave identically in both projects.
+const storage = new Map<string, string>();
+const localStorageShim = {
+	getItem: (key: string) => storage.get(key) ?? null,
+	setItem: (key: string, value: string) => void storage.set(key, value),
+	removeItem: (key: string) => void storage.delete(key),
+	clear: () => void storage.clear()
+};
+if (typeof globalThis.localStorage === 'undefined') {
+	Object.defineProperty(globalThis, 'localStorage', { value: localStorageShim });
+}
+if (typeof globalThis.window === 'undefined') {
+	Object.defineProperty(globalThis, 'window', {
+		value: { localStorage: localStorageShim } as unknown as Window & typeof globalThis,
+		writable: true,
+		configurable: true
+	});
+}
+
 const { rotateToken, startAuthRotation, resetAuthRotationForTesting } =
 	await import('./auth-rotation');
+
+const ROTATION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const LAST_ROTATION_KEY = 'everylist:token-rotated-at';
 
 describe('rotateToken', () => {
 	beforeEach(() => {
 		apiPost.mockReset();
+		apiPost.mockResolvedValue({ token: 'new-token' });
 		fakeToken = null;
+		storage.clear();
 	});
 
-	it('posts to the refresh endpoint and stores the returned token', async () => {
+	it('posts to the refresh endpoint and stores the returned token when due', async () => {
 		fakeToken = 'old-token';
-		apiPost.mockResolvedValue({ token: 'new-token' });
-
+		// No stored rotation timestamp → due immediately.
 		await rotateToken();
 
 		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
 		expect(fakeToken).toBe('new-token');
+		expect(Number(storage.get(LAST_ROTATION_KEY))).toBeGreaterThan(0);
 	});
 
 	it('does nothing when there is no stored token', async () => {
@@ -43,12 +69,47 @@ describe('rotateToken', () => {
 		expect(apiPost).not.toHaveBeenCalled();
 	});
 
-	it('swallows failures and leaves the existing token in place', async () => {
+	it('skips the request when a rotation happened within the interval', async () => {
+		fakeToken = 'old-token';
+		storage.set(LAST_ROTATION_KEY, String(Date.now() - 1000));
+
+		await rotateToken();
+
+		expect(apiPost).not.toHaveBeenCalled();
+	});
+
+	it('rotates when the last rotation is older than the interval', async () => {
+		fakeToken = 'old-token';
+		storage.set(LAST_ROTATION_KEY, String(Date.now() - ROTATION_INTERVAL_MS - 1));
+
+		await rotateToken();
+
+		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
+		expect(fakeToken).toBe('new-token');
+	});
+
+	it('does not update the timestamp when the rotation fails (retried on the next trigger)', async () => {
 		fakeToken = 'old-token';
 		apiPost.mockRejectedValue(new Error('network error'));
 
 		await expect(rotateToken()).resolves.toBeUndefined();
+
 		expect(fakeToken).toBe('old-token');
+		expect(storage.get(LAST_ROTATION_KEY)).toBeUndefined();
+	});
+
+	it('does not update the timestamp when the session was replaced mid-request', async () => {
+		fakeToken = 'old-token';
+		apiPost.mockImplementation(async () => {
+			// A different session's token replaced this one while the refresh was in flight.
+			fakeToken = 'other-login-token';
+			return { token: 'new-token' };
+		});
+
+		await rotateToken();
+
+		expect(fakeToken).toBe('other-login-token');
+		expect(storage.get(LAST_ROTATION_KEY)).toBeUndefined();
 	});
 
 	it('discards the rotated token when the session was cleared mid-request (logout racing the refresh)', async () => {
@@ -64,19 +125,6 @@ describe('rotateToken', () => {
 
 		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
 		expect(fakeToken).toBeNull();
-	});
-
-	it('discards the rotated token when a different user logged in mid-request', async () => {
-		fakeToken = 'old-token';
-		apiPost.mockImplementation(async () => {
-			// A different session's token replaced this one while the refresh was in flight.
-			fakeToken = 'other-login-token';
-			return { token: 'new-token' };
-		});
-
-		await rotateToken();
-
-		expect(fakeToken).toBe('other-login-token');
 	});
 
 	it('skips the attempt entirely while another rotation is already in flight', async () => {
@@ -108,15 +156,17 @@ describe('startAuthRotation', () => {
 		apiPost.mockReset();
 		apiPost.mockResolvedValue({ token: 'new-token' });
 		fakeToken = null;
+		storage.clear();
 		vi.useFakeTimers();
-		(globalThis as { window?: unknown }).window = new EventTarget();
+		vi.setSystemTime(1_700_000_000_000);
+		(globalThis as { window?: unknown }).window = Object.assign(new EventTarget(), {
+			localStorage: localStorageShim
+		});
 		(globalThis as { document?: unknown }).document = new EventTarget() as Document;
 	});
 
 	afterEach(() => {
 		resetAuthRotationForTesting();
-		delete (globalThis as { window?: unknown }).window;
-		delete (globalThis as { document?: unknown }).document;
 		vi.useRealTimers();
 	});
 
@@ -128,7 +178,7 @@ describe('startAuthRotation', () => {
 		(globalThis.document as unknown as EventTarget).dispatchEvent(new Event('visibilitychange'));
 	}
 
-	it('attempts a rotation immediately when a token is stored', async () => {
+	it('rotates immediately when the session has never been rotated', async () => {
 		fakeToken = 'old-token';
 
 		startAuthRotation();
@@ -138,6 +188,16 @@ describe('startAuthRotation', () => {
 		expect(fakeToken).toBe('new-token');
 	});
 
+	it('does not rotate on start when the session was rotated within the interval', async () => {
+		fakeToken = 'old-token';
+		storage.set(LAST_ROTATION_KEY, String(Date.now() - 1000));
+
+		startAuthRotation();
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(apiPost).not.toHaveBeenCalled();
+	});
+
 	it('does nothing on start when logged out', async () => {
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(0);
@@ -145,19 +205,25 @@ describe('startAuthRotation', () => {
 		expect(apiPost).not.toHaveBeenCalled();
 	});
 
-	it('rotates again after the daily interval', async () => {
+	it('checks again after the daily interval and rotates once due', async () => {
 		fakeToken = 'old-token';
 
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(0);
 		expect(apiPost).toHaveBeenCalledTimes(1);
 
-		await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+		// The rotation timestamp is now stored; a tick strictly inside the interval must skip...
+		await vi.advanceTimersByTimeAsync(ROTATION_INTERVAL_MS - 1000);
+		expect(apiPost).toHaveBeenCalledTimes(1);
+
+		// ...but the tick after the interval has passed rotates again.
+		await vi.advanceTimersByTimeAsync(1000);
 		expect(apiPost).toHaveBeenCalledTimes(2);
 	});
 
-	it('rotates on returning to the foreground, before the next interval tick', async () => {
+	it('rotates on returning to the foreground when due', async () => {
 		fakeToken = 'old-token';
+		storage.set(LAST_ROTATION_KEY, String(Date.now() - ROTATION_INTERVAL_MS - 1));
 
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(0);
@@ -165,7 +231,9 @@ describe('startAuthRotation', () => {
 
 		fireVisibilityChange('visible');
 		await vi.advanceTimersByTimeAsync(0);
-		expect(apiPost).toHaveBeenCalledTimes(2);
+		// The start attempt already rotated; the visibility trigger fires again but is still
+		// within the (now updated) interval, so no second request.
+		expect(apiPost).toHaveBeenCalledTimes(1);
 	});
 
 	it('does not rotate when the document becomes hidden', async () => {
@@ -190,6 +258,12 @@ describe('startAuthRotation', () => {
 		expect(apiPost).toHaveBeenCalledTimes(1);
 	});
 
+	it('resetAuthRotationForTesting clears the stored rotation timestamp', () => {
+		storage.set(LAST_ROTATION_KEY, '123');
+		resetAuthRotationForTesting();
+		expect(storage.get(LAST_ROTATION_KEY)).toBeUndefined();
+	});
+
 	it('resetAuthRotationForTesting is safe to call when nothing was started', () => {
 		expect(() => resetAuthRotationForTesting()).not.toThrow();
 	});
@@ -197,6 +271,27 @@ describe('startAuthRotation', () => {
 
 describe('startAuthRotation without a window (SSR/prerender)', () => {
 	it('is a no-op', () => {
-		expect(() => startAuthRotation()).not.toThrow();
+		const { window: _w, ...rest } = globalThis as unknown as Record<string, unknown>;
+		const hadWindow = 'window' in (globalThis as unknown as Record<string, unknown>);
+		// Reflect.deleteProperty bypasses the shim's non-configurable risk; restore after.
+		if (hadWindow) Reflect.deleteProperty(globalThis, 'window');
+		const hadDocument = 'document' in (globalThis as unknown as Record<string, unknown>);
+		if (hadDocument) Reflect.deleteProperty(globalThis, 'document');
+		try {
+			expect(() => startAuthRotation()).not.toThrow();
+		} finally {
+			if (hadWindow)
+				Object.defineProperty(globalThis, 'window', {
+					value: _w,
+					writable: true,
+					configurable: true
+				});
+			if (hadDocument)
+				Object.defineProperty(globalThis, 'document', {
+					value: rest['document'],
+					writable: true,
+					configurable: true
+				});
+		}
 	});
 });
