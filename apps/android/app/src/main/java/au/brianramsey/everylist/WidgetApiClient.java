@@ -38,11 +38,15 @@ final class WidgetApiClient {
         }
     }
 
-    /** `POST /api/v1/lists/:id/items` with `{ name }` — the quick-add popup's only field. */
-    static void createItem(String token, String serverUrl, long listId, String name) throws IOException {
+    /** `POST /api/v1/lists/:id/items` — `name` plus the quick-add popup's optional deadline
+     *  ('YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm', the same shapes RescheduleActivity PATCHes), null
+     *  meaning none. createItemValidator on the server accepts the same field. */
+    static void createItem(String token, String serverUrl, long listId, String name, String deadline)
+            throws IOException {
         JSONObject body = new JSONObject();
         try {
             body.put("name", name);
+            if (deadline != null) body.put("deadline", deadline);
         } catch (org.json.JSONException e) {
             // Unreachable for a string value; keep the method's IOException-only surface.
             throw new IOException("Failed to build create-item payload", e);

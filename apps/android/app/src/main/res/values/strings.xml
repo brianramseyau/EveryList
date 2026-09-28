@@ -36,6 +36,7 @@
     <string name="quick_add_hint">Add an item…</string>
     <string name="quick_add_save">Add</string>
     <string name="quick_add_failed">Couldn’t add that — is the server reachable?</string>
+    <string name="quick_add_deadline">Required by (optional)</string>
 
     <!-- Reschedule popup (deadline notification's "Reschedule" action) -->
     <string name="reschedule_title">Reschedule</string>

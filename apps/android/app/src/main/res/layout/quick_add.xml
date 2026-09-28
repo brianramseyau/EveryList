@@ -5,6 +5,7 @@
      comment for why. -->
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/quick_add_card"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -44,16 +45,51 @@
         android:textSize="14sp"
         android:visibility="gone" />
 
-    <Button
-        android:id="@+id/quick_add_save"
+    <!-- Deadline control row: a clock button that opens the date/time picker, plus a short
+         preview of what's currently picked ("Sep 5, 2:30 PM" — DeadlineMath.formatDeadline's
+         own formatting, matching the widget row chips). The clock lights up in the accent color
+         while a deadline is picked; hidden entirely on lists with deadlines turned off
+         (QuickAddActivity gates it on the widget's persisted useDeadline). -->
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="48dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:background="@drawable/widget_config_button_primary"
-        android:text="@string/quick_add_save"
-        android:textAllCaps="false"
-        android:textColor="@color/widget_paper"
-        android:textStyle="bold"
-        android:elevation="0dp"
-        android:stateListAnimator="@null" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageButton
+            android:id="@+id/quick_add_deadline"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="8dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/quick_add_deadline"
+            android:src="@drawable/ic_widget_clock" />
+
+        <TextView
+            android:id="@+id/quick_add_deadline_preview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="6dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/widget_accent"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/quick_add_save"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_config_button_primary"
+            android:text="@string/quick_add_save"
+            android:textAllCaps="false"
+            android:textColor="@color/widget_paper"
+            android:textStyle="bold"
+            android:elevation="0dp"
+            android:stateListAnimator="@null" />
+    </LinearLayout>
 </LinearLayout>
