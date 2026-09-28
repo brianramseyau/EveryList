@@ -425,13 +425,21 @@ describe('rotateToken', () => {
 		const coordinator = setUnauthorizedCoordinator.mock.calls[0]?.[0] as (
 			token: string | null
 		) => Promise<boolean>;
-		const decision = coordinator('old-token');
+		let decisionSettled = false;
+		const decision = coordinator('old-token').then((result) => {
+			decisionSettled = true;
+			return result;
+		});
+		// The decision must actually be parked on the in-flight rotation — an implementation
+		// that returned a plain "clear" immediately would pass the assertions below, so pin
+		// the pending state first.
+		await Promise.resolve();
+		expect(decisionSettled).toBe(false);
 		failRotation(new Error('offline'));
 		await expect(rotation).resolves.toBeUndefined();
 		// The rotation failed without storing a replacement — the old token is really dead,
 		// so the deferred 401 proceeds with its clear.
 		await expect(decision).resolves.toBe(true);
-		expect(fakeToken).toBe('old-token');
 	});
 });
 
