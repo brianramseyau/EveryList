@@ -69,7 +69,7 @@ const LAST_ROTATION_KEY = 'everylist:token-rotated-at';
 describe('rotateToken', () => {
 	beforeEach(() => {
 		apiPost.mockReset();
-		apiFetch.mockResolvedValue({ token: 'new-token' });
+		apiPost.mockResolvedValue({ token: 'new-token' });
 		apiFetch.mockReset();
 		apiFetch.mockResolvedValue({ token: 'new-token' });
 		fakeToken = null;
@@ -427,7 +427,7 @@ describe('rotateToken', () => {
 describe('startAuthRotation', () => {
 	beforeEach(() => {
 		apiPost.mockReset();
-		apiFetch.mockResolvedValue({ token: 'new-token' });
+		apiPost.mockResolvedValue({ token: 'new-token' });
 		apiFetch.mockReset();
 		apiFetch.mockResolvedValue({ token: 'new-token' });
 		fakeToken = null;
