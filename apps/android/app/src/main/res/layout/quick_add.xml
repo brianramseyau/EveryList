@@ -57,19 +57,24 @@
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
+        <!-- 48dp, not the icon's 40dp row-predecessor: this control opens the new deadline
+             picker, so it needs the standard minimum touch target itself. -->
         <ImageButton
             android:id="@+id/quick_add_deadline"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:padding="8dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/quick_add_deadline"
             android:src="@drawable/ic_widget_clock" />
 
+        <!-- weight=1 + ellipsize: the preview shrinks (with an ellipsis) before it can squeeze
+             the Add button below its usable width at large font scales / narrow popups. -->
         <TextView
             android:id="@+id/quick_add_deadline_preview"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:layout_marginStart="2dp"
             android:layout_marginEnd="6dp"
             android:ellipsize="end"
@@ -81,9 +86,9 @@
 
         <Button
             android:id="@+id/quick_add_save"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="48dp"
-            android:layout_weight="1"
+            android:minWidth="88dp"
             android:background="@drawable/widget_config_button_primary"
             android:text="@string/quick_add_save"
             android:textAllCaps="false"

@@ -52,6 +52,8 @@ public class QuickAddActivity extends Activity {
     /** The deadline picked so far ('YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm'), or null for none. */
     private String pickedDeadline;
 
+    private static final String STATE_PICKED_DEADLINE = "pickedDeadline";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -80,6 +82,13 @@ public class QuickAddActivity extends Activity {
         deadlineButton = findViewById(R.id.quick_add_deadline);
         deadlinePreview = findViewById(R.id.quick_add_deadline_preview);
         card = findViewById(R.id.quick_add_card);
+
+        // The popup is a momentary thing, but a rotation or a process restore mid-pick must not
+        // silently drop the deadline the user already chose (the input's text survives on its
+        // own; this field wouldn't).
+        if (savedInstanceState != null) {
+            pickedDeadline = savedInstanceState.getString(STATE_PICKED_DEADLINE);
+        }
 
         if (prefs.getUseDeadline()) {
             deadlineButton.setOnClickListener(v -> showDeadlinePicker());
@@ -176,6 +185,12 @@ public class QuickAddActivity extends Activity {
         dialog.getWindow().setAttributes(params);
     }
 
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString(STATE_PICKED_DEADLINE, pickedDeadline);
+    }
+
     private void save() {
         String name = input.getText().toString().trim();
         if (TextUtils.isEmpty(name)) {
@@ -194,7 +209,21 @@ public class QuickAddActivity extends Activity {
         final String deadline = pickedDeadline;
         new Thread(() -> {
             try {
-                WidgetApiClient.createItem(token, serverUrl, targetListId, name, deadline);
+                // When the submitted name matches an active row, the server's store() is
+                // get-or-create and returns that row as-is — the submitted deadline is only
+                // applied on a new/restored row. So read the item the response carries and,
+                // when its deadline doesn't match what the user picked, PATCH the picked one
+                // explicitly. A name-only quick-add (deadline == null) needs none of this.
+                if (deadline != null) {
+                    String body = WidgetApiClient.createItem(token, serverUrl, targetListId, name, deadline);
+                    long itemId = WidgetJson.extractItemId(body);
+                    String returnedDeadline = WidgetJson.extractItemDeadline(body);
+                    if (itemId > 0 && !deadline.equals(returnedDeadline)) {
+                        WidgetApiClient.updateItemDeadline(token, serverUrl, targetListId, itemId, deadline);
+                    }
+                } else {
+                    WidgetApiClient.createItem(token, serverUrl, targetListId, name, null);
+                }
                 WidgetUpdater.handle(appContext, EveryListWidget.ACTION_REFRESH, widgetId, -1L, -1L);
                 mainHandler.post(this::finish);
             } catch (IOException e) {

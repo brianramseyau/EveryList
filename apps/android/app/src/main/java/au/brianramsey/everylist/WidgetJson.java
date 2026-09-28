@@ -81,4 +81,29 @@ final class WidgetJson {
         }
         return out;
     }
+
+    /** The item `id` from a create-item response body (`{ data: { id, ... } }`), or 0 when
+     *  missing/malformed — the caller treats that as "nothing to reconcile" rather than an
+     *  error, since the create itself already succeeded. */
+    static long extractItemId(String body) {
+        try {
+            return new JSONObject(body).optJSONObject("data").optLong("id", 0L);
+        } catch (JSONException e) {
+            return 0L;
+        }
+    }
+
+    /** The item `deadline` from a create-item response body ('YYYY-MM-DD' or
+     *  'YYYY-MM-DDTHH:mm'), or null when absent/malformed — the caller compares it against the
+     *  submitted deadline to decide whether an explicit PATCH is still needed (the get-or-create
+     *  path returns the matched row as-is, without applying the submitted deadline). */
+    static String extractItemDeadline(String body) {
+        try {
+            JSONObject data = new JSONObject(body).optJSONObject("data");
+            if (data == null || data.isNull("deadline")) return null;
+            return data.optString("deadline", null);
+        } catch (JSONException e) {
+            return null;
+        }
+    }
 }

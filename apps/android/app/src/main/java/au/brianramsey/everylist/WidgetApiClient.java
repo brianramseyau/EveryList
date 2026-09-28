@@ -40,8 +40,15 @@ final class WidgetApiClient {
 
     /** `POST /api/v1/lists/:id/items` — `name` plus the quick-add popup's optional deadline
      *  ('YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm', the same shapes RescheduleActivity PATCHes), null
-     *  meaning none. createItemValidator on the server accepts the same field. */
-    static void createItem(String token, String serverUrl, long listId, String name, String deadline)
+     *  meaning none. createItemValidator on the server accepts the same field.
+     *
+     *  <p>Returns the item the server ended up on: when the submitted name matches an active
+     *  (checked or open) row, `store()` is get-or-create and returns that row <i>as-is</i> —
+     *  the submitted deadline is only applied on a genuinely new or restored row — so the
+     *  caller must compare the returned item's `deadline` against what was submitted and PATCH
+     *  the difference itself (see {@link #updateItemDeadline}). The response is the `{ data }`
+     *  envelope's body, still enveloped, since parsing belongs to the caller's try block. */
+    static String createItem(String token, String serverUrl, long listId, String name, String deadline)
             throws IOException {
         JSONObject body = new JSONObject();
         try {
@@ -51,7 +58,26 @@ final class WidgetApiClient {
             // Unreachable for a string value; keep the method's IOException-only surface.
             throw new IOException("Failed to build create-item payload", e);
         }
-        HttpJson.request("POST", serverUrl + "/api/v1/lists/" + listId + "/items", token, body.toString());
+        return HttpJson.request(
+            "POST", serverUrl + "/api/v1/lists/" + listId + "/items", token, body.toString());
+    }
+
+    /** `PATCH /api/v1/lists/:id/items/:itemId` with `{ deadline }` — applies the quick-add
+     *  popup's chosen deadline to an item the create call returned as-is (the same-name
+     *  get-or-create path, or any other case where the create didn't itself apply it). Same
+     *  endpoint and shape {@link RescheduleActivity} PATCHes. */
+    static void updateItemDeadline(String token, String serverUrl, long listId, long itemId,
+            String deadline) throws IOException {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("deadline", deadline);
+        } catch (org.json.JSONException e) {
+            // Unreachable for a string value; keep the method's IOException-only surface.
+            throw new IOException("Failed to build deadline-update payload", e);
+        }
+        HttpJson.request(
+            "PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token,
+            body.toString());
     }
 
     /** `PATCH /api/v1/lists/:id/items/:itemId` with `{ checked }` — the checkbox toggle. */

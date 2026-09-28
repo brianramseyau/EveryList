@@ -2,6 +2,38 @@ import { apiBaseUrl } from './base-url';
 import { clearToken, getToken } from './token';
 import { refreshWidget } from '../widget-refresh';
 
+/**
+ * Optional 401 coordinator, injected by auth-rotation.ts at startup (client.ts can't import
+ * auth-rotation.ts directly — that module imports this one's apiPost, so a static import would
+ * be circular). When set, a 401 whose request token is the one currently being rotated defers
+ * its clear until the rotation settles (keeping a successful rotation's replacement, clearing
+ * the old token on rotation failure); anything else falls through to this module's own
+ * stored-token comparison. Untested builds (e.g. plain vitest unit runs without the layout's
+ * startup call) and every pre-rotation flow simply run with the hook unset.
+ */
+let unauthorizedCoordinator: ((requestToken: string | null) => boolean | Promise<boolean>) | null =
+	null;
+
+/** Registers `fn` as the 401 coordinator — called once from auth-rotation.ts. Test-only
+ * counterpart: {@link resetUnauthorizedCoordinatorForTesting}. */
+export function setUnauthorizedCoordinator(
+	fn: (requestToken: string | null) => boolean | Promise<boolean>
+): void {
+	unauthorizedCoordinator = fn;
+}
+
+/** Test-only: drops the coordinator registered by {@link setUnauthorizedCoordinator}. */
+export function resetUnauthorizedCoordinatorForTesting(): void {
+	unauthorizedCoordinator = null;
+}
+
+/** True when the coordinator (if any) approves the 401's clear — awaited, so the rotation's
+ * settle step is the only thing that can hold it up. */
+async function shouldClearOn401(requestToken: string | null): Promise<boolean> {
+	if (!unauthorizedCoordinator) return true;
+	return unauthorizedCoordinator(requestToken);
+}
+
 export class ApiError extends Error {
 	status: number;
 	/** The parsed JSON error body, when the response had one — a 409's `{ data, conflict: true }`
@@ -62,7 +94,16 @@ export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}
 		// *stored* token is still the one this request was sent with — if a concurrent token
 		// rotation (auth-rotation.ts) replaced it while this request was in flight, the
 		// replacement is valid and must survive the stale request's 401.
-		if (response.status === 401 && getToken() === token) clearToken();
+		//
+		// The coordinator adds one more guard on top: a 401 for the token *currently being
+		// rotated* defers its clear until that rotation settles — otherwise a straggler's 401
+		// arriving ahead of the rotation's own response would clear the old token (it still
+		// matches storage at that instant) and the rotation would then discard its replacement
+		// (getToken() no longer equals its request token), logging the user out. See
+		// coordinate401WithRotation in auth-rotation.ts.
+		if (response.status === 401 && getToken() === token && (await shouldClearOn401(token))) {
+			clearToken();
+		}
 		const body = await parseErrorBody(response);
 		throw new ApiError(response.status, extractErrorMessage(body, response.status), body);
 	}

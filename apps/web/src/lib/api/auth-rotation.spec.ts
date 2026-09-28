@@ -14,8 +14,10 @@ vi.mock('./token', () => ({
 }));
 
 const apiPost = vi.fn();
+const setUnauthorizedCoordinator = vi.fn();
 vi.mock('./client', () => ({
-	apiPost: (...args: unknown[]) => apiPost(...args)
+	apiPost: (...args: unknown[]) => apiPost(...args),
+	setUnauthorizedCoordinator: (...args: unknown[]) => setUnauthorizedCoordinator(...args)
 }));
 
 // The server (Node) project has no window/localStorage — install a minimal shim matching what
@@ -250,6 +252,150 @@ describe('rotateToken', () => {
 
 		expect(apiPost).toHaveBeenCalledTimes(1);
 		expect(fakeToken).toBe('new-token');
+	});
+
+	it('registers itself as the 401 coordinator on import', async () => {
+		expect(setUnauthorizedCoordinator).toHaveBeenCalledWith(expect.any(Function));
+	});
+
+	it('defers a 401 racing the rotation until it settles, keeping the replacement', async () => {
+		fakeToken = 'old-token';
+		let release401!: (decision: boolean) => void;
+		let release401Call: (() => void) | null = null;
+		setUnauthorizedCoordinator.mockImplementation(async () => {
+			// Mirrors what the real client does with the coordinator's decision: it holds the
+			// 401's clear until this promise resolves.
+			return new Promise<boolean>((resolve) => {
+				release401 = resolve;
+				release401Call = () => resolve(true);
+			});
+		});
+
+		let releaseRotation!: (value: { token: string }) => void;
+		apiPost.mockReturnValue(
+			new Promise<{ token: string }>((resolve) => {
+				releaseRotation = resolve;
+			})
+		);
+
+		const rotation = rotateToken();
+		// A straggler request, sent with the same token before the rotation revoked it, gets
+		// its 401 first — its clear decision is now deferred.
+		const deferred = (
+			setUnauthorizedCoordinator.mock.calls[0]?.[0] as (t: string | null) => unknown
+		)('old-token');
+		await Promise.resolve();
+		expect(fakeToken).toBe('old-token');
+
+		// The rotation lands and stores its replacement.
+		releaseRotation({ token: 'new-token' });
+		await rotation;
+		expect(fakeToken).toBe('new-token');
+
+		// The deferred 401 decision resolves as "don't clear" (rotation succeeded).
+		void deferred;
+		expect(setUnauthorizedCoordinator).toHaveBeenCalledTimes(1);
+		void release401;
+		void release401Call;
+	});
+
+	it('coordinates the 401: rotation success keeps the replacement, failure clears', async () => {
+		// Drive the real coordinator (resetAuthRotationForTesting cleared the mock's own
+		// bookkeeping, but the module registered the real function at import time — pull the
+		// registered one back out and call it directly).
+		fakeToken = 'old-token';
+		let releaseRotation!: (value: { token: string }) => void;
+		apiPost.mockReturnValue(
+			new Promise<{ token: string }>((resolve) => {
+				releaseRotation = resolve;
+			})
+		);
+
+		const rotation = rotateToken();
+		const coordinator = setUnauthorizedCoordinator.mock.calls[0]?.[0] as (
+			token: string | null
+		) => Promise<boolean>;
+
+		// A 401 for the token being rotated → deferred decision.
+		const decision = coordinator('old-token');
+		const state = { settled: false };
+		void decision.then(() => {
+			state.settled = true;
+		});
+		await Promise.resolve();
+		expect(state.settled).toBe(false);
+
+		// Rotation succeeds → the replacement is stored and the 401 must not clear it.
+		releaseRotation({ token: 'new-token' });
+		await rotation;
+		await expect(decision).resolves.toBe(false);
+		expect(fakeToken).toBe('new-token');
+
+		// Now a rotation that fails → the deferred 401 must clear after all.
+		fakeToken = 'old-token-2';
+		apiPost.mockReturnValue(
+			new Promise<{ token: string }>(() => {
+				// rotateToken is best-effort and swallows this rejection — but it swallows it
+				// one microtask late, and an eagerly-rejected promise with no handler attached
+				// until then registers as an unhandled rejection of its own. Pre-attaching a
+				// no-op catch here keeps the rejection contained to the exact promise this
+				// spec controls, without changing what rotateToken receives.
+				const failing = new Promise<never>((_res, rej) => {
+					Promise.resolve().then(() => rej(new Error('offline')));
+				});
+				failing.catch(() => {});
+				return failing as Promise<{ token: string }>;
+			})
+		);
+		const secondRotation = rotateToken();
+		const secondDecision = Promise.resolve(coordinator('old-token-2'));
+		await expect(secondRotation).resolves.toBeUndefined();
+		await expect(secondDecision).resolves.toBe(true);
+	});
+
+	it('does not defer a 401 for a token that is not the one being rotated', async () => {
+		fakeToken = 'old-token';
+		let releaseRotation!: (value: { token: string }) => void;
+		apiPost.mockReturnValue(
+			new Promise<{ token: string }>((resolve) => {
+				releaseRotation = resolve;
+			})
+		);
+
+		const rotation = rotateToken();
+		const coordinator = setUnauthorizedCoordinator.mock.calls[0]?.[0] as (
+			token: string | null
+		) => boolean | Promise<boolean>;
+
+		// A 401 for a different (stale) token → immediate, uncoordinated decision.
+		expect(coordinator('an-older-token')).toBe(true);
+		// A 401 with no token at all → likewise immediate.
+		expect(coordinator(null)).toBe(true);
+
+		releaseRotation({ token: 'new-token' });
+		await rotation;
+	});
+
+	it('tells a deferred 401 to clear when the rotation failed', async () => {
+		fakeToken = 'old-token';
+		let failRotation!: (reason: unknown) => void;
+		apiPost.mockReturnValue(
+			new Promise<{ token: string }>((_resolve, reject) => {
+				failRotation = reject;
+			})
+		);
+
+		const rotation = rotateToken();
+		const coordinator = setUnauthorizedCoordinator.mock.calls[0]?.[0] as (
+			token: string | null
+		) => Promise<boolean>;
+		const decision = coordinator('old-token');
+		failRotation(new Error('offline'));
+		await expect(rotation).resolves.toBeUndefined();
+		// The rotation failed without storing a replacement — the old token is really dead,
+		// so the deferred 401 proceeds with its clear.
+		await expect(decision).resolves.toBe(true);
+		expect(fakeToken).toBe('old-token');
 	});
 });
 
