@@ -94,6 +94,12 @@ public class QuickAddActivity extends Activity {
             deadlineButton.setOnClickListener(v -> showDeadlinePicker());
             refreshDeadlineUi();
         } else {
+            // Deadlines are off for this list — no chip would render for it anyway, so the
+            // button (and its preview) would only offer a value that shows up nowhere. Also
+            // drop anything restored below (a widget refresh between this popup's saves could
+            // have flipped useDeadline off while a picked deadline was still in state) so a
+            // hidden deadline can't ride along with Add.
+            pickedDeadline = null;
             deadlineButton.setVisibility(View.GONE);
             deadlineButton.setEnabled(false);
             deadlinePreview.setVisibility(View.GONE);

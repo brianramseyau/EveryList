@@ -14,9 +14,11 @@ vi.mock('./token', () => ({
 }));
 
 const apiPost = vi.fn();
+const apiFetch = vi.fn();
 const setUnauthorizedCoordinator = vi.fn();
 vi.mock('./client', () => ({
 	apiPost: (...args: unknown[]) => apiPost(...args),
+	apiFetch: (...args: unknown[]) => apiFetch(...args),
 	setUnauthorizedCoordinator: (...args: unknown[]) => setUnauthorizedCoordinator(...args)
 }));
 
@@ -67,7 +69,9 @@ const LAST_ROTATION_KEY = 'everylist:token-rotated-at';
 describe('rotateToken', () => {
 	beforeEach(() => {
 		apiPost.mockReset();
-		apiPost.mockResolvedValue({ token: 'new-token' });
+		apiFetch.mockResolvedValue({ token: 'new-token' });
+		apiFetch.mockReset();
+		apiFetch.mockResolvedValue({ token: 'new-token' });
 		fakeToken = null;
 		(globalThis.window.localStorage as Storage).clear();
 		// Also clears the module's in-memory rotation timestamp between specs.
@@ -79,7 +83,11 @@ describe('rotateToken', () => {
 		// No stored rotation timestamp → due immediately.
 		await rotateToken();
 
-		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
+		expect(apiFetch).toHaveBeenCalledWith(
+			'/api/v1/account/refresh',
+			{ method: 'POST' },
+			{ bypass401Coordinator: true }
+		);
 		expect(fakeToken).toBe('new-token');
 		expect(Number(readStoredRotation())).toBeGreaterThan(0);
 	});
@@ -87,7 +95,7 @@ describe('rotateToken', () => {
 	it('does nothing when there is no stored token', async () => {
 		await rotateToken();
 
-		expect(apiPost).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
 	});
 
 	it('skips the request when a rotation happened within the interval', async () => {
@@ -96,7 +104,7 @@ describe('rotateToken', () => {
 
 		await rotateToken();
 
-		expect(apiPost).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
 	});
 
 	it('rotates when the last rotation is older than the interval', async () => {
@@ -105,13 +113,17 @@ describe('rotateToken', () => {
 
 		await rotateToken();
 
-		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
+		expect(apiFetch).toHaveBeenCalledWith(
+			'/api/v1/account/refresh',
+			{ method: 'POST' },
+			{ bypass401Coordinator: true }
+		);
 		expect(fakeToken).toBe('new-token');
 	});
 
 	it('does not update the timestamp when the rotation fails (retried on the next trigger)', async () => {
 		fakeToken = 'old-token';
-		apiPost.mockRejectedValue(new Error('network error'));
+		apiFetch.mockRejectedValue(new Error('network error'));
 
 		await expect(rotateToken()).resolves.toBeUndefined();
 
@@ -121,7 +133,7 @@ describe('rotateToken', () => {
 
 	it('does not update the timestamp when the session was replaced mid-request', async () => {
 		fakeToken = 'old-token';
-		apiPost.mockImplementation(async () => {
+		apiFetch.mockImplementation(async () => {
 			// A different session's token replaced this one while the refresh was in flight.
 			fakeToken = 'other-login-token';
 			return { token: 'new-token' };
@@ -135,7 +147,7 @@ describe('rotateToken', () => {
 
 	it('discards the rotated token when the session was cleared mid-request (logout racing the refresh)', async () => {
 		fakeToken = 'old-token';
-		apiPost.mockImplementation(async () => {
+		apiFetch.mockImplementation(async () => {
 			// A concurrent logout (or a 401 elsewhere) clears the token while the
 			// refresh request is in flight.
 			fakeToken = null;
@@ -144,7 +156,11 @@ describe('rotateToken', () => {
 
 		await rotateToken();
 
-		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
+		expect(apiFetch).toHaveBeenCalledWith(
+			'/api/v1/account/refresh',
+			{ method: 'POST' },
+			{ bypass401Coordinator: true }
+		);
 		expect(fakeToken).toBeNull();
 	});
 
@@ -154,7 +170,11 @@ describe('rotateToken', () => {
 
 		await rotateToken();
 
-		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
+		expect(apiFetch).toHaveBeenCalledWith(
+			'/api/v1/account/refresh',
+			{ method: 'POST' },
+			{ bypass401Coordinator: true }
+		);
 		expect(fakeToken).toBe('new-token');
 	});
 
@@ -178,7 +198,7 @@ describe('rotateToken', () => {
 				});
 		}
 
-		expect(apiPost).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
 	});
 
 	it('treats a missing window (SSR) as "never rotated" when a token is somehow present', async () => {
@@ -201,7 +221,11 @@ describe('rotateToken', () => {
 				});
 		}
 
-		expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
+		expect(apiFetch).toHaveBeenCalledWith(
+			'/api/v1/account/refresh',
+			{ method: 'POST' },
+			{ bypass401Coordinator: true }
+		);
 		expect(readStoredRotation()).toBeNull();
 	});
 
@@ -218,14 +242,18 @@ describe('rotateToken', () => {
 		try {
 			await rotateToken();
 
-			expect(apiPost).toHaveBeenCalledWith('/api/v1/account/refresh');
+			expect(apiFetch).toHaveBeenCalledWith(
+				'/api/v1/account/refresh',
+				{ method: 'POST' },
+				{ bypass401Coordinator: true }
+			);
 			expect(fakeToken).toBe('new-token');
 			// The persisted write failed; nothing landed in storage.
 			expect(readStoredRotation()).toBeNull();
 
 			// The in-memory fallback must still gate this session's later triggers.
 			await rotateToken();
-			expect(apiPost).toHaveBeenCalledTimes(1);
+			expect(apiFetch).toHaveBeenCalledTimes(1);
 		} finally {
 			shim['setItem'] = originalSetItem;
 		}
@@ -244,13 +272,13 @@ describe('rotateToken', () => {
 		// A second trigger (e.g. the visibility listener firing while the first request is
 		// still pending) must not send the same token again.
 		const second = rotateToken();
-		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(apiFetch).toHaveBeenCalledTimes(1);
 		void second;
 
 		release({ token: 'new-token' });
 		await first;
 
-		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(apiFetch).toHaveBeenCalledTimes(1);
 		expect(fakeToken).toBe('new-token');
 	});
 
@@ -258,21 +286,38 @@ describe('rotateToken', () => {
 		expect(setUnauthorizedCoordinator).toHaveBeenCalledWith(expect.any(Function));
 	});
 
+	it('sends the refresh through apiFetch with bypass401Coordinator, resolving on a refresh 401', async () => {
+		// The refresh request is the rotation itself — a 401 from it (expired/revoked token)
+		// must not park on its own coordination (that would deadlock the rotation) and must
+		// never clear the stored token out from under the parked straggler 401s (the settle
+		// step decides their outcome). The bypass drops it into apiFetch's plain path.
+		fakeToken = 'old-token';
+		let rejectRefresh!: (reason: { status: number; message: string; body: unknown }) => void;
+		apiFetch.mockReturnValue(
+			new Promise<never>((_resolve, reject) => {
+				rejectRefresh = reject;
+			})
+		);
+
+		const rotation = rotateToken();
+		expect(apiFetch).toHaveBeenCalledWith(
+			'/api/v1/account/refresh',
+			{ method: 'POST' },
+			{ bypass401Coordinator: true }
+		);
+
+		// A refresh-401 rejection is swallowed by rotateToken (best-effort) and resolves.
+		rejectRefresh({ status: 401, message: 'Unauthorized', body: undefined });
+		await expect(rotation).resolves.toBeUndefined();
+		// The failed rotation must not have marked a timestamp — the next trigger retries.
+		expect(readStoredRotation()).toBeNull();
+	});
+
 	it('defers a 401 racing the rotation until it settles, keeping the replacement', async () => {
 		fakeToken = 'old-token';
-		let release401!: (decision: boolean) => void;
-		let release401Call: (() => void) | null = null;
-		setUnauthorizedCoordinator.mockImplementation(async () => {
-			// Mirrors what the real client does with the coordinator's decision: it holds the
-			// 401's clear until this promise resolves.
-			return new Promise<boolean>((resolve) => {
-				release401 = resolve;
-				release401Call = () => resolve(true);
-			});
-		});
 
 		let releaseRotation!: (value: { token: string }) => void;
-		apiPost.mockReturnValue(
+		apiFetch.mockReturnValue(
 			new Promise<{ token: string }>((resolve) => {
 				releaseRotation = resolve;
 			})
@@ -293,19 +338,17 @@ describe('rotateToken', () => {
 		expect(fakeToken).toBe('new-token');
 
 		// The deferred 401 decision resolves as "don't clear" (rotation succeeded).
-		void deferred;
-		expect(setUnauthorizedCoordinator).toHaveBeenCalledTimes(1);
-		void release401;
-		void release401Call;
+		await expect(Promise.resolve(deferred)).resolves.toBe(false);
+		expect(fakeToken).toBe('new-token');
 	});
 
-	it('coordinates the 401: rotation success keeps the replacement, failure clears', async () => {
+	it('coordinates the 401: rotation success keeps the replacement', async () => {
 		// Drive the real coordinator (resetAuthRotationForTesting cleared the mock's own
 		// bookkeeping, but the module registered the real function at import time — pull the
 		// registered one back out and call it directly).
 		fakeToken = 'old-token';
 		let releaseRotation!: (value: { token: string }) => void;
-		apiPost.mockReturnValue(
+		apiFetch.mockReturnValue(
 			new Promise<{ token: string }>((resolve) => {
 				releaseRotation = resolve;
 			})
@@ -330,33 +373,15 @@ describe('rotateToken', () => {
 		await rotation;
 		await expect(decision).resolves.toBe(false);
 		expect(fakeToken).toBe('new-token');
-
-		// Now a rotation that fails → the deferred 401 must clear after all.
-		fakeToken = 'old-token-2';
-		apiPost.mockReturnValue(
-			new Promise<{ token: string }>(() => {
-				// rotateToken is best-effort and swallows this rejection — but it swallows it
-				// one microtask late, and an eagerly-rejected promise with no handler attached
-				// until then registers as an unhandled rejection of its own. Pre-attaching a
-				// no-op catch here keeps the rejection contained to the exact promise this
-				// spec controls, without changing what rotateToken receives.
-				const failing = new Promise<never>((_res, rej) => {
-					Promise.resolve().then(() => rej(new Error('offline')));
-				});
-				failing.catch(() => {});
-				return failing as Promise<{ token: string }>;
-			})
-		);
-		const secondRotation = rotateToken();
-		const secondDecision = Promise.resolve(coordinator('old-token-2'));
-		await expect(secondRotation).resolves.toBeUndefined();
-		await expect(secondDecision).resolves.toBe(true);
+		// (The failure half — a failed rotation telling a parked 401 to clear after all — is
+		// covered by 'tells a deferred 401 to clear when the rotation failed' below; a
+		// second rotation in this same spec would be gated off by rotationDue() anyway.)
 	});
 
 	it('does not defer a 401 for a token that is not the one being rotated', async () => {
 		fakeToken = 'old-token';
 		let releaseRotation!: (value: { token: string }) => void;
-		apiPost.mockReturnValue(
+		apiFetch.mockReturnValue(
 			new Promise<{ token: string }>((resolve) => {
 				releaseRotation = resolve;
 			})
@@ -379,7 +404,7 @@ describe('rotateToken', () => {
 	it('tells a deferred 401 to clear when the rotation failed', async () => {
 		fakeToken = 'old-token';
 		let failRotation!: (reason: unknown) => void;
-		apiPost.mockReturnValue(
+		apiFetch.mockReturnValue(
 			new Promise<{ token: string }>((_resolve, reject) => {
 				failRotation = reject;
 			})
@@ -402,7 +427,9 @@ describe('rotateToken', () => {
 describe('startAuthRotation', () => {
 	beforeEach(() => {
 		apiPost.mockReset();
-		apiPost.mockResolvedValue({ token: 'new-token' });
+		apiFetch.mockResolvedValue({ token: 'new-token' });
+		apiFetch.mockReset();
+		apiFetch.mockResolvedValue({ token: 'new-token' });
 		fakeToken = null;
 		(globalThis.window.localStorage as Storage).clear();
 		// Clears the module's in-memory rotation timestamp between specs.
@@ -434,10 +461,10 @@ describe('startAuthRotation', () => {
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(0);
 		// Still inside the settle window: mount-time data fetches are presumed in flight.
-		expect(apiPost).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
 
 		await vi.advanceTimersByTimeAsync(STARTUP_SETTLE_MS);
-		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(apiFetch).toHaveBeenCalledTimes(1);
 		expect(fakeToken).toBe('new-token');
 	});
 
@@ -448,14 +475,14 @@ describe('startAuthRotation', () => {
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(STARTUP_SETTLE_MS);
 
-		expect(apiPost).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
 	});
 
 	it('does nothing at startup when logged out', async () => {
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(STARTUP_SETTLE_MS);
 
-		expect(apiPost).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
 	});
 
 	it('rotates on the daily interval tick once due', async () => {
@@ -465,17 +492,17 @@ describe('startAuthRotation', () => {
 		// The first tick fires a full interval after start (the settle-delayed startup check
 		// and this tick can both be due; rotationDue makes the later one a no-op either way).
 		await vi.advanceTimersByTimeAsync(STARTUP_SETTLE_MS);
-		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(apiFetch).toHaveBeenCalledTimes(1);
 		expect(fakeToken).toBe('new-token');
 
 		// A tick at one interval after start (24h) is only 24h-10s after the last rotation —
 		// inside the interval, so it skips...
 		await vi.advanceTimersByTimeAsync(ROTATION_INTERVAL_MS);
-		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(apiFetch).toHaveBeenCalledTimes(1);
 
 		// ...but the next tick (48h) is a full interval past the rotation and rotates again.
 		await vi.advanceTimersByTimeAsync(ROTATION_INTERVAL_MS);
-		expect(apiPost).toHaveBeenCalledTimes(2);
+		expect(apiFetch).toHaveBeenCalledTimes(2);
 		expect(fakeToken).toBe('new-token');
 	});
 
@@ -483,7 +510,7 @@ describe('startAuthRotation', () => {
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(STARTUP_SETTLE_MS + ROTATION_INTERVAL_MS);
 
-		expect(apiPost).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
 	});
 
 	it('rotates on returning to the foreground when due', async () => {
@@ -492,11 +519,11 @@ describe('startAuthRotation', () => {
 
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(0);
-		expect(apiPost).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
 
 		fireVisibilityChange('visible');
 		await vi.advanceTimersByTimeAsync(0);
-		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(apiFetch).toHaveBeenCalledTimes(1);
 	});
 
 	it('does not rotate on returning to the foreground while inside the interval', async () => {
@@ -508,7 +535,7 @@ describe('startAuthRotation', () => {
 
 		fireVisibilityChange('visible');
 		await vi.advanceTimersByTimeAsync(0);
-		expect(apiPost).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
 	});
 
 	it('does not rotate when the document becomes hidden', async () => {
@@ -517,11 +544,11 @@ describe('startAuthRotation', () => {
 
 		startAuthRotation();
 		await vi.advanceTimersByTimeAsync(0);
-		expect(apiPost).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
 
 		fireVisibilityChange('hidden');
 		await vi.advanceTimersByTimeAsync(0);
-		expect(apiPost).not.toHaveBeenCalled();
+		expect(apiFetch).not.toHaveBeenCalled();
 	});
 
 	it('is idempotent — a second start does not register more work', async () => {
@@ -534,7 +561,7 @@ describe('startAuthRotation', () => {
 		fireVisibilityChange('visible');
 		await vi.advanceTimersByTimeAsync(0);
 
-		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect(apiFetch).toHaveBeenCalledTimes(1);
 	});
 
 	it('resetAuthRotationForTesting clears the stored rotation timestamp', () => {

@@ -1,4 +1,4 @@
-import { apiPost, setUnauthorizedCoordinator } from './client';
+import { apiFetch, setUnauthorizedCoordinator } from './client';
 import { getToken, setToken } from './token';
 
 interface AuthResponse {
@@ -102,7 +102,17 @@ export async function rotateToken(): Promise<void> {
 	rotationInFlight = true;
 	rotatingToken = requestToken;
 	try {
-		const response = await apiPost<AuthResponse>('/api/v1/account/refresh');
+		// Deliberately NOT apiPost: this request is the rotation itself, and its 401 (an
+		// expired/revoked token) must never park on its own coordination — that would
+		// deadlock (the refresh's 401 would wait for the very rotation awaiting this
+		// response). The bypass drops it straight into apiFetch's plain stored-token
+		// comparison, which clears the dead old token directly; rotateToken's catch then
+		// treats it like any other failure and the parked straggler 401s resolve "failed".
+		const response = await apiFetch<AuthResponse>(
+			'/api/v1/account/refresh',
+			{ method: 'POST' },
+			{ bypass401Coordinator: true }
+		);
 		// Only adopt the new token while the very session that started this request is still the
 		// stored one — a concurrent logout (clears it), a 401 elsewhere (clears it), or a
 		// different user logging in mid-request must never be overwritten with the rotated one.
@@ -143,8 +153,10 @@ export async function rotateToken(): Promise<void> {
  * token that isn't being rotated, or no rotation in flight — defers to `apiFetch`'s own
  * stored-token comparison, unchanged.
  *
- * The rotation's own refresh request never goes through here — it doesn't clear tokens at all
- * on failure — so it can't wait on its own coordination state.
+ * The rotation's own refresh request bypasses this coordinator entirely (apiFetch's
+ * `bypass401Coordinator` option, set in `rotateToken`) — its 401 is that dead token's plain
+ * expiry path and must never park on the coordination state of the very rotation awaiting that
+ * response, which would deadlock both sides.
  *
  * @returns true when the caller should proceed with its normal clear (either no coordination
  * applied, or the rotation failed and the old token is indeed dead), false when the rotation

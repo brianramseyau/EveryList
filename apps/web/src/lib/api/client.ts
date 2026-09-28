@@ -29,8 +29,8 @@ export function resetUnauthorizedCoordinatorForTesting(): void {
 
 /** True when the coordinator (if any) approves the 401's clear — awaited, so the rotation's
  * settle step is the only thing that can hold it up. */
-async function shouldClearOn401(requestToken: string | null): Promise<boolean> {
-	if (!unauthorizedCoordinator) return true;
+async function shouldClearOn401(requestToken: string | null, bypass: boolean): Promise<boolean> {
+	if (bypass || !unauthorizedCoordinator) return true;
 	return unauthorizedCoordinator(requestToken);
 }
 
@@ -80,7 +80,11 @@ function extractErrorMessage(body: unknown, status: number): string {
  * envelope, and normalizes failures into ApiError. On a 401 it also clears
  * the stored token, since that means it's no longer valid.
  */
-export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T = unknown>(
+	path: string,
+	init: RequestInit = {},
+	options: { bypass401Coordinator?: boolean } = {}
+): Promise<T> {
 	const token = getToken();
 	const headers = new Headers(init.headers);
 	headers.set('Accept', 'application/json');
@@ -101,7 +105,16 @@ export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}
 		// matches storage at that instant) and the rotation would then discard its replacement
 		// (getToken() no longer equals its request token), logging the user out. See
 		// coordinate401WithRotation in auth-rotation.ts.
-		if (response.status === 401 && getToken() === token && (await shouldClearOn401(token))) {
+		// The bypass401Coordinator option exists for the token rotation's own refresh request
+		// (auth-rotation.ts): it never clears tokens on a 401, and routing it through the
+		// coordinator would deadlock — the refresh's own 401 would park on the rotation that
+		// is awaiting this very response. With the bypass, a refresh 401 falls through to the
+		// plain stored-token comparison and clears the dead old token directly.
+		if (
+			response.status === 401 &&
+			getToken() === token &&
+			(await shouldClearOn401(token, options.bypass401Coordinator === true))
+		) {
 			clearToken();
 		}
 		const body = await parseErrorBody(response);
