@@ -401,6 +401,17 @@ describe('rotateToken', () => {
 		await rotation;
 	});
 
+	it('does not defer a 401 when no rotation is in flight at all', async () => {
+		// No rotateToken() call — rotatingToken is null, so the coordinator is a pure
+		// pass-through (the plain stored-token comparison in apiFetch is authoritative).
+		fakeToken = 'old-token';
+		const coordinator = setUnauthorizedCoordinator.mock.calls[0]?.[0] as (
+			token: string | null
+		) => boolean | Promise<boolean>;
+
+		expect(coordinator('old-token')).toBe(true);
+	});
+
 	it('tells a deferred 401 to clear when the rotation failed', async () => {
 		fakeToken = 'old-token';
 		let failRotation!: (reason: unknown) => void;
