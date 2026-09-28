@@ -110,10 +110,15 @@ export async function apiFetch<T = unknown>(
 		// coordinator would deadlock — the refresh's own 401 would park on the rotation that
 		// is awaiting this very response. With the bypass, a refresh 401 falls through to the
 		// plain stored-token comparison and clears the dead old token directly.
+		// The stored-token comparison runs *after* the awaited coordination: a 401 parked on
+		// an in-flight rotation can sit there while a concurrent login stores a different
+		// (newer) session — clearing without re-checking would wipe that new session. With
+		// the bypass (the rotation's own refresh), no coordination await happens, so the
+		// comparison is effectively the same as the original eager one.
 		if (
 			response.status === 401 &&
-			getToken() === token &&
-			(await shouldClearOn401(token, options.bypass401Coordinator === true))
+			(await shouldClearOn401(token, options.bypass401Coordinator === true)) &&
+			getToken() === token
 		) {
 			clearToken();
 		}

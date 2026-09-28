@@ -23,7 +23,16 @@ vi.mock('./server-url', () => ({
 	getServerUrl: () => fakeServerUrl
 }));
 
-const { apiDelete, apiFetch, apiGet, apiPatch, apiPost, ApiError } = await import('./client');
+const {
+	apiDelete,
+	apiFetch,
+	apiGet,
+	apiPatch,
+	apiPost,
+	ApiError,
+	setUnauthorizedCoordinator,
+	resetUnauthorizedCoordinatorForTesting
+} = await import('./client');
 const { clearToken, getToken, setToken } = await import('./token');
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -35,8 +44,15 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 describe('apiFetch', () => {
+	beforeEach(() => {
+		// Each 401-coordination spec registers its own coordinator; drop it between specs so
+		// nothing leaks into the plain-path specs below.
+		resetUnauthorizedCoordinatorForTesting();
+	});
+
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		resetUnauthorizedCoordinatorForTesting();
 		clearToken();
 	});
 
@@ -177,6 +193,45 @@ describe('apiFetch', () => {
 
 		await expect(apiFetch('/x')).rejects.toBeInstanceOf(ApiError);
 		expect(getToken()).toBe('rotated-token');
+	});
+
+	it('re-checks the stored token after the 401 coordination settles, so a concurrent login is not wiped', async () => {
+		// A 401 parked on an in-flight rotation sits there while the user logs in with a
+		// different (newer) session — the deferred clear must not remove that new session.
+		setToken('old-token');
+		setUnauthorizedCoordinator(() => {
+			// The rotation settles while this 401's decision is in flight, and a concurrent
+			// login replaces the stored token before the decision comes back.
+			setToken('fresh-login-token');
+			return Promise.resolve(true);
+		});
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(jsonResponse(401, { message: 'Unauthorized' }))
+		);
+
+		await expect(apiFetch('/x')).rejects.toBeInstanceOf(ApiError);
+		expect(getToken()).toBe('fresh-login-token');
+	});
+
+	it('bypass401Coordinator skips the coordinator entirely (the rotation refresh path)', async () => {
+		let coordinatorCalls = 0;
+		setUnauthorizedCoordinator(() => {
+			coordinatorCalls += 1;
+			return true;
+		});
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(jsonResponse(401, { message: 'Unauthorized' }))
+		);
+
+		setToken('stale-token');
+		await expect(apiFetch('/x', {}, { bypass401Coordinator: true })).rejects.toBeInstanceOf(
+			ApiError
+		);
+		expect(coordinatorCalls).toBe(0);
+		// The plain stored-token comparison still ran and cleared the dead token.
+		expect(getToken()).toBeNull();
 	});
 });
 
