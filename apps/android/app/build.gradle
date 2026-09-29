@@ -1,4 +1,10 @@
 apply plugin: 'com.android.application'
+// JVM unit-test coverage for the Android app, mirroring the other workspaces'
+// coverage gate (see the jacoco block at the bottom of this file). JaCoCo only
+// instruments pure-JVM tests here — instrumented tests (androidTest) run on a
+// device/emulator and write their own coverage file the offline report can't
+// merge without extra plumbing, so they're deliberately out of scope for now.
+apply plugin: 'jacoco'
 
 android {
     namespace = "au.brianramsey.everylist"
@@ -112,4 +118,90 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// --- JVM unit-test coverage gate ------------------------------------------------------------
+//
+// The Android half of the repo had no coverage gate; the rest (api/web/shared) enforce 100% in CI
+// (see .github/workflows/test.yml). This wires JaCoCo into the pure-JVM `testDebugUnitTest` suite
+// and fails the build when line coverage drops below the threshold below. The number is a ratchet,
+// deliberately far under the other workspaces' 100%: most of apps/android is Activities/RemoteViews/
+// Capacitor plugin glue that needs the Android framework to exercise, so the JVM-reachable ceiling
+// today is ~17% (WidgetJson, DeadlineMath, HttpJson — the pure logic). Instrumented tests
+// (QuickAddLayoutTest and the androidTest source set) cover the Activities/Views side but write
+// their own device-side coverage file, which this offline report doesn't merge yet. Raise `minimum`
+// as that instrumented coverage is folded in (or as Robolectric is adopted to drag framework classes
+// onto the JVM); never lower it silently — a drop is a real regression.
+//
+// Only the app's own classes count: `classDirectories` points at the `au.brianramsey.everylist`
+// package tree produced by compileDebugJavaWithJavac (the rest of debug/classes is generated
+// BuildConfig/R plus transitive Capacitor classes, which aren't this app's to cover).
+jacoco {
+    toolVersion = '0.8.12'
+}
+
+tasks.register('jacocoTestReport', JacocoReport) {
+    dependsOn 'testDebugUnitTest'
+    // Re-run the report whenever the tests re-ran; without these the report task is considered
+    // up-to-date and silently skips after a code change.
+    outputs.upToDateWhen { false }
+
+    def excludes = [
+        // Generated at build time, no source to cover.
+        '**/R.class', '**/R$*.class', '**/BuildConfig.*', '**/Manifest*.*',
+    ]
+    classDirectories.setFrom(files(
+        fileTree(dir: "$buildDir/intermediates/javac/debug/compileDebugJavaWithJavac/classes", excludes: excludes)
+    ))
+    sourceDirectories.setFrom(files("$projectDir/src/main/java"))
+    executionData.setFrom(fileTree(dir: buildDir, includes: ['jacoco/testDebugUnitTest.exec']))
+
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+
+    // Enforce the gate inline rather than via the standalone `jacocoTestCoverageVerification` task,
+    // so a plain `./gradlew jacocoTestReport` (and CI's invocation) checks it — one command, one
+    // source of truth, no risk of a caller forgetting the verification task.
+    doLast {
+        def minimum = 0.16d   // fraction of lines; a ratchet below the current JVM-reachable max
+        def report = reports.xml.outputLocation.get().asFile
+        // JaCoCo's report carries a `<!DOCTYPE report PUBLIC "-//JACOCO//DTD Report 1.1//EN" ...>`,
+        // which the JAXP default (disallow-doctype-decl=true) rejects; relax that feature and skip
+        // the external DTD fetch so the counters can be read without a network/entity resolution.
+        def factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+        factory.setFeature('http://apache.org/xml/features/disallow-doctype-decl', false)
+        factory.setFeature('http://apache.org/xml/features/nonvalidating/load-external-dtd', false)
+        def doc = factory.newDocumentBuilder().parse(report)
+        // Read the report-level LINE counter specifically: `getElementsByTagName` would return
+        // every nested method/class/package counter too, and the first LINE one in document order
+        // is a single method's, not the total. The report totals are direct children of <report>.
+        def root = doc.getDocumentElement()
+        def lineCounter = null
+        for (int i = 0; i < root.getChildNodes().length; i++) {
+            def node = root.getChildNodes().item(i)
+            if (node.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE
+                && node.getNodeName() == 'counter'
+                && node.getAttributes().getNamedItem('type').getNodeValue() == 'LINE') {
+                lineCounter = node
+                break
+            }
+        }
+        if (lineCounter == null) {
+            throw new GradleException('jacocoTestReport.xml had no report-level LINE counter — report format may have changed')
+        }
+        def missed = lineCounter.getAttributes().getNamedItem('missed').getNodeValue().toBigDecimal()
+        def covered = lineCounter.getAttributes().getNamedItem('covered').getNodeValue().toBigDecimal()
+        def total = missed + covered
+        def ratio = total == 0 ? 1.0d : (covered / total).doubleValue()
+        logger.lifecycle(String.format('Android JVM line coverage: %.2f%% (%s/%s) — gate %.0f%%',
+            ratio * 100, covered, total, minimum * 100))
+        if (ratio < minimum) {
+            throw new GradleException(String.format(
+                'Android JVM line coverage %.2f%% is below the %.0f%% gate — add tests or lower the gate in apps/android/app/build.gradle',
+                ratio * 100, minimum * 100))
+        }
+    }
 }

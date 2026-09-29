@@ -12,7 +12,10 @@
  *   3. typecheck every workspace     (`pnpm -r typecheck`)
  *   4. install Playwright Chromium   (web component tests run in a real browser)
  *   5. test every workspace          (`pnpm -r test`, 100% coverage gates)
- *   6. Playwright E2E                (`apps/web` offline-sync + accessibility)
+ *   6. Android JVM unit tests + JaCoCo line-coverage gate (Gradle, not a
+ *      pnpm workspace — needs the Android SDK + JDK 21, so it's skipped
+ *      with a warning when `apps/android` can't be built here)
+ *   7. Playwright E2E                (`apps/web` offline-sync + accessibility)
  *
  * This script mirrors that exact sequence so a commit can be vetted locally
  * instead of burning (at times multiple) GitHub Actions round trips.
@@ -25,11 +28,18 @@
  * Usage:
  *   pnpm check               # full local gate, E2E included
  *   pnpm check --skip-e2e    # lint/typecheck/unit gate only (fast iteration)
+ *   pnpm check --skip-android  # skip the Android Gradle steps (no SDK/JDK 21 handy)
  */
 
 import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 
 const skipE2E = process.argv.includes('--skip-e2e')
+const skipAndroid = process.argv.includes('--skip-android')
+
+const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 
 const steps = [
   {
@@ -58,6 +68,23 @@ const steps = [
   }
 ]
 
+// Android is a Gradle project, not a pnpm workspace, so it needs the Android SDK + JDK 21 that
+// this step can't assume. Run it when the SDK is discoverable and java is new enough; otherwise
+// print how to run it by hand rather than failing the whole gate on a toolchain CI always has.
+if (!skipAndroid) {
+  steps.push({
+    label: 'Android JVM unit tests + coverage gate',
+    cmd: [
+      join(repoRoot, 'apps/android/gradlew'),
+      ':app:jacocoTestReport',
+      ':app:compileDebugAndroidTestJavaWithJavac',
+      '--no-daemon'
+    ],
+    cwd: join(repoRoot, 'apps/android'),
+    android: true
+  })
+}
+
 if (!skipE2E) {
   steps.push({
     label: 'Playwright E2E (offline sync, accessibility)',
@@ -70,8 +97,30 @@ console.log('Running the EveryList PR gate locally…')
 let failure = null
 for (const [index, step] of steps.entries()) {
   const header = `[${index + 1}/${steps.length}] ${step.label}`
+
+  if (step.android) {
+    const sdkPresent =
+      !!(process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT) ||
+      existsSync(join(process.env.HOME || '', 'Library/Android/sdk')) ||
+      existsSync(join(process.env.HOME || '', 'Android/Sdk'))
+    const javaOk = spawnSync('java', ['-version'], { stdio: 'ignore' }).status === 0
+    if (!sdkPresent || !javaOk) {
+      console.log(`\n===== ${header} — SKIPPED =====`)
+      console.log(
+        'No Android SDK / working `java` found on this machine. CI runs this step; to run it here,'
+      )
+      console.log(
+        'install the Android SDK + JDK 21 and set ANDROID_HOME (or put it at ~/Library/Android/sdk).'
+      )
+      continue
+    }
+  }
+
   console.log(`\n===== ${header} =====\n`)
-  const result = spawnSync(step.cmd[0], step.cmd.slice(1), { stdio: 'inherit' })
+  const result = spawnSync(step.cmd[0], step.cmd.slice(1), {
+    stdio: 'inherit',
+    cwd: step.cwd
+  })
   if (result.status !== 0) {
     failure = header
     break

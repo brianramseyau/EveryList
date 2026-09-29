@@ -117,3 +117,54 @@ jobs:
         run: pnpm --filter @everylist/web exec playwright install --with-deps chromium
 
       - run: pnpm --filter @everylist/${{ matrix.workspace }} test
+
+  android:
+    # The Android app is a Gradle project, not a pnpm workspace, so it lives outside the matrix
+    # above. Runs the pure-JVM unit suite (WidgetJson/DeadlineMath/HttpJson) plus the JaCoCo
+    # line-coverage gate wired in apps/android/app/build.gradle — the Android half of the repo's
+    # coverage story, mirroring the other workspaces' 100% gates (at a lower, instrumented-test-
+    # pending threshold). Instrumented tests (QuickAddLayoutTest) need an emulator and are
+    # deliberately not run here; see that job's plan note. `jacocoTestReport` depends on
+    # testDebugUnitTest, so it runs the tests too.
+    name: Test (android)
+    needs: build-shared
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # See the env block above — this job doesn't build apps/desktop either.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-dist
+          path: packages/shared/dist
+
+      # cap:sync builds the web bundle and generates the Capacitor plugin Gradle projects
+      # (capacitor-cordova-android-plugins, the plugin project includes) that settings.gradle
+      # requires — both gitignored, so a fresh checkout can't compile the app without this. Same
+      # step native-build.yml's Android jobs use. Runs before the SDK setup since it's node-only.
+      - name: Sync web bundle and Capacitor plugins into the Android project
+        run: pnpm --filter @everylist/web run cap:sync
+
+      # packages: 'platform-tools' — see the same step's comment in native-build.yml.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Accept SDK licenses
+        run: yes | sdkmanager --licenses >/dev/null || true
+
+      # compileDebugAndroidTestJavaWithJavac: the instrumented tests (QuickAddLayoutTest) don't run
+      # here — no emulator — but compiling them keeps them from silently rotting against a changed
+      # Activity/layout API. jacocoTestReport depends on testDebugUnitTest, so it runs the JVM
+      # tests + coverage gate too.
+      - name: JVM unit tests + coverage gate, and compile instrumented tests
+        working-directory: apps/android
+        run: ./gradlew :app:jacocoTestReport :app:compileDebugAndroidTestJavaWithJavac --no-daemon
