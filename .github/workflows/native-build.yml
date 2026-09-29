@@ -350,11 +350,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      # mlapaglia/delete-prereleases matches by substring on the `version` input, e.g. "v1.0.1"
+      # mlapaglia/delete-prereleases matches by substring on the `version` input, e.g. "1.0.1"
       # matches "v1.0.1-rc.1", "v1.0.1-rc.2", etc. It deletes the GitHub Releases (and their
       # attached assets) only — it does not delete the underlying git tags, so `git tag -l` will
       # still list the pruned rc tags after this runs.
-      - uses: mlapaglia/delete-prereleases@v1
+      #
+      # Pinned to @v1.0.0, not a floating @v1: that repo publishes only a v1.0.0 tag (no v1 moving
+      # tag), so `@v1` fails at job-setup with "unable to find version v1". It was masked until
+      # #265 made this job actually run — before that the job was silently skipped, so the
+      # unresolvable ref was never exercised and the rc pre-releases were never pruned.
+      - uses: mlapaglia/delete-prereleases@v1.0.0
         with:
           version: ${{ needs.meta.outputs.version_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
