@@ -41,6 +41,22 @@ const skipAndroid = process.argv.includes('--skip-android')
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 
+/**
+ * The major version of the `java` on PATH, or null when none runs. Java prints its version to
+ * stderr ("openjdk version \"21.0.11\" …"); the old `1.8.0` form is normalised to `8`.
+ * @returns {number | null}
+ */
+function detectJavaMajorVersion() {
+  const result = spawnSync('java', ['-version'], { encoding: 'utf8' })
+  if (result.status !== 0) return null
+  const output = `${result.stderr || ''}${result.stdout || ''}`
+  const match = output.match(/version "(\d+)(?:\.(\d+))?/)
+  if (!match) return null
+  const major = Number(match[1])
+  // `1.8.0_392` style: the real major is the second component.
+  return major === 1 && match[2] ? Number(match[2]) : major
+}
+
 const steps = [
   {
     label: 'Build @everylist/shared',
@@ -103,15 +119,20 @@ for (const [index, step] of steps.entries()) {
       !!(process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT) ||
       existsSync(join(process.env.HOME || '', 'Library/Android/sdk')) ||
       existsSync(join(process.env.HOME || '', 'Android/Sdk'))
-    const javaOk = spawnSync('java', ['-version'], { stdio: 'ignore' }).status === 0
-    if (!sdkPresent || !javaOk) {
+    // AGP 8.13 needs JDK 17+; CI pins 21. Parse the major version rather than accepting any
+    // `java` (a JDK 8/11 would pass a bare status check and then fail Gradle confusingly).
+    const javaMajor = detectJavaMajorVersion()
+    if (!sdkPresent || javaMajor === null || javaMajor < 17) {
       console.log(`\n===== ${header} — SKIPPED =====`)
+      const javaNote =
+        javaMajor === null ? 'no working `java` found' : `found JDK ${javaMajor} (need 17+)`
       console.log(
-        'No Android SDK / working `java` found on this machine. CI runs this step; to run it here,'
+        `Skipping Android step: ${javaNote}${sdkPresent ? '' : ', no Android SDK found'}.`
       )
       console.log(
-        'install the Android SDK + JDK 21 and set ANDROID_HOME (or put it at ~/Library/Android/sdk).'
+        'CI runs this step; to run it here, install the Android SDK + JDK 21 and set ANDROID_HOME'
       )
+      console.log('(or put the SDK at ~/Library/Android/sdk).')
       continue
     }
   }
