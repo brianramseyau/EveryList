@@ -37,6 +37,11 @@ const END = '<!-- whats-new:end -->'
 const START_LINE = /^[ \t]*<!-- whats-new:start -->[ \t]*$/m
 const END_LINE = /^[ \t]*<!-- whats-new:end -->[ \t]*$/m
 
+// A release heading: `## vX.Y.Z` with an optional prerelease suffix (`-rc.1`). The suffix is
+// captured too, so a `## v1.7.5-rc.1` entry is never mistaken for the stable `1.7.5` release.
+const RELEASE_HEADING = /^##[ \t]+v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b.*$/m
+const VERSION_HEADING = /^##[ \t]+v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\b.*$/gm
+
 /**
  * Removes fenced code blocks (``` ... ```) so the changelog's own template block — which contains
  * what's-new markers as a reference — is never mistaken for a real entry.
@@ -70,7 +75,17 @@ export function extractWhatsNew(markdown) {
   const startIndex = startMatch.index
   const afterStart = startIndex + startMatch[0].length
 
-  const endMatch = END_LINE.exec(source.slice(afterStart))
+  // Bound the search for the end marker to this release's section, so an entry with no end marker
+  // fails loudly instead of silently swallowing an older entry's end marker (and combining the two
+  // entries into one). The newest section extends to the end of the source when no later heading
+  // exists.
+  const afterStartSource = source.slice(afterStart)
+  const nextRelease = RELEASE_HEADING.exec(afterStartSource)
+  const currentSection = nextRelease
+    ? afterStartSource.slice(0, nextRelease.index)
+    : afterStartSource
+
+  const endMatch = END_LINE.exec(currentSection)
   if (!endMatch) {
     throw new Error(`Found "${START}" with no matching "${END}" on its own line.`)
   }
@@ -79,13 +94,15 @@ export function extractWhatsNew(markdown) {
   // The heading immediately above the block identifies which release it belongs to. Search only
   // the text before the block so a later entry's heading can't be matched by mistake.
   const before = source.slice(0, startIndex)
-  const headings = [...before.matchAll(/^##[ \t]+v?(\d+\.\d+\.\d+)\b.*$/gm)]
+  const headings = [...before.matchAll(VERSION_HEADING)]
   if (headings.length === 0) {
     throw new Error(`No "## vX.Y.Z" heading found above the "${START}" block.`)
   }
   const version = headings[headings.length - 1][1]
 
-  const text = source.slice(afterStart, endIndex).trim().replace(/\s+/g, ' ')
+  // Keep newlines intact for validation — validateWhatsNew's line-start marker check depends on
+  // them. Collapse to a single line only after validation (in buildWhatsNew).
+  const text = source.slice(afterStart, endIndex).trim()
 
   return { version, text }
 }
@@ -134,12 +151,15 @@ export function buildWhatsNew(options) {
       `The newest changelog entry is v${version}, but this release is v${tag}. Add a v${tag} entry at the top.`
     )
   }
+  // Validate with newlines intact (the line-start marker check depends on them), then flatten to a
+  // single line for the file Play receives.
   validateWhatsNew(text)
+  const normalized = text.replace(/\s+/g, ' ')
 
   mkdirSync(options.outDir, { recursive: true })
   const outFile = path.join(options.outDir, `whatsnew-${LOCALE}`)
-  writeFileSync(outFile, text)
-  return { version, text, outFile }
+  writeFileSync(outFile, normalized)
+  return { version, text: normalized, outFile }
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
