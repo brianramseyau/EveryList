@@ -5,6 +5,7 @@ node_modules/
 dist/
 build/
 .svelte-kit/
+apps/android/whatsnew/
 apps/web/build/
 apps/desktop/renderer/
 apps/desktop/release/

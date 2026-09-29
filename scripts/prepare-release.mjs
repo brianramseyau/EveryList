@@ -24,6 +24,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { extractWhatsNew, validateWhatsNew } from './android-whats-new.mjs'
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../..')
 
@@ -35,6 +36,28 @@ if (!tag || !/^v\d+\.\d+\.\d+$/.test(tag)) {
   process.exit(1)
 }
 const bareVersion = tag.slice(1)
+
+// Guard before touching any file: the release branch must already carry an apps/android/CHANGELOG.md
+// entry for this version, with a valid truncated What's new block (native-build.yml publishes it to
+// Google Play — see scripts/android-whats-new.mjs). Failing here rather than after the package.json
+// rewrite keeps a rejected run from leaving the versions half-bumped.
+const changelogPath = path.join(repoRoot, 'apps/android/CHANGELOG.md')
+try {
+  const { version, text } = extractWhatsNew(readFileSync(changelogPath, 'utf8'))
+  if (version !== bareVersion) {
+    throw new Error(
+      `its newest entry is v${version}, not v${bareVersion} — add the v${bareVersion} entry at the top`
+    )
+  }
+  validateWhatsNew(text)
+} catch (error) {
+  console.error(
+    `apps/android/CHANGELOG.md isn't ready for ${tag}: ${error instanceof Error ? error.message : String(error)}\n` +
+      'Add the release entry (a `## vX.Y.Z` heading + a `<!-- whats-new:start -->`/`end` truncated ' +
+      "summary under 500 chars) and run this again — it feeds the Google Play What's new text."
+  )
+  process.exit(1)
+}
 
 // Every workspace's package.json "version" field - npm/electron-builder want a bare semver,
 // no "v" prefix. apps/desktop's is the one that actually matters functionally (it names the

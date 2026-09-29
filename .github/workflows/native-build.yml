@@ -182,10 +182,22 @@ jobs:
         if: always()
         run: rm -f apps/android/app/release.keystore
 
+      # Turns the newest apps/android/CHANGELOG.md entry's What's new block into the Play
+      # release-notes file. Fails the job (before anything reaches Play) if the entry is missing,
+      # oversized (>500 chars), still contains Markdown, or is for a different version.
+      - name: Generate Play "What's new" release notes
+        run: node scripts/android-whats-new.mjs ${{ needs.meta.outputs.version_name }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: android-aab-release
           path: apps/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-whats-new
+          path: apps/android/whatsnew
           if-no-files-found: error
 
   publish-play:
@@ -199,6 +211,11 @@ jobs:
           name: android-aab-release
           path: dist
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-whats-new
+          path: dist/whatsnew
+
       - uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
@@ -206,6 +223,8 @@ jobs:
           releaseFiles: dist/app-release.aab
           track: alpha
           status: completed
+          releaseName: v${{ needs.meta.outputs.version_name }}
+          whatsNewDirectory: dist/whatsnew
 
   build-ios:
     name: Build iOS Simulator app
