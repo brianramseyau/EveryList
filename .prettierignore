@@ -7,5 +7,6 @@ apps/web/dev-dist
 coverage
 pnpm-lock.yaml
 CHANGELOG.md
+apps/android/whatsnew
 apps/api/.adonisjs
 apps/api/database/schema.ts
