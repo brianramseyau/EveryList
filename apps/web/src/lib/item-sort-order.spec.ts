@@ -81,6 +81,14 @@ describe('sortItemsWithinBucket', () => {
 		]);
 	});
 
+	it('deadline sort: a timed deadline on a date sorts before a date-only one (end of day)', () => {
+		const items = [
+			makeItem({ id: 1, name: 'All day', deadline: '2026-09-29' }),
+			makeItem({ id: 2, name: 'Morning', deadline: '2026-09-29T07:00' })
+		];
+		expect(sortItemsWithinBucket(items, 'deadline').map((item) => item.id)).toEqual([2, 1]);
+	});
+
 	it('deadline sort sorts in place and returns the same array (no reactive re-keying)', () => {
 		const items = [
 			makeItem({ id: 1, name: 'Later', deadline: '2026-09-06' }),

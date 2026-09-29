@@ -27,16 +27,23 @@ export function computeMidpointSortOrder(
 }
 
 // PLAN_24_PHASE_ITEM_DEADLINES.md: 'deadline' ordering — items with a deadline
-// first, ascending (ISO 'YYYY-MM-DD' / 'YYYY-MM-DDTHH:mm' compare correctly as
-// plain strings), same-deadline ties broken by name; items without a deadline
-// keep their manual rank order at the end. Must mirror the API's
-// list_display_order.ts byDeadline so the Alexa display and widget match.
+// first, ascending by the instant they're actually due. A date-only deadline
+// ('YYYY-MM-DD') is due by the end of its day, so it must sort *after* a timed
+// deadline ('YYYY-MM-DDTHH:mm') on the same date — a raw lexical comparison puts
+// it before them instead (`'2026-09-29' < '2026-09-29T07:00'`). Same-deadline ties
+// are broken by name; items without a deadline keep their manual rank order at the
+// end. Must mirror the API's list_display_order.ts byDeadline so the Alexa display
+// and widget match.
+function deadlineSortKey(deadline: string): string {
+	return deadline.length > 10 ? deadline : `${deadline}T23:59:59`;
+}
+
 function compareByDeadline(a: ItemDto, b: ItemDto): number {
 	if (a.deadline === null && b.deadline === null) return a.sortOrder - b.sortOrder;
 	if (a.deadline === null) return 1;
 	if (b.deadline === null) return -1;
 	return (
-		a.deadline.localeCompare(b.deadline) ||
+		deadlineSortKey(a.deadline).localeCompare(deadlineSortKey(b.deadline)) ||
 		a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
 	);
 }

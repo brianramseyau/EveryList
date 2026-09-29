@@ -24,12 +24,12 @@ Confirmed with the user:
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Storage format | `items.deadline` = single nullable TEXT column holding `'YYYY-MM-DD'` or `'YYYY-MM-DDTHH:mm'` | No timezone/Date-serialization footguns (a Lucid `date` column + `vine.date()` risks off-by-one on non-UTC servers). Both shapes sort correctly lexicographically, interleaving deterministically (date-only sorts before same-date datetimes). Precedent for regex-validated string fields: `backup_setting.ts`'s `timeOfDay`. |
+| Storage format | `items.deadline` = single nullable TEXT column holding `'YYYY-MM-DD'` or `'YYYY-MM-DDTHH:mm'` | No timezone/Date-serialization footguns (a Lucid `date` column + `vine.date()` risks off-by-one on non-UTC servers). Both shapes sort correctly once a date-only value is keyed to end-of-day (see sort semantics below). Precedent for regex-validated string fields: `backup_setting.ts`'s `timeOfDay`. |
 | Time semantics | **Naive local time** — no timezone conversion anywhere | A "required by 5pm" deadline means 5pm on each viewer's clock. Keeps every code path (API, Dexie, display, sort) free of Date/timezone math. Documented tradeoff: on a cross-timezone shared list the time is not anchored to the author's zone. |
 | Minute precision | Time is `HH:mm` only (no seconds) | Matches `<input type="time">`'s default and the "required by" mental model. |
 | Toggle convention | `lists.use_deadline` boolean, default **`false`** | Deliberately inverts the existing "missing = server default `true`" read convention used by every PLAN_19 flag. All frontend gates read `list?.useDeadline === true`, and `ListDto`'s doc comment must state missing = `false`. |
 | Overdue semantics | datetime → overdue when `deadline < now` (local); date-only → overdue only from the **next day** (`date < today`) — end-of-day rule | A date-only "Sep 5" is due *by* Sep 5, so it is not overdue on Sep 5 itself. |
-| Sort semantics | Within each category bucket: items with a deadline first, ascending by deadline string; ties broken by name (case-insensitive); items without a deadline after, in their existing rank order | Deterministic; keeps manual rank meaningful for the tail. |
+| Sort semantics | Within each category bucket: items with a deadline first, ascending by the instant they're actually due — a date-only deadline is keyed to end-of-day, so it sorts after a timed one on the same date; ties broken by name (case-insensitive); items without a deadline after, in their existing rank order | Deterministic; keeps manual rank meaningful for the tail. End-of-day keying matches the overdue rule (a date-only Sep 5 isn't overdue until Sep 6). |
 | Validation | Regex `^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$` + Luxon round-trip calendar check | Rejects `2026-02-31`, `T25:00`, `T14:61`, partial time (`T14`), and trailing junk, not just malformed shapes. |
 
 ## Backend changes
