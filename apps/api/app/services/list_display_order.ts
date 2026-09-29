@@ -3,6 +3,18 @@ import type Category from '#models/category'
 import type List from '#models/list'
 
 /**
+ * Maps a deadline to the instant it's actually due, for ordering. A date-only
+ * deadline ('YYYY-MM-DD') is due by the end of that day, so it must sort *after*
+ * any timed deadline ('YYYY-MM-DDTHH:mm') on the same date — a raw lexical
+ * comparison puts it before them instead, since `'2026-09-29' < '2026-09-29T07:00'`.
+ * Appending an end-of-day time keeps the plain-string comparison (no Date/timezone
+ * parsing) while matching the end-of-day overdue semantics used everywhere else.
+ */
+function deadlineSortKey(deadline: string): string {
+  return deadline.length > 10 ? deadline : `${deadline}T23:59:59`
+}
+
+/**
  * Flattens a list's items into the same order the app's own grouped display uses
  * (`groups` in `apps/web/src/routes/lists/[id]/+page.svelte`) — category clusters first
  * (ordered by each category's own `sortOrder`, uncategorized items last), then items within
@@ -22,15 +34,16 @@ export function buildFlatDisplayOrder(
   const byName = (a: Item, b: Item) =>
     a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
   const byRank = (a: Item, b: Item) => a.sortOrder - b.sortOrder
-  // PLAN_24_PHASE_ITEM_DEADLINES.md: deadline ascending — ISO 'YYYY-MM-DD' and
-  // 'YYYY-MM-DDTHH:mm' compare correctly as plain strings — with same-deadline
+  // PLAN_24_PHASE_ITEM_DEADLINES.md: deadline ascending by actual due instant —
+  // a date-only deadline is due at the *end* of its day, so it sorts after a
+  // timed deadline on the same date (see deadlineSortKey) — with same-deadline
   // ties broken by name; items without a deadline keep their manual rank order
   // at the end. Must mirror the web app's sortItemsWithinBucket.
   const byDeadline = (a: Item, b: Item) => {
     if (a.deadline === null && b.deadline === null) return byRank(a, b)
     if (a.deadline === null) return 1
     if (b.deadline === null) return -1
-    return a.deadline.localeCompare(b.deadline) || byName(a, b)
+    return deadlineSortKey(a.deadline).localeCompare(deadlineSortKey(b.deadline)) || byName(a, b)
   }
   const compare =
     list.itemSortOrder === 'alphabetical'

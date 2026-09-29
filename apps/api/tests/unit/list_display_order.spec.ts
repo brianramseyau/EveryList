@@ -36,11 +36,11 @@ test.group('buildFlatDisplayOrder deadline sort (PLAN_24)', () => {
     assert.deepEqual(
       ordered.map((item) => item.id),
       [3, 2, 1, 5, 4],
-      'earliest deadline first (datetime sorts before same-day date-only), then name tiebreak, then no-deadline items in rank order'
+      'earliest deadline first (earlier date before later date), then name tiebreak, then no-deadline items in rank order'
     )
   })
 
-  test('date-only deadlines are not ordered before a same-date time by anything but the string rule', ({
+  test('a timed deadline sorts before a date-only one on the same date (date-only is due end of day)', ({
     assert,
   }) => {
     const list = makeList({ itemSortOrder: 'deadline' })
@@ -51,11 +51,11 @@ test.group('buildFlatDisplayOrder deadline sort (PLAN_24)', () => {
 
     const ordered = buildFlatDisplayOrder(list, items, [], { includeChecked: true })
 
-    // 'YYYY-MM-DD' < 'YYYY-MM-DDTHH:mm' lexicographically — the documented,
-    // deterministic tiebreak between the two shapes on one date.
+    // A date-only 'Sep 6' is due by the *end* of Sep 6, so a 20:00 deadline that
+    // day is due first — the raw string rule would wrongly put 'All day' first.
     assert.deepEqual(
       ordered.map((item) => item.id),
-      [2, 1]
+      [1, 2]
     )
   })
 
