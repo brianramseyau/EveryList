@@ -87,7 +87,9 @@ final class WidgetJson {
      *  error, since the create itself already succeeded. */
     static long extractItemId(String body) {
         try {
-            return new JSONObject(body).optJSONObject("data").optLong("id", 0L);
+            JSONObject data = new JSONObject(body).optJSONObject("data");
+            if (data == null) return 0L;
+            return data.optLong("id", 0L);
         } catch (JSONException e) {
             return 0L;
         }

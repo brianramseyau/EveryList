@@ -93,4 +93,32 @@ public class WidgetJsonTest {
         assertNull(restored.get(0).quantity);
         assertNull(restored.get(0).deadline);
     }
+
+    @Test
+    public void parseLists_missingDataKeyYieldsEmptyList() throws Exception {
+        assertEquals(0, WidgetJson.parseLists("{}").size());
+    }
+
+    @Test
+    public void extractItemId_readsDataId() {
+        assertEquals(42L, WidgetJson.extractItemId("{\"data\":{\"id\":42,\"name\":\"Milk\"}}"));
+    }
+
+    @Test
+    public void extractItemId_missingOrMalformedYieldsZero() {
+        // All three are "nothing to reconcile" rather than an error: the create itself succeeded.
+        assertEquals(0L, WidgetJson.extractItemId("{\"data\":{}}"));
+        assertEquals(0L, WidgetJson.extractItemId("{}"));
+        assertEquals(0L, WidgetJson.extractItemId("not json"));
+    }
+
+    @Test
+    public void extractItemDeadline_readsValueAndNulls() {
+        assertEquals("2026-09-05T14:30",
+            WidgetJson.extractItemDeadline("{\"data\":{\"deadline\":\"2026-09-05T14:30\"}}"));
+        assertNull(WidgetJson.extractItemDeadline("{\"data\":{\"deadline\":null}}"));
+        assertNull(WidgetJson.extractItemDeadline("{\"data\":{}}"));
+        assertNull(WidgetJson.extractItemDeadline("{}"));
+        assertNull(WidgetJson.extractItemDeadline("not json"));
+    }
 }

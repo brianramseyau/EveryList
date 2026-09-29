@@ -21,6 +21,7 @@ foundational/   PLAN_00_FOUNDATIONAL_PLAN.md and phase plans — the product/arc
 - Database: **SQLite 3 (WAL)** via `better-sqlite3`, one file (`/config/everylist.sqlite3` in prod). No Postgres/MySQL — don't suggest one.
 - Migrations run automatically on every container boot (`docker/root/etc/cont-init.d/30-migrate`), against a live, populated production database. There is no staging step — a bad migration hits prod directly. Treat every migration as production-critical; see the SQLite footgun below before writing one that alters an existing table.
 - 100% test coverage is enforced in CI on both `apps/api` (c8/v8, `.c8rc.json`) and `apps/web` (Vitest, `vite.config.ts`) — statements/branches/functions/lines. `pnpm lint` (prettier --check + eslint) and `pnpm typecheck` must also be clean.
+- `apps/android` is the exception to that rule and is **not** a pnpm workspace: it's a Gradle project with its own CI job (`android` in `.github/workflows/test.yml`). It runs the pure-JVM unit suite (`app/src/test`) under JaCoCo with a **line-coverage ratchet** in `apps/android/app/build.gradle` (`./gradlew :app:jacocoTestReport`) — currently well under 100% because most of the app is framework glue. `scripts/check.mjs` (`pnpm check`) runs the same step when an Android SDK + `java` are present, and skips it with a note otherwise. Instrumented tests live in `app/src/androidTest` (`QuickAddLayoutTest`) and need a device/emulator; they're run by hand, not in CI — and note `./gradlew connectedAndroidTest` **uninstalls the app and its data when it finishes**, so prefer `adb install` + `adb shell am instrument` against a throwaway/emulator you don't mind wiping.
 - Shared DTOs live in `packages/shared` — validators/transformers on the API side and API-response types on the frontend side should both trace back to those, not redeclare shapes locally.
 
 ## Known footguns
@@ -356,6 +357,30 @@ Separately: a new pnpm-workspace package that's absent from the Docker build con
 break `pnpm install --frozen-lockfile` inside `docker/Dockerfile` — this was verified directly
 (§0 of the plan above), not assumed. `apps/desktop` being a real workspace member doesn't require
 any Dockerfile change, and one shouldn't be added "just in case."
+
+### `./gradlew connectedAndroidTest` uninstalls the app (and wipes its data) when it finishes
+
+**Hit 2026-09-29:** running `./gradlew :app:connectedDebugAndroidTest` against a dev emulator for
+the widget's quick-add layout test uninstalled `au.brianramsey.everylist.debug` at the end of the
+run — which also deleted `/data/data/<pkg>` (the widget's provisioned PAT + per-instance prefs,
+`everylist_auth.xml`, etc.) and the launcher's placed widgets, since AGP tears the installed app
+down between connected runs. On a scratch AVD that's fine; on an emulator/device you've actually
+provisioned against a server it silently costs you the setup.
+
+**What to do instead for one-off instrumented runs:** install the two APKs by hand and invoke the
+runner directly, so nothing is uninstalled:
+
+```sh
+./gradlew :app:assembleDebug :app:assembleDebugAndroidTest
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell am instrument -w -e class au.brianramsey.everylist.QuickAddLayoutTest \
+  au.brianramsey.everylist.debug.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+`QuickAddActivity` (and the other widget Activities) are `exported="false"` and only reachable via
+an explicit `PendingIntent` from the app's own uid, so `adb shell am start` can't launch them;
+`ActivityScenario` inside an instrumented test (as `QuickAddLayoutTest` does) is the way in.
 
 ## Working conventions
 
