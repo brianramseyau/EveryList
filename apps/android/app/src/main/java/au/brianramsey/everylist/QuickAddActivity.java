@@ -170,18 +170,27 @@ public class QuickAddActivity extends Activity {
         refreshDeadlineUi();
     }
 
-    /** Lights the clock up in the accent color and shows the preview while a deadline is picked;
-     *  back to the muted placeholder otherwise. Runs once at setup too, so a restored (or
-     *  never-picked) state renders consistently. */
+    /** Lights the clock up in the accent color and shows the picked deadline while one is set;
+     *  back to a muted placeholder otherwise. Runs once at setup too, so a restored (or
+     *  never-picked) state renders consistently.
+     *
+     *  <p>The preview stays visible with a placeholder rather than being hidden when nothing is
+     *  picked: it carries `layout_weight=1`, so the Add button — laid out after it — is pushed to
+     *  the row's end by the preview's reserved space. Hiding the preview collapsed that spacer and
+     *  let Add jump left to right next to the clock, which is why the button only sat on the right
+     *  once a deadline had been picked. The placeholder also keeps the row's height from changing
+     *  as a deadline comes and goes. */
     private void refreshDeadlineUi() {
         if (pickedDeadline == null) {
             deadlineButton.setColorFilter(getColor(R.color.widget_muted));
-            deadlinePreview.setVisibility(View.GONE);
+            deadlinePreview.setTextColor(getColor(R.color.widget_muted));
+            deadlinePreview.setText(R.string.quick_add_deadline);
         } else {
             deadlineButton.setColorFilter(getColor(R.color.widget_accent));
-            deadlinePreview.setVisibility(View.VISIBLE);
+            deadlinePreview.setTextColor(getColor(R.color.widget_accent));
             deadlinePreview.setText(DeadlineMath.formatDeadline(pickedDeadline));
         }
+        deadlinePreview.setVisibility(View.VISIBLE);
     }
 
     private void shrinkToWrapContent(android.app.Dialog dialog) {

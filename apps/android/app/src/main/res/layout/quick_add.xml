@@ -47,15 +47,18 @@
 
     <!-- Deadline control row: a clock button that opens the date/time picker, plus a short
          preview of what's currently picked ("Sep 5, 2:30 PM" — DeadlineMath.formatDeadline's
-         own formatting, matching the widget row chips). The clock lights up in the accent color
-         while a deadline is picked; hidden entirely on lists with deadlines turned off
-         (QuickAddActivity gates it on the widget's persisted useDeadline). -->
+         own formatting, matching the widget row chips). The clock and preview light up in the
+         accent color while a deadline is picked, and fall back to a muted "Required by
+         (optional)" placeholder when none is — the preview is never hidden while deadlines are
+         on, since its reserved width is what keeps Add pinned to the right end of the row. The
+         clock button and preview are only hidden together on lists with deadlines turned off
+         (QuickAddActivity gates them on the widget's persisted useDeadline). -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical|end">
 
         <!-- 48dp, not the icon's 40dp row-predecessor: this control opens the new deadline
              picker, so it needs the standard minimum touch target itself. -->
@@ -69,7 +72,10 @@
             android:src="@drawable/ic_widget_clock" />
 
         <!-- weight=1 + ellipsize: the preview shrinks (with an ellipsis) before it can squeeze
-             the Add button below its usable width at large font scales / narrow popups. -->
+             the Add button below its usable width at large font scales / narrow popups. It also
+             reserves that flexible space so Add always sits at the row's right end; its initial
+             placeholder text below is replaced at runtime by refreshDeadlineUi() (picked deadline
+             or the same placeholder), so it's only visible pre-setup. -->
         <TextView
             android:id="@+id/quick_add_deadline_preview"
             android:layout_width="0dp"
@@ -79,10 +85,10 @@
             android:layout_marginEnd="6dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="@color/widget_accent"
+            android:text="@string/quick_add_deadline"
+            android:textColor="@color/widget_muted"
             android:textSize="13sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/quick_add_save"
