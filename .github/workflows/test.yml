@@ -105,7 +105,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        workspace: [api, web, desktop, shared]
+        workspace: [api, web, desktop, shared, cli]
     steps:
       - uses: actions/checkout@v4
         with:
