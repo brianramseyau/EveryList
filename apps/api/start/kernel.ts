@@ -49,4 +49,5 @@ router.use([
 export const middleware = router.named({
   auth: () => import('#middleware/auth_middleware'),
   alexaSignature: () => import('#middleware/alexa_signature_middleware'),
+  mcp: () => import('#middleware/mcp_middleware'),
 })

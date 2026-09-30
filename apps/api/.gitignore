@@ -26,5 +26,8 @@ yarn-error.log
 .idea
 .vscode
 
+# MCP Inspector's local catalog (node ace mcp:inspector) — may persist a header/token
+.mcp-inspector.json
+
 # Platform specific
 .DS_Store

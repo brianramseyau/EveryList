@@ -5,6 +5,9 @@ export interface ApiDefinition {
   eventStream: typeof routes['event_stream']
   subscribe: typeof routes['subscribe']
   unsubscribe: typeof routes['unsubscribe']
+  mcp: {
+    post: typeof routes['mcp.post']
+  }
   auth: {
     newAccount: {
       store: typeof routes['auth.new_account.store']

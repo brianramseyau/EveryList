@@ -87,3 +87,21 @@ export const haLinkThrottle = limiter.define('haLink', (ctx) => {
   const key = ctx.auth.user?.id ?? ctx.request.ip()
   return limiter.allowRequests(10).every('1 minute').usingKey(String(key))
 })
+
+/**
+ * Applied to `POST /mcp` (foundational/PLAN_32_PHASE_MCP_SERVER.md) — the MCP surface is by
+ * definition an always-on external client (an AI assistant), so it's throttled like the PAT
+ * half of the `lists` group: keyed by the token's identifier so one integration can't exhaust
+ * another's quota, and skipped entirely under Japa like the other external-client limits.
+ *
+ * Must run after middleware.auth() (context is only populated then, same as `listsThrottle`),
+ * and unlike that limiter it can't see non-PAT traffic at all — the route only accepts the
+ * `pat` guard — but it keeps the same optional-chaining defensive fallback to the request IP
+ * rather than a non-null assertion for the same misconfiguration reason both sibling limiters
+ * above document.
+ */
+export const mcpThrottle = limiter.define('mcp', (ctx) => {
+  if (app.inTest) return limiter.noLimit()
+  const key = ctx.auth.user?.currentAccessToken?.identifier ?? ctx.request.ip()
+  return limiter.allowRequests(60).every('1 minute').usingKey(String(key))
+})

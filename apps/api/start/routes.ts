@@ -11,7 +11,13 @@ import { middleware } from '#start/kernel'
 import router from '@adonisjs/core/services/router'
 import { controllers } from '#generated/controllers'
 import app from '@adonisjs/core/services/app'
-import { authThrottle, haLinkThrottle, listsThrottle, passwordChangeThrottle } from '#start/limiter'
+import {
+  authThrottle,
+  haLinkThrottle,
+  listsThrottle,
+  mcpThrottle,
+  passwordChangeThrottle,
+} from '#start/limiter'
 import { readFile } from 'node:fs/promises'
 import { isValidIngressPath, rewriteHtmlForIngress } from '#services/ingress_service'
 import logger from '@adonisjs/core/services/logger'
@@ -30,6 +36,17 @@ import logger from '@adonisjs/core/services/logger'
 // guarantees runs to completion before any of this file's own top-level code
 // (i.e. router.get('*', ...) below) executes.
 import '#start/transmit'
+
+// MCP server (foundational/PLAN_32_PHASE_MCP_SERVER.md) — one JSON-RPC endpoint at the root,
+// deliberately OUTSIDE the /api/v1 group below: it speaks MCP, not the app's REST envelope,
+// and MCP clients conventionally target /mcp. The package's middleware handles
+// protocol-era/session headers; middleware.auth() pins the `pat` guard ONLY — an MCP client is
+// by definition an unattended external client, so login-session tokens can't use this surface
+// at all, and each tool's reach is capped by its PAT's per-list grants via ListPolicy (owner
+// is never possible). mcpThrottle keys on the token id, same shape as the lists group's PAT
+// limit. Registered before the `*` SPA catch-all at the bottom (the latter is GET-only and
+// this is POST, but keep the ordering explicit so /mcp never depends on wildcard behavior).
+router.mcp().use([middleware.mcp(), middleware.auth({ guards: ['pat'] }), mcpThrottle])
 
 router
   .group(() => {

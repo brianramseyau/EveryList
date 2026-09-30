@@ -66,7 +66,8 @@ EveryList is a general-purpose list app: real-time shared shopping lists with ai
 ### Voice & automation
 
 - **Voice control** — a private [Alexa custom skill](alexa/README.md) (add/remove/complete items, read a list back, plus an on-screen [APL](https://developer.amazon.com/en-US/docs/alexa/alexa-presentation-language/apl-overview.html) visual list on an Echo Show/Hub) and a [Home Assistant HACS integration](https://github.com/brianramseyau/everylist-hass) exposing each list as a native `todo.*` entity for Voice Assist — both authenticate via scoped Personal Access Tokens, not your login.
-- **Personal Access Tokens** — scoped, per-list, editor/viewer-capped API tokens (`Settings → Access Tokens`) for third-party integrations like the two above, independent of your login session.
+- **AI assistants (MCP)** — a built-in [Model Context Protocol](https://modelcontextprotocol.io) server, so Claude, Claude Code, Cursor and other MCP clients can read and edit your lists — discover lists, add/complete/remove items, search, and manage sub-tasks. Runs inside the same container on `/mcp`, authenticated by a scoped Personal Access Token. See [AI assistants (MCP)](#ai-assistants-mcp) below.
+- **Personal Access Tokens** — scoped, per-list, editor/viewer-capped API tokens (`Settings → Access Tokens`) for third-party integrations like the three above, independent of your login session.
 
 ### Self-hosted
 
@@ -92,7 +93,7 @@ EveryList/
 ├── packages/
 │   └── shared/         # shared TS types, DTOs, validation contracts
 ├── docker/              # production + dev Dockerfiles, Unraid template
-├── docs/                 # detailed reference docs (tech stack, deployment methods, development/)
+├── docs/                 # detailed reference docs (tech stack, deployment methods, MCP setup, development/)
 ├── branding/             # app icon source + generated exports, screenshots
 ├── alexa/                # Alexa custom skill deployment assets (interaction model, account linking)
 └── foundational/
@@ -138,10 +139,15 @@ Every `vX.Y.Z` tag also attaches unsigned macOS, Windows, and Linux desktop buil
 
 ## Voice control & integrations
 
-EveryList lists can be read and edited by voice through two paths, both authenticated by a scoped [Personal Access Token](#personal-access-tokens) rather than your login — mint one from `Settings → Access Tokens`, capped at `editor` role and scoped to only the list(s) you want an integration to reach.
+EveryList lists can be read and edited by external clients through three paths, all authenticated by a scoped [Personal Access Token](#personal-access-tokens) rather than your login — mint one from `Settings → Access Tokens`, capped at `editor` role and scoped to only the list(s) you want an integration to reach.
 
 - **Alexa** — a private custom skill for your own household (see [`alexa/README.md`](alexa/README.md) for the full setup, including the Authentik account-linking requirement). "Alexa, ask every list to add milk", "tell every list I got eggs", "what's on my list" — plus an interactive, category-grouped [APL](https://developer.amazon.com/en-US/docs/alexa/alexa-presentation-language/apl-overview.html) visual list on screen devices like an Echo Show or Echo Hub, with tap-to-complete.
 - **Home Assistant** — a [HACS](https://hacs.xyz) custom integration ([`everylist-hass`](https://github.com/brianramseyau/everylist-hass)) exposing each list as a native `todo.*` entity, so Voice Assist's built-in add/complete intents work with no custom NLU. Reads, writes, and reorders round-trip live via realtime subscription, with a polling fallback.
+- **AI assistants (MCP)** — a built-in [Model Context Protocol](https://modelcontextprotocol.io) server at `/mcp`, so MCP-capable AI clients can read and edit your lists directly. See [AI assistants (MCP)](#ai-assistants-mcp) below.
+
+### AI assistants (MCP)
+
+EveryList runs an [MCP](https://modelcontextprotocol.io) server inside the same container — no separate service to deploy — so AI clients like Claude, Claude Code or Cursor can work with your lists: discover which lists a token can reach, read them, add/update/complete/remove items, search, and manage sub-tasks. It's authenticated by a scoped [Personal Access Token](#personal-access-tokens) (mint one from `Settings → Access Tokens`), so an AI client only ever sees the list(s) you grant it, at `editor` or `viewer` role, never full access. Point a remote-capable client at `https://your-instance/mcp` with the token as a bearer header, or bridge a stdio-only desktop client through `mcp-remote`. Full setup, the tool list, and security notes: [`docs/mcp.md`](docs/mcp.md).
 
 ### Personal Access Tokens
 

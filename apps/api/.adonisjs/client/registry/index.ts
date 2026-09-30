@@ -24,6 +24,12 @@ const routes = {
     tokens: [{"old":"/__transmit/unsubscribe","type":0,"val":"__transmit","end":""},{"old":"/__transmit/unsubscribe","type":0,"val":"unsubscribe","end":""}],
     types: placeholder as Registry['unsubscribe']['types'],
   },
+  'mcp.post': {
+    methods: ["POST"],
+    pattern: '/mcp',
+    tokens: [{"old":"/mcp","type":0,"val":"mcp","end":""}],
+    types: placeholder as Registry['mcp.post']['types'],
+  },
   'auth.new_account.store': {
     methods: ["POST"],
     pattern: '/api/v1/auth/signup',

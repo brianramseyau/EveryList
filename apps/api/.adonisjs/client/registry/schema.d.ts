@@ -43,6 +43,18 @@ export interface Registry {
       errorResponse: unknown
     }
   }
+  'mcp.post': {
+    methods: ["POST"]
+    pattern: '/mcp'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
   'auth.new_account.store': {
     methods: ["POST"]
     pattern: '/api/v1/auth/signup'
