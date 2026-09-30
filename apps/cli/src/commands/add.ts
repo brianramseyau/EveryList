@@ -18,8 +18,8 @@ export async function addCommand(ctx: CommandContext): Promise<void> {
   const listArg = requirePositional(ctx.positionals, 0, '<list>')
   const name = requirePositional(ctx.positionals, 1, '<item>')
 
-  const list = await resolveListArg(client, listArg)
-
+  // Read and validate every flag before any network call, so a bad value (a valueless
+  // `--quantity`, a malformed `--price`) fails immediately rather than after a round trip.
   const body: Record<string, unknown> = { name }
   const quantity = stringFlag(ctx.flags, 'quantity')
   if (quantity !== undefined) body.quantity = quantity
@@ -29,6 +29,8 @@ export async function addCommand(ctx: CommandContext): Promise<void> {
   if (deadline !== undefined) body.deadline = deadline
   const price = stringFlag(ctx.flags, 'price')
   if (price !== undefined) body.price = parsePriceFlag(price)
+
+  const list = await resolveListArg(client, listArg)
 
   const item = await client.post<{ id: number; name: string }>(
     `/api/v1/lists/${list.id}/items`,

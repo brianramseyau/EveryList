@@ -2,8 +2,9 @@ import { ApiClient } from '../client.js'
 import {
   BASE_URL_ENV,
   maskToken,
+  normalizeBaseUrl,
   readConfig,
-  requireBaseUrl,
+  resolveBaseUrl,
   resolveToken,
   writeConfig
 } from '../config.js'
@@ -22,13 +23,14 @@ export async function loginCommand(ctx: CommandContext): Promise<void> {
   rejectUnknownFlags(ctx.flags, ['url', 'token'])
   const config = readConfig(ctx.env)
 
-  const url = stringFlag(ctx.flags, 'url') ?? config.baseUrl
+  // Precedence for the saved URL: `--url` flag, then `EVERYLIST_URL`, then the existing config.
+  const url = stringFlag(ctx.flags, 'url') ?? resolveBaseUrl(config, ctx.env)
   if (!url) {
     throw new UsageError(
       `Missing --url. Run \`everylist login --url https://your-server\`, or set ${BASE_URL_ENV}.`
     )
   }
-  const normalizedUrl = url.replace(/\/+$/, '')
+  const normalizedUrl = normalizeBaseUrl(url)
 
   let token = stringFlag(ctx.flags, 'token') ?? resolveToken(config, ctx.env)
   if (!token) {
@@ -37,7 +39,7 @@ export async function loginCommand(ctx: CommandContext): Promise<void> {
   }
 
   // Verify before persisting: a token that can't authenticate shouldn't be written to disk.
-  const client = new ApiClient(normalizedUrl, token)
+  const client = new ApiClient(normalizedUrl, token, fetch, 30_000, ctx.env)
   const identity = await client.get<AccessTokenDto>('/api/v1/tokens/me')
 
   // Persist the *literal* URL the user gave (normalized), not the env override, so a one-off
@@ -66,9 +68,11 @@ export async function loginCommand(ctx: CommandContext): Promise<void> {
 export async function tokenCommand(ctx: CommandContext): Promise<void> {
   rejectUnknownFlags(ctx.flags)
   const client = requireClient(ctx)
-  const config = readConfig(ctx.env)
-  const baseUrl = requireBaseUrl(config, ctx.env)
-  const token = resolveToken(config, ctx.env)
+  // Report the credentials the client actually uses (flag > env > config), not a fresh
+  // config/env lookup — otherwise a `--url`/`--token` override would verify against one server
+  // but display another.
+  const baseUrl = ctx.baseUrl!
+  const token = ctx.token
 
   const identity = await client.get<AccessTokenDto>('/api/v1/tokens/me')
 

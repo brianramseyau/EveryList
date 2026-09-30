@@ -19,6 +19,11 @@ export interface CommandContext {
   /** The HTTP client, built from the resolved base URL + token. May be undefined when
    *  credentials are missing — commands that need it call `requireClient`. */
   client?: ApiClient
+  /** The effective base URL (flag > env > config), when one is configured. Kept alongside
+   *  `client` so `token` reports exactly the server it verified against. */
+  baseUrl?: string
+  /** The effective token (flag > env > config), when one is configured. */
+  token?: string
   /** Prompts for a line of input (used only by `login` when no `--token`/env is supplied).
    *  Defaults to reading stdin. */
   prompt(question: string): Promise<string>

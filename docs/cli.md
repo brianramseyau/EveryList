@@ -40,7 +40,12 @@ export EVERYLIST_URL=https://your-everylist-host
 export EVERYLIST_TOKEN=elt_…
 ```
 
-A `--url`/`--token` flag on any command overrides both, for a one-off run against another server.
+A `--url`/`--token` flag on any command overrides both, for a one-off run against another server (the override wins over env _and_ the saved config).
+
+> **Cleartext is refused by default.** The CLI sends your token as a bearer header, so it refuses
+> plain `http://` to any host except loopback (`localhost`, `127.0.0.1`, `::1`). If you run a
+> server on a trusted LAN over plain HTTP, set `EVERYLIST_ALLOW_INSECURE=1` to opt in — otherwise
+> use `https://`.
 
 ## Commands
 
@@ -102,6 +107,8 @@ everylist complete Groceries Milk
   immediately, with no reconfiguration.
 - **The token is never printed in full.** `everylist token` and `login` show a mask (`elt_abc…wxyz`),
   and the token is only ever written to the `0600` config file or sent in the `Authorization` header.
+- **Cleartext is refused.** A non-loopback `http://` server URL is rejected before the token is
+  sent (`EVERYLIST_ALLOW_INSECURE=1` opts in for a trusted LAN).
 - **Throttled like any external client.** The `/api/v1/lists` surface the CLI uses is rate-limited
   per-token, the same limit the Home Assistant and Alexa integrations share.
 

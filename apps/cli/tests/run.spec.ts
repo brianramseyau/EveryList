@@ -152,6 +152,42 @@ describe('run', () => {
       globalThis.fetch = original
     }
   })
+
+  it('normalizes a trailing slash on the --url flag', async () => {
+    const sink = capture()
+    const original = globalThis.fetch
+    let seenUrl = ''
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      seenUrl = String(input)
+      return { ok: true, status: 200, json: async () => ({ data: [] }) } as Response
+    }) as typeof fetch
+    try {
+      await run(['--url', 'https://flag.example/', '--token', 'elt_x', 'lists'], {
+        output: sink.output,
+        env: {}
+      })
+      expect(seenUrl).toBe('https://flag.example/api/v1/tokens/me')
+    } finally {
+      globalThis.fetch = original
+    }
+  })
+
+  it('reports a value flag passed without a value as a usage error', async () => {
+    const sink = capture()
+    const original = globalThis.fetch
+    globalThis.fetch = (async () =>
+      ({ ok: true, status: 200, json: async () => ({ data: [] }) }) as Response) as typeof fetch
+    try {
+      const code = await run(
+        ['--url', 'https://flag.example', '--token', 'elt_x', 'add', '1', 'Milk', '--quantity'],
+        { output: sink.output, env: {} }
+      )
+      expect(code).toBe(2)
+      expect(sink.stderr).toContain('Option --quantity requires a value.')
+    } finally {
+      globalThis.fetch = original
+    }
+  })
 })
 
 describe('describeUnexpectedError', () => {

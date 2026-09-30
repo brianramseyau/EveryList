@@ -69,6 +69,35 @@ describe('defaultPrompt', () => {
     // A newline is echoed after the hidden value so the next output starts on its own line.
     expect(written).toBe('Token: \n')
   })
+
+  it('aborts on Ctrl+C in raw mode, restoring echo', async () => {
+    const stdin = new PassThrough() as PassThrough & {
+      isTTY?: boolean
+      setRawMode?(mode: boolean): void
+    }
+    stdin.isTTY = true
+    const rawModes: boolean[] = []
+    stdin.setRawMode = (mode: boolean) => {
+      rawModes.push(mode)
+    }
+    const pending = defaultPrompt('Token: ', {
+      stdin: stdin as unknown as Parameters<typeof defaultPrompt>[1]['stdin'],
+      stderr: { write: () => true }
+    })
+    stdin.write('\x03')
+    await expect(pending).rejects.toThrow('Aborted')
+    expect(rawModes).toEqual([true, false])
+  })
+
+  it('rejects when stdin ends before a newline', async () => {
+    const stdin = new PassThrough()
+    const pending = defaultPrompt('Token: ', {
+      stdin: stdin as unknown as Parameters<typeof defaultPrompt>[1]['stdin'],
+      stderr: { write: () => true }
+    })
+    stdin.end()
+    await expect(pending).rejects.toThrow('No input provided')
+  })
 })
 
 describe('command registry', () => {

@@ -31,8 +31,16 @@ describe('parsePriceFlag', () => {
     expect(() => parsePriceFlag('-3')).toThrow(UsageError)
   })
 
-  it('strips every non-numeric character before parsing', () => {
-    // The sanitizer removes letters, so "12.99 USD" cleans to "12.99".
-    expect(parsePriceFlag('12.99 USD')).toBe(1299)
+  it('rejects letters even when digits are present', () => {
+    expect(() => parsePriceFlag('abc12.34')).toThrow(UsageError)
+    expect(() => parsePriceFlag('2x3.50')).toThrow(UsageError)
+  })
+
+  it('rejects scientific notation rather than reinterpreting it', () => {
+    expect(() => parsePriceFlag('1e3')).toThrow(UsageError)
+  })
+
+  it('rejects an out-of-range value that parses to Infinity', () => {
+    expect(() => parsePriceFlag('9'.repeat(400))).toThrow('--price is out of range')
   })
 })

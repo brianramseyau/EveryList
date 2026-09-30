@@ -51,6 +51,12 @@ describe('parseArgs', () => {
     expect(parsed.flags).toEqual({ z: true })
   })
 
+  it('does not consume a following token for boolean short aliases', () => {
+    const parsed = parseArgs(['-h', 'lists'])
+    expect(parsed.flags).toEqual({ help: true })
+    expect(parsed.command).toBe('lists')
+  })
+
   it('treats a lone dash as a positional', () => {
     const parsed = parseArgs(['search', '-'])
     expect(parsed.positionals).toEqual(['-'])
@@ -88,10 +94,19 @@ describe('rejectUnknownFlags', () => {
 })
 
 describe('stringFlag and boolFlag', () => {
-  it('returns the string value, or undefined for a valueless flag', () => {
+  it('returns the string value', () => {
     expect(stringFlag({ quantity: '2' }, 'quantity')).toBe('2')
-    expect(stringFlag({ all: true }, 'all')).toBeUndefined()
+  })
+
+  it('returns undefined for an absent flag', () => {
     expect(stringFlag({}, 'missing')).toBeUndefined()
+  })
+
+  it('throws a UsageError when a value flag was passed without a value', () => {
+    expect(() => stringFlag({ quantity: true }, 'quantity')).toThrow(UsageError)
+    expect(() => stringFlag({ quantity: true }, 'quantity')).toThrow(
+      'Option --quantity requires a value.'
+    )
   })
 
   it('reports true only for a valueless boolean flag', () => {

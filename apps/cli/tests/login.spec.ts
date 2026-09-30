@@ -165,6 +165,31 @@ describe('loginCommand', () => {
     expect(output.stdout).toContain('https://config.example')
   })
 
+  it('uses EVERYLIST_URL when --url and the config are both absent', async () => {
+    const dir = tmpDir()
+    const output = recordingOutput()
+    let seenUrl = ''
+    const original = globalThis.fetch
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      seenUrl = String(input)
+      return jsonResponse(200, { data: tokenFixture() })
+    }) as typeof fetch
+    try {
+      await loginCommand(
+        context({
+          output,
+          flags: { token: 'elt_abcdefghijklmnop' },
+          env: { EVERYLIST_CONFIG_DIR: dir, EVERYLIST_URL: 'https://env.example/' }
+        })
+      )
+    } finally {
+      globalThis.fetch = original
+    }
+    // The saved/used URL is normalized (no double slash) and comes from the env var.
+    expect(seenUrl).toBe('https://env.example/api/v1/tokens/me')
+    expect(readConfig({ EVERYLIST_CONFIG_DIR: dir }).baseUrl).toBe('https://env.example')
+  })
+
   it('throws a usage error when no URL is available', async () => {
     const dir = tmpDir()
     await expect(
@@ -215,7 +240,8 @@ describe('tokenCommand', () => {
       context({
         client,
         output,
-        env: { EVERYLIST_URL: 'https://x.example', EVERYLIST_TOKEN: 'elt_abcdefghijklmnop' }
+        baseUrl: 'https://x.example',
+        token: 'elt_abcdefghijklmnop'
       })
     )
     expect(output.stdout).toContain('Server: https://x.example')
@@ -230,7 +256,8 @@ describe('tokenCommand', () => {
         client,
         output,
         flags: { json: true },
-        env: { EVERYLIST_URL: 'https://x.example', EVERYLIST_TOKEN: 'elt_abcdefghijklmnop' }
+        baseUrl: 'https://x.example',
+        token: 'elt_abcdefghijklmnop'
       })
     )
     expect(JSON.parse(output.stdout).baseUrl).toBe('https://x.example')
@@ -239,14 +266,14 @@ describe('tokenCommand', () => {
   it('reports "none" when the token has no grants', async () => {
     const output = recordingOutput()
     const client = fakeClient({ get: () => tokenFixture({ grants: [] }) })
-    await tokenCommand(context({ client, output, env: { EVERYLIST_URL: 'https://x.example' } }))
+    await tokenCommand(context({ client, output, baseUrl: 'https://x.example' }))
     expect(output.stdout).toContain('Grants: none')
   })
 
-  it('omits the mask when no token is resolvable from config or env', async () => {
+  it('omits the mask when no token is resolvable', async () => {
     const output = recordingOutput()
     const client = fakeClient({ get: () => tokenFixture({ name: null }) })
-    await tokenCommand(context({ client, output, env: { EVERYLIST_URL: 'https://x.example' } }))
+    await tokenCommand(context({ client, output, baseUrl: 'https://x.example' }))
     expect(output.stdout).toContain('Token:  (unnamed)\n')
   })
 
@@ -254,19 +281,14 @@ describe('tokenCommand', () => {
     const output = recordingOutput()
     const client = fakeClient({ get: () => tokenFixture() })
     await tokenCommand(
-      context({
-        client,
-        output,
-        flags: { json: true },
-        env: { EVERYLIST_URL: 'https://x.example' }
-      })
+      context({ client, output, flags: { json: true }, baseUrl: 'https://x.example' })
     )
     expect(JSON.parse(output.stdout).token).toBeNull()
   })
 
   it('requires a client', async () => {
-    await expect(tokenCommand(context({ output: recordingOutput() }))).rejects.toThrow(
-      'Not connected to a server'
-    )
+    await expect(
+      tokenCommand(context({ output: recordingOutput(), baseUrl: 'https://x.example' }))
+    ).rejects.toThrow('Not connected to a server')
   })
 })

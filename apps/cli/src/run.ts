@@ -1,6 +1,13 @@
 import { parseArgs, boolFlag, stringFlag } from './args.js'
 import { ApiClient } from './client.js'
-import { BASE_URL_ENV, TOKEN_ENV, readConfig, resolveBaseUrl, resolveToken } from './config.js'
+import {
+  BASE_URL_ENV,
+  TOKEN_ENV,
+  normalizeBaseUrl,
+  readConfig,
+  resolveBaseUrl,
+  resolveToken
+} from './config.js'
 import type { CommandContext } from './context.js'
 import { CliError, UsageError } from './errors.js'
 import { processOutput, type Output } from './output.js'
@@ -36,16 +43,20 @@ export async function run(
     env
   }
 
-  // Credentials resolve env var → config file → per-invocation `--url`/`--token` flag (the flag
-  // wins, so a one-off command can target another server/token without touching the saved config).
-  // Optional at this stage — commands that don't touch the API (help) must work without them, and
-  // commands that do will fail through `requireClient` with a clear message.
-  const config = readConfig(env)
-  const baseUrl = stringFlag(parsed.flags, 'url') ?? resolveBaseUrl(config, env)
-  const token = stringFlag(parsed.flags, 'token') ?? resolveToken(config, env)
-  if (baseUrl && token) ctx.client = new ApiClient(baseUrl, token)
-
+  // Credentials resolve `--url`/`--token` flag → env var → config file (the flag wins, so a
+  // one-off command can target another server/token without touching the saved config). This runs
+  // inside the try below: a valueless `--url`/`--token` (a `UsageError` from `stringFlag`) or an
+  // insecure URL (from the `ApiClient` constructor) must be reported like any other CLI error, not
+  // escape as an unhandled rejection.
   try {
+    const config = readConfig(env)
+    const urlFlag = stringFlag(parsed.flags, 'url')
+    const baseUrl = urlFlag !== undefined ? normalizeBaseUrl(urlFlag) : resolveBaseUrl(config, env)
+    const token = stringFlag(parsed.flags, 'token') ?? resolveToken(config, env)
+    if (baseUrl && token) ctx.client = new ApiClient(baseUrl, token, fetch, 30_000, env)
+    ctx.baseUrl = baseUrl
+    ctx.token = token
+
     if (boolFlag(parsed.flags, 'version') || parsed.command === 'version') {
       output.out(`${version()}\n`)
       return 0
@@ -85,6 +96,8 @@ export function describeUnexpectedError(error: unknown): string {
 export interface PromptStdin {
   on(event: 'data', listener: (chunk: string) => void): void
   off(event: 'data', listener: (chunk: string) => void): void
+  on(event: 'end', listener: () => void): void
+  off(event: 'end', listener: () => void): void
   setEncoding(encoding: BufferEncoding): unknown
   pause(): void
   resume(): void
@@ -103,31 +116,53 @@ export interface PromptStreams {
  * itself goes to stderr so a command's stdout stays clean for piping. On a TTY the terminal's
  * echo is turned off for the duration, so a pasted token never appears on screen; a piped stdin
  * (not a TTY) is read as-is, which is what scripts and tests use.
+ *
+ * `Ctrl+C` in raw mode arrives as a `\x03` byte (not a signal), so it's handled explicitly — as
+ * is stdin ending before a newline — both of which abort the prompt by throwing a `CliError`
+ * rather than leaving the promise unsettled (and terminal echo off).
  */
 export function defaultPrompt(
   question: string,
   streams: PromptStreams = { stdin: process.stdin, stderr: process.stderr }
 ): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     streams.stderr.write(question)
     const hide = streams.stdin.isTTY === true && typeof streams.stdin.setRawMode === 'function'
     if (hide) streams.stdin.setRawMode!(true)
 
     let data = ''
     streams.stdin.setEncoding('utf8')
+
+    const cleanup = (echoNewline: boolean) => {
+      streams.stdin.off('data', onData)
+      streams.stdin.off('end', onEnd)
+      if (hide) streams.stdin.setRawMode!(false)
+      streams.stdin.pause()
+      if (echoNewline) streams.stderr.write('\n')
+    }
+
     const onData = (chunk: string) => {
+      if (chunk.includes('\x03')) {
+        cleanup(true)
+        reject(new CliError('Aborted.'))
+        return
+      }
       data += chunk
       // Raw-mode terminals emit `\r` on Enter, line-mode ones `\n` — accept either.
       const end = data.search(/[\r\n]/)
       if (end !== -1) {
-        streams.stdin.off('data', onData)
-        if (hide) streams.stdin.setRawMode!(false)
-        streams.stdin.pause()
-        if (hide) streams.stderr.write('\n')
+        cleanup(hide)
         resolve(data.slice(0, end))
       }
     }
+
+    const onEnd = () => {
+      cleanup(false)
+      reject(new CliError('No input provided.'))
+    }
+
     streams.stdin.on('data', onData)
+    streams.stdin.on('end', onEnd)
     streams.stdin.resume()
   })
 }

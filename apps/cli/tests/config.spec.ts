@@ -24,6 +24,19 @@ afterEach(() => {
 })
 
 describe('configDir / configPath', () => {
+  /** Runs `fn` with `process.platform` stubbed, restoring the real value afterwards — these
+   *  branches are platform-specific, so the test must pin the platform rather than inherit the
+   *  host's (which would fail on a macOS/Windows dev machine or runner). */
+  function withPlatform(platform: NodeJS.Platform, fn: () => void): void {
+    const original = process.platform
+    Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+    try {
+      fn()
+    } finally {
+      Object.defineProperty(process, 'platform', { value: original, configurable: true })
+    }
+  }
+
   it('honors EVERYLIST_CONFIG_DIR', () => {
     const env = { EVERYLIST_CONFIG_DIR: '/tmp/explicit-everylist' }
     expect(configDir(env)).toBe('/tmp/explicit-everylist')
@@ -31,45 +44,43 @@ describe('configDir / configPath', () => {
   })
 
   it('falls back to an XDG config path on linux', () => {
-    const env = { HOME: '/home/tester', XDG_CONFIG_HOME: '/home/tester/.config' }
-    expect(configDir(env)).toBe(path.join('/home/tester/.config', 'everylist'))
+    withPlatform('linux', () => {
+      const env = { HOME: '/home/tester', XDG_CONFIG_HOME: '/home/tester/.config' }
+      expect(configDir(env)).toBe(path.join('/home/tester/.config', 'everylist'))
+    })
   })
 
   it('falls back to ~/.config when XDG_CONFIG_HOME is unset', () => {
-    expect(configDir({ HOME: '/home/tester' })).toBe(
-      path.join('/home/tester', '.config', 'everylist')
-    )
+    withPlatform('linux', () => {
+      expect(configDir({ HOME: '/home/tester' })).toBe(
+        path.join('/home/tester', '.config', 'everylist')
+      )
+    })
   })
 
   it('falls back to the OS home when HOME is unset', () => {
-    expect(configDir({})).toBe(path.join(os.homedir(), '.config', 'everylist'))
+    withPlatform('linux', () => {
+      expect(configDir({})).toBe(path.join(os.homedir(), '.config', 'everylist'))
+    })
   })
 
   it('uses the macOS Application Support path on darwin', () => {
-    const original = process.platform
-    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
-    try {
+    withPlatform('darwin', () => {
       expect(configDir({ HOME: '/Users/tester' })).toBe(
         path.join('/Users/tester', 'Library', 'Application Support', 'everylist')
       )
-    } finally {
-      Object.defineProperty(process, 'platform', { value: original, configurable: true })
-    }
+    })
   })
 
   it('uses %APPDATA% on win32, falling back to a default under the home dir', () => {
-    const original = process.platform
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
-    try {
+    withPlatform('win32', () => {
       expect(configDir({ APPDATA: 'C:\\Users\\tester\\AppData\\Roaming' })).toBe(
         path.join('C:\\Users\\tester\\AppData\\Roaming', 'everylist')
       )
       expect(configDir({ HOME: 'C:\\Users\\tester' })).toBe(
         path.join('C:\\Users\\tester', 'AppData', 'Roaming', 'everylist')
       )
-    } finally {
-      Object.defineProperty(process, 'platform', { value: original, configurable: true })
-    }
+    })
   })
 })
 

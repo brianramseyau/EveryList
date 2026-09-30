@@ -96,6 +96,13 @@ export function writeConfig(config: CliConfig, env: NodeJS.ProcessEnv = process.
   fs.renameSync(tmp, target)
 }
 
+/** Strips trailing slashes so a base URL can be path-joined without doubling up
+ *  (`https://host/` → `https://host`, so `https://host/api/v1/...`, never `https://host//api/...`).
+ *  Applied to the flag, env, and config values alike. */
+export function normalizeBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '')
+}
+
 /** The effective base URL: env override first, then the config file, normalized to no trailing
  *  slash so path-joins never double up. */
 export function resolveBaseUrl(
@@ -103,7 +110,7 @@ export function resolveBaseUrl(
   env: NodeJS.ProcessEnv = process.env
 ): string | undefined {
   const value = env[BASE_URL_ENV] ?? config.baseUrl
-  return value ? value.replace(/\/+$/, '') : undefined
+  return value ? normalizeBaseUrl(value) : undefined
 }
 
 /** The effective token: env override first, then the config file. */

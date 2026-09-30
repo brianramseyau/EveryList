@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ApiClient } from '../src/client.js'
+import { ALLOW_INSECURE_ENV, ApiClient, assertSecureBaseUrl } from '../src/client.js'
 import { AuthError, CliError } from '../src/errors.js'
 
 /** A minimal `Response`-shaped stub for the fake fetch. */
@@ -10,6 +10,46 @@ function jsonResponse(status: number, body: unknown): Response {
     json: async () => body
   } as unknown as Response
 }
+
+describe('assertSecureBaseUrl', () => {
+  it('accepts https for any host', () => {
+    expect(() => assertSecureBaseUrl('https://remote.example', {})).not.toThrow()
+  })
+
+  it('accepts http on loopback hosts', () => {
+    for (const host of ['http://localhost:3334', 'http://127.0.0.1:3334', 'http://[::1]:3334']) {
+      expect(() => assertSecureBaseUrl(host, {})).not.toThrow()
+    }
+  })
+
+  it('rejects cleartext http to a non-loopback host', () => {
+    expect(() => assertSecureBaseUrl('http://remote.example', {})).toThrow(CliError)
+    expect(() => assertSecureBaseUrl('http://remote.example', {})).toThrow(
+      'Refusing to send your token in cleartext'
+    )
+  })
+
+  it('allows cleartext http to a remote host with the opt-in env var', () => {
+    expect(() =>
+      assertSecureBaseUrl('http://remote.example', { [ALLOW_INSECURE_ENV]: '1' })
+    ).not.toThrow()
+    expect(() =>
+      assertSecureBaseUrl('http://remote.example', { [ALLOW_INSECURE_ENV]: 'true' })
+    ).not.toThrow()
+  })
+
+  it('rejects a non-http(s) scheme', () => {
+    expect(() => assertSecureBaseUrl('ftp://x.example', {})).toThrow('Unsupported URL scheme')
+  })
+
+  it('rejects a malformed URL', () => {
+    expect(() => assertSecureBaseUrl('not a url', {})).toThrow('Invalid server URL')
+  })
+
+  it('is enforced by the ApiClient constructor', () => {
+    expect(() => new ApiClient('http://remote.example', 'elt_secret')).toThrow(CliError)
+  })
+})
 
 describe('ApiClient', () => {
   it('sends the bearer token and unwraps the { data } envelope on GET', async () => {
@@ -167,5 +207,53 @@ describe('ApiClient', () => {
     await expect(client.get('/api/v1/lists')).rejects.toThrow(
       'Could not reach https://x.example: boom'
     )
+  })
+
+  it('reports a fetch timeout distinctly', async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new DOMException('The operation timed out', 'TimeoutError')
+    })
+    const client = new ApiClient(
+      'https://x.example',
+      'elt_secret',
+      fetchImpl as unknown as typeof fetch,
+      1000
+    )
+    await expect(client.get('/api/v1/lists')).rejects.toThrow(
+      'Request to https://x.example timed out after 1000ms'
+    )
+  })
+
+  it('maps an abort while reading the body to a timeout error', async () => {
+    const response = {
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new DOMException('The operation was aborted', 'AbortError')
+      }
+    } as unknown as Response
+    const client = new ApiClient(
+      'https://x.example',
+      'elt_secret',
+      (async () => response) as typeof fetch,
+      5
+    )
+    await expect(client.get('/api/v1/lists')).rejects.toThrow('timed out after 5ms')
+  })
+
+  it('treats a non-JSON body mid-read as absent', async () => {
+    const response = {
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected token')
+      }
+    } as unknown as Response
+    const client = new ApiClient(
+      'https://x.example',
+      'elt_secret',
+      (async () => response) as typeof fetch
+    )
+    await expect(client.get('/api/v1/lists')).resolves.toBeUndefined()
   })
 })

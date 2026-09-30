@@ -1,6 +1,56 @@
 import { AuthError, CliError } from './errors.js'
 
 /**
+ * Env var that opts into sending the token over plain `http://` to a non-loopback host. Off by
+ * default: a Personal Access Token is a real credential, and cleartext to a remote server lets
+ * anyone on the path capture it. Loopback (`http://localhost`, `http://127.0.0.1`, a self-hosted
+ * box on a trusted LAN via an explicit opt-in) is the exception, not the rule.
+ */
+export const ALLOW_INSECURE_ENV = 'EVERYLIST_ALLOW_INSECURE'
+
+/** True for `localhost`, IPv4/IPv6 loopback, and the unspecified address — the hosts where
+ *  cleartext can't leave the machine. */
+function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase()
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '::1' ||
+    host === '0.0.0.0' ||
+    host.endsWith('.localhost')
+  )
+}
+
+/**
+ * Rejects a base URL that would send the bearer token in cleartext to a non-loopback host,
+ * unless the user explicitly opted in via {@link ALLOW_INSECURE_ENV}. A URL that isn't http(s)
+ * at all is also rejected (the client only speaks HTTP).
+ */
+export function assertSecureBaseUrl(baseUrl: string, env: NodeJS.ProcessEnv = process.env): void {
+  let parsed: URL
+  try {
+    parsed = new URL(baseUrl)
+  } catch {
+    throw new CliError(`Invalid server URL "${baseUrl}".`)
+  }
+
+  if (parsed.protocol === 'https:') return
+
+  if (parsed.protocol !== 'http:') {
+    throw new CliError(`Unsupported URL scheme "${parsed.protocol}" — use https (or http).`)
+  }
+
+  if (isLoopbackHost(parsed.hostname)) return
+
+  if (env[ALLOW_INSECURE_ENV] === '1' || env[ALLOW_INSECURE_ENV] === 'true') return
+
+  throw new CliError(
+    `Refusing to send your token in cleartext to ${baseUrl}. Use https://, or set ` +
+      `${ALLOW_INSECURE_ENV}=1 to allow plain http on a trusted network.`
+  )
+}
+
+/**
  * A minimal REST client for one EveryList server, sending a Personal Access Token as a bearer
  * header. Deliberately `fetch`-based with no framework dependency (PLAN_33: "a small arg parser
  * … until needed") — the API shape is stable and the envelope (`{ data: T }`) is one unwrap.
@@ -10,8 +60,14 @@ export class ApiClient {
     private readonly baseUrl: string,
     private readonly token: string,
     /** Injectable for tests; defaults to the global `fetch`. */
-    private readonly fetchImpl: typeof fetch = fetch
-  ) {}
+    private readonly fetchImpl: typeof fetch = fetch,
+    /** Per-request deadline, so a stalled server can't hang a cron/CI invocation forever. */
+    private readonly timeoutMs = 30_000,
+    /** Env for the cleartext-opt-in check; defaults to the process env. */
+    env: NodeJS.ProcessEnv = process.env
+  ) {
+    assertSecureBaseUrl(baseUrl, env)
+  }
 
   get<T>(path: string): Promise<T> {
     return this.request<T>('GET', path)
@@ -34,22 +90,31 @@ export class ApiClient {
     if (json !== undefined) headers.set('Content-Type', 'application/json')
     headers.set('Authorization', `Bearer ${this.token}`)
 
+    // A single signal covers the whole exchange, including reading the body below — Node's own
+    // Undici timers only detect inactivity, so a server dribbling body chunks could otherwise
+    // keep a cron/CI invocation alive forever.
+    const signal = AbortSignal.timeout(this.timeoutMs)
+
     let response: Response
     try {
       response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         method,
         headers,
+        signal,
         body: json === undefined ? undefined : JSON.stringify(json)
       })
     } catch (error) {
-      // A network/DNS/TLS failure (or the server being down) surfaces as a TypeError from
-      // fetch — give it a message that names the configured server so it's actionable.
+      // A timeout, DNS/TLS failure, or the server being down all surface here — name the server
+      // so the message is actionable, and call out a timeout specifically.
+      if (error instanceof DOMException && error.name === 'TimeoutError') {
+        throw new CliError(`Request to ${this.baseUrl} timed out after ${this.timeoutMs}ms.`)
+      }
       const detail = error instanceof Error ? error.message : String(error)
       throw new CliError(`Could not reach ${this.baseUrl}: ${detail}`)
     }
 
     if (!response.ok) {
-      const body = await parseJson(response)
+      const body = await this.readBody(response, signal)
       const message = extractErrorMessage(body, response.status)
       // 401 means the token itself is bad/expired (an auth/config problem); a 403 means the
       // token is valid but its grant is too low for this action (a plain runtime failure), so
@@ -61,8 +126,24 @@ export class ApiClient {
     }
 
     if (response.status === 204) return undefined as T
-    const body = await parseJson(response)
+    const body = await this.readBody(response, signal)
     return unwrap<T>(body)
+  }
+
+  /** Reads a response body as JSON, turning an abort mid-read (or non-JSON body) into a clean
+   *  result rather than an unhandled throw. The timeout signal is re-checked because the body
+   *  read happens after `fetch` resolved — a slow body could still exceed the deadline. */
+  private async readBody(response: Response, signal: AbortSignal): Promise<unknown> {
+    try {
+      return await response.json()
+    } catch (error) {
+      if (signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+        throw new CliError(`Request to ${this.baseUrl} timed out after ${this.timeoutMs}ms.`)
+      }
+      // A non-JSON body is legitimate on an error response (a proxy's HTML 502, say) — callers
+      // fall back to a status-based message.
+      return undefined
+    }
   }
 }
 
@@ -72,14 +153,6 @@ function unwrap<T>(body: unknown): T {
     return (body as { data: T }).data
   }
   return body as T
-}
-
-async function parseJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json()
-  } catch {
-    return undefined
-  }
 }
 
 /** Mirrors the web client's `extractErrorMessage` — the API's error envelope is

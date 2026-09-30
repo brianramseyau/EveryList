@@ -76,7 +76,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
       const name = token.slice(1)
       const canonical = SHORT_ALIASES[name] ?? name
       const next = argv[i + 1]
-      if (next !== undefined && !next.startsWith('-')) {
+      // `-h`/`-V` are booleans like their long forms — never consume a following token (so
+      // `-h lists` shows help rather than treating "lists" as `--help`'s value).
+      if (!BOOLEAN_FLAGS.has(canonical) && next !== undefined && !next.startsWith('-')) {
         flags[canonical] = next
         i++
       } else {
@@ -104,11 +106,16 @@ export function rejectUnknownFlags(flags: Record<string, FlagValue>, allowed: st
   }
 }
 
-/** Reads a flag as a string, treating a valueless `true` as absent (so `--json` style booleans
- *  don't masquerade as values). */
+/**
+ * Reads a flag's value. A flag that needs a value but was passed without one (`--quantity`, or
+ * `--quantity --json`) is a usage error, not a silent "absent" — otherwise the value is dropped
+ * with no feedback. Boolean flags (`--json`, `--all`) are read with {@link boolFlag} instead.
+ */
 export function stringFlag(flags: Record<string, FlagValue>, name: string): string | undefined {
   const value = flags[name]
-  return typeof value === 'string' ? value : undefined
+  if (value === undefined) return undefined
+  if (typeof value === 'string') return value
+  throw new UsageError(`Option --${name} requires a value.`)
 }
 
 /** True when a boolean flag was passed (`--json`, `-h`, …). */

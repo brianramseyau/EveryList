@@ -78,7 +78,10 @@ The surface was locked when this phase started:
 - **Exit codes** (`src/errors.ts`): `0` success, `1` runtime/API failure, `2` usage error, `3`
   auth/config. `run()` returns the code instead of calling `process.exit`, so it's fully testable.
 - **Token hygiene.** The full token is never printed — only a `elt_abc…wxyz` mask — and is only ever
-  written to the `0600` file or sent in the `Authorization` header.
+  written to the `0600` file or sent in the `Authorization` header. Cleartext `http://` is refused
+  for any non-loopback host (a PAT is a real credential), with `EVERYLIST_ALLOW_INSECURE=1` as the
+  explicit opt-in for a trusted LAN. Every request carries a 30s deadline so a stalled server can't
+  hang a cron/CI run.
 - **Testing**: Vitest, 100% coverage on all four metrics, the same gate every other workspace meets.
   Every command is exercised with a fake API client (injected), a recording output sink, and a fake
   prompt, so nothing touches a real network or TTY.
