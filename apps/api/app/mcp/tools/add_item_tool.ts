@@ -2,7 +2,6 @@ import type { ToolContext } from '@jrmc/adonis-mcp/types/context'
 import type { BaseSchema } from '@jrmc/adonis-mcp/types/method'
 
 import { Tool } from '@jrmc/adonis-mcp'
-import vine from '@vinejs/vine'
 import Item from '#models/item'
 import {
   McpToolError,
@@ -18,6 +17,12 @@ import {
 } from '#services/unchecked_limit'
 import { suggestCategoryId } from '#services/category_suggestion_service'
 import { broadcastSync } from '#services/sync_broadcaster'
+import {
+  addItemArgsValidator,
+  assertScopedRefs,
+  validateToolArgs,
+  type AddItemArgs,
+} from '#validators/mcp'
 
 /**
  * `add_item` — the add-by-name path, mirroring `items_controller.store`'s get-or-create
@@ -27,52 +32,20 @@ import { broadcastSync } from '#services/sync_broadcaster'
  * metadata-less duplicate), and only a genuinely new name creates a row, gated by the list's
  * unchecked-item limit. Every add-by-name path must resolve through `findItemByName`; this
  * tool is the MCP half of that contract.
+ *
+ * The args validator (`#validators/mcp`) is the single source of truth: `schema()` derives the
+ * advertised JSON Schema from it and `handle` runs the same validator at call time. This
+ * `Schema` only satisfies `Tool`'s generic (the package's `JSONSchema` can't express nullable
+ * unions, so the runtime types come from `AddItemArgs` below).
  */
-const vineSchema = vine.object({
-  list: vine
-    .string()
-    .trim()
-    .minLength(1)
-    .meta({ description: 'List id or exact list name to add into' }),
-  name: vine.string().trim().minLength(1).maxLength(200).meta({ description: 'Item name' }),
-  quantity: vine.string().trim().maxLength(50).nullable().optional().meta({
-    description: 'Quantity text, e.g. "2", "500 g" (ignored when the name already exists)',
-  }),
-  notes: vine
-    .string()
-    .trim()
-    .maxLength(1000)
-    .nullable()
-    .optional()
-    .meta({ description: 'Notes shown under the item (ignored when the name already exists)' }),
-  categoryId: vine
-    .number()
-    .positive()
-    .nullable()
-    .optional()
-    .meta({ description: 'Category id — omit to use this list’s learned auto-categorization' }),
-  storeId: vine
-    .number()
-    .positive()
-    .nullable()
-    .optional()
-    .meta({ description: 'Store id to slot the item into (ignored when the name already exists)' }),
-  price: vine
-    .number()
-    .min(0)
-    .nullable()
-    .optional()
-    .meta({ description: 'Price text as a number (ignored when the name already exists)' }),
-})
-
 type Schema = BaseSchema<{
   list: { type: 'string' }
   name: { type: 'string' }
-  quantity: { 'type': 'string'; 'x-nullable': true }
-  notes: { 'type': 'string'; 'x-nullable': true }
-  categoryId: { 'type': 'number'; 'x-nullable': true }
-  storeId: { 'type': 'number'; 'x-nullable': true }
-  price: { 'type': 'number'; 'x-nullable': true }
+  quantity: { type: 'string' }
+  notes: { type: 'string' }
+  categoryId: { type: 'number' }
+  storeId: { type: 'number' }
+  price: { type: 'number' }
 }>
 
 export default class AddItemTool extends Tool<Schema> {
@@ -87,26 +60,20 @@ export default class AddItemTool extends Tool<Schema> {
   async handle({ args, response, auth }: ToolContext<Schema>) {
     const user = auth?.user
     if (!user) return response.error('Authentication required.')
-    const payload = (args ?? {}) as {
-      list?: string
-      name?: string
-      quantity?: string | null
-      notes?: string | null
-      categoryId?: number | null
-      storeId?: number | null
-      price?: number | null
-    }
-    if (!payload.list || !payload.name) {
+    const preliminary = (args ?? {}) as { list?: string; name?: string }
+    if (!preliminary.list || !preliminary.name) {
       return response.error('List and name are required.')
     }
 
     const outcome = await withListAccess(async () => {
+      // Validate args at runtime (the schema only advertises `inputSchema`).
+      const fields = await validateToolArgs<AddItemArgs>(addItemArgsValidator, args)
       // 'editor': every write tool funnels through here — a viewer-granted list is refused
       // before any lookup happens (no probing).
-      const list = await requireGrantedList(user, payload.list!, 'editor')
-      const name = payload.name!
-
-      const normalized = name.trim()
+      const list = await requireGrantedList(user, fields.list, 'editor')
+      // Any supplied category/store must belong to this list, not just exist somewhere.
+      await assertScopedRefs(list, fields)
+      const normalized = fields.name.trim()
       const match = await findItemByName(list, normalized)
       const existing = match && !match.deleted ? match.item : null
 
@@ -149,14 +116,14 @@ export default class AddItemTool extends Tool<Schema> {
       const item = await Item.create({
         listId: list.id,
         name: normalized,
-        quantity: payload.quantity ?? null,
-        notes: payload.notes ?? null,
+        quantity: fields.quantity ?? null,
+        notes: fields.notes ?? null,
         categoryId:
-          payload.categoryId !== undefined
-            ? payload.categoryId
+          fields.categoryId !== undefined
+            ? fields.categoryId
             : await suggestCategoryId(list, normalized),
-        storeId: payload.storeId ?? null,
-        price: payload.price ?? null,
+        storeId: fields.storeId ?? null,
+        price: fields.price ?? null,
         checked: false,
         sortOrder: await nextSortOrder(list, { respectInsertPosition: true }),
         createdBy: user.id,
@@ -183,6 +150,6 @@ export default class AddItemTool extends Tool<Schema> {
   }
 
   schema() {
-    return vine.create(vineSchema).toJSONSchema() as Schema
+    return addItemArgsValidator.toJSONSchema() as unknown as Schema
   }
 }

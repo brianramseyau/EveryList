@@ -1,14 +1,19 @@
 import type { ToolContext } from '@jrmc/adonis-mcp/types/context'
 import type { BaseSchema } from '@jrmc/adonis-mcp/types/method'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 import { Tool } from '@jrmc/adonis-mcp'
 import vine from '@vinejs/vine'
 import Item from '#models/item'
 import SubItem from '#models/sub_item'
 import db from '@adonisjs/lucid/services/db'
-import { itemProjection, requireGrantedList, withListAccess } from '#services/mcp/access'
+import {
+  McpToolError,
+  itemProjection,
+  requireGrantedList,
+  withListAccess,
+} from '#services/mcp/access'
 import { broadcastSync } from '#services/sync_broadcaster'
-import { McpToolError } from '#services/mcp/access'
 
 /**
  * `add_subtask` — appends a sub-task to an item's checklist, mirroring
@@ -65,12 +70,15 @@ export default class AddSubtaskTool extends Tool<Schema> {
           .whereNull('deletedAt')
           .firstOrFail()
         if (freshItem.checked) return null
+        // The sort-order query MUST run on the transaction client: SQLite's pool holds a single
+        // connection, so a default-client query here would wait on the connection this very
+        // transaction is holding and only fail after the acquire timeout.
         return SubItem.create(
           {
             itemId: item.id,
             name: payload.name as string,
             checked: false,
-            sortOrder: await nextSubItemSortOrder(item.id),
+            sortOrder: await nextSubItemSortOrder(item.id, trx),
             createdBy: user.id,
             version: 1,
           },
@@ -107,9 +115,13 @@ export default class AddSubtaskTool extends Tool<Schema> {
   }
 }
 
-/** Appends to the end of the parent's checklist — same helper sub_items_controller uses. */
-async function nextSubItemSortOrder(itemId: number): Promise<number> {
-  const result = await SubItem.query()
+/** Appends to the end of the parent's checklist — same approach sub_items_controller uses, but
+ * run on the caller's transaction client (see the call site for why that matters on SQLite). */
+async function nextSubItemSortOrder(
+  itemId: number,
+  client: TransactionClientContract
+): Promise<number> {
+  const result = await SubItem.query({ client })
     .where('itemId', itemId)
     .max('sort_order as maxSortOrder')
     .first()

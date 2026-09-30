@@ -33,12 +33,11 @@ export default class ListListsTool extends Tool<Schema> {
 
   async handle({ args, response, auth }: ToolContext<Schema>) {
     const user = auth?.user
-    const token = user?.currentAccessToken
-    if (!user || !token) return response.error('Authentication required.')
+    if (!user || !user.currentAccessToken) return response.error('Authentication required.')
 
     const includeArchived = (args as { includeArchived?: boolean } | undefined)?.includeArchived
 
-    const accessible = await grantedLists(token)
+    const accessible = await grantedLists(user)
     const lists = accessible.filter((list) => includeArchived === true || !list.archived)
 
     // One grouped count query for all lists rather than one per list — an MCP client calling

@@ -14,7 +14,6 @@ import {
   resolveGrantedList,
   withListAccess,
 } from '#services/mcp/access'
-import { accessibleLists } from '#services/alexa/list_resolution'
 
 async function makeUser(email: string) {
   return User.create({ fullName: 'Test User', email, password: 'password123' })
@@ -32,6 +31,13 @@ async function makeGrantedList(owner: User, name: string, role: 'owner' = 'owner
   return list
 }
 
+/** A PAT scoped to `abilities`, set as the user's `currentAccessToken` the way the guard does. */
+async function withPat(user: User, abilities: string[]) {
+  const token = await User.personalAccessTokens.create(user, abilities, { name: 't' })
+  user.currentAccessToken = token
+  return token
+}
+
 test.group('MCP access helpers', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
 
@@ -40,14 +46,11 @@ test.group('MCP access helpers', (group) => {
   }) => {
     const owner = await makeUser('mcp-access-1@example.com')
     const list = await makeGrantedList(owner, 'Groceries')
-    const token = await User.personalAccessTokens.create(owner, [`list:${list.id}:editor`], {
-      name: 't',
-    })
-    owner.currentAccessToken = token
+    await withPat(owner, [`list:${list.id}:editor`])
 
-    const byIdString = await resolveGrantedList(token, String(list.id))
-    const byIdNumber = await resolveGrantedList(token, list.id)
-    const byName = await resolveGrantedList(token, '  groceries ')
+    const byIdString = await resolveGrantedList(owner, String(list.id))
+    const byIdNumber = await resolveGrantedList(owner, list.id)
+    const byName = await resolveGrantedList(owner, '  groceries ')
     assert.equal(byIdString?.id, list.id)
     assert.equal(byIdNumber?.id, list.id)
     assert.equal(byName?.id, list.id)
@@ -57,30 +60,57 @@ test.group('MCP access helpers', (group) => {
     const owner = await makeUser('mcp-access-2@example.com')
     const granted = await makeGrantedList(owner, 'Groceries')
     await makeGrantedList(owner, 'Secret Gifts')
-    const token = await User.personalAccessTokens.create(owner, [`list:${granted.id}:editor`], {
-      name: 't',
-    })
+    await withPat(owner, [`list:${granted.id}:editor`])
 
-    assert.isNull(await resolveGrantedList(token, 'Secret Gifts'))
-    assert.isNull(await resolveGrantedList(token, 'Not A List'))
+    assert.isNull(await resolveGrantedList(owner, 'Secret Gifts'))
+    assert.isNull(await resolveGrantedList(owner, 'Not A List'))
     // A number that isn't granted resolves to nothing too — id probing is dead.
-    assert.isNull(await resolveGrantedList(token, 999999))
+    assert.isNull(await resolveGrantedList(owner, 999999))
   })
 
-  test('grantedLists mirrors accessibleLists and yields nothing without a token', async ({
+  test('a name matching two granted lists is refused as ambiguous', async ({ assert }) => {
+    // Two *different* accounts each own a "Groceries" list (the per-owner name constraint
+    // allows this), and the user is a member of both.
+    const owner = await makeUser('mcp-access-ambiguous@example.com')
+    const other = await makeUser('mcp-access-ambiguous-2@example.com')
+    const first = await makeGrantedList(owner, 'Groceries')
+    const shared = await List.create({ name: 'Groceries', ownerId: other.id })
+    await ListMember.create({
+      listId: shared.id,
+      userId: owner.id,
+      role: 'editor',
+      invitedAt: DateTime.now(),
+      acceptedAt: DateTime.now(),
+    })
+    await withPat(owner, [`list:${first.id}:editor`, `list:${shared.id}:editor`])
+
+    const ambiguous = await resolveGrantedList(owner, 'Groceries').catch((error) => error)
+    assert.instanceOf(ambiguous, McpListAccessError)
+    assert.equal((ambiguous as McpListAccessError).kind, 'ambiguous')
+    assert.sameMembers((ambiguous as McpListAccessError).listIds, [first.id, shared.id])
+
+    // The id form disambiguates.
+    const byId = await resolveGrantedList(owner, shared.id)
+    assert.equal(byId?.id, shared.id)
+  })
+
+  test('grantedLists requires the user be a current accepted member, not just granted', async ({
     assert,
   }) => {
     const owner = await makeUser('mcp-access-3@example.com')
     const list = await makeGrantedList(owner, 'Groceries')
-    const token = await User.personalAccessTokens.create(owner, [`list:${list.id}:viewer`], {
-      name: 't',
-    })
+    await withPat(owner, [`list:${list.id}:viewer`])
 
-    const granted = await accessibleLists(token)
+    const granted = await grantedLists(owner)
     assert.equal(granted.length, 1)
-    assert.isNull(await resolveGrantedList(undefined, 'Groceries'))
-    // The no-token guard on the grants lookup itself.
-    assert.deepEqual(await grantedLists(undefined), [])
+
+    // Revoking membership hides the list even though the grant still names it.
+    await ListMember.query().where('userId', owner.id).where('listId', list.id).delete()
+    assert.deepEqual(await grantedLists(owner), [])
+
+    // And a user with no token at all sees nothing.
+    const bare = await makeUser('mcp-access-bare@example.com')
+    assert.deepEqual(await grantedLists(bare), [])
   })
 
   test('withListAccess surfaces McpToolError messages as failures', async ({ assert }) => {
@@ -91,16 +121,13 @@ test.group('MCP access helpers', (group) => {
     assert.equal(refused.ok ? '' : refused.error, 'no capacity')
   })
 
-  test('withListAccess maps both access-denial kinds and rethrows anything else', async ({
+  test('withListAccess maps all three access-denial kinds and rethrows anything else', async ({
     assert,
   }) => {
     const notFound = await withListAccess(async () => {
       throw new McpListAccessError('not_found')
     })
-    assert.equal(
-      notFound.ok ? '' : notFound.error,
-      'List not found (or not granted to this token). Use list_lists first.'
-    )
+    assert.include(notFound.ok ? '' : notFound.error, 'List not found')
 
     const forbidden = await withListAccess(async () => {
       throw new McpListAccessError('forbidden')
@@ -109,6 +136,11 @@ test.group('MCP access helpers', (group) => {
       forbidden.ok ? '' : forbidden.error,
       'Your token only has view access to this list.'
     )
+
+    const ambiguous = await withListAccess(async () => {
+      throw new McpListAccessError('ambiguous', [1, 2])
+    })
+    assert.include(ambiguous.ok ? '' : ambiguous.error, 'More than one list has that name')
 
     await assert.rejects(
       () =>
@@ -124,13 +156,9 @@ test.group('MCP access helpers', (group) => {
   }) => {
     const owner = await makeUser('mcp-access-4@example.com')
     const list = await makeGrantedList(owner, 'Groceries')
-    const token = await User.personalAccessTokens.create(owner, [`list:${list.id}:viewer`], {
-      name: 't',
-    })
-    owner.currentAccessToken = token
+    await withPat(owner, [`list:${list.id}:viewer`])
 
     // Viewer grant asking for editor: forbidden shape.
-    await assert.rejects(() => requireGrantedList(owner, list.id, 'editor'), McpListAccessError)
     const forbidden = await requireGrantedList(owner, list.id, 'editor').catch((e) => e)
     assert.instanceOf(forbidden, McpListAccessError)
     assert.equal((forbidden as McpListAccessError).kind, 'forbidden')
@@ -147,19 +175,16 @@ test.group('MCP access helpers', (group) => {
   }) => {
     const owner = await makeUser('mcp-access-5@example.com')
     await makeGrantedList(owner, 'Groceries')
-    const token = await User.personalAccessTokens.create(owner, ['list:999999:editor'], {
-      name: 't',
-    })
-    owner.currentAccessToken = token
+    await withPat(owner, ['list:999999:editor'])
 
     const missing = await requireGrantedList(owner, 'Groceries').catch((e) => e)
     assert.instanceOf(missing, McpListAccessError)
     assert.equal((missing as McpListAccessError).kind, 'not_found')
-    assert.equal(await resolveGrantedList(undefined, 'Groceries'), null)
+    assert.isNull(await resolveGrantedList(owner, 'Groceries'))
   })
 
   test('itemProjection carries the tool-relevant fields and sub-tasks', async ({ assert }) => {
-    const owner = await makeUser('mcp-access-3@example.com')
+    const owner = await makeUser('mcp-access-6@example.com')
     const list = await makeGrantedList(owner, 'Groceries')
     const item = await Item.create({
       listId: list.id,

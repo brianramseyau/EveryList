@@ -1,6 +1,6 @@
 # MCP (Model Context Protocol)
 
-EveryList ships an [MCP](https://modelcontextprotocol.io) server so AI clients — Claude, Claude Code, Cursor, and anything else that speaks MCP — can read and edit your lists. It runs **inside the same container** as the rest of the app, on the same origin as the web UI, and is authenticated by the same kind of scoped [Personal Access Token](README.md#personal-access-tokens) the Alexa and Home Assistant integrations use. There is no separate service to deploy, and no new port: the endpoint is `/mcp`.
+EveryList ships an [MCP](https://modelcontextprotocol.io) server so AI clients — Claude, Claude Code, Cursor, and anything else that speaks MCP — can read and edit your lists. It runs **inside the same container** as the rest of the app, on the same origin as the web UI, and is authenticated by the same kind of scoped [Personal Access Token](../README.md#personal-access-tokens) the Alexa and Home Assistant integrations use. There is no separate service to deploy, and no new port: the endpoint is `/mcp`.
 
 Because it's PAT-gated, an MCP client only ever sees the lists a token grants it, at the role that token carries (capped below `owner`, so it can never mint or revoke tokens or touch anything instance-wide). Mint a token for exactly the list(s) you want the AI to reach — see [Connecting a client](#connecting-a-client) below.
 
@@ -67,13 +67,13 @@ The tool set is deliberately curated — a small, model-friendly set rather than
 | `list_lists` | Discover which lists the token can reach, with open-item counts. Start here. | viewer |
 | `get_list` | Read one list's items, in display order, with its categories. | viewer |
 | `get_item` | Read one item's full details, or one of its sub-tasks. | viewer |
-| `search_items` | Find items by name on one list or across every reachable list. | viewer |
+| `search_items` | Find items by name (case-insensitive substring) on one list or across every reachable list. | viewer |
 | `add_item` | Add an item by name (re-adding an existing name reuses its row — no duplicates). | editor |
 | `update_item` | Change an item's name, quantity, notes, price, deadline, category or store. | editor |
 | `complete_item` | Check an item off (repeating items spawn their next occurrence). | editor |
 | `uncomplete_item` | Reopen a checked item. | editor |
 | `remove_item` | Soft-delete an item (restorable, and re-adding the name restores it automatically). | editor |
-| `create_list` | Create a new list owned by your account. | editor (any token) |
+| `create_list` | Create a new list owned by your account. | any token (viewer or editor) |
 | `add_subtask` | Add a checklist step to an item. | editor |
 
 Beyond tools, the server also exposes one **resource**, `everylist://lists/{listId}`, returning the same open-item payload `get_list` does, for clients that read resources rather than call tools.

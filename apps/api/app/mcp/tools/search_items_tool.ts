@@ -15,9 +15,9 @@ import { closestMatch } from '#services/alexa/fuzzy_match'
 
 /**
  * `search_items` — find items by name on one list, or across every list the token can reach.
- * Matches fuzzily the way the spoken/Alexa paths do ("coffee" finds "Ground coffee beans") so
- * a model's phrasing doesn't need to be exact; matches are read-only projections carrying the
- * owning list, so the caller can aim a write tool at one.
+ * Matches case-insensitive substrings (so "coffee" finds "Ground coffee beans", and a name on
+ * several lists returns every row), falling back to a single closest fuzzy match when no
+ * substring matches; matches carry the owning list so the caller can aim a write tool.
  */
 const vineSchema = vine.object({
   query: vine.string().trim().minLength(1).meta({ description: 'Item name to search for' }),
@@ -60,7 +60,7 @@ export default class SearchItemsTool extends Tool<Schema> {
           const outcome = await withListAccess(() => requireGrantedList(user, payload.list!))
           return outcome.ok ? [outcome.value] : outcome
         })()
-      : await grantedLists(user.currentAccessToken)
+      : await grantedLists(user)
 
     if (!Array.isArray(targets)) return response.error(targets.error)
 
@@ -76,29 +76,33 @@ export default class SearchItemsTool extends Tool<Schema> {
     // Include open rows unless the caller asked for checked-only; include checked rows unless
     // the caller asked for open-only. (The two ternaries must be independent — the previous
     // chained form returned nothing at all for `checked: true`.)
-    const open =
-      payload.checked === true
-        ? []
-        : await active(false).orderBy('sortOrder', 'asc').preload('list')
-    const checked =
-      payload.checked === false
-        ? []
-        : await active(true).orderBy('sortOrder', 'asc').preload('list')
+    const open = payload.checked === true ? [] : await active(false).orderBy('sortOrder', 'asc')
+    const checked = payload.checked === false ? [] : await active(true).orderBy('sortOrder', 'asc')
 
-    // Fuzzy naming over the combined candidate set, then each hit keeps its own list context
-    // (the candidates were all drawn from `targets`, so the join always resolves).
+    // Case-insensitive substring matches first (so "coffee" finds "Ground coffee beans" and a
+    // name on two lists returns both rows); if none, fall back to the single closest fuzzy
+    // match, which tolerates near-miss phrasing. Every hit keeps its own list context (the
+    // candidates were all drawn from `targets`, so the join always resolves).
+    const normalized = payload.query.trim().toLowerCase()
     const candidates = [...open, ...checked]
-    const match = closestMatch(payload.query, candidates, (item) => item.name)
-    if (!match) {
-      return response.structured({ matches: [] })
-    }
+    const substringMatches = candidates.filter((item) =>
+      item.name.trim().toLowerCase().includes(normalized)
+    )
+    const matches =
+      substringMatches.length > 0
+        ? substringMatches
+        : (() => {
+            const fuzzy = closestMatch(payload.query, candidates, (item) => item.name)
+            return fuzzy ? [fuzzy] : []
+          })()
+
     const listNameById = new Map(targets.map((list) => [list.id, list.name]))
     return response.structured({
       query: payload.query,
-      matches: [itemProjection(match)].map((projection) => ({
-        ...projection,
-        listId: match.listId,
-        listName: listNameById.get(match.listId),
+      matches: matches.map((item) => ({
+        ...itemProjection(item),
+        listId: item.listId,
+        listName: listNameById.get(item.listId),
       })),
     })
   }

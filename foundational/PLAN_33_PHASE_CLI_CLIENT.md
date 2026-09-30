@@ -2,8 +2,9 @@
 
 ## Context
 
-EveryList's API is a documented, bearer-token surface (`/api/v1`, OpenAPI at `/docs` — PLAN_15)
-with a mature Personal Access Token model (per-list `editor`/`viewer` grants, PLAN_16 Stage 0).
+EveryList's API is a documented, bearer-token surface (`/api/v1`; the Scalar reference UI is at
+`/docs` and the raw OpenAPI document at `/openapi` — PLAN_15) with a mature Personal Access Token
+model (per-list `editor`/`viewer` grants, PLAN_16 Stage 0).
 Every non-browser client so far is integration-shaped: Alexa (voice), Home Assistant (smart-home
 entities), and after Phase 32, MCP (AI assistants). What doesn't exist is the boring one: a plain
 **command-line client** for humans and scripts — `everylist add "milk" -l Groceries`,

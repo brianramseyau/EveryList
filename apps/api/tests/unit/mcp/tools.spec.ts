@@ -6,6 +6,8 @@ import List from '#models/list'
 import ListMember from '#models/list_member'
 import Item from '#models/item'
 import Category from '#models/category'
+import Store from '#models/store'
+import ListStore from '#models/list_store'
 import ItemRecurrence from '#models/item_recurrence'
 import SubItem from '#models/sub_item'
 import AddItemTool from '#mcp/tools/add_item_tool'
@@ -289,10 +291,11 @@ test.group('MCP tool guards', (group) => {
       version: 1,
     })
 
-    // Scoped to one granted list by name: the closest match is returned.
+    // Scoped to one granted list by name: an exact substring match returns every hit (both the
+    // open and checked row here).
     const scoped = await run(new SearchItemsTool(), { query: 'Milk', list: 'Groceries' }, user)
     assert.isFalse(scoped.isError())
-    assert.equal(scoped.structuredValue<{ matches: unknown[] }>().matches.length, 1)
+    assert.equal(scoped.structuredValue<{ matches: unknown[] }>().matches.length, 2)
 
     // Open-only excludes the checked row; checked-only finds it.
     const open = await run(
@@ -634,10 +637,90 @@ test.group('MCP tool guards', (group) => {
 
     const completed = await run(new CompleteItemTool(), { list: 'Chores', itemId: item.id }, user)
     assert.isFalse(completed.isError())
-    assert.isNotNull(completed.structuredValue<{ spawned?: { name: string } }>().spawned)
+    assert.exists(completed.structuredValue<{ spawned?: { name: string } }>().spawned)
 
     const undone = await run(new UncompleteItemTool(), { list: 'Chores', itemId: item.id }, user)
     assert.isFalse(undone.isError())
-    assert.isNotNull(undone.structuredValue<{ undone?: { name: string } }>().undone)
+    assert.exists(undone.structuredValue<{ undone?: { name: string } }>().undone)
+  })
+
+  test('update_item writes every editable field it is given', async ({ assert }) => {
+    const user = await makeUser('mcp-guards-20@example.com')
+    const list = await makeList(user, 'Groceries')
+    await patFor(user, list)
+    const category = await Category.create({
+      listId: list.id,
+      name: 'Dairy',
+      icon: 'cheese',
+      sortOrder: 0,
+      isDefault: false,
+      version: 1,
+    })
+    const store = await Store.create({ name: 'Woolworths', createdBy: user.id, color: '#3b82f6' })
+    await ListStore.create({ listId: list.id, storeId: store.id })
+    const item = await Item.create({
+      listId: list.id,
+      name: 'Milk',
+      checked: false,
+      sortOrder: 0,
+      createdBy: user.id,
+      version: 1,
+    })
+
+    const response = await run(
+      new UpdateItemTool(),
+      {
+        list: 'Groceries',
+        itemId: item.id,
+        name: 'Oat milk',
+        quantity: '2',
+        notes: 'barista',
+        categoryId: category.id,
+        storeId: store.id,
+        price: 4.5,
+        deadline: '2026-12-01',
+      },
+      user
+    )
+    assert.isFalse(response.isError())
+    const updated = await Item.findOrFail(item.id)
+    assert.equal(updated.name, 'Oat milk')
+    assert.equal(updated.quantity, '2')
+    assert.equal(updated.notes, 'barista')
+    assert.equal(updated.categoryId, category.id)
+    assert.equal(updated.storeId, store.id)
+    assert.equal(updated.price, 4.5)
+    assert.equal(updated.deadline, '2026-12-01')
+  })
+
+  test('update_item refuses a category or store from another list', async ({ assert }) => {
+    const user = await makeUser('mcp-guards-21@example.com')
+    const list = await makeList(user, 'Groceries')
+    await patFor(user, list)
+    const otherList = await makeList(user, 'Other')
+    const foreignCategory = await Category.create({
+      listId: otherList.id,
+      name: 'Dairy',
+      icon: 'cheese',
+      sortOrder: 0,
+      isDefault: false,
+      version: 1,
+    })
+    const item = await Item.create({
+      listId: list.id,
+      name: 'Milk',
+      checked: false,
+      sortOrder: 0,
+      createdBy: user.id,
+      version: 1,
+    })
+
+    const response = await run(
+      new UpdateItemTool(),
+      { list: 'Groceries', itemId: item.id, categoryId: foreignCategory.id },
+      user
+    )
+    assert.isTrue(response.isError())
+    assert.include(response.textValue(), 'Category not found')
   })
 })

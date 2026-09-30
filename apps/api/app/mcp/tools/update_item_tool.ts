@@ -2,7 +2,6 @@ import type { ToolContext } from '@jrmc/adonis-mcp/types/context'
 import type { BaseSchema } from '@jrmc/adonis-mcp/types/method'
 
 import { Tool } from '@jrmc/adonis-mcp'
-import vine from '@vinejs/vine'
 import Item from '#models/item'
 import { broadcastSync } from '#services/sync_broadcaster'
 import {
@@ -11,6 +10,12 @@ import {
   requireGrantedList,
   withListAccess,
 } from '#services/mcp/access'
+import {
+  assertScopedRefs,
+  updateItemArgsValidator,
+  validateToolArgs,
+  type UpdateItemArgs,
+} from '#validators/mcp'
 
 /**
  * `update_item` — changes an item's editable fields (name/quantity/notes/category/store/
@@ -19,63 +24,22 @@ import {
  * rule editing (an MCP-managed series edit would need the controller's full rule validation —
  * a later tool, not a shortcut here), no reordering (that's the HTTP move endpoint's
  * fractional-indexing job).
+ *
+ * The args validator (`#validators/mcp`) is the single source of truth: `schema()` derives the
+ * advertised JSON Schema from it and `handle` runs the same validator at call time. This
+ * `Schema` only satisfies `Tool`'s generic (the package's `JSONSchema` can't express nullable
+ * unions, so the runtime types come from `UpdateItemArgs` below).
  */
-const vineSchema = vine.object({
-  list: vine.string().trim().minLength(1).meta({ description: 'List id or exact list name' }),
-  itemId: vine.number().positive().meta({ description: 'Item id (from get_list or search_items)' }),
-  name: vine
-    .string()
-    .trim()
-    .minLength(1)
-    .maxLength(200)
-    .optional()
-    .meta({ description: 'New name' }),
-  quantity: vine
-    .string()
-    .trim()
-    .maxLength(50)
-    .nullable()
-    .optional()
-    .meta({ description: 'Quantity text; null clears it' }),
-  notes: vine
-    .string()
-    .trim()
-    .maxLength(1000)
-    .nullable()
-    .optional()
-    .meta({ description: 'Notes; null clears them' }),
-  categoryId: vine
-    .number()
-    .positive()
-    .nullable()
-    .optional()
-    .meta({ description: 'Category id; null clears it' }),
-  storeId: vine
-    .number()
-    .positive()
-    .nullable()
-    .optional()
-    .meta({ description: 'Store id; null clears it' }),
-  price: vine.number().min(0).nullable().optional().meta({ description: 'Price; null clears it' }),
-  deadline: vine
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/)
-    .nullable()
-    .optional()
-    .meta({ description: 'Deadline YYYY-MM-DD or YYYY-MM-DDTHH:mm; null clears it' }),
-})
-
 type Schema = BaseSchema<{
   list: { type: 'string' }
   itemId: { type: 'number' }
   name: { type: 'string' }
-  quantity: { 'type': 'string'; 'x-nullable': true }
-  notes: { 'type': 'string'; 'x-nullable': true }
-  categoryId: { 'type': 'number'; 'x-nullable': true }
-  storeId: { 'type': 'number'; 'x-nullable': true }
-  price: { 'type': 'number'; 'x-nullable': true }
-  deadline: { 'type': 'string'; 'x-nullable': true }
+  quantity: { type: 'string' }
+  notes: { type: 'string' }
+  categoryId: { type: 'number' }
+  storeId: { type: 'number' }
+  price: { type: 'number' }
+  deadline: { type: 'string' }
 }>
 
 export default class UpdateItemTool extends Tool<Schema> {
@@ -89,40 +53,35 @@ export default class UpdateItemTool extends Tool<Schema> {
   async handle({ args, response, auth }: ToolContext<Schema>) {
     const user = auth?.user
     if (!user) return response.error('Authentication required.')
-    const payload = (args ?? {}) as Record<string, unknown>
-    if (!payload.list || typeof payload.itemId !== 'number') {
+    const preliminary = (args ?? {}) as Record<string, unknown>
+    if (!preliminary.list || typeof preliminary.itemId !== 'number') {
       return response.error('List and itemId are required.')
     }
 
     const outcome = await withListAccess(async () => {
-      const list = await requireGrantedList(user, payload.list as string, 'editor')
+      const fields = await validateToolArgs<UpdateItemArgs>(updateItemArgsValidator, args)
+      const list = await requireGrantedList(user, fields.list, 'editor')
       const item = await Item.query()
-        .where('id', payload.itemId as number)
+        .where('id', fields.itemId)
         .where('listId', list.id)
         .whereNull('deletedAt')
         .first()
       if (!item) throw new McpToolError('Item not found on this list.')
+      await assertScopedRefs(list, fields)
 
-      // Exactly the fields the schema allows, already trimmed/validated by VineJS — merged the
-      // way items_controller.update does for its `rest` (unknown/absent fields untouched).
+      // Build the merge from the *validated* fields explicitly — no computed-key assignment into
+      // a shared object, so there's nothing for a `__proto__`-style key to pollute.
       const updates: Partial<
         Pick<Item, 'name' | 'quantity' | 'notes' | 'categoryId' | 'storeId' | 'price' | 'deadline'>
       > = {}
-      for (const field of [
-        'name',
-        'quantity',
-        'notes',
-        'categoryId',
-        'storeId',
-        'price',
-        'deadline',
-      ] as const) {
-        if (payload[field] !== undefined) {
-          // `item.merge` rejects unknown keys; these keys are all real columns, so the cast is
-          // the validator's guarantee, not a leap of faith.
-          ;(updates as Record<string, unknown>)[field] = payload[field]
-        }
-      }
+      if (fields.name !== undefined) updates.name = fields.name
+      if (fields.quantity !== undefined) updates.quantity = fields.quantity
+      if (fields.notes !== undefined) updates.notes = fields.notes
+      if (fields.categoryId !== undefined) updates.categoryId = fields.categoryId
+      if (fields.storeId !== undefined) updates.storeId = fields.storeId
+      if (fields.price !== undefined) updates.price = fields.price
+      if (fields.deadline !== undefined) updates.deadline = fields.deadline
+
       if (Object.keys(updates).length === 0) {
         throw new McpToolError('Nothing to update — pass at least one field.')
       }
@@ -151,6 +110,6 @@ export default class UpdateItemTool extends Tool<Schema> {
   }
 
   schema() {
-    return vine.create(vineSchema).toJSONSchema() as Schema
+    return updateItemArgsValidator.toJSONSchema() as unknown as Schema
   }
 }
