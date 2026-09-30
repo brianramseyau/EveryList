@@ -15,9 +15,11 @@ export function parsePriceFlag(raw: string): number {
     throw new UsageError(`--price must be a non-negative number, got "${raw}".`)
   }
   const value = Number(cleaned)
-  // A huge digit string (e.g. 400 nines) parses to Infinity — still reject it.
-  if (!Number.isFinite(value)) {
+  const cents = Math.round(value * 100)
+  // A huge digit string can still parse finite but overflow once multiplied into cents
+  // (e.g. 308 nines → finite value, Infinity cents) — reject either.
+  if (!Number.isFinite(value) || !Number.isFinite(cents)) {
     throw new UsageError(`--price is out of range, got "${raw}".`)
   }
-  return Math.round(value * 100)
+  return cents
 }

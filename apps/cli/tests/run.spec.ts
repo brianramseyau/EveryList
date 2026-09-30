@@ -130,6 +130,33 @@ describe('run', () => {
     }
   })
 
+  it('prints help even when the saved config URL is insecure', async () => {
+    const dir = tmpDir()
+    fs.writeFileSync(
+      path.join(dir, 'config.json'),
+      JSON.stringify({ baseUrl: 'http://remote.example', token: 'elt_x' })
+    )
+    const sink = capture()
+    const code = await run(['help'], {
+      output: sink.output,
+      env: { EVERYLIST_CONFIG_DIR: dir }
+    })
+    expect(code).toBe(0)
+    expect(sink.stdout).toContain('Usage: everylist')
+  })
+
+  it('reports a malformed/insecure saved URL for a real command', async () => {
+    const dir = tmpDir()
+    fs.writeFileSync(
+      path.join(dir, 'config.json'),
+      JSON.stringify({ baseUrl: 'http://remote.example', token: 'elt_x' })
+    )
+    const sink = capture()
+    const code = await run(['lists'], { output: sink.output, env: { EVERYLIST_CONFIG_DIR: dir } })
+    expect(code).toBe(1)
+    expect(sink.stderr).toContain('Refusing to send your token in cleartext')
+  })
+
   it('honors a per-invocation --url/--token override', async () => {
     const sink = capture()
     const original = globalThis.fetch

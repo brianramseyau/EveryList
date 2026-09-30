@@ -101,6 +101,11 @@ export class ApiClient {
         method,
         headers,
         signal,
+        // Never follow a redirect: a 307/308 preserves the method and body, so an HTTPS server
+        // could bounce the request (with its item data) to a remote HTTP host the constructor's
+        // scheme check never saw. Cross-origin redirects also strip `Authorization`, but that
+        // protects the token, not the body.
+        redirect: 'manual',
         body: json === undefined ? undefined : JSON.stringify(json)
       })
     } catch (error) {
@@ -113,8 +118,19 @@ export class ApiClient {
       throw new CliError(`Could not reach ${this.baseUrl}: ${detail}`)
     }
 
+    // With `redirect: manual` these arrive as ordinary 3xx responses (not followed by fetch).
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location')
+      throw new CliError(
+        `${this.baseUrl} redirected (HTTP ${response.status}` +
+          `${location ? ` to ${location}` : ''}) — refusing to follow it with your token/data.`
+      )
+    }
+
     if (!response.ok) {
-      const body = await this.readBody(response, signal)
+      // An error response may legitimately carry no JSON body (a proxy's HTML 502) — the caller
+      // falls back to a status-based message, so a body-read failure here is not fatal.
+      const body = await this.readBody(response, signal, false)
       const message = extractErrorMessage(body, response.status)
       // 401 means the token itself is bad/expired (an auth/config problem); a 403 means the
       // token is valid but its grant is too low for this action (a plain runtime failure), so
@@ -126,22 +142,31 @@ export class ApiClient {
     }
 
     if (response.status === 204) return undefined as T
-    const body = await this.readBody(response, signal)
+    // A 2xx response is expected to carry JSON — a truncated/HTML body is a real failure, not an
+    // absent value. Resolving to `undefined` here would let `login` write the config before
+    // reading `identity.grants`, persisting a config it then can't use.
+    const body = await this.readBody(response, signal, true)
     return unwrap<T>(body)
   }
 
-  /** Reads a response body as JSON, turning an abort mid-read (or non-JSON body) into a clean
-   *  result rather than an unhandled throw. The timeout signal is re-checked because the body
-   *  read happens after `fetch` resolved — a slow body could still exceed the deadline. */
-  private async readBody(response: Response, signal: AbortSignal): Promise<unknown> {
+  /** Reads a response body as JSON. `required` (a success response) turns a non-JSON body into a
+   *  `CliError`; otherwise it resolves `undefined` so error handling can fall back to the status.
+   *  An abort mid-read maps to a timeout error in both cases — the body read happens after
+   *  `fetch` resolved, so a slow body could still exceed the deadline. */
+  private async readBody(
+    response: Response,
+    signal: AbortSignal,
+    required: boolean
+  ): Promise<unknown> {
     try {
       return await response.json()
     } catch (error) {
       if (signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
         throw new CliError(`Request to ${this.baseUrl} timed out after ${this.timeoutMs}ms.`)
       }
-      // A non-JSON body is legitimate on an error response (a proxy's HTML 502, say) — callers
-      // fall back to a status-based message.
+      if (required) {
+        throw new CliError(`${this.baseUrl} returned a malformed response (invalid JSON).`)
+      }
       return undefined
     }
   }

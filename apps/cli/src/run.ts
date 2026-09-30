@@ -43,11 +43,22 @@ export async function run(
     env
   }
 
-  // Credentials resolve `--url`/`--token` flag → env var → config file (the flag wins, so a
-  // one-off command can target another server/token without touching the saved config). This runs
-  // inside the try below: a valueless `--url`/`--token` (a `UsageError` from `stringFlag`) or an
-  // insecure URL (from the `ApiClient` constructor) must be reported like any other CLI error, not
-  // escape as an unhandled rejection.
+  // Help and version never need credentials or a valid config, so they run first — a malformed or
+  // insecure saved URL must not stop `everylist help` from printing help.
+  if (boolFlag(parsed.flags, 'version') || parsed.command === 'version') {
+    output.out(`${version()}\n`)
+    return 0
+  }
+
+  if (!parsed.command || boolFlag(parsed.flags, 'help') || parsed.command === 'help') {
+    output.out(`${helpText(parsed.command === 'help' ? parsed.positionals[0] : undefined)}\n`)
+    return 0
+  }
+
+  // Everything else — credential resolution and the command itself — runs inside the try below: a
+  // valueless `--url`/`--token` (a `UsageError` from `stringFlag`), an insecure/malformed URL
+  // (from the `ApiClient` constructor), or an unknown command must be reported like any other CLI
+  // error, not escape as an unhandled rejection.
   try {
     const config = readConfig(env)
     const urlFlag = stringFlag(parsed.flags, 'url')
@@ -56,16 +67,6 @@ export async function run(
     if (baseUrl && token) ctx.client = new ApiClient(baseUrl, token, fetch, 30_000, env)
     ctx.baseUrl = baseUrl
     ctx.token = token
-
-    if (boolFlag(parsed.flags, 'version') || parsed.command === 'version') {
-      output.out(`${version()}\n`)
-      return 0
-    }
-
-    if (!parsed.command || boolFlag(parsed.flags, 'help') || parsed.command === 'help') {
-      output.out(`${helpText(parsed.command === 'help' ? parsed.positionals[0] : undefined)}\n`)
-      return 0
-    }
 
     const command = commands[parsed.command]
     if (!command) {

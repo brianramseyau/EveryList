@@ -108,7 +108,10 @@ everylist complete Groceries Milk
 - **The token is never printed in full.** `everylist token` and `login` show a mask (`elt_abc…wxyz`),
   and the token is only ever written to the `0600` config file or sent in the `Authorization` header.
 - **Cleartext is refused.** A non-loopback `http://` server URL is rejected before the token is
-  sent (`EVERYLIST_ALLOW_INSECURE=1` opts in for a trusted LAN).
+  sent (`EVERYLIST_ALLOW_INSECURE=1` opts in for a trusted LAN), and redirects are never followed —
+  a 3xx is reported instead, so an HTTPS server can't bounce your token or item data to a plain-HTTP
+  host.
+- **Each request has a 30s deadline**, so a stalled server can't hang a cron or CI run.
 - **Throttled like any external client.** The `/api/v1/lists` surface the CLI uses is rate-limited
   per-token, the same limit the Home Assistant and Alexa integrations share.
 

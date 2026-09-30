@@ -43,4 +43,8 @@ describe('parsePriceFlag', () => {
   it('rejects an out-of-range value that parses to Infinity', () => {
     expect(() => parsePriceFlag('9'.repeat(400))).toThrow('--price is out of range')
   })
+
+  it('rejects a finite value whose cents conversion overflows', () => {
+    expect(() => parsePriceFlag('9'.repeat(308))).toThrow('--price is out of range')
+  })
 })

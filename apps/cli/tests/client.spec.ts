@@ -241,7 +241,23 @@ describe('ApiClient', () => {
     await expect(client.get('/api/v1/lists')).rejects.toThrow('timed out after 5ms')
   })
 
-  it('treats a non-JSON body mid-read as absent', async () => {
+  it('treats a non-JSON error body as absent (falls back to the status message)', async () => {
+    const response = {
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new SyntaxError('Unexpected token <')
+      }
+    } as unknown as Response
+    const client = new ApiClient(
+      'https://x.example',
+      'elt_secret',
+      (async () => response) as typeof fetch
+    )
+    await expect(client.get('/api/v1/lists')).rejects.toThrow('Request failed with status 502')
+  })
+
+  it('throws on a malformed body for a success response (required JSON)', async () => {
     const response = {
       ok: true,
       status: 200,
@@ -254,6 +270,43 @@ describe('ApiClient', () => {
       'elt_secret',
       (async () => response) as typeof fetch
     )
-    await expect(client.get('/api/v1/lists')).resolves.toBeUndefined()
+    await expect(client.get('/api/v1/tokens/me')).rejects.toThrow('malformed response')
+  })
+
+  it('disables automatic redirects', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { data: {} }))
+    const client = new ApiClient('https://x.example', 'elt_secret', fetchImpl)
+    await client.get('/api/v1/lists')
+    expect((fetchImpl.mock.calls[0]![1] as RequestInit).redirect).toBe('manual')
+  })
+
+  it('rejects a redirect response instead of following it', async () => {
+    const response = {
+      ok: false,
+      status: 308,
+      headers: new Headers({ location: 'http://remote.example/steal' })
+    } as unknown as Response
+    const client = new ApiClient(
+      'https://x.example',
+      'elt_secret',
+      (async () => response) as typeof fetch
+    )
+    await expect(client.post('/api/v1/lists/1/items', { name: 'Milk' })).rejects.toThrow(
+      'redirected (HTTP 308 to http://remote.example/steal)'
+    )
+  })
+
+  it('reports a redirect without a Location header', async () => {
+    const response = {
+      ok: false,
+      status: 301,
+      headers: new Headers()
+    } as unknown as Response
+    const client = new ApiClient(
+      'https://x.example',
+      'elt_secret',
+      (async () => response) as typeof fetch
+    )
+    await expect(client.get('/api/v1/lists')).rejects.toThrow('redirected (HTTP 301)')
   })
 })
