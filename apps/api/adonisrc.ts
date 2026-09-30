@@ -28,6 +28,10 @@ export default defineConfig({
     () => import('@adonisjs/core/commands'),
     () => import('@adonisjs/lucid/commands'),
     () => import('@adonisjs/session/commands'),
+    // mcp:start (stdio), mcp:inspector, make:mcp-{tool,resource,prompt} — see
+    // foundational/PLAN_32_PHASE_MCP_SERVER.md. mcp:start is dev-tools only (stdio has no
+    // HttpContext, so tools see no authenticated user — HTTP transport is the supported path).
+    () => import('@jrmc/adonis-mcp/commands'),
   ],
 
   /*
@@ -58,6 +62,15 @@ export default defineConfig({
     () => import('@adonisjs/static/static_provider'),
     () => import('@adonisjs/transmit/transmit_provider'),
     () => import('@adonisjs/limiter/limiter_provider'),
+    // Defines router.mcp() (in its start() hook, which runs before the #start/routes preload)
+    // and scans app/mcp/{tools,resources,prompts}. Registered in the package's start() hook —
+    // not boot() — is exactly why router.mcp() is safe to call from routes.ts (see
+    // foundational/PLAN_32_PHASE_MCP_SERVER.md).
+    () => import('@jrmc/adonis-mcp/mcp_provider'),
+    // Adds McpRequest.validateUsing(...) so tool schemas can be VineJS validators. The package's
+    // optional `bouncer` peer is deliberately NOT registered: this app authorizes through
+    // ListPolicy (see app/policies/list_policy.ts), not Bouncer.
+    () => import('@jrmc/adonis-mcp/vinejs_provider'),
   ],
 
   /*

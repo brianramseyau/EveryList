@@ -74,6 +74,9 @@ importers:
       '@japa/api-client':
         specifier: ^3.2.1
         version: 3.2.1(@japa/assert@4.2.0(@japa/runner@5.3.0))(@japa/runner@5.3.0)
+      '@jrmc/adonis-mcp':
+        specifier: 2.0.0
+        version: 2.0.0
       '@mdi/js':
         specifier: ^7.4.47
         version: 7.4.47
@@ -1938,6 +1941,14 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@jrmc/adonis-mcp@2.0.0':
+    resolution: {integrity: sha512-1fmD3F/PUjNr0SyWAYe6dbJ8fclTK+HecCCBij7QuhVeRnT3UrdkaXHlVI4S8d4GayFlHqbhb6+aCMZ005deQQ==}
+    peerDependencies:
+      '@adonisjs/bouncer': ^3.0.0 || ^4.0.0
+    peerDependenciesMeta:
+      '@adonisjs/bouncer':
+        optional: true
 
   '@lezer/common@1.5.2':
     resolution: {integrity: sha512-sxQE460fPZyU3sdc8lafxiPwJHBzZRy/udNFynGQky1SePYBdhkBl1kOagA9uT3pxR8K09bOrmTUqA9wb/PjSQ==}
@@ -7688,6 +7699,9 @@ packages:
   third-party-web@0.29.2:
     resolution: {integrity: sha512-fegtha91tq2DHphyoiBXVHjVi2YG9zFaRnboT9C28tO1en9Y3wJsfspuy40F+u5wl3hHVbw7cnd1b67kEGHb8g==}
 
+  third-party-web@0.30.0:
+    resolution: {integrity: sha512-p+PfyL5U0ediGzvwPzMSdD9MnC8rHW6nWJJVLIQvqN7RsSqfaZ+7n4c9GILqH36EYR0eXB9CzAeCRnKFr/9uJg==}
+
   thread-stream@4.2.0:
     resolution: {integrity: sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==}
     engines: {node: '>=20'}
@@ -10404,6 +10418,8 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@jrmc/adonis-mcp@2.0.0': {}
+
   '@lezer/common@1.5.2': {}
 
   '@lezer/css@1.3.6':
@@ -10556,7 +10572,7 @@ snapshots:
   '@paulirish/trace_engine@0.0.65':
     dependencies:
       legacy-javascript: 0.0.1
-      third-party-web: 0.29.2
+      third-party-web: 0.30.0
 
   '@phc/format@1.0.0': {}
 
@@ -16917,6 +16933,8 @@ snapshots:
       - react-native-b4a
 
   third-party-web@0.29.2: {}
+
+  third-party-web@0.30.0: {}
 
   thread-stream@4.2.0:
     dependencies:

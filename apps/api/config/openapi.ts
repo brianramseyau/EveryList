@@ -33,7 +33,12 @@ const openapiConfig: OpenApiConfig = {
     },
   },
   publicRouteNames: ['auth.', 'metas.show', 'invite_accept.preview'],
-  exclude: [],
+  // The MCP JSON-RPC endpoint (foundational/PLAN_32_PHASE_MCP_SERVER.md) is not part of the
+  // REST surface — it rides the `router.mcp()` macro (a bare POST to a package-internal
+  // controller with no Tuyau-typed request/response) rather than the validator/transformer
+  // pipeline the registry generator documents, so it must be kept out of the generated
+  // document entirely.
+  exclude: ['/mcp'],
   endpoints: { ui: '/docs', spec: '/openapi' },
   buildSpecPath: '.adonisjs/openapi.json',
   // Served from public/ (not under /docs) so the static middleware's directory

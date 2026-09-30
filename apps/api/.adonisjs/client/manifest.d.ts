@@ -9,5 +9,6 @@
 /// <reference path="../../config/limiter.ts" />
 /// <reference path="../../config/logger.ts" />
 /// <reference path="../../config/mail.ts" />
+/// <reference path="../../config/mcp.ts" />
 /// <reference path="../../config/openapi.ts" />
 /// <reference path="../../config/transmit.ts" />
