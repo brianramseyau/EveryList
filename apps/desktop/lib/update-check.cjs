@@ -81,8 +81,82 @@ function selectLatestServerRelease(releases) {
 const CHECK_FAILED_MESSAGE = "Couldn't check for updates right now."
 
 /**
- * @typedef {(url: string, init?: RequestInit) => Promise<{ ok: boolean, json: () => Promise<unknown> }>} MinimalFetch
+ * @typedef {{ get?: (name: string) => string | null }} MinimalHeaders
+ * @typedef {{ ok: boolean, headers?: MinimalHeaders, json: () => Promise<unknown> }} MinimalResponse
+ * @typedef {(url: string, init?: RequestInit) => Promise<MinimalResponse>} MinimalFetch
  */
+
+/**
+ * Safety valve on pagination: stop after this many pages even if GitHub keeps advertising a
+ * `next` link. At 100/page that's 5000 releases — far more than this repo will ever have, and it
+ * bounds the worst case (and guards against a malformed/mocked response that always says "next").
+ */
+const MAX_RELEASE_PAGES = 50
+
+/**
+ * Extracts the `rel="next"` URL from a `Link` response header, or null when there is none.
+ *
+ * @param {MinimalResponse} response
+ * @returns {string | null}
+ */
+function nextPageUrl(response) {
+  const link = response.headers?.get?.('link')
+  if (typeof link !== 'string') return null
+  const match = /<([^>]+)>;\s*rel="next"/.exec(link)
+  return match?.[1] ?? null
+}
+
+/**
+ * Fetches every page of the repo's releases, following GitHub's `Link: rel="next"` pagination.
+ * Returns the flattened list, or null on any failure — network error, non-OK response,
+ * unparseable body, or an unexpected non-array shape. A failure on *any* page (not just the
+ * first) is reported as an error rather than silently truncated, so a newer server release can't
+ * be missed because a later page failed.
+ *
+ * @param {MinimalFetch} fetchImpl
+ * @param {string} owner
+ * @param {string} repo
+ * @returns {Promise<unknown[] | null>}
+ */
+async function fetchAllReleases(fetchImpl, owner, repo) {
+  /** @type {unknown[]} */
+  const releases = []
+  /** @type {string | null} */
+  let url = `https://api.github.com/repos/${owner}/${repo}/releases?per_page=100`
+
+  for (let page = 0; page < MAX_RELEASE_PAGES && url !== null; page++) {
+    const pageUrl = url
+    /** @type {MinimalResponse} */
+    let response
+    try {
+      response = await fetchImpl(pageUrl, { headers: { Accept: 'application/vnd.github+json' } })
+    } catch {
+      return null
+    }
+
+    if (response.ok === false) {
+      return null
+    } else {
+      /** @type {unknown} */
+      let data
+      try {
+        data = await response.json()
+      } catch {
+        return null
+      }
+
+      // A non-array body means an unexpected/error shape, not "no releases".
+      if (!Array.isArray(data)) {
+        return null
+      } else {
+        releases.push(...data)
+        url = nextPageUrl(response)
+      }
+    }
+  }
+
+  return releases
+}
 
 /**
  * "Check and link", not `electron-updater` (PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §8 — unsigned
@@ -99,46 +173,28 @@ async function checkForUpdate(currentVersion, options = {}) {
   const owner = options.owner ?? REPO_OWNER
   const repo = options.repo ?? REPO_NAME
 
-  let response
-  try {
-    // The list endpoint, not `/releases/latest`: see selectLatestServerRelease. 100 is GitHub's max
-    // page size and comfortably covers the recency window the newest server release sits in.
-    response = await fetchImpl(
-      `https://api.github.com/repos/${owner}/${repo}/releases?per_page=100`,
-      {
-        headers: { Accept: 'application/vnd.github+json' }
-      }
-    )
-  } catch {
-    return { status: 'error', message: CHECK_FAILED_MESSAGE }
-  }
-
-  if (response.ok === false) {
+  // The list endpoint, not `/releases/latest`: see selectLatestServerRelease. Every page is
+  // followed — native-stream releases (`android-v…`/`ios-v…`) and prereleases can fill a page, so
+  // the newest server release may not be on the first one.
+  const releases = await fetchAllReleases(fetchImpl, owner, repo)
+  if (releases === null) {
     return { status: 'error', message: CHECK_FAILED_MESSAGE }
   } else {
-    /** @type {unknown} */
-    let data
-    try {
-      data = await response.json()
-    } catch {
-      return { status: 'error', message: CHECK_FAILED_MESSAGE }
-    }
-
-    // A non-array body means an unexpected/error shape, not "no releases" — treat it as a failure.
-    if (!Array.isArray(data)) {
-      return { status: 'error', message: CHECK_FAILED_MESSAGE }
-    } else {
-      const latest = selectLatestServerRelease(data)
-      if (!latest) {
-        // No server release to point at (e.g. a fresh fork with only native tags) — nothing to
-        // update to.
-        return { status: 'up-to-date' }
-      } else if (isNewerVersion(latest.tag, currentVersion)) {
-        return { status: 'update-available', latestVersion: latest.tag, url: latest.url }
-      }
+    const latest = selectLatestServerRelease(releases)
+    if (!latest) {
+      // No server release to point at (e.g. a fresh fork with only native tags) — nothing to update.
       return { status: 'up-to-date' }
+    } else if (isNewerVersion(latest.tag, currentVersion)) {
+      return { status: 'update-available', latestVersion: latest.tag, url: latest.url }
     }
+    return { status: 'up-to-date' }
   }
 }
 
-module.exports = { parseVersion, isNewerVersion, selectLatestServerRelease, checkForUpdate }
+module.exports = {
+  parseVersion,
+  isNewerVersion,
+  selectLatestServerRelease,
+  nextPageUrl,
+  checkForUpdate
+}

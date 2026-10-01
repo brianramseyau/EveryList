@@ -9,7 +9,8 @@ name: iOS App Build
 # server release and carries real version numbers for a future TestFlight/App Store release.
 #
 # Cut a release with: `pnpm prepare-ios-release ios-vX.Y.Z`, merge the PR, then
-# `git tag ios-vX.Y.Z && git push origin ios-vX.Y.Z`.
+# `git tag ios-vX.Y.Z && git push origin ios-vX.Y.Z`. An `ios-vX.Y.Z-rc.N` tag builds/attaches the
+# same Simulator app but marks the GitHub Release a prerelease.
 #
 # No server URL is baked in (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1 made that runtime-configurable
 # via /server-setup), so one build here serves every self-hosted instance.
@@ -17,6 +18,10 @@ name: iOS App Build
 on:
   push:
     tags: ['ios-v*.*.*']
+
+# Least privilege: the build job only reads; the release job re-declares contents: write.
+permissions:
+  contents: read
 
 concurrency:
   group: ios-build-${{ github.ref }}
@@ -26,26 +31,55 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
 
+  meta:
+    name: Parse release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version_name: ${{ steps.parse.outputs.version_name }}
+      is_rc: ${{ steps.parse.outputs.is_rc }}
+    steps:
+      - id: parse
+        # Only `X.Y.Z` or `X.Y.Z-rc.N` are valid. Reject anything else before the value reaches a
+        # `run:` script — the trigger `ios-v*.*.*` would otherwise also match shapes the release
+        # logic doesn't expect.
+        run: |
+          TAG="${GITHUB_REF_NAME#ios-v}"
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "Unsupported tag ${GITHUB_REF_NAME}; expected ios-vX.Y.Z or ios-vX.Y.Z-rc.N." >&2
+            exit 1
+          fi
+          echo "version_name=$TAG" >> "$GITHUB_OUTPUT"
+          if [[ "$TAG" == *-rc.* ]]; then
+            echo "is_rc=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_rc=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build-ios:
     name: Build iOS Simulator app
-    needs: test
+    needs: [test, meta]
     runs-on: macos-latest
     env:
       # See test.yml's env block — this job doesn't build apps/desktop either.
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # This job runs pnpm install + the web build (dependency lifecycle scripts run), and
+          # never pushes — don't leave the token in .git/config for those to read. Mirrors test.yml.
+          persist-credentials: false
 
       # The build reads its version from project.pbxproj, which `pnpm prepare-ios-release` writes.
-      # A mismatch means the tag was cut without running it, so the built bundle's version would
-      # contradict its release tag — fail rather than ship that.
+      # An rc tag carries a `-rc.N` suffix the project file never has, so compare the base version.
+      # A mismatch means the tag was cut without running the prepare script — fail rather than ship
+      # a build whose embedded version contradicts its release tag.
       - name: Verify the project version matches this tag
         run: |
-          TAG="${GITHUB_REF_NAME#ios-v}"
+          BASE="${GITHUB_REF_NAME#ios-v}"; BASE="${BASE%%-*}"
           FILE_VERSION=$(grep -m1 -oE 'MARKETING_VERSION = [^;]+' apps/ios/App/App.xcodeproj/project.pbxproj | sed 's/.*= //')
-          if [[ "$FILE_VERSION" != "$TAG" ]]; then
-            echo "project.pbxproj is v${FILE_VERSION}, but this tag is ios-v${TAG}." >&2
-            echo "Run \`pnpm prepare-ios-release ios-v${TAG}\` and merge it first." >&2
+          if [[ "$FILE_VERSION" != "$BASE" ]]; then
+            echo "project.pbxproj is v${FILE_VERSION}, but this tag is ios-v${BASE}." >&2
+            echo "Run \`pnpm prepare-ios-release ios-v${BASE}\` and merge it first." >&2
             exit 1
           fi
 
@@ -67,8 +101,7 @@ jobs:
         # Capacitor 8's default template resolves its native deps via Swift Package Manager, not
         # CocoaPods — App.xcodeproj (not a .xcworkspace) is the real project, and xcodebuild
         # resolves the SPM graph itself before compiling. No code signing available/needed for a
-        # Simulator-only build. The version (MARKETING_VERSION/CURRENT_PROJECT_VERSION) is read
-        # from the project file, owned by `pnpm prepare-ios-release`.
+        # Simulator-only build.
         run: |
           xcodebuild build \
             -project apps/ios/App/App.xcodeproj \
@@ -91,7 +124,7 @@ jobs:
 
   release:
     name: Attach iOS build to the GitHub Release
-    needs: [test, build-ios]
+    needs: [meta, build-ios]
     if: ${{ always() && !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     permissions:
@@ -104,4 +137,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          # An `-rc.N` tag is a test build, not a release — mark it a prerelease (and it's how the
+          # other streams label theirs).
+          prerelease: ${{ needs.meta.outputs.is_rc == 'true' }}
           files: dist/*.zip

@@ -13,6 +13,10 @@ on:
   push:
     tags: ['v*.*.*']
 
+# Least privilege: the build jobs only read; the release job re-declares contents: write.
+permissions:
+  contents: read
+
 concurrency:
   group: desktop-build-${{ github.ref }}
   cancel-in-progress: true
@@ -28,7 +32,16 @@ jobs:
       version_name: ${{ steps.parse.outputs.version_name }}
     steps:
       - id: parse
-        run: echo "version_name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        # Only a stable vX.Y.Z or a vX.Y.Z-<suffix> prerelease reaches here (the tag filter is
+        # `v*.*.*`). Reject anything else before the value is interpolated into later `run:` steps,
+        # so a tag name can't be executed as shell.
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "Unsupported tag ${GITHUB_REF_NAME}; expected vX.Y.Z optionally with a prerelease suffix." >&2
+            exit 1
+          fi
+          echo "version_name=$VERSION" >> "$GITHUB_OUTPUT"
 
   build-desktop:
     name: Build desktop app (${{ matrix.os }})
@@ -44,6 +57,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # These jobs run `pnpm install` (dependency lifecycle scripts) and never push — don't
+          # leave the token in .git/config for those to read. Mirrors test.yml.
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 

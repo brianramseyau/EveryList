@@ -28,6 +28,10 @@ on:
   push:
     tags: ['android-v*.*.*']
 
+# Least privilege: the build jobs only read; the release/prune jobs re-declare contents: write.
+permissions:
+  contents: read
+
 concurrency:
   group: android-build-${{ github.ref }}
   cancel-in-progress: true
@@ -57,6 +61,14 @@ jobs:
         # build whose embedded version contradicts its release tag.
         run: |
           TAG="${GITHUB_REF_NAME#android-v}"
+          # Only `X.Y.Z` or `X.Y.Z-rc.N` (N 1..98) are valid; reject anything else before it can
+          # reach the shell (the same value is interpolated into later `run:` steps) or take the
+          # stable/publish path for an unsupported tag shape. The trigger `android-v*.*.*` would
+          # otherwise also match e.g. `android-v1.8.1-beta.1`.
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.([1-9]|[1-8][0-9]|9[0-8]))?$ ]]; then
+            echo "Unsupported tag ${GITHUB_REF_NAME}; expected android-vX.Y.Z or android-vX.Y.Z-rc.N (N 1..98)." >&2
+            exit 1
+          fi
           BASE="${TAG%%-*}"
           FILE_VERSION=$(grep -E '^versionName=' apps/android/version.properties | cut -d= -f2)
           FILE_CODE=$(grep -E '^versionCode=' apps/android/version.properties | cut -d= -f2)
@@ -88,6 +100,10 @@ jobs:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # These jobs run `pnpm install` (dependency lifecycle scripts) and never push — don't
+          # leave the token in .git/config for those to read. Mirrors test.yml.
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 
@@ -148,6 +164,10 @@ jobs:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # These jobs run `pnpm install` (dependency lifecycle scripts) and never push — don't
+          # leave the token in .git/config for those to read. Mirrors test.yml.
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 
