@@ -6,6 +6,13 @@ apply plugin: 'com.android.application'
 // merge without extra plumbing, so they're deliberately out of scope for now.
 apply plugin: 'jacoco'
 
+// The Android release stream's own version (foundational/PLAN_35_PHASE_NATIVE_RELEASE_STREAMS.md),
+// independent of the server `vX.Y.Z` tag. scripts/prepare-android-release.mjs owns this file. CI
+// overrides both values via -P for `android-vX.Y.Z-rc.N` pre-release builds; local dev builds use
+// whatever is checked in here.
+def androidVersion = new Properties()
+file('../version.properties').withInputStream { androidVersion.load(it) }
+
 android {
     namespace = "au.brianramsey.everylist"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -13,12 +20,11 @@ android {
         applicationId "au.brianramsey.everylist"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // CI passes these from the release tag (see native-build.yml) so every tagged
-        // build has a higher versionCode than the last, which Android requires to treat
-        // a new APK as an update rather than a downgrade. Defaults here only cover local
-        // dev builds, which are never distributed as updates to anyone.
-        versionCode project.hasProperty('appVersionCode') ? (appVersionCode as Integer) : 1
-        versionName project.hasProperty('appVersionName') ? appVersionName : "0.0.0-dev"
+        // versionCode must strictly increase release over release, or Android refuses to treat a
+        // new AAB as an update. version.properties is the source of truth; prepare-android-release
+        // asserts monotonicity when it writes it.
+        versionCode project.hasProperty('appVersionCode') ? (appVersionCode as Integer) : (androidVersion['versionCode'] as Integer)
+        versionName project.hasProperty('appVersionName') ? appVersionName : androidVersion['versionName']
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

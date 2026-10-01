@@ -1,23 +1,23 @@
-name: Native App Build
+name: Android App Build
 
-# Builds the Capacitor-wrapped iOS/Android apps (foundational/PLAN_13_PHASE_NATIVE_APP_SHELL.md §7)
-# on every pushed tag, split by tag shape:
+# Builds and publishes the Capacitor-wrapped Android app, on its own release stream
+# (foundational/PLAN_35_PHASE_NATIVE_RELEASE_STREAMS.md) — independent of the server `vX.Y.Z` tag:
 #
-#   - `vX.Y.Z-rc.N` (pre-release testing tags): builds a debug-signed Android APK only, attached
-#     as a GitHub Release asset (marked prerelease). Sideload-only — never published to Play.
-#   - `vX.Y.Z` (real releases): builds a release-signed Android App Bundle and publishes it to the
-#     Play Console's closed testing (alpha) track, plus attaches the AAB to the GitHub Release too. Once
-#     that's all green, its `-rc.N` GitHub Releases for the same version are pruned — they're
-#     sideload-only test builds superseded the moment the real release ships.
+#   - `android-vX.Y.Z-rc.N` (pre-release testing tags): builds a debug-signed APK, attached as a
+#     GitHub Release asset (marked prerelease). Sideload-only — never published to Play.
+#   - `android-vX.Y.Z` (real releases): builds a release-signed App Bundle and publishes it to the
+#     Play Console's closed testing (alpha) track, plus attaches the AAB to the GitHub Release too.
+#     Once that's all green, its `android-vX.Y.Z-rc.N` GitHub Releases for the same version are
+#     pruned — they're sideload-only test builds superseded the moment the real release ships.
 #
-# iOS builds an unsigned Simulator-only app on every tag of either shape (no Apple Developer
-# Program enrollment yet, which a real device/TestFlight build requires) — installable via
-# `xcrun simctl install`, not on a physical device, and not a Play Store concern.
+# The version (versionCode/versionName) comes from apps/android/version.properties, owned by
+# `pnpm prepare-android-release android-vX.Y.Z` — NOT from the tag. For rc builds this workflow
+# overrides both via -P so an rc's code sits below its eventual stable code, same as before.
 #
-# No server URL is baked in (PLAN_13_PHASE_NATIVE_APP_SHELL.md §1 made that runtime-configurable
-# via /server-setup), so one build here serves every self-hosted instance.
+# Cut a release with: `pnpm prepare-android-release android-vX.Y.Z`, merge the PR, then
+# `git tag android-vX.Y.Z && git push origin android-vX.Y.Z`.
 #
-# Required secrets for the release-signed Android path:
+# Required secrets for the release-signed path:
 #   - ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
 #     — the upload keystore used to sign the AAB (Play re-signs with its own app signing key
 #     under Play App Signing; this is only the upload key).
@@ -26,10 +26,14 @@ name: Native App Build
 
 on:
   push:
-    tags: ['v*.*.*']
+    tags: ['android-v*.*.*']
+
+# Least privilege: the build jobs only read; the release/prune jobs re-declare contents: write.
+permissions:
+  contents: read
 
 concurrency:
-  group: native-build-${{ github.ref }}
+  group: android-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -44,23 +48,46 @@ jobs:
       version_name: ${{ steps.parse.outputs.version_name }}
       is_rc: ${{ steps.parse.outputs.is_rc }}
     steps:
+      - uses: actions/checkout@v4
+
       - id: parse
         # versionCode must strictly increase release over release, or Android refuses to treat a
-        # new APK/AAB as an update. The RC slot keeps every vX.Y.Z-rc.N build's code below the
-        # eventual vX.Y.Z release of the same patch (RC=99), and rc.1 < rc.2 < ... within that,
-        # capped at 98 pre-release iterations per patch.
+        # new APK/AAB as an update. The stable code comes from version.properties (written by
+        # prepare-android-release); an rc uses the same formula but with its RC slot (1..98) instead
+        # of 99, so every rc sits below the eventual stable build of the same version.
+        #
+        # version.properties must already name this version — prepare-android-release writes both
+        # together, so a mismatch means the tag was cut without running it. Fail rather than ship a
+        # build whose embedded version contradicts its release tag.
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${GITHUB_REF_NAME#android-v}"
+          # Only `X.Y.Z` or `X.Y.Z-rc.N` (N 1..98) are valid; reject anything else before it can
+          # reach the shell (the same value is interpolated into later `run:` steps) or take the
+          # stable/publish path for an unsupported tag shape. The trigger `android-v*.*.*` would
+          # otherwise also match e.g. `android-v1.8.1-beta.1`.
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.([1-9]|[1-8][0-9]|9[0-8]))?$ ]]; then
+            echo "Unsupported tag ${GITHUB_REF_NAME}; expected android-vX.Y.Z or android-vX.Y.Z-rc.N (N 1..98)." >&2
+            exit 1
+          fi
           BASE="${TAG%%-*}"
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
+          FILE_VERSION=$(grep -E '^versionName=' apps/android/version.properties | cut -d= -f2)
+          FILE_CODE=$(grep -E '^versionCode=' apps/android/version.properties | cut -d= -f2)
+          if [[ "$FILE_VERSION" != "$BASE" ]]; then
+            echo "apps/android/version.properties is v${FILE_VERSION}, but this tag is android-v${TAG}." >&2
+            echo "Run \`pnpm prepare-android-release android-v${BASE}\` and merge it first." >&2
+            exit 1
+          fi
           if [[ "$TAG" == *-rc.* ]]; then
             RC="${TAG##*-rc.}"
+            MAJOR="${BASE%%.*}"; REST="${BASE#*.}"; MINOR="${REST%%.*}"; PATCH="${REST#*.}"
+            # Strip the stable +99 slot and re-add the rc slot.
+            VERSION_CODE=$(( MAJOR * 1000000 + MINOR * 10000 + PATCH * 100 + RC ))
             echo "is_rc=true" >> "$GITHUB_OUTPUT"
           else
-            RC=99
+            VERSION_CODE="$FILE_CODE"
             echo "is_rc=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "version_code=$((MAJOR * 1000000 + MINOR * 10000 + PATCH * 100 + RC))" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
           echo "version_name=$TAG" >> "$GITHUB_OUTPUT"
 
   build-android-debug:
@@ -73,6 +100,10 @@ jobs:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # These jobs run `pnpm install` (dependency lifecycle scripts) and never push — don't
+          # leave the token in .git/config for those to read. Mirrors test.yml.
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 
@@ -133,6 +164,10 @@ jobs:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # These jobs run `pnpm install` (dependency lifecycle scripts) and never push — don't
+          # leave the token in .git/config for those to read. Mirrors test.yml.
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 
@@ -186,7 +221,7 @@ jobs:
       # release-notes file. Fails the job (before anything reaches Play) if the entry is missing,
       # oversized (>500 chars), still contains Markdown, or is for a different version.
       - name: Generate Play "What's new" release notes
-        run: node scripts/android-whats-new.mjs ${{ needs.meta.outputs.version_name }}
+        run: node scripts/android-whats-new.mjs android-v${{ needs.meta.outputs.version_name }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -223,113 +258,12 @@ jobs:
           releaseFiles: dist/app-release.aab
           track: alpha
           status: completed
-          releaseName: v${{ needs.meta.outputs.version_name }}
+          releaseName: android-v${{ needs.meta.outputs.version_name }}
           whatsNewDirectory: dist/whatsnew
 
-  build-ios:
-    name: Build iOS Simulator app
-    needs: test
-    runs-on: macos-latest
-    env:
-      # See test.yml's env block — this job doesn't build apps/desktop either.
-      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24.20.0
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - run: pnpm --filter @everylist/shared build
-
-      - name: Build web bundle and sync into the native iOS project
-        run: pnpm --filter @everylist/web run cap:sync
-
-      - name: Build for the iOS Simulator
-        # Capacitor 8's default template resolves its native deps via Swift Package Manager, not
-        # CocoaPods — App.xcodeproj (not a .xcworkspace) is the real project, and xcodebuild
-        # resolves the SPM graph itself before compiling. No code signing available/needed for a
-        # Simulator-only build.
-        run: |
-          xcodebuild build \
-            -project apps/ios/App/App.xcodeproj \
-            -scheme App \
-            -configuration Release \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
-
-      - name: Zip the .app bundle
-        run: |
-          cd build/Build/Products/Release-iphonesimulator
-          zip -r -y "$GITHUB_WORKSPACE/EveryList-ios-simulator.zip" App.app
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ios-simulator-build
-          path: EveryList-ios-simulator.zip
-          if-no-files-found: error
-
-  build-desktop:
-    name: Build desktop app (${{ matrix.os }})
-    needs: [test, meta]
-    strategy:
-      fail-fast: false
-      matrix:
-        # windows-latest pinned to windows-2022, not the newer image: its bundled node-gyp
-        # doesn't recognize the VS 2026 (v18) toolchain that image ships, so any workspace
-        # package needing a native build (better-sqlite3, pulled in by apps/api even though
-        # this job never touches it — pnpm installs the whole workspace) fails to compile.
-        os: [macos-latest, windows-2022, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24.20.0
-          cache: pnpm
-
-      # Unlike test.yml/ci.yml, this job actually needs Electron's runtime binary — leave
-      # ELECTRON_SKIP_BINARY_DOWNLOAD unset here (see pnpm-workspace.yaml's onlyBuiltDependencies
-      # comment and PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §6).
-      - run: pnpm install --frozen-lockfile
-
-      - run: pnpm --filter @everylist/shared build
-
-      - run: pnpm --filter @everylist/web build
-
-      # Matrix builds per-OS not because of native modules (there are none — see §6) but because
-      # dmg/nsis/AppImage each need their own OS toolchain.
-      - name: Package the desktop app
-        working-directory: apps/desktop
-        # electron-builder reads `version` from package.json; inject the tag's version rather
-        # than hand-bumping a file that would inevitably drift (§6).
-        run: |
-          npm pkg set version=${{ needs.meta.outputs.version_name }}
-          node scripts/copy-renderer.mjs
-          pnpm exec electron-builder --publish never
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-${{ matrix.os }}
-          path: |
-            apps/desktop/release/*.dmg
-            apps/desktop/release/*.zip
-            apps/desktop/release/*.exe
-            apps/desktop/release/*.AppImage
-          if-no-files-found: error
-
   release:
-    name: Attach builds to the GitHub Release
-    needs: [meta, build-android-debug, build-android-release, build-ios, build-desktop]
+    name: Attach Android builds to the GitHub Release
+    needs: [meta, build-android-debug, build-android-release]
     if: ${{ always() && !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     permissions:
@@ -345,43 +279,32 @@ jobs:
           files: |
             dist/android-apk-debug/*.apk
             dist/android-aab-release/*.aab
-            dist/ios-simulator-build/*.zip
-            dist/desktop-macos-latest/*
-            dist/desktop-windows-2022/*
-            dist/desktop-ubuntu-latest/*
 
   prune-prereleases:
-    name: Prune superseded pre-release tags
+    name: Prune superseded Android pre-release tags
     # Only after a real (non-rc) tag's build is fully green, including the Play publish — a
     # failed publish-play run leaves this job skipped rather than pruning test builds a real
     # release didn't actually finish replacing.
     needs: [meta, release, publish-play]
-    # `always()` is required, not decorative: with no status function in the `if`, GitHub applies
+    # `always()` is required, not decorative: without a status function in the `if`, GitHub applies
     # an implicit transitive `success()` gate that sees build-android-debug's expected skip (real
     # releases don't build the rc-only debug APK) several hops up via `release` and skips this job
-    # regardless of the explicit checks below. Observed skipping on every real release checked
-    # (v1.3.1 through v1.7.2, which left v1.7.2-rc.1 published); the earlier c66e920 fix switched
-    # away from `success()` but still omitted `always()`, so it didn't actually fix anything. The
-    # sibling `release` job works because it already carries `always()`. The needs.*.result checks
-    # below are what actually decide whether to prune.
+    # regardless. The needs.*.result checks below are what actually decide whether to prune.
     if: ${{ always() && !cancelled() && needs.meta.outputs.is_rc == 'false' && needs.release.result == 'success' && needs.publish-play.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      # The action matches by substring on `version` against each prerelease's tag/name, e.g.
-      # `1.7.3-` matches `1.7.3-rc.1` / `1.7.3-rc.2`. The trailing `-` is load-bearing: a bare
-      # `1.7.3` would also substring-match `1.7.30-rc.1` and delete an unrelated version's
-      # prereleases. (version_name is the tag without its leading `v`.)
+      # The action matches by substring on `version` against each prerelease's tag/name. The
+      # `android-` prefix keeps it scoped to this stream's prereleases only; the trailing `-` is
+      # load-bearing (a bare `1.8.1` would also substring-match `1.8.10-rc.1`).
       #
       # It deletes the GitHub Releases (and their attached assets) only — it does not delete the
       # underlying git tags, so `git tag -l` will still list the pruned rc tags after this runs.
       #
-      # Pinned to the v1.0.0 commit SHA, not a tag: that repo publishes only a v1.0.0 tag (there
-      # is no `v1` moving tag, so `@v1` failed job-setup with "unable to find version v1" — latent
-      # until #265 made this job actually run) and a tag is mutable, so a re-pointed v1.0.0 could
-      # run changed code with this job's `contents: write`.
+      # Pinned to the v1.0.0 commit SHA, not a tag: that repo publishes only a v1.0.0 tag and a tag
+      # is mutable, so a re-pointed v1.0.0 could run changed code with this job's `contents: write`.
       - uses: mlapaglia/delete-prereleases@0f90437118080a69876452776abff6b33310a040 # v1.0.0
         with:
-          version: ${{ needs.meta.outputs.version_name }}-
+          version: android-v${{ needs.meta.outputs.version_name }}-
           token: ${{ secrets.GITHUB_TOKEN }}

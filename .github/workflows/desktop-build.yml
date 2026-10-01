@@ -1,0 +1,117 @@
+name: Desktop App Build
+
+# Builds the Electron desktop app on the server/web release stream (`vX.Y.Z`), alongside the Docker
+# image — see foundational/PLAN_35_PHASE_NATIVE_RELEASE_STREAMS.md. The desktop app is a pure
+# wrapper around the exact apps/web bundle with no native modules (PLAN_22 §6), so it has no
+# independent surface and rides the server tag; only its update-check needed scoping to the server
+# stream once the native tags (`android-v…`/`ios-v…`) started producing GitHub Releases.
+#
+# electron-builder reads `version` from package.json; the tag's version is injected at build time
+# rather than hand-bumping a file that would drift.
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+# Least privilege: the build jobs only read; the release job re-declares contents: write.
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  meta:
+    name: Parse release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version_name: ${{ steps.parse.outputs.version_name }}
+    steps:
+      - id: parse
+        # Only a stable vX.Y.Z or a vX.Y.Z-<suffix> prerelease reaches here (the tag filter is
+        # `v*.*.*`). Reject anything else before the value is interpolated into later `run:` steps,
+        # so a tag name can't be executed as shell.
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "Unsupported tag ${GITHUB_REF_NAME}; expected vX.Y.Z optionally with a prerelease suffix." >&2
+            exit 1
+          fi
+          echo "version_name=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build-desktop:
+    name: Build desktop app (${{ matrix.os }})
+    needs: [test, meta]
+    strategy:
+      fail-fast: false
+      matrix:
+        # windows-latest pinned to windows-2022, not the newer image: its bundled node-gyp
+        # doesn't recognize the VS 2026 (v18) toolchain that image ships, so any workspace
+        # package needing a native build (better-sqlite3, pulled in by apps/api even though
+        # this job never touches it — pnpm installs the whole workspace) fails to compile.
+        os: [macos-latest, windows-2022, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # These jobs run `pnpm install` (dependency lifecycle scripts) and never push — don't
+          # leave the token in .git/config for those to read. Mirrors test.yml.
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+
+      # Unlike test.yml/ci.yml, this job actually needs Electron's runtime binary — leave
+      # ELECTRON_SKIP_BINARY_DOWNLOAD unset here (see pnpm-workspace.yaml's onlyBuiltDependencies
+      # comment and PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §6).
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @everylist/shared build
+
+      - run: pnpm --filter @everylist/web build
+
+      # Matrix builds per-OS not because of native modules (there are none — see §6) but because
+      # dmg/nsis/AppImage each need their own OS toolchain.
+      - name: Package the desktop app
+        working-directory: apps/desktop
+        run: |
+          npm pkg set version=${{ needs.meta.outputs.version_name }}
+          node scripts/copy-renderer.mjs
+          pnpm exec electron-builder --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.AppImage
+          if-no-files-found: error
+
+  release:
+    name: Attach desktop builds to the GitHub Release
+    needs: [meta, build-desktop]
+    if: ${{ always() && !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/desktop-macos-latest/*
+            dist/desktop-windows-2022/*
+            dist/desktop-ubuntu-latest/*

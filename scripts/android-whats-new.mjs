@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Extracts the newest entry's "What's new" block from apps/android/CHANGELOG.md and writes it as
- * the Google Play release-notes file consumed by native-build.yml's publish-play job.
+ * the Google Play release-notes file consumed by android-build.yml's publish-play job.
  *
  * Why this exists: Play's release notes are separate from the GitHub Release notes and are capped
  * at ~500 characters per locale, so the long hand-written release notes can't be pasted in. The
@@ -15,7 +15,8 @@
  * the Play API, so the filename's suffix is the Play locale verbatim.
  *
  * Usage: node scripts/android-whats-new.mjs <tag> [--changelog <path>] [--out-dir <dir>]
- *   <tag> is the release version, with or without a leading "v" (e.g. v1.7.5 or 1.7.5).
+ *   <tag> is the Android stream tag (`android-v1.8.1`) or a bare version (`1.8.1`); the changelog
+ *   heading is always the plain Android version, independent of the server `vX.Y.Z` stream.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -138,10 +139,16 @@ export function validateWhatsNew(text) {
  * @returns {{ version: string, text: string, outFile: string }}
  */
 export function buildWhatsNew(options) {
-  const tag = String(options.tag).replace(/^v/, '')
+  // Accepts both the Android stream tag (`android-vX.Y.Z`) and a bare/`v`-prefixed version; the
+  // changelog heading is always the plain `X.Y.Z` Android version. See
+  // foundational/PLAN_35_PHASE_NATIVE_RELEASE_STREAMS.md.
+  const tag = String(options.tag)
+    .replace(/^android-/, '')
+    .replace(/^v/, '')
   if (!/^\d+\.\d+\.\d+$/.test(tag)) {
     throw new Error(
-      `Expected a vX.Y.Z release tag, got "${options.tag}". (Pre-releases don't publish to Play.)`
+      `Expected an android-vX.Y.Z (or vX.Y.Z) release tag, got "${options.tag}". ` +
+        `(Pre-releases don't publish to Play.)`
     )
   }
 

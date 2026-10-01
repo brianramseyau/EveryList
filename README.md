@@ -133,11 +133,11 @@ EveryList is also available as a Home Assistant app, for anyone already running 
 
 ### Native apps (iOS/Android)
 
-Every `vX.Y.Z` tag builds and attaches native app packages — a debug-signed Android APK and an unsigned iOS Simulator build — to the corresponding [GitHub Release](https://github.com/brianramseyau/EveryList/releases), each pointed at your own server via a `/server-setup` screen with no rebuild needed. See [`docs/android-ios.md`](docs/android-ios.md) for signing status and the Android home-screen widget.
+The native apps release on their own tags, separate from the server: `android-vX.Y.Z` builds a debug-signed Android APK (`-rc.N` pre-release) or publishes the AAB to Play closed testing (stable), and `ios-vX.Y.Z` builds an unsigned iOS Simulator app — each attached to its own [GitHub Release](https://github.com/brianramseyau/EveryList/releases) and pointed at your own server via a `/server-setup` screen with no rebuild needed. See [`docs/android-ios.md`](docs/android-ios.md) for signing status and the Android home-screen widget.
 
 ### Desktop app (Electron)
 
-Every `vX.Y.Z` tag also attaches unsigned macOS, Windows, and Linux desktop builds to the [GitHub Release](https://github.com/brianramseyau/EveryList/releases) — a client only, pointed at whatever EveryList server you configure on first launch. See [`docs/desktop.md`](docs/desktop.md) for unsigned-build workarounds, update behavior, and the fixed loopback port.
+Every server release (`vX.Y.Z`) also attaches unsigned macOS, Windows, and Linux desktop builds to the [GitHub Release](https://github.com/brianramseyau/EveryList/releases) — a client only, pointed at whatever EveryList server you configure on first launch. Unlike the mobile apps it has no native surface of its own, so it rides the server release train rather than having a separate version stream. See [`docs/desktop.md`](docs/desktop.md) for unsigned-build workarounds, update behavior, and the fixed loopback port.
 
 ## Voice control & integrations
 
