@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Updates every workspace package.json "version" for a release in one place, so they can't
- * drift out of sync with each other or with the release tag being cut.
+ * Updates workspace package.json "version" fields for a release in one place: the client
+ * workspaces move with the release tag, and the API's own version moves only when the API
+ * changed (see below), so the two can legitimately differ.
  *
  * Deliberately does NOT touch ha-addon/everylist/config.yaml: that version is the exact GHCR
  * image tag Supervisor pulls, so it may only move *after* the release image is published. It has
@@ -16,11 +17,21 @@
  *
  * Bump before tagging so the tagged commit carries the right versions. Nothing in CI requires it
  * (Docker takes its version from the tag, and native-build.yml injects the tag's version into
- * apps/desktop before packaging), but apps/api's version is real: config/openapi.ts reads it for
- * the OpenAPI document's info.version (/docs, /openapi). Don't blank these to 0.0.0.
+ * apps/desktop before packaging), but two version groups are real:
+ *
+ *   - "Release-synced" workspaces (root, apps/web, apps/desktop, apps/cli) always move to the new
+ *     tag. apps/desktop's names the built DMG/EXE/AppImage; apps/cli's is what `everylist
+ *     --version` reports; the rest are metadata.
+ *   - apps/api + packages/shared are the API's own version, and only move when the API (or the
+ *     shared DTOs it compiles against) changed since the last stable tag. `apps/api/package.json`
+ *     feeds the OpenAPI document's `info.version` and the MCP `serverInfo.version`
+ *     (config/openapi.ts, config/mcp.ts); leaving it put means `/docs` truthfully names the last
+ *     release whose API surface moved. See foundational/PLAN_34_PHASE_API_VERSIONING.md.
+ * Don't blank these to 0.0.0.
  *
  * Stable releases only (no "-rc"/"-beta" suffix).
  */
+import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -61,30 +72,84 @@ try {
 
 // Every workspace's package.json "version" field - npm/electron-builder want a bare semver,
 // no "v" prefix. apps/desktop's names the built DMG/EXE/AppImage and apps/cli's is what
-// `everylist --version` reports (apps/cli/src/version.ts reads its own package.json); the rest
-// are otherwise-unused metadata, kept in sync for hygiene. Regex-replaced in place (not
-// JSON.parse/stringify) so each file's existing formatting - apps/web/package.json is
-// tab-indented, the rest are 2-space - survives untouched.
-const packageJsonPaths = [
-  'package.json',
-  'apps/api/package.json',
-  'apps/web/package.json',
-  'apps/desktop/package.json',
-  'apps/cli/package.json',
-  'packages/shared/package.json'
-]
+// `everylist --version` reports (apps/cli/src/version.ts reads its own package.json). Regex-
+// replaced in place (not JSON.parse/stringify) so each file's existing formatting -
+// apps/web/package.json is tab-indented, the rest are 2-space - survives untouched.
 const versionField = /"version":\s*"[^"]*"/
-for (const relPath of packageJsonPaths) {
+
+function setVersion(relPath, value) {
   const filePath = path.join(repoRoot, relPath)
   const contents = readFileSync(filePath, 'utf8')
   if (!versionField.test(contents)) {
     console.error(`Could not find a "version" field in ${filePath}`)
     process.exit(1)
   }
-  writeFileSync(filePath, contents.replace(versionField, `"version": "${bareVersion}"`))
+  writeFileSync(filePath, contents.replace(versionField, `"version": "${value}"`))
+}
+
+// Always follow the release train, whatever changed.
+const releaseSyncedPaths = [
+  'package.json',
+  'apps/web/package.json',
+  'apps/desktop/package.json',
+  'apps/cli/package.json'
+]
+for (const relPath of releaseSyncedPaths) {
+  setVersion(relPath, bareVersion)
   console.log(`Updated ${relPath} -> ${bareVersion}`)
+}
+
+// The API's own version (apps/api + the shared DTOs it compiles against) only moves when the
+// API changed since the last stable release. Both are set together: apps/api depends on
+// packages/shared, so a shared DTO change is an API change even if no apps/api file was touched.
+const lastStableTag = findLastStableTag()
+const apiChanged = lastStableTag
+  ? pathsChangedSince(lastStableTag, ['apps/api', 'packages/shared'])
+  : true
+if (apiChanged) {
+  setVersion('apps/api/package.json', bareVersion)
+  setVersion('packages/shared/package.json', bareVersion)
+  console.log(
+    `Updated apps/api/package.json and packages/shared/package.json -> ${bareVersion} ` +
+      `(API changed since ${lastStableTag ?? 'the start of history'})`
+  )
+} else {
+  console.log(
+    'Left apps/api/package.json and packages/shared/package.json unchanged (no apps/api or ' +
+      `packages/shared changes since ${lastStableTag}) — /docs keeps naming the last release ` +
+      'whose API moved.'
+  )
 }
 
 console.log(
   `\nDone. Review the diff, then commit/PR/merge, tag the merge commit, and (after docker-publish.yml finishes) run \`pnpm release-addon ${tag}\`.`
 )
+
+/**
+ * The newest stable (non-pre-release) `vX.Y.Z` tag reachable from HEAD, or null when there is
+ * none yet. `--exclude` only filters patterns that are also matched, so `--match 'v*'` is
+ * required for the rc exclusion to apply.
+ */
+function findLastStableTag() {
+  try {
+    return (
+      execFileSync(
+        'git',
+        ['describe', '--tags', '--abbrev=0', '--match', 'v*', '--exclude', '*-rc.*'],
+        { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+      ).trim() || null
+    )
+  } catch {
+    // `git describe` exits non-zero when no tag matches (e.g. a fresh clone with no tags).
+    return null
+  }
+}
+
+/** Whether any file under `roots` changed between `fromTag` and HEAD. */
+function pathsChangedSince(fromTag, roots) {
+  const output = execFileSync('git', ['diff', '--name-only', `${fromTag}..HEAD`, '--', ...roots], {
+    cwd: repoRoot,
+    encoding: 'utf8'
+  })
+  return output.trim().length > 0
+}

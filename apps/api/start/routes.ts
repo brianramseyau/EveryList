@@ -346,6 +346,10 @@ router
       .prefix('push')
       .as('push')
   })
+  // The /api/v1 prefix is the API contract major. Additive changes are safe at any time;
+  // breaking changes must follow the deprecation procedure (OpenAPI `deprecated` → release-notes
+  // Breaking/Upgrading → removal next release) and only a break that can't be staged moves this
+  // to /api/v2. See foundational/PLAN_34_PHASE_API_VERSIONING.md.
   .prefix('/api/v1')
 
 /**

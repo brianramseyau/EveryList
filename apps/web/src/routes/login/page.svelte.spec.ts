@@ -20,6 +20,7 @@ describe('Login +page.svelte', () => {
 		vi.mocked(goto).mockResolvedValue(undefined);
 		vi.mocked(fetchMeta).mockResolvedValue({
 			version: 'develop',
+			apiVersion: 'v1',
 			commit: 'abc123',
 			builtAt: '2026-08-01T00:00:00.000Z',
 			publicSignupEnabled: true
@@ -92,6 +93,7 @@ describe('Login +page.svelte', () => {
 	it('hides the sign up link when public signup is disabled', async () => {
 		vi.mocked(fetchMeta).mockResolvedValue({
 			version: 'develop',
+			apiVersion: 'v1',
 			commit: 'abc123',
 			builtAt: '2026-08-01T00:00:00.000Z',
 			publicSignupEnabled: false
