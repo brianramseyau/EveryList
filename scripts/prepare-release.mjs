@@ -60,15 +60,17 @@ try {
 }
 
 // Every workspace's package.json "version" field - npm/electron-builder want a bare semver,
-// no "v" prefix. apps/desktop's is the one that actually matters functionally (it names the
-// built DMG/EXE/AppImage); the rest are otherwise-unused metadata, kept in sync for hygiene.
-// Regex-replaced in place (not JSON.parse/stringify) so each file's existing formatting -
-// apps/web/package.json is tab-indented, the rest are 2-space - survives untouched.
+// no "v" prefix. apps/desktop's names the built DMG/EXE/AppImage and apps/cli's is what
+// `everylist --version` reports (apps/cli/src/version.ts reads its own package.json); the rest
+// are otherwise-unused metadata, kept in sync for hygiene. Regex-replaced in place (not
+// JSON.parse/stringify) so each file's existing formatting - apps/web/package.json is
+// tab-indented, the rest are 2-space - survives untouched.
 const packageJsonPaths = [
   'package.json',
   'apps/api/package.json',
   'apps/web/package.json',
   'apps/desktop/package.json',
+  'apps/cli/package.json',
   'packages/shared/package.json'
 ]
 const versionField = /"version":\s*"[^"]*"/
