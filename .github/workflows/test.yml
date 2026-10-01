@@ -159,11 +159,11 @@ jobs:
       # cap:sync builds the web bundle and generates the Capacitor plugin Gradle projects
       # (capacitor-cordova-android-plugins, the plugin project includes) that settings.gradle
       # requires — both gitignored, so a fresh checkout can't compile the app without this. Same
-      # step native-build.yml's Android jobs use. Runs before the SDK setup since it's node-only.
+      # step android-build.yml's Android jobs use. Runs before the SDK setup since it's node-only.
       - name: Sync web bundle and Capacitor plugins into the Android project
         run: pnpm --filter @everylist/web run cap:sync
 
-      # packages: 'platform-tools' — see the same step's comment in native-build.yml.
+      # packages: 'platform-tools' — see the same step's comment in android-build.yml.
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'

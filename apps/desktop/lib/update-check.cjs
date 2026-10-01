@@ -4,6 +4,15 @@ const REPO_OWNER = 'brianramseyau'
 const REPO_NAME = 'EveryList'
 
 /**
+ * Tags belonging to the **server/web/desktop** release stream — a leading `v` and nothing else
+ * (`v1.8.0`). Deliberately excludes the native streams' prefixed tags (`android-v1.8.1`,
+ * `ios-v1.8.1`) and any prerelease suffix (`v1.8.1-rc.1`), so the desktop app never offers an
+ * Android/iOS build or a test build as an update. See
+ * foundational/PLAN_35_PHASE_NATIVE_RELEASE_STREAMS.md.
+ */
+const SERVER_TAG_PATTERN = /^v\d+\.\d+\.\d+$/
+
+/**
  * @param {string} value
  * @returns {[number, number, number] | null}
  */
@@ -27,6 +36,40 @@ function isNewerVersion(latest, current) {
   if (aMajor !== bMajor) return aMajor > bMajor
   if (aMinor !== bMinor) return aMinor > bMinor
   return aPatch > bPatch
+}
+
+/**
+ * @typedef {{ tag_name?: unknown, html_url?: unknown, draft?: unknown, prerelease?: unknown }} ReleaseLike
+ */
+
+/**
+ * Picks the highest server-stream release from GitHub's releases list.
+ *
+ * Desktop's update check used to read `releases/latest`, which returns whichever stream released
+ * most recently *by date* — once `android-v…`/`ios-v…` releases exist that could be an Android
+ * build, and the app would offer an AAB as a desktop update. It now scans the list and ignores
+ * anything that isn't a plain `vX.Y.Z` server release (native-prefixed tags, prereleases, drafts).
+ *
+ * @param {unknown} releases
+ * @returns {{ tag: string, url: string } | null}
+ */
+function selectLatestServerRelease(releases) {
+  if (!Array.isArray(releases)) return null
+
+  let best = null
+  for (const release of releases) {
+    if (!release || typeof release !== 'object') continue
+    const { tag_name: tag, html_url: url, draft, prerelease } = /** @type {ReleaseLike} */ (release)
+    if (draft === true || prerelease === true) continue
+    if (typeof tag !== 'string' || !SERVER_TAG_PATTERN.test(tag)) continue
+    if (typeof url !== 'string') continue
+    if (best === null) {
+      best = { tag, url }
+    } else if (isNewerVersion(tag, best.tag)) {
+      best = { tag, url }
+    }
+  }
+  return best
 }
 
 /**
@@ -58,35 +101,44 @@ async function checkForUpdate(currentVersion, options = {}) {
 
   let response
   try {
-    response = await fetchImpl(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
-      headers: { Accept: 'application/vnd.github+json' }
-    })
+    // The list endpoint, not `/releases/latest`: see selectLatestServerRelease. 100 is GitHub's max
+    // page size and comfortably covers the recency window the newest server release sits in.
+    response = await fetchImpl(
+      `https://api.github.com/repos/${owner}/${repo}/releases?per_page=100`,
+      {
+        headers: { Accept: 'application/vnd.github+json' }
+      }
+    )
   } catch {
     return { status: 'error', message: CHECK_FAILED_MESSAGE }
   }
 
   if (response.ok === false) {
     return { status: 'error', message: CHECK_FAILED_MESSAGE }
-  }
+  } else {
+    /** @type {unknown} */
+    let data
+    try {
+      data = await response.json()
+    } catch {
+      return { status: 'error', message: CHECK_FAILED_MESSAGE }
+    }
 
-  /** @type {{ tag_name?: unknown, html_url?: unknown } | null} */
-  let data
-  try {
-    data = /** @type {{ tag_name?: unknown, html_url?: unknown } | null} */ (await response.json())
-  } catch {
-    return { status: 'error', message: CHECK_FAILED_MESSAGE }
+    // A non-array body means an unexpected/error shape, not "no releases" — treat it as a failure.
+    if (!Array.isArray(data)) {
+      return { status: 'error', message: CHECK_FAILED_MESSAGE }
+    } else {
+      const latest = selectLatestServerRelease(data)
+      if (!latest) {
+        // No server release to point at (e.g. a fresh fork with only native tags) — nothing to
+        // update to.
+        return { status: 'up-to-date' }
+      } else if (isNewerVersion(latest.tag, currentVersion)) {
+        return { status: 'update-available', latestVersion: latest.tag, url: latest.url }
+      }
+      return { status: 'up-to-date' }
+    }
   }
-
-  const tag = data && typeof data === 'object' ? data.tag_name : undefined
-  const url = data && typeof data === 'object' ? data.html_url : undefined
-  if (typeof tag !== 'string' || typeof url !== 'string') {
-    return { status: 'error', message: CHECK_FAILED_MESSAGE }
-  }
-
-  if (isNewerVersion(tag, currentVersion)) {
-    return { status: 'update-available', latestVersion: tag, url }
-  }
-  return { status: 'up-to-date' }
 }
 
-module.exports = { parseVersion, isNewerVersion, checkForUpdate }
+module.exports = { parseVersion, isNewerVersion, selectLatestServerRelease, checkForUpdate }
