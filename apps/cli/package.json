@@ -1,7 +1,7 @@
 {
   "name": "@everylist/cli",
   "private": true,
-  "version": "1.7.4",
+  "version": "1.8.0",
   "description": "EveryList command-line client — a PAT-authenticated REST client for humans and scripts. See foundational/PLAN_33_PHASE_CLI_CLIENT.md.",
   "license": "MIT",
   "type": "module",
