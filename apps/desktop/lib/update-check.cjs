@@ -155,7 +155,9 @@ async function fetchAllReleases(fetchImpl, owner, repo) {
     }
   }
 
-  return releases
+  // Hitting the cap while `next` still points somewhere means the scan is incomplete — return null
+  // (→ the friendly error) rather than a partial list a newer server release could be missing from.
+  return url === null ? releases : null
 }
 
 /**

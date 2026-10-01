@@ -259,6 +259,17 @@ describe('checkForUpdate', () => {
     })
   })
 
+  it('reports an error when pagination never terminates (cap reached with more pages left)', async () => {
+    // Always advertises another page, so the loop hits MAX_RELEASE_PAGES with `next` still set.
+    const fetchImpl = async () => ({
+      ok: true,
+      headers: { get: () => '<https://api.github.com/repos/o/r/releases?page=2>; rel="next"' },
+      json: async () => [{ tag_name: 'android-v1.0.0', html_url: 'https://example.com' }]
+    })
+    const result = await checkForUpdate('v1.0.0', { fetchImpl })
+    expect(result.status).toBe('error')
+  })
+
   it('reports an error when a later page fails', async () => {
     let call = 0
     const fetchImpl = async () => {
