@@ -117,13 +117,15 @@ the only version signal an MCP client sees.)
 
 ### Release tooling
 
-- `scripts/prepare-release.mjs` — resolve the last stable tag with
-  `git describe --abbrev=0 --exclude='*-rc.*' --match='v*'` (falling back to the oldest tag for the
-  first run), then diff `apps/api/**` and `packages/shared/**` against `HEAD`. If either changed,
-  set both `apps/api/package.json` and `packages/shared/package.json` to the release version;
-  otherwise leave them untouched and log which paths were unchanged and why. `root`, `web`,
-  `desktop`, `cli`, `shared` keep the existing unconditional loop. (Note: `apps/cli` was brought
-  into the loop by a separate fix, PR #277, before this phase.)
+- `scripts/prepare-release.mjs` — resolve the last stable tag by enumerating reachable tags
+  (`git tag --list --merged HEAD --sort=-v:refname 'v*'`) and taking the first whose _complete_
+  name matches `^v\d+\.\d+\.\d+$` (a prerelease-suffix denylist would miss `-beta.N`, and a
+  prerelease baseline would wrongly report "API unchanged"); null on the first release. Then diff
+  `apps/api/**` and `packages/shared/**` against `HEAD`. If either changed, set both
+  `apps/api/package.json` and `packages/shared/package.json` to the release version; otherwise
+  leave them untouched and log which paths were unchanged and why. `root`, `web`, `desktop`,
+  `cli`, `shared` keep the existing unconditional loop. (Note: `apps/cli` was brought into the
+  loop by a separate fix, PR #277, before this phase.)
 
 ### Docs
 

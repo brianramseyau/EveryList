@@ -126,23 +126,24 @@ console.log(
 )
 
 /**
- * The newest stable (non-pre-release) `vX.Y.Z` tag reachable from HEAD, or null when there is
- * none yet. `--exclude` only filters patterns that are also matched, so `--match 'v*'` is
- * required for the rc exclusion to apply.
+ * The newest stable `vX.Y.Z` tag reachable from HEAD, or null when there is none yet.
+ *
+ * Enumerates reachable tags and matches the *complete* name against the stable pattern rather
+ * than relying on `git describe --exclude`: prereleases use more than one suffix (`-rc.N`, and
+ * `-beta.N` per docker-publish.yml), so a glob denylist would let a prerelease tag become the
+ * baseline — which would make `apiChanged` false and leave the API version stale.
  */
 function findLastStableTag() {
-  try {
-    return (
-      execFileSync(
-        'git',
-        ['describe', '--tags', '--abbrev=0', '--match', 'v*', '--exclude', '*-rc.*'],
-        { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
-      ).trim() || null
-    )
-  } catch {
-    // `git describe` exits non-zero when no tag matches (e.g. a fresh clone with no tags).
-    return null
-  }
+  const output = execFileSync(
+    'git',
+    ['tag', '--list', '--merged', 'HEAD', '--sort=-v:refname', 'v*'],
+    { cwd: repoRoot, encoding: 'utf8' }
+  )
+  const stable = output
+    .split('\n')
+    .map((line) => line.trim())
+    .find((name) => /^v\d+\.\d+\.\d+$/.test(name))
+  return stable ?? null
 }
 
 /** Whether any file under `roots` changed between `fromTag` and HEAD. */
