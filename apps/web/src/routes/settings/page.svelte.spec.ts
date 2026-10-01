@@ -281,6 +281,7 @@ describe('Settings +page.svelte', () => {
 				json: () =>
 					Promise.resolve({
 						version: 'v1.2.3',
+						apiVersion: 'v1',
 						commit: 'abc123',
 						builtAt: '2026-08-12T00:00:00.000Z'
 					})
@@ -300,6 +301,7 @@ describe('Settings +page.svelte', () => {
 				json: () =>
 					Promise.resolve({
 						version: 'v1.2.3',
+						apiVersion: 'v1',
 						commit: 'abc123',
 						builtAt: '2026-08-12T00:00:00.000Z'
 					})

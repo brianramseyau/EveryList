@@ -1,4 +1,5 @@
 import { test } from '@japa/runner'
+import { API_VERSION } from '@everylist/shared'
 
 test.group('OpenAPI docs', () => {
   test('serves the Scalar reference UI at /docs', async ({ client, assert }) => {
@@ -21,5 +22,17 @@ test.group('OpenAPI docs', () => {
     assert.property(document.paths, '/api/v1/auth/signup')
     assert.property(document.paths, '/api/v1/lists/{listId}/items')
     assert.property(document.paths, '/api/v1/meta')
+  })
+
+  test('reports a bare-semver API version and names the contract major', async ({
+    client,
+    assert,
+  }) => {
+    const response = await client.get('/openapi')
+
+    response.assertStatus(200)
+    const { info } = response.body()
+    assert.match(info.version, /^\d+\.\d+\.\d+$/)
+    assert.include(info.description, `${API_VERSION} contract`)
   })
 })

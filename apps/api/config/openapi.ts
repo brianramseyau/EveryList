@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { API_VERSION } from '@everylist/shared'
 import type { OpenApiConfig } from '#services/openapi/generator'
 
 /**
@@ -6,6 +7,11 @@ import type { OpenApiConfig } from '#services/openapi/generator'
  * package's version) next to this file's compiled output, so this resolves
  * correctly both in dev (`apps/api/package.json`) and in the production
  * build (`build/package.json`) — see docker/Dockerfile's build-api stage.
+ *
+ * This is the *API's* version, not the release tag: `scripts/prepare-release.mjs`
+ * only bumps it when the API (or the shared DTOs it compiles against) changed
+ * since the last stable tag, so `info.version` truthfully names the last release
+ * whose API surface moved. See foundational/PLAN_34_PHASE_API_VERSIONING.md.
  */
 const { version } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf-8')
@@ -22,7 +28,7 @@ const openapiConfig: OpenApiConfig = {
   info: {
     title: 'EveryList API',
     version,
-    description: 'Self-hosted list API. Endpoints are bearer-token protected except where noted.',
+    description: `Self-hosted list API (${API_VERSION} contract). Endpoints are bearer-token protected except where noted.`,
   },
   servers: [{ url: '/' }],
   securitySchemes: {
