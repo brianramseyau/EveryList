@@ -124,8 +124,8 @@ the only version signal an MCP client sees.)
   `apps/api/**` and `packages/shared/**` against `HEAD`. If either changed, set both
   `apps/api/package.json` and `packages/shared/package.json` to the release version; otherwise
   leave them untouched and log which paths were unchanged and why. `root`, `web`, `desktop`,
-  `cli`, `shared` keep the existing unconditional loop. (Note: `apps/cli` was brought into the
-  loop by a separate fix, PR #277, before this phase.)
+  `cli` keep the existing unconditional loop. (Note: `apps/cli` was brought into the loop by a
+  separate fix, PR #277, before this phase.)
 
 ### Docs
 
