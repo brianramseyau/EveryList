@@ -47,7 +47,7 @@ public class WidgetConfigActivityTest {
         context.getSharedPreferences("widget_" + widgetId, Context.MODE_PRIVATE).edit().clear().commit();
 
         transport = new RecordingTransport();
-        transport.response = "{\"data\":[{\"id\":74,\"name\":\"TODO\"},{\"id\":3,\"name\":\"Hardware\"}]}";
+        transport.respondWith("{\"data\":[{\"id\":74,\"name\":\"TODO\"},{\"id\":3,\"name\":\"Hardware\"}]}");
         HttpJson.setTransportForTesting(transport);
     }
 
@@ -82,7 +82,7 @@ public class WidgetConfigActivityTest {
         long deadline = System.currentTimeMillis() + 5000;
         while (System.currentTimeMillis() < deadline) {
             shadowOf(Looper.getMainLooper()).idle();
-            if (!transport.calls.isEmpty()) {
+            if (!transport.calls().isEmpty()) {
                 shadowOf(Looper.getMainLooper()).idle();
                 return;
             }
@@ -205,10 +205,10 @@ public class WidgetConfigActivityTest {
     @Test
     public void aFailedFetchShowsTheLoadError() {
         provision(74L);
-        transport.failure = new IOException("API returned 500");
+        transport.failAlways(new IOException("API returned 500"));
         try (ActivityScenario<WidgetConfigActivity> scenario = ActivityScenario.launch(placementIntent(widgetId))) {
             long deadline = System.currentTimeMillis() + 5000;
-            while (System.currentTimeMillis() < deadline && transport.calls.isEmpty()) {
+            while (System.currentTimeMillis() < deadline && transport.calls().isEmpty()) {
                 try {
                     Thread.sleep(10);
                 } catch (InterruptedException e) {

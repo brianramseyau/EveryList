@@ -78,21 +78,21 @@ public class WidgetUpdaterTest {
             arr.put(o);
         }
         data.put("items", arr);
-        transport.response = new JSONObject().put("data", data).toString();
+        transport.respondWith(new JSONObject().put("data", data).toString());
     }
 
     @Test
     public void invalidWidgetIdIsIgnored() {
         WidgetUpdater.handle(context, EveryListWidget.ACTION_REFRESH,
             android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID, -1L, -1L);
-        assertTrue("no request should be made for an invalid widget id", transport.calls.isEmpty());
+        assertTrue("no request should be made for an invalid widget id", transport.calls().isEmpty());
     }
 
     @Test
     public void withoutCredentialsRendersSetupAndMakesNoRequest() {
         context.getSharedPreferences(WidgetPrefs.GLOBAL_PREFS, Context.MODE_PRIVATE).edit().clear().commit();
         WidgetUpdater.handle(context, EveryListWidget.ACTION_REFRESH, widgetId, -1L, -1L);
-        assertTrue(transport.calls.isEmpty());
+        assertTrue(transport.calls().isEmpty());
     }
 
     @Test
@@ -127,9 +127,9 @@ public class WidgetUpdaterTest {
         WidgetUpdater.handle(context, EveryListWidget.ACTION_ITEM, widgetId, LIST_ID, 9L);
 
         // First call is the PATCH toggle, second the snapshot fetch.
-        assertEquals("PATCH", transport.calls.get(0).method);
-        assertEquals("http://server/api/v1/lists/74/items/9", transport.calls.get(0).url);
-        assertTrue(new JSONObject(transport.calls.get(0).body).getBoolean("checked"));
+        assertEquals("PATCH", transport.get(0).method);
+        assertEquals("http://server/api/v1/lists/74/items/9", transport.get(0).url);
+        assertTrue(new JSONObject(transport.get(0).body).getBoolean("checked"));
         // The fetch then replaces the snapshot with the server's post-toggle view (checked, but
         // kept because this test's snapshot call reports the row).
         assertEquals(1, prefs.loadSnapshot().size());
@@ -139,18 +139,26 @@ public class WidgetUpdaterTest {
     public void togglingAnItemOffThatIsThenHiddenDropsItFromTheOptimisticSnapshot() throws Exception {
         prefs.setShowCompleted(false);
         prefs.saveSnapshot(Collections.singletonList(new WidgetModels.WidgetItem(9, "Milk", false, null, null)));
-        // Follow-up fetch fails after the toggle succeeded — the optimistic (dropped) state stays.
-        transport.failure = new IOException("API returned 500");
-        // Make the toggle succeed and only the fetch fail: RecordingTransport supports one response,
-        // so instead verify the pure filter directly is covered in WidgetUpdaterLogicTest; here we
-        // just assert the failure path rolled nothing back because the toggle succeeded.
+        // Let the PATCH (call 1) succeed but fail the follow-up snapshot fetch (call 2), so the
+        // toggle lands while the refetch does not — the case where the optimistic state must stick.
+        transport.failOnCall(2, new IOException("API returned 500"));
+
         WidgetUpdater.handle(context, EveryListWidget.ACTION_ITEM, widgetId, LIST_ID, 9L);
-        assertNull("toggle itself succeeded, so no error should be shown on the first failure", prefs.getLastError());
+
+        assertEquals("PATCH", transport.get(0).method);
+        assertTrue("the toggle should have succeeded before the fetch failed",
+            transport.size() >= 2);
+        // The fetched refresh can't reconcile, so the item stays dropped (checked + hidden).
+        assertTrue("a checked-off item should be hidden while show-completed is off",
+            prefs.loadSnapshot().isEmpty());
+        // And the toggle succeeding means no rollback to the pre-toggle (unchecked) row.
+        assertNull("the toggle itself succeeded, so no error should be shown on the first failure",
+            prefs.getLastError());
     }
 
     @Test
     public void aFailedRefreshSchedulesARetryAndStaysQuietUntilExhausted() {
-        transport.failure = new IOException("API returned 500");
+        transport.failAlways(new IOException("API returned 500"));
         WidgetUpdater.handle(context, EveryListWidget.ACTION_REFRESH, widgetId, -1L, -1L);
 
         assertEquals(1, prefs.getRetryCount());
@@ -159,7 +167,7 @@ public class WidgetUpdaterTest {
 
     @Test
     public void repeatedFailuresEventuallySurfaceTheOfflineNote() {
-        transport.failure = new IOException("API returned 500");
+        transport.failAlways(new IOException("API returned 500"));
         for (int i = 0; i < 7; i++) {
             WidgetUpdater.handle(context, EveryListWidget.ACTION_REFRESH, widgetId, -1L, -1L);
         }
@@ -169,11 +177,11 @@ public class WidgetUpdaterTest {
 
     @Test
     public void aSuccessfulRefreshResetsTheRetryCountAfterFailures() {
-        transport.failure = new IOException("API returned 500");
+        transport.failAlways(new IOException("API returned 500"));
         WidgetUpdater.handle(context, EveryListWidget.ACTION_REFRESH, widgetId, -1L, -1L);
         assertEquals(1, prefs.getRetryCount());
 
-        transport.failure = null;
+        transport.succeed();
         respondWithSnapshotQuietly();
         WidgetUpdater.handle(context, EveryListWidget.ACTION_REFRESH, widgetId, -1L, -1L);
         assertEquals(0, prefs.getRetryCount());
@@ -183,7 +191,7 @@ public class WidgetUpdaterTest {
     @Test
     public void aFailedToggleRollsBackTheOptimisticSnapshot() {
         prefs.saveSnapshot(Collections.singletonList(new WidgetModels.WidgetItem(9, "Milk", false, null, null)));
-        transport.failure = new IOException("API returned 500");
+        transport.failAlways(new IOException("API returned 500"));
 
         WidgetUpdater.handle(context, EveryListWidget.ACTION_ITEM, widgetId, LIST_ID, 9L);
 
@@ -194,6 +202,6 @@ public class WidgetUpdaterTest {
     }
 
     private void respondWithSnapshotQuietly() {
-        transport.response = "{\"data\":{\"listName\":\"TODO\",\"useDeadline\":false,\"items\":[]}}";
+        transport.respondWith("{\"data\":{\"listName\":\"TODO\",\"useDeadline\":false,\"items\":[]}}");
     }
 }

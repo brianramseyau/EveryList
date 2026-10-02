@@ -47,7 +47,7 @@ public class QuickAddActivityTest {
         context.getSharedPreferences("widget_" + widgetId, Context.MODE_PRIVATE).edit().clear().commit();
 
         transport = new RecordingTransport();
-        transport.response = "{\"data\":{\"id\":11}}";
+        transport.respondWith("{\"data\":{\"id\":11}}");
         HttpJson.setTransportForTesting(transport);
 
         WidgetPrefs.saveGlobalCredentials(context, "elt", 7L, "http://server", Collections.singletonList(LIST_ID));
@@ -91,7 +91,7 @@ public class QuickAddActivityTest {
         ActivityScenario<QuickAddActivity> scenario = ActivityScenario.launch(intent(AppWidgetManager.INVALID_APPWIDGET_ID));
         scenario.close();
         EveryListWidget.awaitIdleForTesting();
-        assertTrue(transport.calls.isEmpty());
+        assertTrue(transport.calls().isEmpty());
     }
 
     @Test
@@ -122,7 +122,7 @@ public class QuickAddActivityTest {
         try (ActivityScenario<QuickAddActivity> scenario = ActivityScenario.launch(intent(widgetId))) {
             scenario.onActivity(a -> a.findViewById(R.id.quick_add_save).performClick());
             EveryListWidget.awaitIdleForTesting();
-            assertTrue("a blank quick-add must not call the API", transport.calls.isEmpty());
+            assertTrue("a blank quick-add must not call the API", transport.calls().isEmpty());
         }
     }
 
@@ -133,9 +133,9 @@ public class QuickAddActivityTest {
                 ((android.widget.EditText) a.findViewById(R.id.quick_add_input)).setText("Milk");
                 a.findViewById(R.id.quick_add_save).performClick();
             });
-            await(() -> !transport.calls.isEmpty());
-            assertEquals("POST", transport.calls.get(0).method);
-            assertEquals("http://server/api/v1/lists/74/items", transport.calls.get(0).url);
+            await(() -> !transport.calls().isEmpty());
+            assertEquals("POST", transport.get(0).method);
+            assertEquals("http://server/api/v1/lists/74/items", transport.get(0).url);
         }
     }
 
@@ -146,8 +146,8 @@ public class QuickAddActivityTest {
                 ((android.widget.EditText) a.findViewById(R.id.quick_add_input)).setText("Milk");
                 a.findViewById(R.id.quick_add_save).performClick();
             });
-            await(() -> !transport.calls.isEmpty());
-            JSONObject sent = new JSONObject(transport.calls.get(0).body);
+            await(() -> !transport.calls().isEmpty());
+            JSONObject sent = new JSONObject(transport.get(0).body);
             assertEquals("Milk", sent.getString("name"));
             assertTrue(!sent.has("deadline"));
         }
@@ -155,7 +155,7 @@ public class QuickAddActivityTest {
 
     @Test
     public void aFailedAddShowsTheErrorAndReenablesSave() {
-        transport.failure = new IOException("API returned 500");
+        transport.failAlways(new IOException("API returned 500"));
         try (ActivityScenario<QuickAddActivity> scenario = ActivityScenario.launch(intent(widgetId))) {
             scenario.onActivity(a -> {
                 ((android.widget.EditText) a.findViewById(R.id.quick_add_input)).setText("Milk");
@@ -200,8 +200,8 @@ public class QuickAddActivityTest {
                 ((android.widget.EditText) a.findViewById(R.id.quick_add_input)).setText("Milk");
                 a.findViewById(R.id.quick_add_save).performClick();
             });
-            await(() -> !transport.calls.isEmpty());
-            JSONObject sent = new JSONObject(transport.calls.get(0).body);
+            await(() -> !transport.calls().isEmpty());
+            JSONObject sent = new JSONObject(transport.get(0).body);
             assertEquals("2026-09-30T10:00", sent.getString("deadline"));
         }
     }
@@ -227,8 +227,8 @@ public class QuickAddActivityTest {
                 input.setText("Milk");
                 input.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
             });
-            await(() -> !transport.calls.isEmpty());
-            assertEquals("POST", transport.calls.get(0).method);
+            await(() -> !transport.calls().isEmpty());
+            assertEquals("POST", transport.get(0).method);
         }
     }
 
@@ -311,7 +311,7 @@ public class QuickAddActivityTest {
         // The create returns an item with no deadline (the get-or-create path), so the popup must
         // follow up with an explicit PATCH carrying the picked deadline.
         new WidgetPrefs(context, widgetId).setUseDeadline(true);
-        transport.response = "{\"data\":{\"id\":11,\"deadline\":null}}";
+        transport.respondWith("{\"data\":{\"id\":11,\"deadline\":null}}");
         try (ActivityScenario<QuickAddActivity> scenario = ActivityScenario.launch(intent(widgetId))) {
             scenario.onActivity(a -> {
                 try {
@@ -325,10 +325,10 @@ public class QuickAddActivityTest {
                 ((android.widget.EditText) a.findViewById(R.id.quick_add_input)).setText("Milk");
                 a.findViewById(R.id.quick_add_save).performClick();
             });
-            await(() -> transport.calls.size() >= 2);
-            assertEquals("POST", transport.calls.get(0).method);
-            assertEquals("PATCH", transport.calls.get(1).method);
-            assertEquals("http://server/api/v1/lists/74/items/11", transport.calls.get(1).url);
+            await(() -> transport.size() >= 2);
+            assertEquals("POST", transport.get(0).method);
+            assertEquals("PATCH", transport.get(1).method);
+            assertEquals("http://server/api/v1/lists/74/items/11", transport.get(1).url);
         }
     }
 }

@@ -50,7 +50,7 @@ public class EveryListWidgetTest {
         context.getSharedPreferences("widget_" + widgetId, Context.MODE_PRIVATE).edit().clear().commit();
 
         transport = new RecordingTransport();
-        transport.response = "{\"data\":{\"listName\":\"TODO\",\"useDeadline\":false,\"items\":[]}}";
+        transport.respondWith("{\"data\":{\"listName\":\"TODO\",\"useDeadline\":false,\"items\":[]}}");
         HttpJson.setTransportForTesting(transport);
 
         WidgetPrefs.saveGlobalCredentials(context, "elt_abc", 7L, "http://server", Collections.singletonList(LIST_ID));
@@ -100,7 +100,7 @@ public class EveryListWidgetTest {
     @Test
     public void refreshBroadcastRunsAFetch() {
         send(widgetIntent(EveryListWidget.ACTION_REFRESH));
-        await(() -> !transport.calls.isEmpty());
+        await(() -> !transport.calls().isEmpty());
         assertEquals("GET", transport.last().method);
     }
 
@@ -145,14 +145,14 @@ public class EveryListWidgetTest {
             .putExtra(EveryListWidget.EXTRA_LIST_ID, LIST_ID)
             .putExtra(EveryListWidget.EXTRA_ITEM_ID, 9L);
         send(item);
-        await(() -> !transport.calls.isEmpty());
-        assertEquals("PATCH", transport.calls.get(0).method);
+        await(() -> !transport.calls().isEmpty());
+        assertEquals("PATCH", transport.get(0).method);
     }
 
     @Test
     public void anUnknownActionFallsThroughWithoutError() {
         send(new Intent(context, EveryListWidget.class).setAction("au.brianramsey.everylist.UNKNOWN"));
-        assertTrue("no network work should be triggered by an unknown action", transport.calls.isEmpty());
+        assertTrue("no network work should be triggered by an unknown action", transport.calls().isEmpty());
     }
 
     @Test
@@ -160,7 +160,7 @@ public class EveryListWidgetTest {
         // A placed widget is registered; broadcastRefreshAll fans an explicit refresh out to it.
         EveryListWidget.broadcastRefreshAll(context);
         shadowOf(Looper.getMainLooper()).idle();
-        await(() -> !transport.calls.isEmpty());
+        await(() -> !transport.calls().isEmpty());
         assertEquals("GET", transport.last().method);
     }
 }

@@ -92,6 +92,34 @@ public class PullToRefreshControlPluginTest {
     }
 
     @Test
+    public void doesNotResolveUntilTheDeferredUiRunnableHasRun() {
+        // The plugin resolves from *inside* the posted Runnable, so the promise reflects the
+        // mutation actually completing rather than just being scheduled. Capture the Runnable
+        // instead of running it inline: nothing should have resolved yet, and the mutation must
+        // happen only once it runs.
+        MainActivity activity = mock(MainActivity.class);
+        final Runnable[] posted = new Runnable[1];
+        doAnswer(inv -> {
+            posted[0] = inv.getArgument(0);
+            return null;
+        }).when(activity).runOnUiThread(any(Runnable.class));
+        Bridge bridge = mock(Bridge.class);
+        when(bridge.getActivity()).thenReturn(activity);
+        plugin.setBridge(bridge);
+
+        PluginCall call = call(true);
+        plugin.setEnabled(call);
+
+        verify(call, never()).resolve();
+        verify(activity, never()).setPullToRefreshEnabled(anyBoolean());
+
+        posted[0].run();
+
+        verify(activity).setPullToRefreshEnabled(true);
+        verify(call).resolve();
+    }
+
+    @Test
     public void rejectsWhenTheUiThreadMutationThrows() {
         MainActivity activity = mockActivityRunningInline();
         doThrow(new RuntimeException("wrong thread")).when(activity).setPullToRefreshEnabled(anyBoolean());

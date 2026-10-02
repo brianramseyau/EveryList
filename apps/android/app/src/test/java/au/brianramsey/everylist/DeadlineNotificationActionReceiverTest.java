@@ -109,14 +109,14 @@ public class DeadlineNotificationActionReceiverTest {
     @Test
     public void missingExtrasAreIgnored() {
         send(null, null, null);
-        assertTrue(transport.calls.isEmpty());
+        assertTrue(transport.calls().isEmpty());
     }
 
     @Test
     public void malformedNotificationJsonShowsTheFallback() {
         send(11, "complete", "not json");
         await(this::fallbackNotificationShown);
-        assertTrue(transport.calls.isEmpty());
+        assertTrue(transport.calls().isEmpty());
     }
 
     @Test
@@ -124,15 +124,15 @@ public class DeadlineNotificationActionReceiverTest {
         AuthPrefs.clear(context);
         send(11, "complete", payload(LIST_ID, ITEM_ID));
         await(this::fallbackNotificationShown);
-        assertTrue(transport.calls.isEmpty());
+        assertTrue(transport.calls().isEmpty());
     }
 
     @Test
     public void completePatchesTheItemChecked() throws Exception {
         send(11, "complete", payload(LIST_ID, ITEM_ID));
-        await(() -> !transport.calls.isEmpty());
+        await(() -> !transport.calls().isEmpty());
 
-        RecordingTransport.Call call = transport.calls.get(0);
+        RecordingTransport.Call call = transport.get(0);
         assertEquals("PATCH", call.method);
         assertEquals("http://server/api/v1/lists/74/items/11", call.url);
         assertTrue(new JSONObject(call.body).getBoolean("checked"));
@@ -155,15 +155,15 @@ public class DeadlineNotificationActionReceiverTest {
 
         send(11, "complete", payload(LIST_ID, ITEM_ID));
 
-        await(() -> !transport.calls.isEmpty());
-        assertEquals("PATCH", transport.calls.get(0).method);
+        await(() -> !transport.calls().isEmpty());
+        assertEquals("PATCH", transport.get(0).method);
         await(() -> refreshed[0]);
         assertTrue("a completed item must refresh placed widgets", refreshed[0]);
     }
 
     @Test
     public void aFailedCompleteShowsTheFallback() {
-        transport.failure = new IOException("API returned 500");
+        transport.failAlways(new IOException("API returned 500"));
         send(11, "complete", payload(LIST_ID, ITEM_ID));
         await(this::fallbackNotificationShown);
     }

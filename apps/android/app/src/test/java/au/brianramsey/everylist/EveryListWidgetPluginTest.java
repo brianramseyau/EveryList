@@ -66,7 +66,10 @@ public class EveryListWidgetPluginTest {
 
         JSArray arr = new JSArray();
         for (Long id : listIds) arr.put(id);
-        when(call.getArray("listIds", new JSArray())).thenReturn(arr);
+        // Match any JSArray: on the JVM the app resolves org.json:json:20240303, whose JSONArray
+        // uses reference equality, so stubbing with a fresh `new JSArray()` would never match the
+        // instance configure() actually passes and Mockito would return null.
+        when(call.getArray(anyString(), any(JSArray.class))).thenReturn(arr);
         return call;
     }
 
@@ -123,13 +126,26 @@ public class EveryListWidgetPluginTest {
     }
 
     @Test
-    public void configureWithoutATokenReusesTheHeldOne() throws Exception {
+    public void configurePersistsTheSuppliedTokenId() throws Exception {
+        // A freshly-minted PAT arrives with the server-side id it was created under, so the app can
+        // later update that same token in place instead of orphaning it. configure() must store it.
+        PluginCall call = callWith("elt_new", "http://server", 74L);
+        when(call.getData()).thenReturn(new JSObject().put("tokenId", 42L));
+
+        plugin.configure(call);
+
+        assertEquals(42L, WidgetPrefs.getTokenId(context));
+    }
+
+    @Test
+    public void configureWithoutATokenReusesTheHeldOneAndItsTokenId() throws Exception {
         WidgetPrefs.saveGlobalCredentials(context, "elt_old", 7L, "http://server", Collections.singletonList(74L));
         PluginCall call = callWith(null, "http://server", 74L);
 
         plugin.configure(call);
 
         assertEquals("elt_old", WidgetPrefs.getGlobalToken(context));
+        assertEquals(7L, WidgetPrefs.getTokenId(context));
         verify(call).resolve();
     }
 
@@ -158,7 +174,7 @@ public class EveryListWidgetPluginTest {
         JSArray arr = new JSArray();
         arr.put("74");
         arr.put(3);
-        when(call.getArray("listIds", new JSArray())).thenReturn(arr);
+        when(call.getArray(anyString(), any(JSArray.class))).thenReturn(arr);
 
         plugin.configure(call);
 
@@ -173,7 +189,7 @@ public class EveryListWidgetPluginTest {
         when(call.getString("serverUrl")).thenReturn("http://server");
         JSArray arr = new JSArray();
         arr.put("not-a-number");
-        when(call.getArray("listIds", new JSArray())).thenReturn(arr);
+        when(call.getArray(anyString(), any(JSArray.class))).thenReturn(arr);
 
         plugin.configure(call);
 

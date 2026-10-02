@@ -130,7 +130,38 @@ public class WidgetListViewsFactoryTest {
 
         View row = render(0);
 
-        assertNotNull(row.findViewById(R.id.item_check).getContentDescription());
+        // Checked and unchecked both carry a description, so assert the specific one, and the
+        // strikethrough (STRIKE_THRU_TEXT_FLAG) that distinguishes a checked row.
+        assertEquals(context.getString(R.string.widget_item_checked),
+            row.findViewById(R.id.item_check).getContentDescription());
+        TextView name = row.findViewById(R.id.item_name);
+        assertTrue("a checked row's name should be struck through",
+            (name.getPaintFlags() & android.graphics.Paint.STRIKE_THRU_TEXT_FLAG) != 0);
+    }
+
+    @Test
+    public void uncheckedItemsHaveNoStrikethrough() {
+        prefs.saveSnapshot(Collections.singletonList(
+            new WidgetModels.WidgetItem(1, "Milk", false, null, null)));
+
+        View row = render(0);
+
+        assertEquals(context.getString(R.string.widget_item_unchecked),
+            row.findViewById(R.id.item_check).getContentDescription());
+        TextView name = row.findViewById(R.id.item_name);
+        assertEquals("an unchecked row's name must not be struck through",
+            0, name.getPaintFlags() & android.graphics.Paint.STRIKE_THRU_TEXT_FLAG);
+    }
+
+    @Test
+    public void dateOnlyAndNoDeadlineRowsRenderWithoutAChip() {
+        // A row with a deadline but the list toggled off, and one with none at all, both hide it.
+        prefs.setUseDeadline(false);
+        prefs.saveSnapshot(Arrays.asList(
+            new WidgetModels.WidgetItem(1, "Milk", false, null, "2099-01-01"),
+            new WidgetModels.WidgetItem(2, "Bread", false, null, null)));
+        assertEquals(View.GONE, render(0).findViewById(R.id.item_deadline_row).getVisibility());
+        assertEquals(View.GONE, render(1).findViewById(R.id.item_deadline_row).getVisibility());
     }
 
     @Test

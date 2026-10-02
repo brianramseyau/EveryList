@@ -91,6 +91,25 @@ public class RescheduleActivityTest {
         throw new AssertionError("condition not met within 5s");
     }
 
+    /** Waits until the activity has actually destroyed itself, proving the code under test called
+     *  {@code finish()} rather than the test's own {@code close()} tearing it down. */
+    private void awaitDestroyed(ActivityScenario<RescheduleActivity> scenario) {
+        long deadline = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle();
+            final boolean[] alive = {true};
+            scenario.onActivity(a -> alive[0] = !a.isFinishing());
+            if (!alive[0]) return;
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(e);
+            }
+        }
+        throw new AssertionError("activity did not finish within 5s");
+    }
+
     private boolean fallbackNotificationShown() {
         NotificationManager manager =
             (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -114,42 +133,46 @@ public class RescheduleActivityTest {
 
     @Test
     public void aTimedDeadlineEnablesTheOneHourShortcut() throws Exception {
-        transport.response = itemsResponse("2026-09-30T10:00");
+        transport.respondWith(itemsResponse("2026-09-30T10:00"));
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
-            await(() -> !transport.calls.isEmpty());
+            await(() -> !transport.calls().isEmpty());
             scenario.onActivity(a -> assertEquals(View.VISIBLE, a.findViewById(R.id.reschedule_one_hour).getVisibility()));
         }
     }
 
     @Test
     public void aDateOnlyDeadlineHidesTheOneHourShortcut() throws Exception {
-        transport.response = itemsResponse("2026-09-30");
+        transport.respondWith(itemsResponse("2026-09-30"));
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
-            await(() -> !transport.calls.isEmpty());
+            await(() -> !transport.calls().isEmpty());
             scenario.onActivity(a -> assertEquals(View.GONE, a.findViewById(R.id.reschedule_one_hour).getVisibility()));
         }
     }
 
     @Test
     public void anItemWithNoLiveDeadlineFinishesWithoutOfferingShortcuts() throws Exception {
-        transport.response = itemsResponse(null);
-        ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()));
-        await(() -> !transport.calls.isEmpty());
-        scenario.close();
+        transport.respondWith(itemsResponse(null));
+        try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
+            await(() -> !transport.calls().isEmpty());
+            awaitDestroyed(scenario);
+            assertEquals("only the failed lookup should have run", 1, transport.size());
+        }
     }
 
     @Test
     public void anUnknownItemFinishesWithoutOfferingShortcuts() throws Exception {
         // The response has no row with this item's id.
-        transport.response = "{\"data\":[{\"id\":999,\"deadline\":\"2026-09-30\"}]}";
-        ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()));
-        await(() -> !transport.calls.isEmpty());
-        scenario.close();
+        transport.respondWith("{\"data\":[{\"id\":999,\"deadline\":\"2026-09-30\"}]}");
+        try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
+            await(() -> !transport.calls().isEmpty());
+            awaitDestroyed(scenario);
+            assertEquals("only the lookup should have run", 1, transport.size());
+        }
     }
 
     @Test
     public void aFailedLiveDeadlineFetchShowsTheFallback() {
-        transport.failure = new IOException("API returned 500");
+        transport.failAlways(new IOException("API returned 500"));
         ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()));
         await(this::fallbackNotificationShown);
         scenario.close();
@@ -157,13 +180,13 @@ public class RescheduleActivityTest {
 
     @Test
     public void tomorrowShortcutPatchesTheNewDeadline() throws Exception {
-        transport.response = itemsResponse("2026-09-30T10:00");
+        transport.respondWith(itemsResponse("2026-09-30T10:00"));
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
-            await(() -> !transport.calls.isEmpty());
+            await(() -> !transport.calls().isEmpty());
             scenario.onActivity(a -> a.findViewById(R.id.reschedule_tomorrow).performClick());
-            await(() -> transport.calls.size() >= 2);
+            await(() -> transport.size() >= 2);
 
-            RecordingTransport.Call patch = transport.calls.get(1);
+            RecordingTransport.Call patch = transport.get(1);
             assertEquals("PATCH", patch.method);
             assertEquals("http://server/api/v1/lists/74/items/11", patch.url);
             assertTrue(new JSONObject(patch.body).has("deadline"));
@@ -172,42 +195,42 @@ public class RescheduleActivityTest {
 
     @Test
     public void theOneHourShortcutIsAvailableForATimedDeadline() throws Exception {
-        transport.response = itemsResponse("2026-09-30T10:00");
+        transport.respondWith(itemsResponse("2026-09-30T10:00"));
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
-            await(() -> !transport.calls.isEmpty());
+            await(() -> !transport.calls().isEmpty());
             scenario.onActivity(a -> a.findViewById(R.id.reschedule_one_hour).performClick());
-            await(() -> transport.calls.size() >= 2);
-            assertEquals("PATCH", transport.calls.get(1).method);
+            await(() -> transport.size() >= 2);
+            assertEquals("PATCH", transport.get(1).method);
         }
     }
 
     @Test
     public void weekendAndNextWeekShortcutsPatchANewDeadline() throws Exception {
-        transport.response = itemsResponse("2026-09-30T10:00");
+        transport.respondWith(itemsResponse("2026-09-30T10:00"));
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
-            await(() -> !transport.calls.isEmpty());
+            await(() -> !transport.calls().isEmpty());
             scenario.onActivity(a -> a.findViewById(R.id.reschedule_weekend).performClick());
-            await(() -> transport.calls.size() >= 2);
-            assertTrue(new JSONObject(transport.calls.get(1).body).has("deadline"));
+            await(() -> transport.size() >= 2);
+            assertTrue(new JSONObject(transport.get(1).body).has("deadline"));
 
-            transport.calls.clear();
-            transport.response = itemsResponse("2026-09-30T10:00");
+            transport.clear();
+            transport.respondWith(itemsResponse("2026-09-30T10:00"));
             // A fresh activity for the next-week path (this one is finishing after the PATCH).
         }
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
-            await(() -> !transport.calls.isEmpty());
+            await(() -> !transport.calls().isEmpty());
             scenario.onActivity(a -> a.findViewById(R.id.reschedule_next_week).performClick());
-            await(() -> transport.calls.size() >= 2);
-            assertEquals("PATCH", transport.calls.get(1).method);
+            await(() -> transport.size() >= 2);
+            assertEquals("PATCH", transport.get(1).method);
         }
     }
 
     @Test
     public void aFailedShortcutPatchShowsTheFallback() throws Exception {
-        transport.response = itemsResponse("2026-09-30T10:00");
+        transport.respondWith(itemsResponse("2026-09-30T10:00"));
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
-            await(() -> !transport.calls.isEmpty());
-            transport.failure = new IOException("API returned 500");
+            await(() -> !transport.calls().isEmpty());
+            transport.failAlways(new IOException("API returned 500"));
             scenario.onActivity(a -> a.findViewById(R.id.reschedule_tomorrow).performClick());
             await(this::fallbackNotificationShown);
         }
@@ -215,9 +238,9 @@ public class RescheduleActivityTest {
 
     @Test
     public void customPickerHidesContentAndCancelRestoresIt() throws Exception {
-        transport.response = itemsResponse("2026-09-30T10:00");
+        transport.respondWith(itemsResponse("2026-09-30T10:00"));
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
-            await(() -> !transport.calls.isEmpty());
+            await(() -> !transport.calls().isEmpty());
             scenario.onActivity(a -> {
                 a.findViewById(R.id.reschedule_custom).performClick();
                 View content = a.findViewById(R.id.reschedule_scroll);
@@ -234,9 +257,9 @@ public class RescheduleActivityTest {
 
     @Test
     public void customPickerNoTimeButtonAppliesADateOnlyDeadline() throws Exception {
-        transport.response = itemsResponse("2026-09-30T10:00");
+        transport.respondWith(itemsResponse("2026-09-30T10:00"));
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
-            await(() -> !transport.calls.isEmpty());
+            await(() -> !transport.calls().isEmpty());
             scenario.onActivity(a -> {
                 try {
                     java.lang.reflect.Method showTime =
@@ -252,21 +275,21 @@ public class RescheduleActivityTest {
                     .getButton(android.content.DialogInterface.BUTTON_NEGATIVE).performClick();
                 shadowOf(Looper.getMainLooper()).idle();
             });
-            await(() -> transport.calls.size() >= 2);
-            assertEquals("PATCH", transport.calls.get(1).method);
-            assertTrue(new JSONObject(transport.calls.get(1).body).getString("deadline").startsWith("2026-09-30"));
+            await(() -> transport.size() >= 2);
+            assertEquals("PATCH", transport.get(1).method);
+            assertTrue(new JSONObject(transport.get(1).body).getString("deadline").startsWith("2026-09-30"));
         }
     }
 
     @Test
     public void cancelJustFinishes() throws Exception {
-        transport.response = itemsResponse("2026-09-30T10:00");
+        transport.respondWith(itemsResponse("2026-09-30T10:00"));
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
-            await(() -> !transport.calls.isEmpty());
-            int before = transport.calls.size();
+            await(() -> !transport.calls().isEmpty());
+            int before = transport.size();
             scenario.onActivity(a -> a.findViewById(R.id.reschedule_cancel).performClick());
-            Thread.sleep(50);
-            assertEquals("cancel must not PATCH anything", before, transport.calls.size());
+            awaitDestroyed(scenario);
+            assertEquals("cancel must not PATCH anything", before, transport.size());
         }
     }
 }

@@ -66,7 +66,7 @@ public class WidgetApiClientPatchTest {
 
     @Test
     public void aFailedPatchSurfacesAsIoException() {
-        transport.failure = new IOException("API returned 500");
+        transport.failAlways(new IOException("API returned 500"));
         try {
             WidgetApiClient.toggleItem("t", "http://s", 1L, 2L, true);
             fail("expected IOException");

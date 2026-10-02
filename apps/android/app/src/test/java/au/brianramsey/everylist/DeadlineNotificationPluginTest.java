@@ -1,5 +1,6 @@
 package au.brianramsey.everylist;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -39,10 +40,24 @@ public class DeadlineNotificationPluginTest {
     }
 
     @Test
-    public void dismissAcceptsAPositiveItemId() {
+    public void dismissCancelsTheShownNotificationAndResolves() {
+        // Post a notification under item id 11, then dismiss it: the plugin's whole job is the
+        // direct NotificationManagerCompat.cancel(itemId) that the stock plugin's cancel() misses
+        // for an already-delivered notification.
+        android.app.NotificationManager manager =
+            (android.app.NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        android.app.Notification notification = new android.app.Notification.Builder(context, "test")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .build();
+        manager.notify(11, notification);
+        assertEquals(1, org.robolectric.Shadows.shadowOf(manager).size());
+
         PluginCall call = mock(PluginCall.class);
         when(call.getInt("itemId", -1)).thenReturn(11);
         plugin.dismiss(call);
+
+        assertEquals("dismiss must cancel the shown notification", 0,
+            org.robolectric.Shadows.shadowOf(manager).size());
         verify(call).resolve();
     }
 
