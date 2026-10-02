@@ -40,6 +40,11 @@ public class WidgetUpdaterTest {
 
     @Before
     public void setUp() {
+        // Drain any broadcast work a previously-run test class left queued on the process-wide
+        // EveryListWidget executor before installing this test's transport. Robolectric caches
+        // sandboxes per (SDK, config), so those statics persist across test classes — without
+        // this, a late refresh from an earlier class can record into this class's transport.
+        EveryListWidget.awaitIdleForTesting();
         context = ApplicationProvider.getApplicationContext();
         // Registers a real widget with Robolectric's ShadowAppWidgetManager so
         // manager.updateAppWidget(...) has a WidgetInfo to apply RemoteViews to.

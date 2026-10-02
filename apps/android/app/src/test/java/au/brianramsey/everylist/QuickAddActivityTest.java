@@ -40,6 +40,12 @@ public class QuickAddActivityTest {
 
     @Before
     public void setUp() {
+        // Drain any broadcast work a previously-run test class left queued on the process-wide
+        // EveryListWidget executor before installing this test's transport. Robolectric caches
+        // sandboxes per (SDK, config), so those statics persist across test classes — without
+        // this, a late refresh from an earlier class can record into this class's transport.
+        EveryListWidget.awaitIdleForTesting();
+
         context = ApplicationProvider.getApplicationContext();
         widgetId = shadowOf(AppWidgetManager.getInstance(context))
             .createWidget(EveryListWidget.class, R.layout.widget_everylist);
