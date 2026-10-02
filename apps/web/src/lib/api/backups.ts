@@ -19,8 +19,10 @@ export function runBackupNow(): Promise<BackupSettingsStateDto> {
 	return apiPost('/api/v1/backup-settings/run');
 }
 
-export function deleteBackup(filename: string): Promise<void> {
-	return apiDelete(`/api/v1/backup-settings/${encodeURIComponent(filename)}`);
+export function deleteBackup(filename: string): Promise<BackupSettingsStateDto> {
+	return apiDelete<BackupSettingsStateDto>(
+		`/api/v1/backup-settings/${encodeURIComponent(filename)}`
+	);
 }
 
 /**

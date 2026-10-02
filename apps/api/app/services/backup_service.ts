@@ -94,13 +94,20 @@ export function pruneToCount(backupDir: string, kind: BackupKind, count: number)
  * have passed `isBackupFilename` — this joins it straight onto `backupDir`, so
  * that validation is the only thing keeping it inside the backups directory.
  * Returns false when the file is already gone (or was never there), so a
- * repeated/concurrent delete doesn't surface as an error.
+ * repeated/concurrent delete doesn't surface as an error: a plain
+ * `existsSync`-then-unlink would still throw ENOENT if another request removed
+ * the file in between, so the unlink is attempted directly and its ENOENT is
+ * folded into the same false result. Any other error (e.g. EACCES) rethrows.
  */
 export function deleteBackup(backupDir: string, filename: string): boolean {
   const filePath = path.join(backupDir, filename)
-  if (!fs.existsSync(filePath)) return false
+  try {
+    fs.unlinkSync(filePath)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
 
-  fs.unlinkSync(filePath)
   logger.info({ filename }, 'backup file deleted')
   return true
 }

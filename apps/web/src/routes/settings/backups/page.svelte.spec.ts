@@ -355,8 +355,19 @@ describe('Backups +page.svelte', () => {
 		expect(deleteBackup).not.toHaveBeenCalled();
 	});
 
-	it('deletes a backup file after confirming and removes it from the list', async () => {
-		vi.mocked(deleteBackup).mockResolvedValue(undefined);
+	it('deletes a backup file after confirming and applies the returned list', async () => {
+		vi.mocked(deleteBackup).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-automatic-20260822-030000.sqlite3',
+						kind: 'automatic',
+						sizeBytes: 2048,
+						createdAt: '2026-08-22T03:00:00.000Z'
+					}
+				]
+			})
+		);
 		vi.mocked(fetchBackupState).mockResolvedValue(
 			state({
 				files: [
@@ -387,6 +398,55 @@ describe('Backups +page.svelte', () => {
 		await expect
 			.element(page.getByText('everylist-automatic-20260822-030000.sqlite3'))
 			.toBeInTheDocument();
+	});
+
+	it('ignores a second delete while one is already in flight', async () => {
+		let resolveDelete: (value: BackupSettingsStateDto) => void = () => {};
+		vi.mocked(deleteBackup).mockReturnValue(
+			new Promise((resolve) => {
+				resolveDelete = resolve;
+			})
+		);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					},
+					{
+						filename: 'everylist-automatic-20260822-030000.sqlite3',
+						kind: 'automatic',
+						sizeBytes: 2048,
+						createdAt: '2026-08-22T03:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		// While the first delete is pending the other row's Delete button is
+		// disabled, so it can't start a second overlapping request.
+		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+
+		resolveDelete(
+			state({
+				files: [
+					{
+						filename: 'everylist-automatic-20260822-030000.sqlite3',
+						kind: 'automatic',
+						sizeBytes: 2048,
+						createdAt: '2026-08-22T03:00:00.000Z'
+					}
+				]
+			})
+		);
+		await expect.poll(() => vi.mocked(deleteBackup).mock.calls.length).toBe(1);
 	});
 
 	it('shows the ApiError message when deleting fails', async () => {

@@ -188,6 +188,16 @@ test.group('listBackups / pruneToCount', () => {
   test('deleteBackup reports false when the file does not exist', ({ assert }) => {
     assert.isFalse(deleteBackup(tempDir(), 'everylist-manual-20260101-030000.sqlite3'))
   })
+
+  test('deleteBackup rethrows a non-ENOENT error', ({ assert }) => {
+    const dir = tempDir()
+    // A directory occupying the backup filename makes unlinkSync fail with
+    // EISDIR/EPERM rather than ENOENT, exercising the rethrow path.
+    const filename = 'everylist-manual-20260101-030000.sqlite3'
+    fs.mkdirSync(path.join(dir, filename))
+
+    assert.throws(() => deleteBackup(dir, filename))
+  })
 })
 
 test.group('performBackup', () => {
