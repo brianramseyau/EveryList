@@ -372,10 +372,14 @@ describe('Backups +page.svelte', () => {
 		// Every download button is disabled while one is in flight (a second
 		// wouldn't be tracked by the single downloadingFilename), and Delete is
 		// blocked so it can't 404 the download.
-		for (const button of await page.getByRole('button', { name: /Downloading…|Download/ }).all()) {
+		const downloadButtons = await page.getByRole('button', { name: /Downloading…|Download/ }).all();
+		expect(downloadButtons).toHaveLength(2);
+		for (const button of downloadButtons) {
 			await expect.element(button).toBeDisabled();
 		}
-		for (const button of await page.getByRole('button', { name: 'Delete', exact: true }).all()) {
+		const deleteButtons = await page.getByRole('button', { name: 'Delete', exact: true }).all();
+		expect(deleteButtons).toHaveLength(2);
+		for (const button of deleteButtons) {
 			await expect.element(button).toBeDisabled();
 		}
 
