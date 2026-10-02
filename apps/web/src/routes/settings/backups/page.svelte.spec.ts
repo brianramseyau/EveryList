@@ -400,7 +400,7 @@ describe('Backups +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
-	it('ignores a second delete while one is already in flight', async () => {
+	it('disables other rows while a delete is in flight so it cannot overlap', async () => {
 		let resolveDelete: (value: BackupSettingsStateDto) => void = () => {};
 		vi.mocked(deleteBackup).mockReturnValue(
 			new Promise((resolve) => {
@@ -430,8 +430,10 @@ describe('Backups +page.svelte', () => {
 		await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
 		await page.getByRole('button', { name: 'Confirm delete' }).click();
 
-		// While the first delete is pending the other row's Delete button is
-		// disabled, so it can't start a second overlapping request.
+		// The in-flight row's own button reports the pending state...
+		await expect.element(page.getByRole('button', { name: 'Deleting…' })).toBeDisabled();
+		// ...and every other row's Delete button is disabled too, so it can't
+		// start a second overlapping request.
 		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
 
 		resolveDelete(
