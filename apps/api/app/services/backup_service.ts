@@ -98,11 +98,14 @@ export function pruneToCount(backupDir: string, kind: BackupKind, count: number)
  * `existsSync`-then-unlink would still throw ENOENT if another request removed
  * the file in between, so the unlink is attempted directly and its ENOENT is
  * folded into the same false result. Any other error (e.g. EACCES) rethrows.
+ *
+ * Async because this runs from a live request handler against `/config`, which
+ * can be slow storage — a synchronous unlink there would block the event loop.
  */
-export function deleteBackup(backupDir: string, filename: string): boolean {
+export async function deleteBackup(backupDir: string, filename: string): Promise<boolean> {
   const filePath = path.join(backupDir, filename)
   try {
-    fs.unlinkSync(filePath)
+    await fs.promises.unlink(filePath)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
     throw error

@@ -122,7 +122,7 @@ export default class BackupSettingsController {
       return response.badRequest({ message: 'Invalid backup filename' })
     }
 
-    const deleted = deleteBackup(backupDirectory(), filename)
+    const deleted = await deleteBackup(backupDirectory(), filename)
     if (!deleted) {
       return response.notFound({ message: 'Backup file not found' })
     }

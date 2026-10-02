@@ -132,8 +132,9 @@
 	async function handleDelete(filename: string) {
 		deletingFilename = filename;
 		try {
+			// Only the file list is applied — the returned settings would
+			// otherwise overwrite an unsaved schedule the admin is editing.
 			const state = await deleteBackup(filename);
-			applySettings(state.settings);
 			files = state.files;
 			confirmingDeleteFilename = null;
 			error = null;
@@ -214,7 +215,7 @@
 					size="sm"
 					color="alternative"
 					onclick={handleRunNow}
-					disabled={runningNow}
+					disabled={runningNow || deletingFilename !== null}
 				>
 					{runningNow ? 'Backing up…' : 'Back up now'}
 				</Button>
@@ -268,7 +269,7 @@
 									type="button"
 									size="xs"
 									color="red"
-									disabled={deletingFilename !== null}
+									disabled={deletingFilename !== null || runningNow}
 									onclick={() => handleDeleteClick(file.filename)}
 								>
 									{deletingFilename === file.filename

@@ -243,6 +243,35 @@ describe('Backups +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
+	it('disables Delete while a backup is running so it cannot clobber the result', async () => {
+		let resolveRun: (value: BackupSettingsStateDto) => void = () => {};
+		vi.mocked(runBackupNow).mockReturnValue(
+			new Promise((resolve) => {
+				resolveRun = resolve;
+			})
+		);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Back up now' }).click();
+
+		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+
+		resolveRun(state({ files: [] }));
+		await expect.poll(() => vi.mocked(runBackupNow).mock.calls.length).toBe(1);
+	});
+
 	it('shows the ApiError message when running a backup fails', async () => {
 		vi.mocked(runBackupNow).mockRejectedValue(new ApiError(500, 'Backup failed'));
 
@@ -398,6 +427,39 @@ describe('Backups +page.svelte', () => {
 		await expect
 			.element(page.getByText('everylist-automatic-20260822-030000.sqlite3'))
 			.toBeInTheDocument();
+	});
+
+	it('does not overwrite an unsaved schedule draft when deleting a backup', async () => {
+		vi.mocked(deleteBackup).mockResolvedValue(
+			state({
+				settings: { frequency: 'monthly', timeOfDay: '02:15', retentionCount: 20 },
+				files: []
+			})
+		);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByLabelText('Frequency').selectOptions('daily');
+		await page.getByLabelText('Backups to keep').fill('9');
+
+		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		expect(deleteBackup).toHaveBeenCalledWith('everylist-manual-20260822-090000.sqlite3');
+		// The delete's returned settings must not clobber the admin's edits.
+		await expect.element(page.getByLabelText('Frequency')).toHaveValue('daily');
+		await expect.element(page.getByLabelText('Backups to keep')).toHaveValue(9);
 	});
 
 	it('disables other rows while a delete is in flight so it cannot overlap', async () => {
