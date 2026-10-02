@@ -60,9 +60,16 @@ public class DeadlineNotificationActionReceiverTest {
 
     @After
     public void tearDown() {
-        // Let this class's own queued broadcast work finish while its transport is still
-        // installed, so it can't leak into a later test class.
-        EveryListWidget.awaitIdleForTesting();
+        // Drain this class's whole async chain while its transport is still installed, so none of
+        // it can run against a later test's transport. `complete` calls EveryListWidget
+        // .broadcastRefreshAll on this receiver's own executor; Robolectric then queues the
+        // broadcast on the main looper, and delivering it queues the refresh on
+        // EveryListWidget.EXECUTOR — so it takes a main-looper idle *then* an executor drain,
+        // repeated until both are quiet, to fully settle.
+        for (int i = 0; i < 4; i++) {
+            shadowOf(Looper.getMainLooper()).idle();
+            EveryListWidget.awaitIdleForTesting();
+        }
         try {
             context.unregisterReceiver(receiver);
         } catch (IllegalArgumentException ignored) {
