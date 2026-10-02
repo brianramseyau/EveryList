@@ -315,6 +315,7 @@ router
         router.patch('/', [controllers.BackupSettings, 'update'])
         router.post('run', [controllers.BackupSettings, 'run'])
         router.get('download/:filename', [controllers.BackupSettings, 'download'])
+        router.delete(':filename', [controllers.BackupSettings, 'destroy'])
       })
       .prefix('backup-settings')
       .as('backupSettings')

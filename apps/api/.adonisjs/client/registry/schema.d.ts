@@ -1207,6 +1207,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['download']>>>
     }
   }
+  'backupSettings.backup_settings.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/backup-settings/:filename'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { filename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/backup_settings_controller').default['destroy']>>>
+    }
+  }
   'serverConfig.server_config.show': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/server-config'

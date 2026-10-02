@@ -10,10 +10,11 @@ vi.mock('$lib/api/backups', () => ({
 	fetchBackupState: vi.fn(),
 	updateBackupSettings: vi.fn(),
 	runBackupNow: vi.fn(),
-	downloadBackup: vi.fn()
+	downloadBackup: vi.fn(),
+	deleteBackup: vi.fn()
 }));
 
-const { fetchBackupState, updateBackupSettings, runBackupNow, downloadBackup } =
+const { fetchBackupState, updateBackupSettings, runBackupNow, downloadBackup, deleteBackup } =
 	await import('$lib/api/backups');
 const { goto } = await import('$app/navigation');
 const BackupsPage = (await import('./+page.svelte')).default;
@@ -322,6 +323,115 @@ describe('Backups +page.svelte', () => {
 
 		await expect
 			.element(page.getByText('Failed to download everylist-manual-20260822-090000.sqlite3.'))
+			.toBeInTheDocument();
+	});
+
+	it('asks for confirmation before deleting and leaves the file alone when cancelled', async () => {
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+
+		expect(deleteBackup).not.toHaveBeenCalled();
+		await expect
+			.element(page.getByText("Delete this backup? This can't be undone."))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+		await expect
+			.element(page.getByText("Delete this backup? This can't be undone."))
+			.not.toBeInTheDocument();
+		expect(deleteBackup).not.toHaveBeenCalled();
+	});
+
+	it('deletes a backup file after confirming and removes it from the list', async () => {
+		vi.mocked(deleteBackup).mockResolvedValue(undefined);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					},
+					{
+						filename: 'everylist-automatic-20260822-030000.sqlite3',
+						kind: 'automatic',
+						sizeBytes: 2048,
+						createdAt: '2026-08-22T03:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		expect(deleteBackup).toHaveBeenCalledWith('everylist-manual-20260822-090000.sqlite3');
+		await expect
+			.element(page.getByText('everylist-manual-20260822-090000.sqlite3'))
+			.not.toBeInTheDocument();
+		await expect
+			.element(page.getByText('everylist-automatic-20260822-030000.sqlite3'))
+			.toBeInTheDocument();
+	});
+
+	it('shows the ApiError message when deleting fails', async () => {
+		vi.mocked(deleteBackup).mockRejectedValue(new ApiError(403, 'Not authorized'));
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		await expect.element(page.getByText('Not authorized')).toBeInTheDocument();
+	});
+
+	it('shows a generic error message when deleting fails without an ApiError', async () => {
+		vi.mocked(deleteBackup).mockRejectedValue(new TypeError('network down'));
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		await expect
+			.element(page.getByText('Failed to delete everylist-manual-20260822-090000.sqlite3.'))
 			.toBeInTheDocument();
 	});
 });

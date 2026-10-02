@@ -8,6 +8,7 @@ import { DateTime } from 'luxon'
 import {
   backupDirectory,
   currentPeriodStart,
+  deleteBackup,
   isBackupDue,
   lastAutomaticBackupAt,
   listBackups,
@@ -173,6 +174,19 @@ test.group('listBackups / pruneToCount', () => {
       'everylist-automatic-20260115-030000.sqlite3',
       'everylist-manual-20260110-090000.sqlite3',
     ])
+  })
+
+  test('deleteBackup removes the named file and reports true', ({ assert }) => {
+    const dir = tempDir()
+    const filename = 'everylist-manual-20260101-030000.sqlite3'
+    fs.writeFileSync(path.join(dir, filename), 'x')
+
+    assert.isTrue(deleteBackup(dir, filename))
+    assert.isFalse(fs.existsSync(path.join(dir, filename)))
+  })
+
+  test('deleteBackup reports false when the file does not exist', ({ assert }) => {
+    assert.isFalse(deleteBackup(tempDir(), 'everylist-manual-20260101-030000.sqlite3'))
   })
 })
 

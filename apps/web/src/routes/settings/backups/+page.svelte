@@ -6,6 +6,7 @@
 	import type { BackupFileDto, BackupFrequency, BackupSettingsDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import {
+		deleteBackup,
 		downloadBackup,
 		fetchBackupState,
 		runBackupNow,
@@ -27,6 +28,8 @@
 
 	let runningNow = $state(false);
 	let downloadingFilename = $state<string | null>(null);
+	let confirmingDeleteFilename = $state<string | null>(null);
+	let deletingFilename = $state<string | null>(null);
 
 	// Driven by the file list (the actual most recent backup, automatic or
 	// manual) — there's no separate "last backup" field on the server to read
@@ -110,6 +113,20 @@
 			downloadingFilename = null;
 		}
 	}
+
+	async function handleDelete(filename: string) {
+		deletingFilename = filename;
+		try {
+			await deleteBackup(filename);
+			files = files.filter((file) => file.filename !== filename);
+			confirmingDeleteFilename = null;
+			error = null;
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : `Failed to delete ${filename}.`;
+		} finally {
+			deletingFilename = null;
+		}
+	}
 </script>
 
 <main
@@ -174,7 +191,7 @@
 		</form>
 
 		<section class="flex flex-col gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
-			<div class="flex items-center justify-between">
+			<div class="flex flex-wrap items-center justify-between gap-2">
 				<h2 class="text-sm font-semibold">Backup files</h2>
 				<Button
 					type="button"
@@ -192,12 +209,12 @@
 			{#if files.length === 0}
 				<p class="text-sm text-gray-600 dark:text-gray-400">No backup files yet.</p>
 			{:else}
-				<ul class="flex flex-col gap-1">
+				<ul class="flex flex-col gap-2">
 					{#each files as file (file.filename)}
 						<li
-							class="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-gray-700"
+							class="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700"
 						>
-							<div class="flex min-w-0 items-center gap-2">
+							<div class="flex items-start gap-2">
 								<span
 									class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase {file.kind ===
 									'automatic'
@@ -206,22 +223,59 @@
 								>
 									{file.kind}
 								</span>
-								<span class="truncate">{file.filename}</span>
+								<span class="min-w-0 font-medium break-all">{file.filename}</span>
 							</div>
-							<div class="flex shrink-0 items-center gap-2">
-								<span class="text-xs text-gray-500 dark:text-gray-400">
-									{formatFileSize(file.sizeBytes)} · {formatTimestamp(file.createdAt)}
-								</span>
-								<Button
-									type="button"
-									size="xs"
-									color="alternative"
-									onclick={() => handleDownload(file.filename)}
-									disabled={downloadingFilename === file.filename}
-								>
-									{downloadingFilename === file.filename ? 'Downloading…' : 'Download'}
-								</Button>
-							</div>
+
+							<p class="text-xs text-gray-500 dark:text-gray-400">
+								{formatFileSize(file.sizeBytes)} · {formatTimestamp(file.createdAt)}
+							</p>
+
+							{#if confirmingDeleteFilename === file.filename}
+								<div class="flex flex-col gap-2 border-t border-gray-200 pt-2 dark:border-gray-700">
+									<p class="text-xs text-red-600 dark:text-red-400">
+										Delete this backup? This can't be undone.
+									</p>
+									<div class="flex gap-2">
+										<Button
+											type="button"
+											size="xs"
+											color="red"
+											disabled={deletingFilename === file.filename}
+											onclick={() => handleDelete(file.filename)}
+										>
+											{deletingFilename === file.filename ? 'Deleting…' : 'Confirm delete'}
+										</Button>
+										<Button
+											type="button"
+											size="xs"
+											color="alternative"
+											onclick={() => (confirmingDeleteFilename = null)}
+										>
+											Cancel
+										</Button>
+									</div>
+								</div>
+							{:else}
+								<div class="flex gap-2">
+									<Button
+										type="button"
+										size="xs"
+										color="alternative"
+										onclick={() => handleDownload(file.filename)}
+										disabled={downloadingFilename === file.filename}
+									>
+										{downloadingFilename === file.filename ? 'Downloading…' : 'Download'}
+									</Button>
+									<Button
+										type="button"
+										size="xs"
+										color="red"
+										onclick={() => (confirmingDeleteFilename = file.filename)}
+									>
+										Delete
+									</Button>
+								</div>
+							{/if}
 						</li>
 					{/each}
 				</ul>

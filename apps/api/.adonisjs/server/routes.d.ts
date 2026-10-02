@@ -104,6 +104,7 @@ export type ScannedRoutes = {
     'backupSettings.backup_settings.update': { paramsTuple?: []; params?: {} }
     'backupSettings.backup_settings.run': { paramsTuple?: []; params?: {} }
     'backupSettings.backup_settings.download': { paramsTuple: [ParamValue]; params: {'filename': ParamValue} }
+    'backupSettings.backup_settings.destroy': { paramsTuple: [ParamValue]; params: {'filename': ParamValue} }
     'serverConfig.server_config.show': { paramsTuple?: []; params?: {} }
     'serverConfig.server_config.update': { paramsTuple?: []; params?: {} }
     'push.push_subscriptions.public_key': { paramsTuple?: []; params?: {} }
@@ -256,6 +257,7 @@ export type ScannedRoutes = {
     'lists.list_invites.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'listId': ParamValue,'inviteId': ParamValue} }
     'tokens.personal_access_tokens.destroy': { paramsTuple: [ParamValue]; params: {'tokenId': ParamValue} }
     'stores.stores.reset_categories': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'backupSettings.backup_settings.destroy': { paramsTuple: [ParamValue]; params: {'filename': ParamValue} }
     'push.push_subscriptions.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
 }

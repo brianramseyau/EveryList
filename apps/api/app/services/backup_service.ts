@@ -90,6 +90,22 @@ export function pruneToCount(backupDir: string, kind: BackupKind, count: number)
 }
 
 /**
+ * Deletes a single backup file by its exact filename. `filename` must already
+ * have passed `isBackupFilename` — this joins it straight onto `backupDir`, so
+ * that validation is the only thing keeping it inside the backups directory.
+ * Returns false when the file is already gone (or was never there), so a
+ * repeated/concurrent delete doesn't surface as an error.
+ */
+export function deleteBackup(backupDir: string, filename: string): boolean {
+  const filePath = path.join(backupDir, filename)
+  if (!fs.existsSync(filePath)) return false
+
+  fs.unlinkSync(filePath)
+  logger.info({ filename }, 'backup file deleted')
+  return true
+}
+
+/**
  * Uses better-sqlite3's native online backup API (rather than copying the file)
  * so a backup can be taken safely while the app is live and writing — it
  * correctly captures a consistent snapshot under WAL mode without blocking or
