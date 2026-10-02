@@ -135,9 +135,13 @@ jobs:
           name: ios-simulator-build
           path: dist
 
+      # Never own `releases/latest`: only the server/web/desktop stream does, so an iOS release
+      # published after it can't displace the web/API bundle as "latest"
+      # (PLAN_35 §"GitHub Release namespace problem").
       - uses: softprops/action-gh-release@v2
         with:
           # An `-rc.N` tag is a test build, not a release — mark it a prerelease (and it's how the
           # other streams label theirs).
           prerelease: ${{ needs.meta.outputs.is_rc == 'true' }}
+          make_latest: false
           files: dist/*.zip
