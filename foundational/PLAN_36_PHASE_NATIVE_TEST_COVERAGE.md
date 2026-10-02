@@ -133,7 +133,10 @@ network-facing, the HTTP seam:
 - Added a small `ios` job to `.github/workflows/test.yml` (`macos-latest`, `xcodebuild test` on
   the iPhone 16 Simulator). It runs on every PR; if the macos cost proves unacceptable later, it
   can be moved to `ios-build.yml` only — at the documented cost of losing PR gating.
-- `scripts/check.mjs` mirrors the step, skipping it with a note anywhere but macOS.
+- `scripts/check.mjs` mirrors the step, skipping it with a note anywhere but macOS. Both call
+  `scripts/ios-test.mjs`, which resolves a Simulator that actually exists via `simctl` rather than
+  pinning a device name — the runner image's device list changes with each Xcode update, and a
+  hard-coded `name=iPhone 16` failed the first CI run when the image shipped only 16e/17/Air.
 
 ### Desktop
 

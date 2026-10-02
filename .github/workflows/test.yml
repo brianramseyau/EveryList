@@ -222,15 +222,9 @@ jobs:
         run: pnpm --filter @everylist/web run cap:sync
 
       # The App scheme's shared scheme (apps/ios/App/App.xcodeproj/xcshareddata/xcschemes) lists
-      # the EveryListTests target as a testable, so `test` runs it. A concrete simulator is
-      # required (unlike the release build's generic destination); the macos-latest image ships
-      # iPhone 16 simulators. No code signing needed for a Simulator run.
+      # the EveryListTests target as a testable, so `test` runs it. scripts/ios-test.mjs resolves
+      # an available iPhone Simulator via simctl rather than pinning a device name — the runner
+      # image's device set changes with each Xcode update (a hard-coded `name=iPhone 16` broke
+      # when the image shipped only 16e/17/Air). No code signing needed for a Simulator run.
       - name: Run the XCTest suite on a Simulator
-        run: |
-          xcodebuild test \
-            -project apps/ios/App/App.xcodeproj \
-            -scheme App \
-            -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+        run: node scripts/ios-test.mjs

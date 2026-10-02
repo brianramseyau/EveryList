@@ -110,25 +110,11 @@ if (!skipAndroid) {
 // The iOS app is an Xcode project, not a pnpm workspace (like apps/android above). Its
 // EveryListTests XCTest target covers the pure helpers extracted out of the shell; the job needs
 // macOS + Xcode, so it's skipped with a note everywhere else (and CI runs it on a macOS runner).
+// scripts/ios-test.mjs resolves an available Simulator rather than pinning a device name.
 if (!skipIos) {
   steps.push({
     label: 'iOS XCTest suite',
-    cmd: [
-      'xcodebuild',
-      'test',
-      '-project',
-      'apps/ios/App/App.xcodeproj',
-      '-scheme',
-      'App',
-      '-configuration',
-      'Debug',
-      '-destination',
-      'platform=iOS Simulator,name=iPhone 16',
-      '-derivedDataPath',
-      'build',
-      'CODE_SIGNING_ALLOWED=NO',
-      'CODE_SIGNING_REQUIRED=NO'
-    ],
+    cmd: ['node', 'scripts/ios-test.mjs'],
     ios: true
   })
 }
