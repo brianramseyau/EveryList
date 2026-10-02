@@ -43,6 +43,11 @@ public class DeadlineNotificationActionReceiverTest {
 
     @Before
     public void setUp() {
+        // Drain any broadcast work a previously-run test class left queued on the process-wide
+        // EveryListWidget executor before installing this test's transport. Robolectric caches
+        // sandboxes per (SDK, config), so those statics persist across test classes — without
+        // this, a late refresh from an earlier class can record into this class's transport.
+        EveryListWidget.awaitIdleForTesting();
         context = ApplicationProvider.getApplicationContext();
         AuthPrefs.save(context, "sess_token", "http://server");
 
@@ -55,6 +60,16 @@ public class DeadlineNotificationActionReceiverTest {
 
     @After
     public void tearDown() {
+        // Drain this class's whole async chain while its transport is still installed, so none of
+        // it can run against a later test's transport. `complete` calls EveryListWidget
+        // .broadcastRefreshAll on this receiver's own executor; Robolectric then queues the
+        // broadcast on the main looper, and delivering it queues the refresh on
+        // EveryListWidget.EXECUTOR — so it takes a main-looper idle *then* an executor drain,
+        // repeated until both are quiet, to fully settle.
+        for (int i = 0; i < 4; i++) {
+            shadowOf(Looper.getMainLooper()).idle();
+            EveryListWidget.awaitIdleForTesting();
+        }
         try {
             context.unregisterReceiver(receiver);
         } catch (IllegalArgumentException ignored) {

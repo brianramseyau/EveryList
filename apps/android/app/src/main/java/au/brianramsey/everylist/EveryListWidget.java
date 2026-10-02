@@ -117,8 +117,11 @@ public class EveryListWidget extends AppWidgetProvider {
     }
 
     /** Blocks until every broadcast task queued so far has finished — test-only. {@link #EXECUTOR}
-     *  is a process-wide single thread, so without draining, a test's background work (and its
-     *  {@link HttpJson} transport calls) can leak into the next test. */
+     *  is a process-wide single thread and {@link HttpJson}'s transport is a static too, so
+     *  without draining, one test's background work (and its transport calls) can leak into the
+     *  next test — and, because Robolectric caches sandboxes per (SDK, config), into the next test
+     *  <em>class</em> as well. Callers that install a transport should drain first, before
+     *  installing it. */
     static void awaitIdleForTesting() {
         try {
             EXECUTOR.submit(() -> {}).get(5, java.util.concurrent.TimeUnit.SECONDS);

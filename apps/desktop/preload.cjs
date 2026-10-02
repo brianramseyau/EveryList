@@ -14,7 +14,8 @@ const { contextBridge, ipcRenderer } = require('electron')
 // PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §1 warns about (confirmed the hard way: a real launch
 // landed on /login instead of /server-setup because this bridge never got exposed). main.cjs
 // passes the version through `additionalArguments` instead, which sandboxed preload can read
-// off `process.argv`.
+// off `process.argv`. Kept inline rather than in lib/ because a sandboxed preload can't require a
+// local module at all — extracting it would break this file, not test it.
 const versionArg = process.argv.find((arg) => arg.startsWith('--everylist-version='))
 const version = versionArg ? versionArg.slice('--everylist-version='.length) : 'unknown'
 

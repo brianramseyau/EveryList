@@ -191,3 +191,40 @@ jobs:
       - name: JVM unit tests + coverage gate, and compile instrumented tests
         working-directory: apps/android
         run: ./gradlew :app:jacocoTestReport :app:compileDebugAndroidTestJavaWithJavac --no-daemon
+
+  ios:
+    # The iOS app is an Xcode project, not a pnpm workspace (like apps/android above). Its
+    # `EveryListTests` XCTest target covers the pure helpers extracted out of the shell — the
+    # SPA-fallback path and the paper/ink theme colors (PLAN_36_PHASE_NATIVE_TEST_COVERAGE.md);
+    # everything else is Capacitor/UIKit boilerplate that needs a running app. Needs macOS +
+    # Xcode, hence a dedicated runner rather than the Ubuntu matrix above.
+    name: Test (ios)
+    needs: build-shared
+    runs-on: macos-latest
+    timeout-minutes: 25
+    env:
+      # See the env block above — this job doesn't build apps/desktop either.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: shared-dist
+          path: packages/shared/dist
+
+      # The XCTest target links the App target, so xcodebuild resolves Capacitor's SPM graph
+      # before compiling — which needs the web bundle and generated Package.swift in place, same
+      # as ios-build.yml's build job.
+      - name: Sync web bundle and Capacitor plugins into the native iOS project
+        run: pnpm --filter @everylist/web run cap:sync
+
+      # The App scheme's shared scheme (apps/ios/App/App.xcodeproj/xcshareddata/xcschemes) lists
+      # the EveryListTests target as a testable, so `test` runs it. scripts/ios-test.mjs resolves
+      # an available iPhone Simulator via simctl rather than pinning a device name — the runner
+      # image's device set changes with each Xcode update (a hard-coded `name=iPhone 16` broke
+      # when the image shipped only 16e/17/Air). No code signing needed for a Simulator run.
+      - name: Run the XCTest suite on a Simulator
+        run: node scripts/ios-test.mjs
