@@ -30,6 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version_name: ${{ steps.parse.outputs.version_name }}
+      is_prerelease: ${{ steps.parse.outputs.is_prerelease }}
     steps:
       - id: parse
         # Only a stable vX.Y.Z or a vX.Y.Z-<suffix> prerelease reaches here (the tag filter is
@@ -42,6 +43,11 @@ jobs:
             exit 1
           fi
           echo "version_name=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
   build-desktop:
     name: Build desktop app (${{ matrix.os }})
@@ -109,8 +115,13 @@ jobs:
         with:
           path: dist
 
+      # The server/web/desktop stream is the only one allowed to own `releases/latest` — the
+      # native streams (`android-v…`/`ios-v…`) set `make_latest: false` so a native release can
+      # never displace the web/API bundle as "latest" (PLAN_35 §"GitHub Release namespace problem").
+      # A server prerelease (`vX.Y.Z-<suffix>`) doesn't claim it either; only a stable `vX.Y.Z`.
       - uses: softprops/action-gh-release@v2
         with:
+          make_latest: ${{ needs.meta.outputs.is_prerelease == 'false' }}
           files: |
             dist/desktop-macos-latest/*
             dist/desktop-windows-2022/*

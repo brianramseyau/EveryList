@@ -273,9 +273,13 @@ jobs:
         with:
           path: dist
 
+      # Never own `releases/latest`: only the server/web/desktop stream does, so an Android or iOS
+      # release published after it can't displace the web/API bundle as "latest"
+      # (PLAN_35 §"GitHub Release namespace problem").
       - uses: softprops/action-gh-release@v2
         with:
           prerelease: ${{ needs.meta.outputs.is_rc == 'true' }}
+          make_latest: false
           files: |
             dist/android-apk-debug/*.apk
             dist/android-aab-release/*.aab
