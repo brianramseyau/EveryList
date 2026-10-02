@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -31,6 +31,10 @@
 	let downloadingFilename = $state<string | null>(null);
 	let confirmingDeleteFilename = $state<string | null>(null);
 	let deletingFilename = $state<string | null>(null);
+	// The row element per filename, so focus can return to its Delete button
+	// after Cancel removes the focused Cancel button (Flowbite's Button binds
+	// the component instance, not its DOM node, so we bind the row instead).
+	let rowEls: Record<string, HTMLLIElement | undefined> = $state({});
 
 	// Driven by the file list (the actual most recent backup, automatic or
 	// manual) — there's no separate "last backup" field on the server to read
@@ -124,6 +128,16 @@
 		} else {
 			confirmingDeleteFilename = filename;
 		}
+	}
+
+	// Cancel removes the button the keyboard user just activated, so move
+	// focus back to that row's Delete button once the DOM has updated —
+	// `tick()` waits for the Cancel button's removal before focusing.
+	function cancelDeleteConfirm(filename: string) {
+		confirmingDeleteFilename = null;
+		void tick().then(() =>
+			rowEls[filename]?.querySelector<HTMLButtonElement>('[data-delete-button]')?.focus()
+		);
 	}
 
 	// Never called concurrently: every Delete/Cancel button is disabled while a
@@ -229,6 +243,7 @@
 				<ul class="flex flex-col gap-2">
 					{#each files as file (file.filename)}
 						<li
+							bind:this={rowEls[file.filename]}
 							class="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700"
 						>
 							<div class="flex items-start gap-2">
@@ -261,8 +276,7 @@
 									size="xs"
 									color="alternative"
 									onclick={() => handleDownload(file.filename)}
-									disabled={downloadingFilename === file.filename ||
-										deletingFilename === file.filename}
+									disabled={downloadingFilename !== null || deletingFilename === file.filename}
 								>
 									{downloadingFilename === file.filename ? 'Downloading…' : 'Download'}
 								</Button>
@@ -270,8 +284,9 @@
 									type="button"
 									size="xs"
 									color="red"
+									data-delete-button
 									disabled={deletingFilename !== null ||
-										downloadingFilename === file.filename ||
+										downloadingFilename !== null ||
 										runningNow ||
 										saving}
 									onclick={() => handleDeleteClick(file.filename)}
@@ -288,7 +303,7 @@
 										size="xs"
 										color="alternative"
 										disabled={deletingFilename !== null}
-										onclick={() => (confirmingDeleteFilename = null)}
+										onclick={() => cancelDeleteConfirm(file.filename)}
 									>
 										Cancel
 									</Button>

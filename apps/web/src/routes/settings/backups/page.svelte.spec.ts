@@ -340,7 +340,7 @@ describe('Backups +page.svelte', () => {
 		expect(downloadBackup).toHaveBeenCalledWith('everylist-manual-20260822-090000.sqlite3');
 	});
 
-	it('blocks Download and Delete on the same file while its download is in flight', async () => {
+	it('blocks all other actions while a download is in flight', async () => {
 		let resolveDownload: () => void = () => {};
 		vi.mocked(downloadBackup).mockReturnValue(
 			new Promise((resolve) => {
@@ -355,16 +355,29 @@ describe('Backups +page.svelte', () => {
 						kind: 'manual',
 						sizeBytes: 1024,
 						createdAt: '2026-08-22T09:00:00.000Z'
+					},
+					{
+						filename: 'everylist-automatic-20260822-030000.sqlite3',
+						kind: 'automatic',
+						sizeBytes: 2048,
+						createdAt: '2026-08-22T03:00:00.000Z'
 					}
 				]
 			})
 		);
 
 		render(BackupsPage);
-		await page.getByRole('button', { name: 'Download' }).click();
+		await page.getByRole('button', { name: 'Download' }).first().click();
 
-		// The same row's Delete is blocked, so a delete can't 404 the download.
-		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+		// Every download button is disabled while one is in flight (a second
+		// wouldn't be tracked by the single downloadingFilename), and Delete is
+		// blocked so it can't 404 the download.
+		for (const button of await page.getByRole('button', { name: /Downloading…|Download/ }).all()) {
+			await expect.element(button).toBeDisabled();
+		}
+		for (const button of await page.getByRole('button', { name: 'Delete', exact: true }).all()) {
+			await expect.element(button).toBeDisabled();
+		}
 
 		resolveDownload();
 		await expect.poll(() => vi.mocked(downloadBackup).mock.calls.length).toBe(1);
@@ -440,6 +453,9 @@ describe('Backups +page.svelte', () => {
 		await expect
 			.element(page.getByText("Delete this backup? This can't be undone."))
 			.not.toBeInTheDocument();
+		// Cancel removes the button the user just activated, so focus returns
+		// to the row's Delete button.
+		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toHaveFocus();
 		expect(deleteBackup).not.toHaveBeenCalled();
 	});
 
