@@ -41,4 +41,23 @@ function trayAction({ backgroundRunEnabled, hasTray }) {
   return 'none'
 }
 
-module.exports = { buildTrayMenuTemplate, shouldHideInsteadOfClose, trayAction }
+/**
+ * Applies a {@link trayAction} result by invoking the matching callback. Keeps the create/destroy
+ * dispatch (and its branch) in tested code, so `main.cjs` only passes the Electron operations in.
+ *
+ * @param {{ action: 'create' | 'destroy' | 'none', create: () => void, destroy: () => void }} args
+ * @returns {'create' | 'destroy' | 'none'} the action that ran
+ */
+function applyTrayAction({ action, create, destroy }) {
+  if (action === 'create') {
+    create()
+    return 'create'
+  }
+  if (action === 'destroy') {
+    destroy()
+    return 'destroy'
+  }
+  return 'none'
+}
+
+module.exports = { buildTrayMenuTemplate, shouldHideInsteadOfClose, trayAction, applyTrayAction }

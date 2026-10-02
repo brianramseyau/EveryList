@@ -8,9 +8,13 @@ final class EveryListTests: XCTestCase {
 
     // MARK: - spaFallbackPath
 
-    func testSpaFallbackPathRemapsOnlyTheIndexHtmlLiteral() {
+    func testSpaFallbackPathRemapsExtensionlessPathsToTheSpaShell() {
+        // iOS's Router receives the actual request path (unlike Android's RouteProcessor, which
+        // gets the literal /index.html), so any extensionless path is a client route.
+        XCTAssertEqual(spaFallbackPath(basePath: "", path: "/"), "/200.html")
         XCTAssertEqual(spaFallbackPath(basePath: "", path: "/index.html"), "/200.html")
-        XCTAssertEqual(spaFallbackPath(basePath: "/app", path: "/index.html"), "/app/200.html")
+        XCTAssertEqual(spaFallbackPath(basePath: "", path: "/lists"), "/200.html")
+        XCTAssertEqual(spaFallbackPath(basePath: "/app", path: "/lists/74"), "/app/200.html")
     }
 
     func testSpaFallbackPathPassesRealAssetPathsThrough() {
@@ -20,13 +24,7 @@ final class EveryListTests: XCTestCase {
         XCTAssertEqual(
             spaFallbackPath(basePath: "/base", path: "/_app/immutable/entry.css"),
             "/base/_app/immutable/entry.css")
-    }
-
-    func testSpaFallbackPathPassesOtherExtensionlessRoutesThrough() {
-        // A client route like /lists is not the fallback signal — Capacitor hands the real
-        // request through, and the SPA shell must not be substituted for it here.
-        XCTAssertEqual(spaFallbackPath(basePath: "", path: "/lists"), "/lists")
-        XCTAssertEqual(spaFallbackPath(basePath: "/base", path: "/lists/74"), "/base/lists/74")
+        XCTAssertEqual(spaFallbackPath(basePath: "", path: "/favicon.png"), "/favicon.png")
     }
 
     // MARK: - ThemeColors

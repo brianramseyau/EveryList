@@ -130,9 +130,9 @@ network-facing, the HTTP seam:
   `200.html`, real asset paths pass through) and `ThemeColors.paper`/`ink` (exact sRGB values).
 - The `AppDelegate`/`SceneDelegate` and the rest of `MainViewController` stay excluded as
   Capacitor/UIKit boilerplate that needs a running app.
-- Added a small `ios` job to `.github/workflows/test.yml` (`macos-latest`, `xcodebuild test` on
-  the iPhone 16 Simulator). It runs on every PR; if the macos cost proves unacceptable later, it
-  can be moved to `ios-build.yml` only — at the documented cost of losing PR gating.
+- Added a small `ios` job to `.github/workflows/test.yml` (`macos-latest`). It runs on every PR; if
+  the macos cost proves unacceptable later, it can be moved to `ios-build.yml` only — at the
+  documented cost of losing PR gating.
 - `scripts/check.mjs` mirrors the step, skipping it with a note anywhere but macOS. Both call
   `scripts/ios-test.mjs`, which resolves a Simulator that actually exists via `simctl` rather than
   pinning a device name — the runner image's device list changes with each Xcode update, and a
@@ -140,16 +140,21 @@ network-facing, the HTTP seam:
 
 ### Desktop
 
-- Moved every branch out of `main.cjs`/`preload.cjs` into new `lib/*.cjs` modules (or added
-  functions to the existing ones): `lib/window-options.cjs` (window sizing/fallbacks,
-  maximize, close-to-tray, dock-icon), `lib/menu.cjs` (the application menu template),
-  `lib/startup.cjs` (error logging, EADDRINUSE detection + dialog text, second-instance action,
-  quit-on-all-closed), and `lib/preload-version.cjs` (the `--everylist-version` parse). The tray
-  create/destroy decision moved into `lib/tray.cjs`. Each is at 100% via the existing
-  `vitest.config.ts` (now 121 desktop tests).
+- Moved the decisions out of `main.cjs` into new `lib/*.cjs` modules (or added functions to the
+  existing ones): `lib/window-options.cjs` (window sizing/fallbacks, maximize, close-to-tray,
+  dock-icon), `lib/menu.cjs` (the application menu template), `lib/startup.cjs` (error logging,
+  EADDRINUSE detection + dialog text, and the second-instance / port-conflict _dispatch_ so the
+  branches live here, not in `main.cjs`), and `lib/tray.cjs` gained the tray create/destroy
+  decision and its dispatch. Each is at 100% via the existing `vitest.config.ts` (123 desktop
+  tests). `main.cjs` keeps only Electron event dispatch and null guards, and passes the actual
+  Electron operations in as callbacks.
+- `preload.cjs`'s `--everylist-version` parse stays **inline**, deliberately: a sandboxed preload
+  (`sandbox: true`) can't `require()` a local module, so extracting it would break the bridge,
+  not test it. The file's own comment already warned about this — CodeRabbit caught the
+  extraction as a real regression in review, and it was reverted.
 - Removed the `exclude: ['main.cjs', 'preload.cjs']` entry: `include: ['lib/**/*.cjs']` never
-  covered those two files anyway, and both are now genuinely branch-free wiring. No headless
-  `_electron.launch()` smoke test was added — the wiring they'd exercise is now trivially thin.
+  covered those two files anyway, so the exclusion was dead. No headless `_electron.launch()`
+  smoke test was added — the wiring they'd exercise is now thin dispatch.
 
 ## PR 3 — Docs, AGENTS.md, and this plan's follow-ups
 

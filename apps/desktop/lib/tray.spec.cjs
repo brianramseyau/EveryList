@@ -1,6 +1,11 @@
 'use strict'
 
-const { buildTrayMenuTemplate, shouldHideInsteadOfClose, trayAction } = require('./tray.cjs')
+const {
+  buildTrayMenuTemplate,
+  shouldHideInsteadOfClose,
+  trayAction,
+  applyTrayAction
+} = require('./tray.cjs')
 
 describe('buildTrayMenuTemplate', () => {
   it('wires Show/Quit items to the given callbacks', () => {
@@ -41,5 +46,43 @@ describe('trayAction', () => {
 
   it('does nothing when both are already off', () => {
     expect(trayAction({ backgroundRunEnabled: false, hasTray: false })).toBe('none')
+  })
+})
+
+describe('applyTrayAction', () => {
+  it('invokes create and reports it', () => {
+    /** @type {string[]} */
+    const calls = []
+    const ran = applyTrayAction({
+      action: 'create',
+      create: () => calls.push('create'),
+      destroy: () => calls.push('destroy')
+    })
+    expect(ran).toBe('create')
+    expect(calls).toEqual(['create'])
+  })
+
+  it('invokes destroy and reports it', () => {
+    /** @type {string[]} */
+    const calls = []
+    const ran = applyTrayAction({
+      action: 'destroy',
+      create: () => calls.push('create'),
+      destroy: () => calls.push('destroy')
+    })
+    expect(ran).toBe('destroy')
+    expect(calls).toEqual(['destroy'])
+  })
+
+  it('invokes neither for none', () => {
+    /** @type {string[]} */
+    const calls = []
+    const ran = applyTrayAction({
+      action: 'none',
+      create: () => calls.push('create'),
+      destroy: () => calls.push('destroy')
+    })
+    expect(ran).toBe('none')
+    expect(calls).toEqual([])
   })
 })

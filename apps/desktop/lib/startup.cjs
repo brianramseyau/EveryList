@@ -77,6 +77,38 @@ function secondInstanceAction({ hasWindow, isMinimized }) {
 }
 
 /**
+ * Applies {@link secondInstanceAction} by invoking the callbacks it calls for. Keeps the restore/
+ * focus dispatch (and its branches) in tested code, so `main.cjs` only passes the window
+ * operations in.
+ *
+ * @param {{ hasWindow: boolean, isMinimized: boolean, restore: () => void, focus: () => void }} args
+ * @returns {{ restore: boolean, focus: boolean }} what ran
+ */
+function applySecondInstanceAction({ hasWindow, isMinimized, restore, focus }) {
+  const action = secondInstanceAction({ hasWindow, isMinimized })
+  if (action.restore) {
+    restore()
+  }
+  if (action.focus) {
+    focus()
+  }
+  return action
+}
+
+/**
+ * Shows the bespoke "port already in use" dialog when `error` is that specific failure, and
+ * reports whether it did. Keeps that branch in tested code rather than in `main.cjs`.
+ *
+ * @param {{ error: unknown, port: number, userDataDir: string, showErrorBox: (title: string, message: string) => void }} args
+ * @returns {boolean} true if the port-in-use dialog was shown
+ */
+function reportPortConflictIfAny({ error, port, userDataDir, showErrorBox }) {
+  if (!isPortInUseError(error)) return false
+  showErrorBox('EveryList — port already in use', portInUseMessage({ port, userDataDir }))
+  return true
+}
+
+/**
  * Whether `window-all-closed` should quit the app — everywhere except macOS, where the process
  * conventionally stays alive in the dock until the user quits explicitly.
  *
@@ -92,5 +124,7 @@ module.exports = {
   isPortInUseError,
   portInUseMessage,
   secondInstanceAction,
+  applySecondInstanceAction,
+  reportPortConflictIfAny,
   shouldQuitOnAllWindowsClosed
 }

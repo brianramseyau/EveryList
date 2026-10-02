@@ -8,6 +8,8 @@ const {
   isPortInUseError,
   portInUseMessage,
   secondInstanceAction,
+  applySecondInstanceAction,
+  reportPortConflictIfAny,
   shouldQuitOnAllWindowsClosed
 } = require('./startup.cjs')
 
@@ -101,5 +103,74 @@ describe('shouldQuitOnAllWindowsClosed', () => {
     expect(shouldQuitOnAllWindowsClosed('win32')).toBe(true)
     expect(shouldQuitOnAllWindowsClosed('linux')).toBe(true)
     expect(shouldQuitOnAllWindowsClosed('darwin')).toBe(false)
+  })
+})
+
+describe('applySecondInstanceAction', () => {
+  it('does nothing with no window', () => {
+    /** @type {string[]} */
+    const calls = []
+    const result = applySecondInstanceAction({
+      hasWindow: false,
+      isMinimized: false,
+      restore: () => calls.push('restore'),
+      focus: () => calls.push('focus')
+    })
+    expect(calls).toEqual([])
+    expect(result).toEqual({ restore: false, focus: false })
+  })
+
+  it('focuses a visible window without restoring', () => {
+    /** @type {string[]} */
+    const calls = []
+    applySecondInstanceAction({
+      hasWindow: true,
+      isMinimized: false,
+      restore: () => calls.push('restore'),
+      focus: () => calls.push('focus')
+    })
+    expect(calls).toEqual(['focus'])
+  })
+
+  it('restores a minimized window before focusing', () => {
+    /** @type {string[]} */
+    const calls = []
+    applySecondInstanceAction({
+      hasWindow: true,
+      isMinimized: true,
+      restore: () => calls.push('restore'),
+      focus: () => calls.push('focus')
+    })
+    expect(calls).toEqual(['restore', 'focus'])
+  })
+})
+
+describe('reportPortConflictIfAny', () => {
+  it('shows the port-in-use dialog for an EADDRINUSE error', () => {
+    /** @type {{ title: string, message: string }[]} */
+    const shown = []
+    const handled = reportPortConflictIfAny({
+      error: Object.assign(new Error('in use'), { code: 'EADDRINUSE' }),
+      port: 41783,
+      userDataDir: '/home/u/.config/EveryList',
+      showErrorBox: (title, message) => shown.push({ title, message })
+    })
+    expect(handled).toBe(true)
+    expect(shown).toHaveLength(1)
+    expect(shown[0]?.title).toContain('port already in use')
+    expect(shown[0]?.message).toContain('127.0.0.1:41783')
+  })
+
+  it('shows nothing and reports false for any other error', () => {
+    /** @type {unknown[][]} */
+    const shown = []
+    const handled = reportPortConflictIfAny({
+      error: new Error('something else'),
+      port: 41783,
+      userDataDir: '/home/u/.config/EveryList',
+      showErrorBox: (...args) => shown.push(args)
+    })
+    expect(handled).toBe(false)
+    expect(shown).toEqual([])
   })
 })

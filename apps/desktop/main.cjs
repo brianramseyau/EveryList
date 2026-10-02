@@ -23,7 +23,7 @@ const { readWindowState, writeWindowState, clampWindowState } = require('./lib/w
 const { shouldOpenExternally, isAppOrigin } = require('./lib/navigation.cjs')
 const { checkForUpdate } = require('./lib/update-check.cjs')
 const { readBackgroundRunEnabled, writeBackgroundRunEnabled } = require('./lib/background-run.cjs')
-const { buildTrayMenuTemplate, trayAction } = require('./lib/tray.cjs')
+const { buildTrayMenuTemplate, trayAction, applyTrayAction } = require('./lib/tray.cjs')
 const {
   buildWindowOptions,
   shouldMaximize,
@@ -33,9 +33,8 @@ const {
 const { buildMenuTemplate } = require('./lib/menu.cjs')
 const {
   logStartupError,
-  isPortInUseError,
-  portInUseMessage,
-  secondInstanceAction,
+  reportPortConflictIfAny,
+  applySecondInstanceAction,
   shouldQuitOnAllWindowsClosed
 } = require('./lib/startup.cjs')
 const packageJson = require('./package.json')
@@ -67,33 +66,36 @@ function persistStartupError(error) {
  * PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md §"Electron". Idempotent; the decision itself is the
  * tested `trayAction`. */
 function syncTray() {
-  const action = trayAction({ backgroundRunEnabled, hasTray: tray !== null })
-  if (action === 'create') {
-    const created = new Tray(ICON_PATH)
-    tray = created
-    created.setToolTip('EveryList')
-    created.setContextMenu(
-      Menu.buildFromTemplate(
-        buildTrayMenuTemplate({
-          onShow: () => {
-            mainWindow?.show()
-            mainWindow?.focus()
-          },
-          onQuit: () => {
-            isQuitting = true
-            app.quit()
-          }
-        })
+  applyTrayAction({
+    action: trayAction({ backgroundRunEnabled, hasTray: tray !== null }),
+    create: () => {
+      const created = new Tray(ICON_PATH)
+      tray = created
+      created.setToolTip('EveryList')
+      created.setContextMenu(
+        Menu.buildFromTemplate(
+          buildTrayMenuTemplate({
+            onShow: () => {
+              mainWindow?.show()
+              mainWindow?.focus()
+            },
+            onQuit: () => {
+              isQuitting = true
+              app.quit()
+            }
+          })
+        )
       )
-    )
-    created.on('click', () => {
-      mainWindow?.show()
-      mainWindow?.focus()
-    })
-  } else if (action === 'destroy') {
-    tray?.destroy()
-    tray = null
-  }
+      created.on('click', () => {
+        mainWindow?.show()
+        mainWindow?.focus()
+      })
+    },
+    destroy: () => {
+      tray?.destroy()
+      tray = null
+    }
+  })
 }
 
 async function createWindow() {
@@ -177,12 +179,12 @@ async function listenOrReportPortConflict(server, port) {
   try {
     await listen(server, port)
   } catch (error) {
-    if (isPortInUseError(error)) {
-      dialog.showErrorBox(
-        'EveryList — port already in use',
-        portInUseMessage({ port, userDataDir: app.getPath('userData') })
-      )
-    }
+    reportPortConflictIfAny({
+      error,
+      port,
+      userDataDir: app.getPath('userData'),
+      showErrorBox: (title, message) => dialog.showErrorBox(title, message)
+    })
     throw error
   }
 }
@@ -195,12 +197,12 @@ async function boot() {
     return
   }
   app.on('second-instance', () => {
-    const { restore, focus } = secondInstanceAction({
+    applySecondInstanceAction({
       hasWindow: mainWindow !== null,
-      isMinimized: mainWindow ? mainWindow.isMinimized() : false
+      isMinimized: mainWindow ? mainWindow.isMinimized() : false,
+      restore: () => mainWindow?.restore(),
+      focus: () => mainWindow?.focus()
     })
-    if (restore) mainWindow?.restore()
-    if (focus) mainWindow?.focus()
   })
 
   await app.whenReady()

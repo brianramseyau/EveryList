@@ -6,7 +6,6 @@
 // actually runs as CommonJS. See PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §5.
 
 const { contextBridge, ipcRenderer } = require('electron')
-const { parseVersionArg } = require('./lib/preload-version.cjs')
 
 // Under `sandbox: true` (main.cjs's BrowserWindow config), a preload script's `require()` is
 // restricted to Electron's own built-ins plus a small Node allowlist — `require('./package.json')`
@@ -15,8 +14,10 @@ const { parseVersionArg } = require('./lib/preload-version.cjs')
 // PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §1 warns about (confirmed the hard way: a real launch
 // landed on /login instead of /server-setup because this bridge never got exposed). main.cjs
 // passes the version through `additionalArguments` instead, which sandboxed preload can read
-// off `process.argv`. The parsing itself lives in lib/preload-version.cjs so it's unit-tested.
-const version = parseVersionArg(process.argv)
+// off `process.argv`. Kept inline rather than in lib/ because a sandboxed preload can't require a
+// local module at all — extracting it would break this file, not test it.
+const versionArg = process.argv.find((arg) => arg.startsWith('--everylist-version='))
+const version = versionArg ? versionArg.slice('--everylist-version='.length) : 'unknown'
 
 // contextIsolation: true / nodeIntegration: false are Electron's own defaults (since v12/v5) —
 // this bridge is what lets the renderer detect the desktop build at all without weakening

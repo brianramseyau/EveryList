@@ -12,15 +12,16 @@ import Foundation
 /// (PLAN_13_PHASE_NATIVE_APP_SHELL.md §4). `MainViewController.router()` overrides Capacitor's
 /// supported hook and resolves the fallback here instead.
 ///
-/// The check is scoped to the exact literal path `/index.html` rather than "any extensionless
-/// path": Capacitor passes that literal for the SPA-fallback branch, but routes every real asset
-/// request through the same `Router` too, so matching more broadly would hand `200.html` back for
-/// every `.js`/`.css` load.
+/// Unlike Android's `RouteProcessor` (which is handed the literal `/index.html` for the fallback
+/// branch), iOS's `Router.route(for:)` receives the *actual* request path — `/lists`, `/lists/74`,
+/// etc. — so the rule here is "any path with no file extension is a client route → the SPA shell",
+/// and only real files with an extension pass through unchanged.
 ///
 /// - Parameters:
 ///   - basePath: the server base path (empty for this app).
 ///   - path: the path Capacitor is resolving.
-/// - Returns: `basePath + "/200.html"` for the fallback literal, otherwise `basePath + path`.
+/// - Returns: `basePath + "/200.html"` for an extensionless path, otherwise `basePath + path`.
 func spaFallbackPath(basePath: String, path: String) -> String {
-    path == "/index.html" ? basePath + "/200.html" : basePath + path
+    URL(fileURLWithPath: path).pathExtension.isEmpty ? basePath + "/200.html" : basePath + path
 }
+
