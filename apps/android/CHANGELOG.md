@@ -24,7 +24,7 @@ entry for `vX.Y.Z`, so write (or update) the entry on the release branch before 
 ## v1.8.1
 
 <!-- whats-new:start -->
-The backup file list in Settings is now easy to manage on a phone: each backup is its own stacked card showing its size and date, and you can delete an individual backup file with a confirmation step. The list no longer overlaps on narrow screens, and "Back up now" no longer collides with the heading.
+Backups are easier to manage on a phone: the file list no longer overlaps, and you can now delete an individual backup file with a confirmation step.
 <!-- whats-new:end -->
 
 - **Manage backups from your phone** (#283) — the backup file list in **Settings → Backups** no longer crams each file onto one line (badge, filename, size, date and a Download button) where it overlapped on a phone. Each backup is now a stacked card with its kind and full filename, a size/date line, and its own buttons. A new **Delete** button removes a single backup file after an inline confirmation ("Delete this backup? This can't be undone."); deleting is guarded against overlapping with a backup, a download, a schedule save or another delete, so the list can't be left showing a file that's already gone. Backed by a new `DELETE /api/v1/backup-settings/:filename` endpoint, admin-only like the rest of the backup routes.
