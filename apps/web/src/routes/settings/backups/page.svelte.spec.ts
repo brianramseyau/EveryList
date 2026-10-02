@@ -340,6 +340,36 @@ describe('Backups +page.svelte', () => {
 		expect(downloadBackup).toHaveBeenCalledWith('everylist-manual-20260822-090000.sqlite3');
 	});
 
+	it('blocks Download and Delete on the same file while its download is in flight', async () => {
+		let resolveDownload: () => void = () => {};
+		vi.mocked(downloadBackup).mockReturnValue(
+			new Promise((resolve) => {
+				resolveDownload = resolve;
+			})
+		);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Download' }).click();
+
+		// The same row's Delete is blocked, so a delete can't 404 the download.
+		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+
+		resolveDownload();
+		await expect.poll(() => vi.mocked(downloadBackup).mock.calls.length).toBe(1);
+	});
+
 	it('shows the ApiError message when a download fails', async () => {
 		vi.mocked(downloadBackup).mockRejectedValue(new ApiError(403, 'Not authorized'));
 		vi.mocked(fetchBackupState).mockResolvedValue(
@@ -523,8 +553,10 @@ describe('Backups +page.svelte', () => {
 
 		// The in-flight row's own button reports the pending state...
 		await expect.element(page.getByRole('button', { name: 'Deleting…' })).toBeDisabled();
-		// ...and every other row's Delete button is disabled too, so it can't
-		// start a second overlapping request.
+		// ...that row's Download is blocked too, so it can't 404 mid-delete...
+		await expect.element(page.getByRole('button', { name: 'Download' }).first()).toBeDisabled();
+		// ...and every other row's Delete button is disabled as well, so it
+		// can't start a second overlapping request.
 		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
 		// Save is blocked too, so a stale save snapshot can't re-show the
 		// deleted row.

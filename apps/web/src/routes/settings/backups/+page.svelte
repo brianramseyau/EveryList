@@ -261,7 +261,8 @@
 									size="xs"
 									color="alternative"
 									onclick={() => handleDownload(file.filename)}
-									disabled={downloadingFilename === file.filename}
+									disabled={downloadingFilename === file.filename ||
+										deletingFilename === file.filename}
 								>
 									{downloadingFilename === file.filename ? 'Downloading…' : 'Download'}
 								</Button>
@@ -269,7 +270,10 @@
 									type="button"
 									size="xs"
 									color="red"
-									disabled={deletingFilename !== null || runningNow || saving}
+									disabled={deletingFilename !== null ||
+										downloadingFilename === file.filename ||
+										runningNow ||
+										saving}
 									onclick={() => handleDeleteClick(file.filename)}
 								>
 									{deletingFilename === file.filename
