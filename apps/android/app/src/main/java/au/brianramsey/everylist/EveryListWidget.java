@@ -116,6 +116,17 @@ public class EveryListWidget extends AppWidgetProvider {
         });
     }
 
+    /** Blocks until every broadcast task queued so far has finished — test-only. {@link #EXECUTOR}
+     *  is a process-wide single thread, so without draining, a test's background work (and its
+     *  {@link HttpJson} transport calls) can leak into the next test. */
+    static void awaitIdleForTesting() {
+        try {
+            EXECUTOR.submit(() -> {}).get(5, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException("widget executor did not drain", e);
+        }
+    }
+
     private interface WidgetWork {
         void run(Context context);
     }

@@ -146,7 +146,7 @@ public class RescheduleActivity extends Activity {
     private void loadDeadline() {
         new Thread(() -> {
             try {
-                String itemsBody = HttpJson.request("GET", serverUrl + "/api/v1/lists/" + listId + "/items", token, null);
+                String itemsBody = HttpJson.send("GET", serverUrl + "/api/v1/lists/" + listId + "/items", token, null);
                 JSONArray items = new JSONObject(itemsBody).getJSONArray("data");
                 String deadline = findItemDeadline(items, itemId);
                 if (deadline == null) {
@@ -246,7 +246,7 @@ public class RescheduleActivity extends Activity {
             try {
                 JSONObject body = new JSONObject();
                 body.put("deadline", nextDeadline);
-                HttpJson.request("PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token, body.toString());
+                HttpJson.send("PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token, body.toString());
             } catch (IOException | org.json.JSONException | RuntimeException e) {
                 // See loadDeadline()'s identical catch for why RuntimeException is included here.
                 android.util.Log.e("EveryList", "Reschedule popup: failed to update item " + itemId, e);
