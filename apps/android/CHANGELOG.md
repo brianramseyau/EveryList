@@ -21,6 +21,16 @@ tag; see `foundational/PLAN_35_PHASE_NATIVE_RELEASE_STREAMS.md`). Each entry has
 `pnpm prepare-android-release android-vX.Y.Z` refuses to bump versions until this file has an
 entry for `vX.Y.Z`, so write (or update) the entry on the release branch before bumping.
 
+## v1.8.1
+
+<!-- whats-new:start -->
+Backups are easier to manage on a phone: the file list no longer overlaps, and you can now delete an individual backup file with a confirmation step.
+<!-- whats-new:end -->
+
+- **Manage backups from your phone** (#283) — the backup file list in **Settings → Backups** no longer crams each file onto one line (badge, filename, size, date and a Download button) where it overlapped on a phone. Each backup is now a stacked card with its kind and full filename, a size/date line, and its own buttons. A new **Delete** button removes a single backup file after an inline confirmation ("Delete this backup? This can't be undone."); deleting is guarded against overlapping with a backup, a download, a schedule save or another delete, so the list can't be left showing a file that's already gone. Backed by a new `DELETE /api/v1/backup-settings/:filename` endpoint, admin-only like the rest of the backup routes.
+
+**Upgrading:** no schema changes and no server-side migration — pulling the `v1.8.1` image is enough for the web/PWA path. On Android, this build carries the updated web bundle (server version `1.8.1`); no server change is required for the new UI, and the delete endpoint requires the `v1.8.1` (or later) server.
+
 ## v1.8.0
 
 <!-- whats-new:start -->
