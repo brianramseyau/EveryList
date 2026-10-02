@@ -132,8 +132,9 @@ public class WidgetUpdater {
 
     /** Mirrors the server's own filtering (see {@link WidgetModels.WidgetItem}'s doc comment) so the
      *  optimistic render matches what the follow-up fetch would show on success: the toggled row is
-     *  dropped when it would no longer pass the show/hide-completed filter, otherwise just re-flagged. */
-    private static List<WidgetModels.WidgetItem> applyOptimisticToggle(
+     *  dropped when it would no longer pass the show/hide-completed filter, otherwise just re-flagged.
+     *  Package-private (not private) so it has a direct JVM unit test. */
+    static List<WidgetModels.WidgetItem> applyOptimisticToggle(
             List<WidgetModels.WidgetItem> snapshot, long itemId, boolean nowChecked, boolean showCompleted) {
         List<WidgetModels.WidgetItem> updated = new ArrayList<>(snapshot.size());
         for (WidgetModels.WidgetItem it : snapshot) {
@@ -245,7 +246,7 @@ public class WidgetUpdater {
         prefs.setRetryCount(attempt);
         if (attempt > RETRY_MAX_ATTEMPTS) return true;
 
-        long delayMs = Math.min(RETRY_BASE_DELAY_MS << (attempt - 1), RETRY_MAX_DELAY_MS);
+        long delayMs = retryDelayMs(attempt);
         AlarmManager alarmManager = context.getSystemService(AlarmManager.class);
         if (alarmManager == null) return true;
         alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
@@ -256,6 +257,13 @@ public class WidgetUpdater {
     static void cancelPendingRetry(Context context, int appWidgetId) {
         AlarmManager alarmManager = context.getSystemService(AlarmManager.class);
         if (alarmManager != null) alarmManager.cancel(retryPendingIntent(context, appWidgetId));
+    }
+
+    /** The exponential backoff delay for a given 1-based attempt: 30s, 60s, … capped at 16 min.
+     *  Package-private so the schedule/overflow edge (attempt > the shift width) is directly
+     *  testable. */
+    static long retryDelayMs(int attempt) {
+        return Math.min(RETRY_BASE_DELAY_MS << (attempt - 1), RETRY_MAX_DELAY_MS);
     }
 
     /** Same request code and action as the widget's own refresh-button broadcast (built in

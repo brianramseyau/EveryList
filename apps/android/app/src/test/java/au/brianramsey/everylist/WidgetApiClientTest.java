@@ -120,8 +120,9 @@ public class WidgetApiClientTest {
         }
     }
 
-    // No tests for updateItemDeadline/toggleItem: both PATCH an item, and the JDK's
+    // No tests here for updateItemDeadline/toggleItem's *HTTP method*: the JDK's
     // HttpURLConnection refuses PATCH outright ("Invalid HTTP method"), so the request never
-    // reaches the server in a JVM test. Android uses an OkHttp-backed connection that supports
-    // PATCH; that path is exercised on-device (widget toggle + the quick-add deadline reconcile).
+    // reaches MiniHttpServer in a JVM test. Android uses an OkHttp-backed connection that
+    // supports PATCH. The URL/payload shapes of both are covered in WidgetApiClientPatchTest
+    // through the HttpJson transport seam, which bypasses that JDK limitation.
 }

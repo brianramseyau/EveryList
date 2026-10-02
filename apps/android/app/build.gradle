@@ -76,6 +76,38 @@ android {
     buildFeatures {
         buildConfig true
     }
+    // Robolectric runs Activities/Preferences/RemoteViews/receivers/plugins on the JVM (no
+    // emulator), which is what lets the coverage gate below measure the app's real behaviour
+    // rather than just its few pure helpers. It needs the merged resources/manifest and the
+    // Android framework's default return values for unstubbed platform methods.
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            returnDefaultValues = true
+            all {
+                // Robolectric's SDK 36 sandbox reaches into FileDescriptor internals
+                // (ApplicationSharedMemory) via reflection; on JDK 21 those packages are
+                // strongly encapsulated, so the test JVM needs explicit opens or every
+                // Robolectric test fails at environment setup. CI pins JDK 21, same as here.
+                jvmArgs(
+                    '--add-opens=java.base/java.lang=ALL-UNNAMED',
+                    '--add-opens=java.base/java.util=ALL-UNNAMED',
+                    '--add-opens=java.base/java.io=ALL-UNNAMED',
+                    '--add-opens=java.base/jdk.internal.access=ALL-UNNAMED'
+                )
+                // Robolectric loads app classes through its own sandbox classloader, which
+                // Gradle's default on-the-fly JaCoCo agent skips entirely (classes with no
+                // CodeSource) — every Robolectric-run class reported 0% without this. Opting the
+                // agent into "no location" classes makes the framework-touching code measurable;
+                // the jdk.internal.* exclusion avoids the agent trying to instrument JDK internals
+                // it can't re-derive the original bytes for.
+                jacoco {
+                    includeNoLocationClasses = true
+                    excludes = ['jdk.internal.*']
+                }
+            }
+        }
+    }
 }
 
 repositories {
@@ -107,6 +139,14 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
+    // Robolectric: runs Android framework classes (Activities, SharedPreferences, RemoteViews,
+    // BroadcastReceiver, AlarmManager, etc.) on the JVM so the app's real behaviour is testable in
+    // CI without an emulator. androidx.test:core provides ApplicationProvider + ActivityScenario
+    // under Robolectric (the same APIs the androidTest source set uses).
+    testImplementation "org.robolectric:robolectric:$robolectricVersion"
+    testImplementation "androidx.test:core:$androidxTestCoreVersion"
+    testImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    testImplementation "org.mockito:mockito-core:$mockitoVersion"
     // Android's org.json is a platform class (not on the JVM unit-test classpath); this provides
     // the same API locally so WidgetJson/WidgetConfigPayload run under plain JUnit.
     testImplementation 'org.json:json:20240303'
@@ -128,16 +168,25 @@ try {
 
 // --- JVM unit-test coverage gate ------------------------------------------------------------
 //
-// The Android half of the repo had no coverage gate; the rest (api/web/shared) enforce 100% in CI
-// (see .github/workflows/test.yml). This wires JaCoCo into the pure-JVM `testDebugUnitTest` suite
-// and fails the build when line coverage drops below the threshold below. The number is a ratchet,
-// deliberately far under the other workspaces' 100%: most of apps/android is Activities/RemoteViews/
-// Capacitor plugin glue that needs the Android framework to exercise, so the JVM-reachable ceiling
-// today is ~17% (WidgetJson, DeadlineMath, HttpJson — the pure logic). Instrumented tests
-// (QuickAddLayoutTest and the androidTest source set) cover the Activities/Views side but write
-// their own device-side coverage file, which this offline report doesn't merge yet. Raise `minimum`
-// as that instrumented coverage is folded in (or as Robolectric is adopted to drag framework classes
-// onto the JVM); never lower it silently — a drop is a real regression.
+// The Android half of the repo runs its `testDebugUnitTest` suite (app/src/test) under
+// **Robolectric**, which brings Activities/Preferences/RemoteViews/BroadcastReceivers/Capacitor
+// plugins onto the JVM — so the widget, its popups, its receivers, and the app's plugins are all
+// measured here without an emulator. JaCoCo gates the line coverage at `minimum` below.
+//
+// The gate is a ratchet set just under the current measured line coverage. What remains
+// uncovered, and why, is deliberately small and named:
+//   - `MainActivity`/`MainActivity$1` (the Capacitor `BridgeActivity` onCreate and its
+//     WebViewListener): needs a live Capacitor Bridge/WebView, which isn't constructible in a JVM
+//     test. `spaFallbackPath` (the one decision it makes) and `RefreshGestureAwareLayout`'s
+//     gesture heuristics were extracted to their own classes precisely so they *are* covered.
+//   - A handful of JSONException catch blocks that are genuinely unreachable (e.g. putting a
+//     String/boolean into an org.json object never throws) — kept for the callers' IOException-only
+//     surface, same "don't add dead code / document the exception" rule as the other workspaces.
+//
+// Instrumented tests (QuickAddLayoutTest and the androidTest source set) still exist for on-device
+// layout/gesture checks and are run by hand (see AGENTS.md — `connectedAndroidTest` uninstalls the
+// app), not in CI. Their coverage is not merged into this report. Never lower `minimum` silently —
+// a drop is a real regression.
 //
 // Only the app's own classes count: `classDirectories` points at the `au.brianramsey.everylist`
 // package tree produced by compileDebugJavaWithJavac (the rest of debug/classes is generated
@@ -174,7 +223,7 @@ tasks.register('jacocoTestReport', JacocoReport) {
     // so a plain `./gradlew jacocoTestReport` (and CI's invocation) checks it — one command, one
     // source of truth, no risk of a caller forgetting the verification task.
     doLast {
-        def minimum = 0.16d   // fraction of lines; a ratchet below the current JVM-reachable max
+        def minimum = 0.94d   // fraction of lines; a ratchet just under the current measured value
         def report = reports.xml.outputLocation.get().asFile
         // JaCoCo's report carries a `<!DOCTYPE report PUBLIC "-//JACOCO//DTD Report 1.1//EN" ...>`,
         // which the JAXP default (disallow-doctype-decl=true) rejects; relax that feature and skip

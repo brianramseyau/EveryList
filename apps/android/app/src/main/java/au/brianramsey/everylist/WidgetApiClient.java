@@ -15,7 +15,7 @@ final class WidgetApiClient {
 
     /** `GET /api/v1/lists` — the list selector's data. */
     static List<WidgetModels.WidgetList> fetchLists(String token, String serverUrl) throws IOException {
-        String body = HttpJson.request("GET", serverUrl + "/api/v1/lists", token, null);
+        String body = HttpJson.send("GET", serverUrl + "/api/v1/lists", token, null);
         try {
             return WidgetJson.parseLists(body);
         } catch (Exception e) {
@@ -29,7 +29,7 @@ final class WidgetApiClient {
      *  (lists + items + categories) the widget used to make and then join/sort itself. */
     static WidgetModels.WidgetSnapshot fetchWidgetSnapshot(
             String token, String serverUrl, long listId, boolean includeChecked) throws IOException {
-        String body = HttpJson.request("GET", serverUrl + "/api/v1/lists/" + listId
+        String body = HttpJson.send("GET", serverUrl + "/api/v1/lists/" + listId
             + "/widget-snapshot?includeChecked=" + includeChecked, token, null);
         try {
             return WidgetJson.parseWidgetSnapshot(body);
@@ -58,7 +58,7 @@ final class WidgetApiClient {
             // Unreachable for a string value; keep the method's IOException-only surface.
             throw new IOException("Failed to build create-item payload", e);
         }
-        return HttpJson.request(
+        return HttpJson.send(
             "POST", serverUrl + "/api/v1/lists/" + listId + "/items", token, body.toString());
     }
 
@@ -75,7 +75,7 @@ final class WidgetApiClient {
             // Unreachable for a string value; keep the method's IOException-only surface.
             throw new IOException("Failed to build deadline-update payload", e);
         }
-        HttpJson.request(
+        HttpJson.send(
             "PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token,
             body.toString());
     }
@@ -89,7 +89,7 @@ final class WidgetApiClient {
             // Unreachable for a boolean value; keep the method's IOException-only surface.
             throw new IOException("Failed to build toggle payload", e);
         }
-        HttpJson.request("PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token,
+        HttpJson.send("PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token,
             body.toString());
     }
 }

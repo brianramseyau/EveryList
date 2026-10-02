@@ -108,7 +108,7 @@ public class DeadlineNotificationActionReceiver extends BroadcastReceiver {
             if ("complete".equals(actionId)) {
                 JSONObject body = new JSONObject();
                 body.put("checked", true);
-                HttpJson.request(
+                HttpJson.send(
                     "PATCH", serverUrl + "/api/v1/lists/" + listId + "/items/" + itemId, token, body.toString()
                 );
                 // Same handoff the app itself uses after a mutation (EveryListWidgetPlugin#refresh)

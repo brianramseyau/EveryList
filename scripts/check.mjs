@@ -12,9 +12,9 @@
  *   3. typecheck every workspace     (`pnpm -r typecheck`)
  *   4. install Playwright Chromium   (web component tests run in a real browser)
  *   5. test every workspace          (`pnpm -r test`, 100% coverage gates)
- *   6. Android JVM unit tests + JaCoCo line-coverage gate (Gradle, not a
- *      pnpm workspace — needs the Android SDK + JDK 21, so it's skipped
- *      with a warning when `apps/android` can't be built here)
+ *   6. Android JVM unit tests (Robolectric) + JaCoCo line-coverage gate
+ *      (Gradle, not a pnpm workspace — needs the Android SDK + JDK 17+, so
+ *      it's skipped with a warning when `apps/android` can't be built here)
  *   7. Playwright E2E                (`apps/web` offline-sync + accessibility)
  *
  * This script mirrors that exact sequence so a commit can be vetted locally
@@ -28,7 +28,7 @@
  * Usage:
  *   pnpm check               # full local gate, E2E included
  *   pnpm check --skip-e2e    # lint/typecheck/unit gate only (fast iteration)
- *   pnpm check --skip-android  # skip the Android Gradle steps (no SDK/JDK 21 handy)
+ *   pnpm check --skip-android  # skip the Android Gradle steps (no SDK/JDK 17+ handy)
  */
 
 import { spawnSync } from 'node:child_process'
@@ -84,12 +84,14 @@ const steps = [
   }
 ]
 
-// Android is a Gradle project, not a pnpm workspace, so it needs the Android SDK + JDK 21 that
+// Android is a Gradle project, not a pnpm workspace, so it needs the Android SDK + JDK 17+ that
 // this step can't assume. Run it when the SDK is discoverable and java is new enough; otherwise
 // print how to run it by hand rather than failing the whole gate on a toolchain CI always has.
+// The suite runs under Robolectric, so most framework-touching code is exercised here without an
+// emulator; only the instrumented layout/gesture tests stay manual.
 if (!skipAndroid) {
   steps.push({
-    label: 'Android JVM unit tests + coverage gate',
+    label: 'Android JVM unit tests (Robolectric) + coverage gate',
     cmd: [
       join(repoRoot, 'apps/android/gradlew'),
       ':app:jacocoTestReport',
@@ -130,7 +132,7 @@ for (const [index, step] of steps.entries()) {
         `Skipping Android step: ${javaNote}${sdkPresent ? '' : ', no Android SDK found'}.`
       )
       console.log(
-        'CI runs this step; to run it here, install the Android SDK + JDK 21 and set ANDROID_HOME'
+        'CI runs this step; to run it here, install the Android SDK + JDK 17+ and set ANDROID_HOME'
       )
       console.log('(or put the SDK at ~/Library/Android/sdk).')
       continue
