@@ -272,6 +272,35 @@ describe('Backups +page.svelte', () => {
 		await expect.poll(() => vi.mocked(runBackupNow).mock.calls.length).toBe(1);
 	});
 
+	it('disables Delete while the schedule is being saved', async () => {
+		let resolveSave: (value: BackupSettingsStateDto) => void = () => {};
+		vi.mocked(updateBackupSettings).mockReturnValue(
+			new Promise((resolve) => {
+				resolveSave = resolve;
+			})
+		);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Save schedule' }).click();
+
+		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+
+		resolveSave(state());
+		await expect.poll(() => vi.mocked(updateBackupSettings).mock.calls.length).toBe(1);
+	});
+
 	it('shows the ApiError message when running a backup fails', async () => {
 		vi.mocked(runBackupNow).mockRejectedValue(new ApiError(500, 'Backup failed'));
 
@@ -497,6 +526,9 @@ describe('Backups +page.svelte', () => {
 		// ...and every other row's Delete button is disabled too, so it can't
 		// start a second overlapping request.
 		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+		// Save is blocked too, so a stale save snapshot can't re-show the
+		// deleted row.
+		await expect.element(page.getByRole('button', { name: 'Save schedule' })).toBeDisabled();
 
 		resolveDelete(
 			state({

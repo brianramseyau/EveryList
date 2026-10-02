@@ -202,7 +202,7 @@
 				</span>
 			</label>
 
-			<Button type="submit" size="sm" disabled={saving}>
+			<Button type="submit" size="sm" disabled={saving || deletingFilename !== null}>
 				{saving ? 'Saving…' : 'Save schedule'}
 			</Button>
 		</form>
@@ -269,7 +269,7 @@
 									type="button"
 									size="xs"
 									color="red"
-									disabled={deletingFilename !== null || runningNow}
+									disabled={deletingFilename !== null || runningNow || saving}
 									onclick={() => handleDeleteClick(file.filename)}
 								>
 									{deletingFilename === file.filename
