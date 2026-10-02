@@ -15,7 +15,9 @@
  *   6. Android JVM unit tests (Robolectric) + JaCoCo line-coverage gate
  *      (Gradle, not a pnpm workspace — needs the Android SDK + JDK 17+, so
  *      it's skipped with a warning when `apps/android` can't be built here)
- *   7. Playwright E2E                (`apps/web` offline-sync + accessibility)
+ *   7. iOS XCTest suite (Xcode project, not a pnpm workspace — needs macOS +
+ *      Xcode, so it's skipped with a note anywhere else)
+ *   8. Playwright E2E                (`apps/web` offline-sync + accessibility)
  *
  * This script mirrors that exact sequence so a commit can be vetted locally
  * instead of burning (at times multiple) GitHub Actions round trips.
@@ -29,6 +31,7 @@
  *   pnpm check               # full local gate, E2E included
  *   pnpm check --skip-e2e    # lint/typecheck/unit gate only (fast iteration)
  *   pnpm check --skip-android  # skip the Android Gradle steps (no SDK/JDK 17+ handy)
+ *   pnpm check --skip-ios    # skip the iOS XCTest step (not on macOS/Xcode)
  */
 
 import { spawnSync } from 'node:child_process'
@@ -38,6 +41,7 @@ import { dirname, join } from 'node:path'
 
 const skipE2E = process.argv.includes('--skip-e2e')
 const skipAndroid = process.argv.includes('--skip-android')
+const skipIos = process.argv.includes('--skip-ios')
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 
@@ -103,6 +107,32 @@ if (!skipAndroid) {
   })
 }
 
+// The iOS app is an Xcode project, not a pnpm workspace (like apps/android above). Its
+// EveryListTests XCTest target covers the pure helpers extracted out of the shell; the job needs
+// macOS + Xcode, so it's skipped with a note everywhere else (and CI runs it on a macOS runner).
+if (!skipIos) {
+  steps.push({
+    label: 'iOS XCTest suite',
+    cmd: [
+      'xcodebuild',
+      'test',
+      '-project',
+      'apps/ios/App/App.xcodeproj',
+      '-scheme',
+      'App',
+      '-configuration',
+      'Debug',
+      '-destination',
+      'platform=iOS Simulator,name=iPhone 16',
+      '-derivedDataPath',
+      'build',
+      'CODE_SIGNING_ALLOWED=NO',
+      'CODE_SIGNING_REQUIRED=NO'
+    ],
+    ios: true
+  })
+}
+
 if (!skipE2E) {
   steps.push({
     label: 'Playwright E2E (offline sync, accessibility)',
@@ -115,6 +145,15 @@ console.log('Running the EveryList PR gate locally…')
 let failure = null
 for (const [index, step] of steps.entries()) {
   const header = `[${index + 1}/${steps.length}] ${step.label}`
+
+  if (step.ios) {
+    if (process.platform !== 'darwin') {
+      console.log(`\n===== ${header} — SKIPPED =====`)
+      console.log(`Skipping iOS step: not on macOS (found ${process.platform}).`)
+      console.log('CI runs this on a macos-latest runner; run it locally from Xcode or a Mac.')
+      continue
+    }
+  }
 
   if (step.android) {
     const sdkPresent =

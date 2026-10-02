@@ -6,13 +6,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
+      // Every *decision* main.cjs/preload.cjs would otherwise make lives in lib/ and is tested
+      // (see PLAN_36_PHASE_NATIVE_TEST_COVERAGE.md); those two files keep only Electron
+      // event-dispatch and null guards. `include` over lib/ is the whole gate, so — rather than
+      // excluding them by name — they're simply outside it. See PLAN_22 §9.
       include: ['lib/**/*.cjs'],
-      // main.cjs/preload.cjs are Electron wiring that can only be exercised by
-      // actually launching an app (see PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §9) — every
-      // decision they'd otherwise make lives in lib/ instead, so those two files
-      // contain no branching of their own and are excluded from the coverage gate
-      // rather than widening it.
-      exclude: ['main.cjs', 'preload.cjs', '**/*.spec.cjs'],
+      exclude: ['**/*.spec.cjs'],
       thresholds: {
         lines: 100,
         branches: 100,

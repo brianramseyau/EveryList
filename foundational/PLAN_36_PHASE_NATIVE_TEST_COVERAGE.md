@@ -9,10 +9,16 @@
   `RefreshGestureAwareLayout`/`spaFallbackPath`/`applyOptimisticToggle`/`retryDelayMs` were extracted
   for direct testing, the Capacitor scaffold tests were deleted, and CI gained a Robolectric jar
   cache. The gate was verified locally against a userspace Temurin 21 + Android SDK 36.
-- **PR 2 (iOS target + desktop `main.cjs`/`preload.cjs` extraction) — not yet started.**
+- **PR 2 (iOS target + desktop `main.cjs`/`preload.cjs` extraction) — done** in the follow-up
+  branch `feature/native-test-coverage-ios-desktop`: desktop's `main.cjs`/`preload.cjs` now keep
+  only Electron event-dispatch and null guards (window sizing/close behavior, the application
+  menu, the tray create/destroy choice, startup-error handling and the preload version parse all
+  moved into tested `lib/*.cjs` at 100%), and iOS gained an `EveryListTests` XCTest target + shared
+  `App` scheme covering `spaFallbackPath` and `ThemeColors`, run by a new `ios` job in `test.yml`
+  (macos-latest).
 - **PR 3 (remaining docs) — folded in**: `AGENTS.md`, `docs/development/testing.md`,
-  `docs/android-ios.md`, `README.md`, `scripts/check.mjs` and the PLAN_00 roadmap all updated in
-  this pass; this plan itself is the record.
+  `docs/android-ios.md`, `README.md`, `scripts/check.mjs` and the PLAN_00 roadmap all updated.
+  This plan itself is the record.
 
 ## Context
 
@@ -117,23 +123,30 @@ network-facing, the HTTP seam:
 
 ### iOS
 
-- Add an `AppTests` target and a shared scheme to `apps/ios/App/App.xcodeproj/project.pbxproj`
-  (there is none today). XCTest cases for `SpaFallbackRouter.route` (extensionless → `200.html`;
-  real asset paths pass through) and, if cheap, `MainViewController`'s paper/ink colour helpers.
-- Add a small `ios` job to `.github/workflows/test.yml` (`macos-latest`, `xcodebuild test` on a
-  Simulator destination). `AppDelegate`/`SceneDelegate` remain excluded as boilerplate.
-- If the macos runner cost proves unacceptable on every PR, run it only from `ios-build.yml` and
-  record the loss of PR gating.
+- Added an `EveryListTests` XCTest target (a `com.apple.product-type.bundle.unit-test` target
+  depending on `App`, host-configured) and a shared `App` scheme to
+  `apps/ios/App/App.xcodeproj` — there was no test target or scheme before. The cases cover the
+  pure helpers extracted out of the shell: `spaFallbackPath` (the literal `/index.html` →
+  `200.html`, real asset paths pass through) and `ThemeColors.paper`/`ink` (exact sRGB values).
+- The `AppDelegate`/`SceneDelegate` and the rest of `MainViewController` stay excluded as
+  Capacitor/UIKit boilerplate that needs a running app.
+- Added a small `ios` job to `.github/workflows/test.yml` (`macos-latest`, `xcodebuild test` on
+  the iPhone 16 Simulator). It runs on every PR; if the macos cost proves unacceptable later, it
+  can be moved to `ios-build.yml` only — at the documented cost of losing PR gating.
+- `scripts/check.mjs` mirrors the step, skipping it with a note anywhere but macOS.
 
 ### Desktop
 
-- Move every branch out of `main.cjs`/`preload.cjs` into `lib/*.cjs` — window-state clamping,
-  the tray/background-run decision, external-link and navigation guards, the second-instance/lock
-  handling, and error logging — each at 100% via the existing `vitest.config.ts`. This is the same
-  pattern the config/`background-run`/`window-state` modules already follow.
-- Shrink and re-justify the `exclude: ['main.cjs', 'preload.cjs']` list once the residual wiring is
-  genuinely branch-free. Optionally add a headless `_electron.launch()` boot→window→quit smoke test
-  if it proves stable.
+- Moved every branch out of `main.cjs`/`preload.cjs` into new `lib/*.cjs` modules (or added
+  functions to the existing ones): `lib/window-options.cjs` (window sizing/fallbacks,
+  maximize, close-to-tray, dock-icon), `lib/menu.cjs` (the application menu template),
+  `lib/startup.cjs` (error logging, EADDRINUSE detection + dialog text, second-instance action,
+  quit-on-all-closed), and `lib/preload-version.cjs` (the `--everylist-version` parse). The tray
+  create/destroy decision moved into `lib/tray.cjs`. Each is at 100% via the existing
+  `vitest.config.ts` (now 121 desktop tests).
+- Removed the `exclude: ['main.cjs', 'preload.cjs']` entry: `include: ['lib/**/*.cjs']` never
+  covered those two files anyway, and both are now genuinely branch-free wiring. No headless
+  `_electron.launch()` smoke test was added — the wiring they'd exercise is now trivially thin.
 
 ## PR 3 — Docs, AGENTS.md, and this plan's follow-ups
 

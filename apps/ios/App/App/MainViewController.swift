@@ -11,15 +11,12 @@ import UIKit
 /// instead of refreshing what they were actually looking at (PLAN_13_PHASE_NATIVE_APP_SHELL.md §4). Overriding
 /// `router()` is Capacitor's own supported hook for this — resolves the fallback to 200.html
 /// instead, the minimal SPA shell adapter-static builds specifically for the client router to
-/// take over from `location.pathname`.
+/// take over from `location.pathname`. The path decision itself lives in `spaFallbackPath`
+/// (SpaFallbackPath.swift) so it's unit-tested.
 private struct SpaFallbackRouter: Router {
     var basePath: String = ""
     func route(for path: String) -> String {
-        let pathUrl = URL(fileURLWithPath: path)
-        if pathUrl.pathExtension.isEmpty {
-            return basePath + "/200.html"
-        }
-        return basePath + path
+        spaFallbackPath(basePath: basePath, path: path)
     }
 }
 
@@ -35,6 +32,10 @@ class MainViewController: CAPBridgeViewController {
         SpaFallbackRouter()
     }
 
+    private var isDark: Bool {
+        traitCollection.userInterfaceStyle == .dark
+    }
+
     // Mirrors --color-paper / --color-ink from apps/web/src/routes/layout.css. The rubber-band
     // overscroll region above content is the scroll view's own background showing through — with
     // no color set it defaults to plain white, which doesn't match the app's cream/dark theme.
@@ -43,15 +44,11 @@ class MainViewController: CAPBridgeViewController {
     // common case (most users leave the in-app setting on "automatic") without needing a bridge
     // call just for this.
     private func paperColor() -> UIColor {
-        traitCollection.userInterfaceStyle == .dark
-            ? UIColor(red: 0x1b / 255, green: 0x1d / 255, blue: 0x1f / 255, alpha: 1)
-            : UIColor(red: 0xf6 / 255, green: 0xf5 / 255, blue: 0xf1 / 255, alpha: 1)
+        ThemeColors.paper(dark: isDark)
     }
 
     private func inkColor() -> UIColor {
-        traitCollection.userInterfaceStyle == .dark
-            ? UIColor(red: 0xed / 255, green: 0xea / 255, blue: 0xe3 / 255, alpha: 1)
-            : UIColor(red: 0x20 / 255, green: 0x1f / 255, blue: 0x1d / 255, alpha: 1)
+        ThemeColors.ink(dark: isDark)
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {

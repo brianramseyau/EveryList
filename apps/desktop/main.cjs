@@ -1,10 +1,12 @@
 'use strict'
 
 // Electron main process. Thin wiring only — every decision this file would otherwise make
-// (static file resolution, config parsing, window-state clamping, external-link/navigation
-// predicates, update-version comparison) lives in lib/ instead, where it's unit-tested. This
-// file is excluded from the coverage gate (see vitest.config.ts) on the understanding that the
-// moment it grows an `if` of its own, that logic moves to lib/ — see
+// (static file resolution, config parsing, window-state clamping, window sizing/close behavior,
+// the application menu, the tray create/destroy choice, external-link/navigation predicates,
+// update-version comparison, startup-error handling) lives in lib/ instead, where it's
+// unit-tested. What stays here is Electron event dispatch and null guards. This file is outside
+// the coverage gate (see vitest.config.ts) on the understanding that the moment it grows another
+// real decision, that logic moves to lib/ — see PLAN_36_PHASE_NATIVE_TEST_COVERAGE.md and
 // PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §5 and §9.
 //
 // The whole boot chain is wrapped so a startup failure always produces a visible error dialog
@@ -13,7 +15,6 @@
 // project (`brianramseyau/ev-charging-log`) a full debugging session (commit `6e112b8`).
 
 const path = require('node:path')
-const fs = require('node:fs')
 const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, shell } = require('electron')
 
 const { readConfig } = require('./lib/config.cjs')
@@ -22,7 +23,21 @@ const { readWindowState, writeWindowState, clampWindowState } = require('./lib/w
 const { shouldOpenExternally, isAppOrigin } = require('./lib/navigation.cjs')
 const { checkForUpdate } = require('./lib/update-check.cjs')
 const { readBackgroundRunEnabled, writeBackgroundRunEnabled } = require('./lib/background-run.cjs')
-const { buildTrayMenuTemplate, shouldHideInsteadOfClose } = require('./lib/tray.cjs')
+const { buildTrayMenuTemplate, trayAction } = require('./lib/tray.cjs')
+const {
+  buildWindowOptions,
+  shouldMaximize,
+  shouldHideOnClose,
+  shouldSetDockIcon
+} = require('./lib/window-options.cjs')
+const { buildMenuTemplate } = require('./lib/menu.cjs')
+const {
+  logStartupError,
+  isPortInUseError,
+  portInUseMessage,
+  secondInstanceAction,
+  shouldQuitOnAllWindowsClosed
+} = require('./lib/startup.cjs')
 const packageJson = require('./package.json')
 
 // The renderer is the exact same `apps/web/build` output that serves Docker/PWA/Capacitor — see
@@ -31,6 +46,8 @@ const packageJson = require('./package.json')
 // prepackage/copy step). Resolved from __dirname, never process.cwd() — a Finder/Explorer launch
 // has a cwd of "/".
 const RENDERER_ROOT = path.join(__dirname, 'renderer')
+const ICON_PATH = path.join(__dirname, 'resources', 'icon.png')
+const PRELOAD_PATH = path.join(__dirname, 'preload.cjs')
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null
@@ -42,84 +59,20 @@ let backgroundRunEnabled = false
 let isQuitting = false
 
 /** @param {Error} error */
-function logStartupError(error) {
-  try {
-    const logPath = path.join(app.getPath('userData'), 'startup-error.log')
-    fs.writeFileSync(logPath, `${new Date().toISOString()}\n${error.stack ?? error}\n`)
-  } catch {
-    // A packaged GUI launch has no terminal to print to, and if userData itself isn't
-    // writable there's nothing more useful to do than let the dialog below carry the error.
-  }
-}
-
-function buildMenu() {
-  /** @type {Electron.MenuItemConstructorOptions[]} */
-  const template = []
-
-  if (process.platform === 'darwin') {
-    template.push({
-      label: app.name,
-      submenu: [
-        { role: 'about' },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' }
-      ]
-    })
-  }
-
-  template.push({
-    label: 'Edit',
-    submenu: [
-      { role: 'undo' },
-      { role: 'redo' },
-      { type: 'separator' },
-      { role: 'cut' },
-      { role: 'copy' },
-      { role: 'paste' },
-      { role: 'selectAll' }
-    ]
-  })
-
-  /** @type {Electron.MenuItemConstructorOptions[]} */
-  const viewSubmenu = [
-    { role: 'reload' },
-    { role: 'resetZoom' },
-    { role: 'zoomIn' },
-    { role: 'zoomOut' },
-    { type: 'separator' },
-    { role: 'togglefullscreen' }
-  ]
-  if (!app.isPackaged) viewSubmenu.push({ role: 'toggleDevTools' })
-  template.push({ label: 'View', submenu: viewSubmenu })
-
-  template.push(/** @type {Electron.MenuItemConstructorOptions} */ ({ role: 'windowMenu' }))
-
-  template.push({
-    label: 'Help',
-    submenu: [
-      {
-        label: 'View EveryList releases',
-        click: () => shell.openExternal('https://github.com/brianramseyau/EveryList/releases')
-      }
-    ]
-  })
-
-  return Menu.buildFromTemplate(template)
+function persistStartupError(error) {
+  logStartupError({ userDataDir: app.getPath('userData'), error })
 }
 
 /** Creates or destroys the tray icon to match `backgroundRunEnabled` — see
- * PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md §"Electron". Idempotent. */
+ * PLAN_26_PHASE_DEADLINE_NOTIFICATIONS.md §"Electron". Idempotent; the decision itself is the
+ * tested `trayAction`. */
 function syncTray() {
-  if (backgroundRunEnabled && !tray) {
-    tray = new Tray(path.join(__dirname, 'resources', 'icon.png'))
-    tray.setToolTip('EveryList')
-    tray.setContextMenu(
+  const action = trayAction({ backgroundRunEnabled, hasTray: tray !== null })
+  if (action === 'create') {
+    const created = new Tray(ICON_PATH)
+    tray = created
+    created.setToolTip('EveryList')
+    created.setContextMenu(
       Menu.buildFromTemplate(
         buildTrayMenuTemplate({
           onShow: () => {
@@ -133,57 +86,35 @@ function syncTray() {
         })
       )
     )
-    tray.on('click', () => {
+    created.on('click', () => {
       mainWindow?.show()
       mainWindow?.focus()
     })
-  } else if (!backgroundRunEnabled && tray) {
-    tray.destroy()
+  } else if (action === 'destroy') {
+    tray?.destroy()
     tray = null
   }
 }
 
 async function createWindow() {
   const displays = require('electron').screen.getAllDisplays()
-  const persisted = readWindowState(app.getPath('userData'))
-  const clamped = clampWindowState(persisted, displays)
+  const clamped = clampWindowState(readWindowState(app.getPath('userData')), displays)
 
-  mainWindow = new BrowserWindow({
-    width: clamped?.width ?? 1100,
-    height: clamped?.height ?? 820,
-    x: clamped?.x,
-    y: clamped?.y,
-    minWidth: 380,
-    minHeight: 520,
-    // The web layout's content column caps out at 1024px (`app-max-w`'s `lg:max-w-5xl`,
-    // layout.css) — anything wider than that just grows the empty background gutters on either
-    // side, not the app itself. 1280 leaves a deliberate, modest margin around that column
-    // (matching the "generous margins, never full-width" intent layout.css already states)
-    // without letting the window balloon to fill an ultrawide/4K display. Height is left
-    // uncapped: the content scrolls vertically, so more height is strictly useful, not wasted.
-    maxWidth: 1280,
-    // macOS's green-button/Cmd+Ctrl+F fullscreen (and the OS's fullscreen window-manager
-    // treatment generally) would stretch that same capped-width column across an entire
-    // display for the same reason — disabled outright rather than left to look broken.
-    fullscreenable: false,
-    backgroundColor: '#f6f5f1',
-    autoHideMenuBar: process.platform !== 'darwin',
-    icon: app.isPackaged ? undefined : path.join(__dirname, 'resources', 'icon.png'),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      // A sandboxed preload can't `require('./package.json')` — see preload.cjs's comment.
-      // This is how it actually receives the version.
-      additionalArguments: [`--everylist-version=${packageJson.version}`]
-    }
-  })
+  mainWindow = new BrowserWindow(
+    buildWindowOptions({
+      clamped,
+      isPackaged: app.isPackaged,
+      platform: process.platform,
+      iconPath: ICON_PATH,
+      preloadPath: PRELOAD_PATH,
+      version: packageJson.version
+    })
+  )
 
-  if (clamped?.isMaximized) mainWindow.maximize()
+  if (shouldMaximize(clamped)) mainWindow.maximize()
 
-  if (!app.isPackaged && process.platform === 'darwin') {
-    app.dock?.setIcon(path.join(__dirname, 'resources', 'icon.png'))
+  if (shouldSetDockIcon({ isPackaged: app.isPackaged, platform: process.platform })) {
+    app.dock?.setIcon(ICON_PATH)
   }
 
   // Confirmed the hard way (real launch, 2026-08-31): a preload script that throws or silently
@@ -191,7 +122,7 @@ async function createWindow() {
   // loudly — exactly PLAN_22_PHASE_DESKTOP_APP_ELECTRON.md §1's warning. Surface it instead of
   // letting it disappear into devtools-only console output nobody in a packaged build will see.
   mainWindow.webContents.on('preload-error', (_event, preloadPath, error) => {
-    logStartupError(error)
+    persistStartupError(error)
     dialog.showErrorBox(
       'EveryList — preload script failed',
       `${preloadPath}\n\n${error?.stack ?? error}`
@@ -225,7 +156,7 @@ async function createWindow() {
   mainWindow.on('move', persistState)
   mainWindow.on('close', (event) => {
     persistState()
-    if (!isQuitting && shouldHideInsteadOfClose(backgroundRunEnabled)) {
+    if (shouldHideOnClose({ isQuitting, backgroundRunEnabled })) {
       event.preventDefault()
       mainWindow?.hide()
     }
@@ -238,46 +169,56 @@ async function createWindow() {
   await mainWindow.loadURL(`http://127.0.0.1:${appPort}/`)
 }
 
+/**
+ * @param {import('node:http').Server} server
+ * @param {number} port
+ */
+async function listenOrReportPortConflict(server, port) {
+  try {
+    await listen(server, port)
+  } catch (error) {
+    if (isPortInUseError(error)) {
+      dialog.showErrorBox(
+        'EveryList — port already in use',
+        portInUseMessage({ port, userDataDir: app.getPath('userData') })
+      )
+    }
+    throw error
+  }
+}
+
 async function boot() {
   app.setName('EveryList')
 
-  const gotLock = app.requestSingleInstanceLock()
-  if (!gotLock) {
+  if (!app.requestSingleInstanceLock()) {
     app.quit()
     return
   }
   app.on('second-instance', () => {
-    if (!mainWindow) return
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
+    const { restore, focus } = secondInstanceAction({
+      hasWindow: mainWindow !== null,
+      isMinimized: mainWindow ? mainWindow.isMinimized() : false
+    })
+    if (restore) mainWindow?.restore()
+    if (focus) mainWindow?.focus()
   })
 
   await app.whenReady()
 
   const { port } = readConfig(app.getPath('userData'))
-  const server = createStaticServer(RENDERER_ROOT)
-  try {
-    await listen(server, port)
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      /** @type {NodeJS.ErrnoException} */ (error).code === 'EADDRINUSE'
-    ) {
-      dialog.showErrorBox(
-        'EveryList — port already in use',
-        `EveryList couldn't bind to 127.0.0.1:${port} — something else on this machine is ` +
-          'already using it.\n\n' +
-          `Override the port by creating a config.json file at:\n${path.join(app.getPath('userData'), 'config.json')}\n` +
-          'with contents like: { "port": 41784 }\n\n' +
-          "Note: changing the port changes the app's origin, which resets the locally " +
-          'stored server URL, login token and offline cache (your server-side data is untouched).'
-      )
-    }
-    throw error
-  }
+  await listenOrReportPortConflict(createStaticServer(RENDERER_ROOT), port)
   appPort = port
 
-  Menu.setApplicationMenu(buildMenu())
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      buildMenuTemplate({
+        platform: process.platform,
+        isPackaged: app.isPackaged,
+        appName: app.name,
+        openExternal: (url) => void shell.openExternal(url)
+      })
+    )
+  )
 
   backgroundRunEnabled = readBackgroundRunEnabled(app.getPath('userData'))
   syncTray()
@@ -296,16 +237,16 @@ async function boot() {
   await createWindow()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) void createWindow()
+    if (!mainWindow) void createWindow()
   })
 }
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  if (shouldQuitOnAllWindowsClosed(process.platform)) app.quit()
 })
 
 boot().catch((error) => {
-  logStartupError(error)
+  persistStartupError(error)
   dialog.showErrorBox('EveryList failed to start', String(error?.stack ?? error))
   app.exit(1)
 })

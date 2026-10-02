@@ -164,7 +164,7 @@ EveryList runs an [MCP](https://modelcontextprotocol.io) server inside the same 
 
 No external services are required — SQLite runs off a local file, and `pnpm install && pnpm dev` gets both the API and web app running with hot reload. See [`docs/development/environment.md`](docs/development/environment.md) for setup, seed data, useful scripts, and the Docker Compose alternative.
 
-Tests run via `pnpm test` (Japa for the API, Vitest + Playwright for the web app, Electron/Vitest for the desktop app), gated at 100% coverage in CI; the Android app's Robolectric suite is gated by a line-coverage ratchet. See [`docs/development/testing.md`](docs/development/testing.md) for the full breakdown and CI pipeline.
+Tests run via `pnpm test` (Japa for the API, Vitest + Playwright for the web app, Electron/Vitest for the desktop app), gated at 100% coverage in CI; the Android app's Robolectric suite is gated by a line-coverage ratchet, and the iOS app's XCTest target runs on a macOS runner. See [`docs/development/testing.md`](docs/development/testing.md) for the full breakdown and CI pipeline.
 
 ## API docs
 

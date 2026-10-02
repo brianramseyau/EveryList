@@ -27,4 +27,18 @@ function shouldHideInsteadOfClose(backgroundRunEnabled) {
   return backgroundRunEnabled === true
 }
 
-module.exports = { buildTrayMenuTemplate, shouldHideInsteadOfClose }
+/**
+ * What {@link syncTray} in main.cjs should do this pass — create the tray if background-run just
+ * turned on, destroy it if it just turned off, otherwise leave it alone. Kept pure so the
+ * create/destroy branches are unit-tested rather than living in excluded wiring (PLAN_36).
+ *
+ * @param {{ backgroundRunEnabled: boolean, hasTray: boolean }} args
+ * @returns {'create' | 'destroy' | 'none'}
+ */
+function trayAction({ backgroundRunEnabled, hasTray }) {
+  if (backgroundRunEnabled && !hasTray) return 'create'
+  if (!backgroundRunEnabled && hasTray) return 'destroy'
+  return 'none'
+}
+
+module.exports = { buildTrayMenuTemplate, shouldHideInsteadOfClose, trayAction }
