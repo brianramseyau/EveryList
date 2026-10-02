@@ -76,16 +76,18 @@ public class WidgetConfigActivityTest {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
     }
 
-    /** Waits until the config screen's fetch has been issued, then lets its main-thread callback
-     *  run so the list group is populated before the assertions. */
-    private void awaitListsLoaded() {
+    /** Waits until the config screen's fetch has actually completed — the list group populated, or
+     *  an error shown — rather than merely until a request was recorded (the transport records
+     *  before it returns, so a recorded call does not mean the main-thread callback has run). */
+    private void awaitListsLoaded(ActivityScenario<WidgetConfigActivity> scenario) {
         long deadline = System.currentTimeMillis() + 5000;
         while (System.currentTimeMillis() < deadline) {
             shadowOf(Looper.getMainLooper()).idle();
-            if (!transport.calls().isEmpty()) {
-                shadowOf(Looper.getMainLooper()).idle();
-                return;
-            }
+            final boolean[] done = {false};
+            scenario.onActivity(a -> done[0] =
+                ((RadioGroup) a.findViewById(R.id.config_list_group)).getChildCount() > 0
+                    || a.findViewById(R.id.config_error).getVisibility() == View.VISIBLE);
+            if (done[0]) return;
             try {
                 Thread.sleep(10);
             } catch (InterruptedException e) {
@@ -93,7 +95,7 @@ public class WidgetConfigActivityTest {
                 throw new AssertionError(e);
             }
         }
-        throw new AssertionError("lists fetch never ran");
+        throw new AssertionError("lists never loaded (no list rows and no error)");
     }
 
     private RadioButton radioLabelled(WidgetConfigActivity activity, String label) {
@@ -134,7 +136,7 @@ public class WidgetConfigActivityTest {
     public void placementShowsOnlyGrantedLists() {
         provision(74L); // only TODO is granted; Hardware must be filtered out.
         try (ActivityScenario<WidgetConfigActivity> scenario = ActivityScenario.launch(placementIntent(widgetId))) {
-            awaitListsLoaded();
+            awaitListsLoaded(scenario);
             scenario.onActivity(a -> {
                 RadioGroup group = a.findViewById(R.id.config_list_group);
                 int radios = 0;
@@ -151,7 +153,7 @@ public class WidgetConfigActivityTest {
     public void placementSaveStoresTheChoiceAndSetsResultOk() {
         provision(74L, 3L);
         try (ActivityScenario<WidgetConfigActivity> scenario = ActivityScenario.launch(placementIntent(widgetId))) {
-            awaitListsLoaded();
+            awaitListsLoaded(scenario);
             scenario.onActivity(a -> {
                 radioLabelled(a, "Hardware").setChecked(true);
                 a.findViewById(R.id.config_save).performClick();
@@ -164,7 +166,7 @@ public class WidgetConfigActivityTest {
     public void savingWithoutPickingAListShowsAnError() {
         provision(74L, 3L);
         try (ActivityScenario<WidgetConfigActivity> scenario = ActivityScenario.launch(placementIntent(widgetId))) {
-            awaitListsLoaded();
+            awaitListsLoaded(scenario);
             scenario.onActivity(a -> {
                 ((RadioGroup) a.findViewById(R.id.config_list_group)).clearCheck();
                 a.findViewById(R.id.config_save).performClick();
@@ -177,7 +179,7 @@ public class WidgetConfigActivityTest {
     public void quickSwitchHidesSaveAndAppliesOnTap() {
         provision(74L, 3L);
         try (ActivityScenario<WidgetConfigActivity> scenario = ActivityScenario.launch(quickSwitchIntent(widgetId))) {
-            awaitListsLoaded();
+            awaitListsLoaded(scenario);
             scenario.onActivity(a -> {
                 assertEquals(View.GONE, a.findViewById(R.id.config_save).getVisibility());
                 assertEquals(View.GONE, a.findViewById(R.id.config_show_completed).getVisibility());
@@ -193,7 +195,7 @@ public class WidgetConfigActivityTest {
         try (ActivityScenario<WidgetConfigActivity> scenario =
                  ActivityScenario.launch(new Intent(context, WidgetConfigActivity.class)
                      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) {
-            awaitListsLoaded();
+            awaitListsLoaded(scenario);
             scenario.onActivity(a -> {
                 radioLabelled(a, "Hardware").setChecked(true);
                 a.findViewById(R.id.config_save).performClick();
@@ -207,16 +209,9 @@ public class WidgetConfigActivityTest {
         provision(74L);
         transport.failAlways(new IOException("API returned 500"));
         try (ActivityScenario<WidgetConfigActivity> scenario = ActivityScenario.launch(placementIntent(widgetId))) {
-            long deadline = System.currentTimeMillis() + 5000;
-            while (System.currentTimeMillis() < deadline && transport.calls().isEmpty()) {
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new AssertionError(e);
-                }
-            }
-            shadowOf(Looper.getMainLooper()).idle();
+            // Wait for the error state itself, not the recorded request — the transport records
+            // before throwing, so the main-thread error callback may not have run yet.
+            awaitListsLoaded(scenario);
             scenario.onActivity(a -> {
                 assertEquals(View.GONE, a.findViewById(R.id.config_list_hint).getVisibility());
                 assertEquals(View.VISIBLE, a.findViewById(R.id.config_error).getVisibility());
@@ -230,7 +225,7 @@ public class WidgetConfigActivityTest {
         // empty, so the screen must say so rather than sit on the loading hint.
         provision(999L);
         try (ActivityScenario<WidgetConfigActivity> scenario = ActivityScenario.launch(placementIntent(widgetId))) {
-            awaitListsLoaded();
+            awaitListsLoaded(scenario);
             scenario.onActivity(a -> {
                 assertEquals(View.VISIBLE, a.findViewById(R.id.config_error).getVisibility());
                 assertEquals(View.GONE, a.findViewById(R.id.config_list_hint).getVisibility());

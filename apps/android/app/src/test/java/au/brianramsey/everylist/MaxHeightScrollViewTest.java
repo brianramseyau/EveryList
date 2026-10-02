@@ -77,7 +77,7 @@ public class MaxHeightScrollViewTest {
         int heightSpec = View.MeasureSpec.makeMeasureSpec(10_000, View.MeasureSpec.AT_MOST);
         v.onMeasure(View.MeasureSpec.makeMeasureSpec(VIEWPORT_WIDTH_PX, View.MeasureSpec.EXACTLY), heightSpec);
 
-        assertTrue("content shorter than the cap should not be stretched to it",
-            v.getMeasuredHeight() < CAP_PX);
+        assertEquals("the ScrollView should wrap the 50px child, not stretch it to the cap",
+            50, v.getMeasuredHeight());
     }
 }

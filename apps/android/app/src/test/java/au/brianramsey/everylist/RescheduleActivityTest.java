@@ -91,15 +91,21 @@ public class RescheduleActivityTest {
         throw new AssertionError("condition not met within 5s");
     }
 
-    /** Waits until the activity has actually destroyed itself, proving the code under test called
-     *  {@code finish()} rather than the test's own {@code close()} tearing it down. */
-    private void awaitDestroyed(ActivityScenario<RescheduleActivity> scenario) {
+    /** Waits until the activity has actually finished itself, proving the code under test called
+     *  {@code finish()} rather than the test's own {@code close()} tearing it down. Robolectric
+     *  never advances the scenario to DESTROYED on {@code finish()}, so poll the Activity's own
+     *  {@code isFinishing()} (guarding the destroy case, where onActivity throws). */
+    private void awaitFinished(ActivityScenario<RescheduleActivity> scenario) {
         long deadline = System.currentTimeMillis() + 5000;
         while (System.currentTimeMillis() < deadline) {
             shadowOf(Looper.getMainLooper()).idle();
-            final boolean[] alive = {true};
-            scenario.onActivity(a -> alive[0] = !a.isFinishing());
-            if (!alive[0]) return;
+            final boolean[] finishing = {false};
+            try {
+                scenario.onActivity(a -> finishing[0] = a.isFinishing());
+            } catch (IllegalStateException alreadyDestroyed) {
+                return;
+            }
+            if (finishing[0]) return;
             try {
                 Thread.sleep(10);
             } catch (InterruptedException e) {
@@ -108,6 +114,25 @@ public class RescheduleActivityTest {
             }
         }
         throw new AssertionError("activity did not finish within 5s");
+    }
+
+    /** Waits until the live-deadline GET's result has reached the UI (the shortcut buttons
+     *  enabled), not just until the request was recorded. */
+    private void awaitShortcutsEnabled(ActivityScenario<RescheduleActivity> scenario) {
+        long deadline = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle();
+            final boolean[] enabled = {false};
+            scenario.onActivity(a -> enabled[0] = a.findViewById(R.id.reschedule_tomorrow).isEnabled());
+            if (enabled[0]) return;
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(e);
+            }
+        }
+        throw new AssertionError("shortcuts never enabled after the live-deadline fetch");
     }
 
     private boolean fallbackNotificationShown() {
@@ -154,7 +179,7 @@ public class RescheduleActivityTest {
         transport.respondWith(itemsResponse(null));
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
             await(() -> !transport.calls().isEmpty());
-            awaitDestroyed(scenario);
+            awaitFinished(scenario);
             assertEquals("only the failed lookup should have run", 1, transport.size());
         }
     }
@@ -165,7 +190,7 @@ public class RescheduleActivityTest {
         transport.respondWith("{\"data\":[{\"id\":999,\"deadline\":\"2026-09-30\"}]}");
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
             await(() -> !transport.calls().isEmpty());
-            awaitDestroyed(scenario);
+            awaitFinished(scenario);
             assertEquals("only the lookup should have run", 1, transport.size());
         }
     }
@@ -229,9 +254,14 @@ public class RescheduleActivityTest {
     public void aFailedShortcutPatchShowsTheFallback() throws Exception {
         transport.respondWith(itemsResponse("2026-09-30T10:00"));
         try (ActivityScenario<RescheduleActivity> scenario = ActivityScenario.launch(intent(payload()))) {
-            await(() -> !transport.calls().isEmpty());
+            // Wait for the live-deadline GET to have *completed* (shortcuts enabled), not merely
+            // been recorded — otherwise enabling PATCH failure below could race the GET itself.
+            awaitShortcutsEnabled(scenario);
             transport.failAlways(new IOException("API returned 500"));
             scenario.onActivity(a -> a.findViewById(R.id.reschedule_tomorrow).performClick());
+            await(() -> transport.size() >= 2);
+            assertEquals("the failed request should be the PATCH, not the GET",
+                "PATCH", transport.get(1).method);
             await(this::fallbackNotificationShown);
         }
     }
@@ -288,7 +318,7 @@ public class RescheduleActivityTest {
             await(() -> !transport.calls().isEmpty());
             int before = transport.size();
             scenario.onActivity(a -> a.findViewById(R.id.reschedule_cancel).performClick());
-            awaitDestroyed(scenario);
+            awaitFinished(scenario);
             assertEquals("cancel must not PATCH anything", before, transport.size());
         }
     }

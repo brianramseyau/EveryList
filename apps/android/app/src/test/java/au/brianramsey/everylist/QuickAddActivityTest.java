@@ -83,6 +83,32 @@ public class QuickAddActivityTest {
         throw new AssertionError("condition not met within 5s");
     }
 
+    /** Waits until the popup has finished itself after a successful save. `save()` runs the POST,
+     *  then the widget refresh, then posts `finish()`, so `isFinishing()` becoming true means the
+     *  whole save completed — unlike "a request was recorded", which the transport does before it
+     *  returns. Robolectric never advances the scenario to DESTROYED on `finish()`, so poll the
+     *  Activity's own flag (guarding the destroy case, where onActivity throws). */
+    private void awaitFinished(ActivityScenario<QuickAddActivity> scenario) {
+        long deadline = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle();
+            final boolean[] finished = {false};
+            try {
+                scenario.onActivity(a -> finished[0] = a.isFinishing());
+            } catch (IllegalStateException alreadyDestroyed) {
+                return;
+            }
+            if (finished[0]) return;
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(e);
+            }
+        }
+        throw new AssertionError("popup did not finish after a successful save");
+    }
+
     @Test
     public void finishesImmediatelyWhenProvisioningIsInvalid() {
         // onCreate calls finish() before any of the popup's wiring, so the scenario is already
@@ -133,7 +159,8 @@ public class QuickAddActivityTest {
                 ((android.widget.EditText) a.findViewById(R.id.quick_add_input)).setText("Milk");
                 a.findViewById(R.id.quick_add_save).performClick();
             });
-            await(() -> !transport.calls().isEmpty());
+            awaitFinished(scenario);
+            // The POST is the first request; the widget refresh that follows is a GET.
             assertEquals("POST", transport.get(0).method);
             assertEquals("http://server/api/v1/lists/74/items", transport.get(0).url);
         }
@@ -146,7 +173,8 @@ public class QuickAddActivityTest {
                 ((android.widget.EditText) a.findViewById(R.id.quick_add_input)).setText("Milk");
                 a.findViewById(R.id.quick_add_save).performClick();
             });
-            await(() -> !transport.calls().isEmpty());
+            awaitFinished(scenario);
+            // No widget is placed, so the refresh is a no-op; the create is the only request.
             JSONObject sent = new JSONObject(transport.get(0).body);
             assertEquals("Milk", sent.getString("name"));
             assertTrue(!sent.has("deadline"));
@@ -200,7 +228,7 @@ public class QuickAddActivityTest {
                 ((android.widget.EditText) a.findViewById(R.id.quick_add_input)).setText("Milk");
                 a.findViewById(R.id.quick_add_save).performClick();
             });
-            await(() -> !transport.calls().isEmpty());
+            awaitFinished(scenario);
             JSONObject sent = new JSONObject(transport.get(0).body);
             assertEquals("2026-09-30T10:00", sent.getString("deadline"));
         }
@@ -227,7 +255,7 @@ public class QuickAddActivityTest {
                 input.setText("Milk");
                 input.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
             });
-            await(() -> !transport.calls().isEmpty());
+            awaitFinished(scenario);
             assertEquals("POST", transport.get(0).method);
         }
     }
@@ -325,7 +353,7 @@ public class QuickAddActivityTest {
                 ((android.widget.EditText) a.findViewById(R.id.quick_add_input)).setText("Milk");
                 a.findViewById(R.id.quick_add_save).performClick();
             });
-            await(() -> transport.size() >= 2);
+            awaitFinished(scenario);
             assertEquals("POST", transport.get(0).method);
             assertEquals("PATCH", transport.get(1).method);
             assertEquals("http://server/api/v1/lists/74/items/11", transport.get(1).url);

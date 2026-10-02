@@ -5,6 +5,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -69,7 +70,7 @@ public class EveryListWidgetPluginTest {
         // Match any JSArray: on the JVM the app resolves org.json:json:20240303, whose JSONArray
         // uses reference equality, so stubbing with a fresh `new JSArray()` would never match the
         // instance configure() actually passes and Mockito would return null.
-        when(call.getArray(anyString(), any(JSArray.class))).thenReturn(arr);
+        when(call.getArray(eq("listIds"), any(JSArray.class))).thenReturn(arr);
         return call;
     }
 
@@ -174,7 +175,7 @@ public class EveryListWidgetPluginTest {
         JSArray arr = new JSArray();
         arr.put("74");
         arr.put(3);
-        when(call.getArray(anyString(), any(JSArray.class))).thenReturn(arr);
+        when(call.getArray(eq("listIds"), any(JSArray.class))).thenReturn(arr);
 
         plugin.configure(call);
 
@@ -189,7 +190,7 @@ public class EveryListWidgetPluginTest {
         when(call.getString("serverUrl")).thenReturn("http://server");
         JSArray arr = new JSArray();
         arr.put("not-a-number");
-        when(call.getArray(anyString(), any(JSArray.class))).thenReturn(arr);
+        when(call.getArray(eq("listIds"), any(JSArray.class))).thenReturn(arr);
 
         plugin.configure(call);
 
