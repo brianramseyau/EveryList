@@ -10,10 +10,11 @@ vi.mock('$lib/api/backups', () => ({
 	fetchBackupState: vi.fn(),
 	updateBackupSettings: vi.fn(),
 	runBackupNow: vi.fn(),
-	downloadBackup: vi.fn()
+	downloadBackup: vi.fn(),
+	deleteBackup: vi.fn()
 }));
 
-const { fetchBackupState, updateBackupSettings, runBackupNow, downloadBackup } =
+const { fetchBackupState, updateBackupSettings, runBackupNow, downloadBackup, deleteBackup } =
 	await import('$lib/api/backups');
 const { goto } = await import('$app/navigation');
 const BackupsPage = (await import('./+page.svelte')).default;
@@ -242,6 +243,64 @@ describe('Backups +page.svelte', () => {
 			.toBeInTheDocument();
 	});
 
+	it('disables Delete while a backup is running so it cannot clobber the result', async () => {
+		let resolveRun: (value: BackupSettingsStateDto) => void = () => {};
+		vi.mocked(runBackupNow).mockReturnValue(
+			new Promise((resolve) => {
+				resolveRun = resolve;
+			})
+		);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Back up now' }).click();
+
+		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+
+		resolveRun(state({ files: [] }));
+		await expect.poll(() => vi.mocked(runBackupNow).mock.calls.length).toBe(1);
+	});
+
+	it('disables Delete while the schedule is being saved', async () => {
+		let resolveSave: (value: BackupSettingsStateDto) => void = () => {};
+		vi.mocked(updateBackupSettings).mockReturnValue(
+			new Promise((resolve) => {
+				resolveSave = resolve;
+			})
+		);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Save schedule' }).click();
+
+		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+
+		resolveSave(state());
+		await expect.poll(() => vi.mocked(updateBackupSettings).mock.calls.length).toBe(1);
+	});
+
 	it('shows the ApiError message when running a backup fails', async () => {
 		vi.mocked(runBackupNow).mockRejectedValue(new ApiError(500, 'Backup failed'));
 
@@ -279,6 +338,53 @@ describe('Backups +page.svelte', () => {
 		await page.getByRole('button', { name: 'Download' }).click();
 
 		expect(downloadBackup).toHaveBeenCalledWith('everylist-manual-20260822-090000.sqlite3');
+	});
+
+	it('blocks all other actions while a download is in flight', async () => {
+		let resolveDownload: () => void = () => {};
+		vi.mocked(downloadBackup).mockReturnValue(
+			new Promise((resolve) => {
+				resolveDownload = resolve;
+			})
+		);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					},
+					{
+						filename: 'everylist-automatic-20260822-030000.sqlite3',
+						kind: 'automatic',
+						sizeBytes: 2048,
+						createdAt: '2026-08-22T03:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Download' }).first().click();
+
+		// Every download button is disabled while one is in flight (a second
+		// wouldn't be tracked by the single downloadingFilename), and Delete is
+		// blocked so it can't 404 the download.
+		const downloadButtons = await page.getByRole('button', { name: /Downloading…|Download/ }).all();
+		expect(downloadButtons).toHaveLength(2);
+		for (const button of downloadButtons) {
+			await expect.element(button).toBeDisabled();
+		}
+		const deleteButtons = await page.getByRole('button', { name: 'Delete', exact: true }).all();
+		expect(deleteButtons).toHaveLength(2);
+		for (const button of deleteButtons) {
+			await expect.element(button).toBeDisabled();
+		}
+
+		resolveDownload();
+		await expect.poll(() => vi.mocked(downloadBackup).mock.calls.length).toBe(1);
 	});
 
 	it('shows the ApiError message when a download fails', async () => {
@@ -322,6 +428,218 @@ describe('Backups +page.svelte', () => {
 
 		await expect
 			.element(page.getByText('Failed to download everylist-manual-20260822-090000.sqlite3.'))
+			.toBeInTheDocument();
+	});
+
+	it('asks for confirmation before deleting and leaves the file alone when cancelled', async () => {
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+
+		expect(deleteBackup).not.toHaveBeenCalled();
+		await expect
+			.element(page.getByText("Delete this backup? This can't be undone."))
+			.toBeInTheDocument();
+
+		await page.getByRole('button', { name: 'Cancel' }).click();
+		await expect
+			.element(page.getByText("Delete this backup? This can't be undone."))
+			.not.toBeInTheDocument();
+		// Cancel removes the button the user just activated, so focus returns
+		// to the row's Delete button.
+		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toHaveFocus();
+		expect(deleteBackup).not.toHaveBeenCalled();
+	});
+
+	it('deletes a backup file after confirming and applies the returned list', async () => {
+		vi.mocked(deleteBackup).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-automatic-20260822-030000.sqlite3',
+						kind: 'automatic',
+						sizeBytes: 2048,
+						createdAt: '2026-08-22T03:00:00.000Z'
+					}
+				]
+			})
+		);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					},
+					{
+						filename: 'everylist-automatic-20260822-030000.sqlite3',
+						kind: 'automatic',
+						sizeBytes: 2048,
+						createdAt: '2026-08-22T03:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		expect(deleteBackup).toHaveBeenCalledWith('everylist-manual-20260822-090000.sqlite3');
+		await expect
+			.element(page.getByText('everylist-manual-20260822-090000.sqlite3'))
+			.not.toBeInTheDocument();
+		await expect
+			.element(page.getByText('everylist-automatic-20260822-030000.sqlite3'))
+			.toBeInTheDocument();
+	});
+
+	it('does not overwrite an unsaved schedule draft when deleting a backup', async () => {
+		vi.mocked(deleteBackup).mockResolvedValue(
+			state({
+				settings: { frequency: 'monthly', timeOfDay: '02:15', retentionCount: 20 },
+				files: []
+			})
+		);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByLabelText('Frequency').selectOptions('daily');
+		await page.getByLabelText('Backups to keep').fill('9');
+
+		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		expect(deleteBackup).toHaveBeenCalledWith('everylist-manual-20260822-090000.sqlite3');
+		// The delete's returned settings must not clobber the admin's edits.
+		await expect.element(page.getByLabelText('Frequency')).toHaveValue('daily');
+		await expect.element(page.getByLabelText('Backups to keep')).toHaveValue(9);
+	});
+
+	it('disables other rows while a delete is in flight so it cannot overlap', async () => {
+		let resolveDelete: (value: BackupSettingsStateDto) => void = () => {};
+		vi.mocked(deleteBackup).mockReturnValue(
+			new Promise((resolve) => {
+				resolveDelete = resolve;
+			})
+		);
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					},
+					{
+						filename: 'everylist-automatic-20260822-030000.sqlite3',
+						kind: 'automatic',
+						sizeBytes: 2048,
+						createdAt: '2026-08-22T03:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		// The in-flight row's own button reports the pending state...
+		await expect.element(page.getByRole('button', { name: 'Deleting…' })).toBeDisabled();
+		// ...that row's Download is blocked too, so it can't 404 mid-delete...
+		await expect.element(page.getByRole('button', { name: 'Download' }).first()).toBeDisabled();
+		// ...and every other row's Delete button is disabled as well, so it
+		// can't start a second overlapping request.
+		await expect.element(page.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+		// Save is blocked too, so a stale save snapshot can't re-show the
+		// deleted row.
+		await expect.element(page.getByRole('button', { name: 'Save schedule' })).toBeDisabled();
+
+		resolveDelete(
+			state({
+				files: [
+					{
+						filename: 'everylist-automatic-20260822-030000.sqlite3',
+						kind: 'automatic',
+						sizeBytes: 2048,
+						createdAt: '2026-08-22T03:00:00.000Z'
+					}
+				]
+			})
+		);
+		await expect.poll(() => vi.mocked(deleteBackup).mock.calls.length).toBe(1);
+	});
+
+	it('shows the ApiError message when deleting fails', async () => {
+		vi.mocked(deleteBackup).mockRejectedValue(new ApiError(403, 'Not authorized'));
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		await expect.element(page.getByText('Not authorized')).toBeInTheDocument();
+	});
+
+	it('shows a generic error message when deleting fails without an ApiError', async () => {
+		vi.mocked(deleteBackup).mockRejectedValue(new TypeError('network down'));
+		vi.mocked(fetchBackupState).mockResolvedValue(
+			state({
+				files: [
+					{
+						filename: 'everylist-manual-20260822-090000.sqlite3',
+						kind: 'manual',
+						sizeBytes: 1024,
+						createdAt: '2026-08-22T09:00:00.000Z'
+					}
+				]
+			})
+		);
+
+		render(BackupsPage);
+		await page.getByRole('button', { name: 'Delete', exact: true }).click();
+		await page.getByRole('button', { name: 'Confirm delete' }).click();
+
+		await expect
+			.element(page.getByText('Failed to delete everylist-manual-20260822-090000.sqlite3.'))
 			.toBeInTheDocument();
 	});
 });

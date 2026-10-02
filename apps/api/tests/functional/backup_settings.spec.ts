@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { DateTime } from 'luxon'
@@ -12,13 +13,25 @@ import { bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 // test itself happens to run.
 const wellPastFirstWindow = () => DateTime.now().plus({ days: 8 })
 
+// Removes the backup files but leaves the directory itself in place: a prior
+// test's `response.attachment` download can still be releasing its read handle
+// when the next test's setup runs, and on some filesystems that makes removing
+// the whole directory throw ENOTEMPTY even when it's already empty.
+function clearBackupFiles(): void {
+  const dir = backupDirectory()
+  if (!fs.existsSync(dir)) return
+  for (const entry of fs.readdirSync(dir)) {
+    fs.rmSync(path.join(dir, entry), { force: true })
+  }
+}
+
 test.group('Backup settings', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
   // Backup files are a real filesystem write, not part of the DB transaction
   // the setup above rolls back — clear them between tests so one test's
   // backup can't leak into another's "no files yet" assertion.
   group.each.setup(() => {
-    fs.rmSync(backupDirectory(), { recursive: true, force: true })
+    clearBackupFiles()
   })
 
   test('defaults to weekly at 03:00, keeping the last 4 backups of each kind', async ({
@@ -180,6 +193,11 @@ test.group('Backup settings', (group) => {
       .get('/api/v1/backup-settings/download/everylist-manual-20260101-000000.sqlite3')
       .header('Authorization', `Bearer ${other.token}`)
     download.assertStatus(403)
+
+    const destroy = await client
+      .delete('/api/v1/backup-settings/everylist-manual-20260101-000000.sqlite3')
+      .header('Authorization', `Bearer ${other.token}`)
+    destroy.assertStatus(403)
   })
 
   test('downloads a backup file by its exact filename', async ({ client, assert }) => {
@@ -215,5 +233,46 @@ test.group('Backup settings', (group) => {
       .get('/api/v1/backup-settings/download/everylist-manual-20260101-000000.sqlite3')
       .header('Authorization', `Bearer ${admin.token}`)
     download.assertStatus(404)
+  })
+
+  test('deletes a backup file by its exact filename and returns the remaining files', async ({
+    client,
+    assert,
+  }) => {
+    const admin = await signupAndGetUser(client)
+
+    const run = await client
+      .post('/api/v1/backup-settings/run')
+      .header('Authorization', `Bearer ${admin.token}`)
+    const filename = bodyData<BackupSettingsStateDto>(run).files[0]!.filename
+
+    const destroy = await client
+      .delete(`/api/v1/backup-settings/${filename}`)
+      .header('Authorization', `Bearer ${admin.token}`)
+    destroy.assertStatus(200)
+    assert.deepEqual(bodyData<BackupSettingsStateDto>(destroy).files, [])
+    assert.isFalse(fs.existsSync(path.join(backupDirectory(), filename)))
+  })
+
+  test('rejects a delete filename that does not match the backup naming pattern', async ({
+    client,
+  }) => {
+    const admin = await signupAndGetUser(client)
+
+    const destroy = await client
+      .delete('/api/v1/backup-settings/..%2F..%2Fpackage.json')
+      .header('Authorization', `Bearer ${admin.token}`)
+    destroy.assertStatus(400)
+  })
+
+  test('404s when deleting a well-formed filename that has no matching file on disk', async ({
+    client,
+  }) => {
+    const admin = await signupAndGetUser(client)
+
+    const destroy = await client
+      .delete('/api/v1/backup-settings/everylist-manual-20260101-000000.sqlite3')
+      .header('Authorization', `Bearer ${admin.token}`)
+    destroy.assertStatus(404)
   })
 })

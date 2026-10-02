@@ -1,7 +1,7 @@
 import type { BackupFrequency, BackupSettingsStateDto } from '@everylist/shared';
 import { apiBaseUrl } from './base-url';
 import { getToken } from './token';
-import { apiGet, apiPatch, apiPost, ApiError } from './client';
+import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from './client';
 
 export function fetchBackupState(): Promise<BackupSettingsStateDto> {
 	return apiGet('/api/v1/backup-settings');
@@ -17,6 +17,12 @@ export function updateBackupSettings(
 
 export function runBackupNow(): Promise<BackupSettingsStateDto> {
 	return apiPost('/api/v1/backup-settings/run');
+}
+
+export function deleteBackup(filename: string): Promise<BackupSettingsStateDto> {
+	return apiDelete<BackupSettingsStateDto>(
+		`/api/v1/backup-settings/${encodeURIComponent(filename)}`
+	);
 }
 
 /**

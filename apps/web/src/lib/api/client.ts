@@ -153,6 +153,6 @@ export function apiPatch<T>(path: string, json?: unknown): Promise<T> {
 	});
 }
 
-export function apiDelete(path: string): Promise<void> {
-	return apiFetch<void>(path, { method: 'DELETE' });
+export function apiDelete<T = void>(path: string): Promise<T> {
+	return apiFetch<T>(path, { method: 'DELETE' });
 }

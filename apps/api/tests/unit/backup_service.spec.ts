@@ -8,6 +8,7 @@ import { DateTime } from 'luxon'
 import {
   backupDirectory,
   currentPeriodStart,
+  deleteBackup,
   isBackupDue,
   lastAutomaticBackupAt,
   listBackups,
@@ -173,6 +174,29 @@ test.group('listBackups / pruneToCount', () => {
       'everylist-automatic-20260115-030000.sqlite3',
       'everylist-manual-20260110-090000.sqlite3',
     ])
+  })
+
+  test('deleteBackup removes the named file and reports true', async ({ assert }) => {
+    const dir = tempDir()
+    const filename = 'everylist-manual-20260101-030000.sqlite3'
+    fs.writeFileSync(path.join(dir, filename), 'x')
+
+    assert.isTrue(await deleteBackup(dir, filename))
+    assert.isFalse(fs.existsSync(path.join(dir, filename)))
+  })
+
+  test('deleteBackup reports false when the file does not exist', async ({ assert }) => {
+    assert.isFalse(await deleteBackup(tempDir(), 'everylist-manual-20260101-030000.sqlite3'))
+  })
+
+  test('deleteBackup rethrows a non-ENOENT error', async ({ assert }) => {
+    const dir = tempDir()
+    // A directory occupying the backup filename makes unlink fail with
+    // EISDIR/EPERM rather than ENOENT, exercising the rethrow path.
+    const filename = 'everylist-manual-20260101-030000.sqlite3'
+    fs.mkdirSync(path.join(dir, filename))
+
+    await assert.rejects(() => deleteBackup(dir, filename))
   })
 })
 

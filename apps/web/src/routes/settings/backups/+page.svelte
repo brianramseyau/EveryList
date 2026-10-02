@@ -1,11 +1,13 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
+
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Button } from 'flowbite-svelte';
 	import type { BackupFileDto, BackupFrequency, BackupSettingsDto } from '@everylist/shared';
 	import { getToken } from '$lib/api/token';
 	import {
+		deleteBackup,
 		downloadBackup,
 		fetchBackupState,
 		runBackupNow,
@@ -27,6 +29,12 @@
 
 	let runningNow = $state(false);
 	let downloadingFilename = $state<string | null>(null);
+	let confirmingDeleteFilename = $state<string | null>(null);
+	let deletingFilename = $state<string | null>(null);
+	// The row element per filename, so focus can return to its Delete button
+	// after Cancel removes the focused Cancel button (Flowbite's Button binds
+	// the component instance, not its DOM node, so we bind the row instead).
+	let rowEls: Record<string, HTMLLIElement | undefined> = $state({});
 
 	// Driven by the file list (the actual most recent backup, automatic or
 	// manual) — there's no separate "last backup" field on the server to read
@@ -110,6 +118,46 @@
 			downloadingFilename = null;
 		}
 	}
+
+	// The row's single red button both opens the confirmation and, once open,
+	// carries it out — keeping one DOM element means focus never moves as the
+	// label changes, so a keyboard user doesn't lose their place.
+	function handleDeleteClick(filename: string) {
+		if (confirmingDeleteFilename === filename) {
+			void handleDelete(filename);
+		} else {
+			confirmingDeleteFilename = filename;
+		}
+	}
+
+	// Cancel removes the button the keyboard user just activated, so move
+	// focus back to that row's Delete button once the DOM has updated —
+	// `tick()` waits for the Cancel button's removal before focusing.
+	function cancelDeleteConfirm(filename: string) {
+		confirmingDeleteFilename = null;
+		void tick().then(() =>
+			rowEls[filename]?.querySelector<HTMLButtonElement>('[data-delete-button]')?.focus()
+		);
+	}
+
+	// Never called concurrently: every Delete/Cancel button is disabled while a
+	// delete is in flight (see the buttons below), so a simple clear of the
+	// shared state is safe.
+	async function handleDelete(filename: string) {
+		deletingFilename = filename;
+		try {
+			// Only the file list is applied — the returned settings would
+			// otherwise overwrite an unsaved schedule the admin is editing.
+			const state = await deleteBackup(filename);
+			files = state.files;
+			confirmingDeleteFilename = null;
+			error = null;
+		} catch (err) {
+			error = err instanceof ApiError ? err.message : `Failed to delete ${filename}.`;
+		} finally {
+			deletingFilename = null;
+		}
+	}
 </script>
 
 <main
@@ -168,20 +216,20 @@
 				</span>
 			</label>
 
-			<Button type="submit" size="sm" disabled={saving}>
+			<Button type="submit" size="sm" disabled={saving || deletingFilename !== null}>
 				{saving ? 'Saving…' : 'Save schedule'}
 			</Button>
 		</form>
 
 		<section class="flex flex-col gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
-			<div class="flex items-center justify-between">
+			<div class="flex flex-wrap items-center justify-between gap-2">
 				<h2 class="text-sm font-semibold">Backup files</h2>
 				<Button
 					type="button"
 					size="sm"
 					color="alternative"
 					onclick={handleRunNow}
-					disabled={runningNow}
+					disabled={runningNow || deletingFilename !== null}
 				>
 					{runningNow ? 'Backing up…' : 'Back up now'}
 				</Button>
@@ -192,12 +240,13 @@
 			{#if files.length === 0}
 				<p class="text-sm text-gray-600 dark:text-gray-400">No backup files yet.</p>
 			{:else}
-				<ul class="flex flex-col gap-1">
+				<ul class="flex flex-col gap-2">
 					{#each files as file (file.filename)}
 						<li
-							class="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-gray-700"
+							bind:this={rowEls[file.filename]}
+							class="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700"
 						>
-							<div class="flex min-w-0 items-center gap-2">
+							<div class="flex items-start gap-2">
 								<span
 									class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase {file.kind ===
 									'automatic'
@@ -206,21 +255,59 @@
 								>
 									{file.kind}
 								</span>
-								<span class="truncate">{file.filename}</span>
+								<span class="min-w-0 font-medium break-all">{file.filename}</span>
 							</div>
-							<div class="flex shrink-0 items-center gap-2">
-								<span class="text-xs text-gray-500 dark:text-gray-400">
-									{formatFileSize(file.sizeBytes)} · {formatTimestamp(file.createdAt)}
-								</span>
+
+							<p class="text-xs text-gray-500 dark:text-gray-400">
+								{formatFileSize(file.sizeBytes)} · {formatTimestamp(file.createdAt)}
+							</p>
+
+							{#if confirmingDeleteFilename === file.filename}
+								<p
+									class="border-t border-gray-200 pt-2 text-xs text-red-600 dark:border-gray-700 dark:text-red-400"
+								>
+									Delete this backup? This can't be undone.
+								</p>
+							{/if}
+
+							<div class="flex flex-wrap gap-2">
 								<Button
 									type="button"
 									size="xs"
 									color="alternative"
 									onclick={() => handleDownload(file.filename)}
-									disabled={downloadingFilename === file.filename}
+									disabled={downloadingFilename !== null || deletingFilename === file.filename}
 								>
 									{downloadingFilename === file.filename ? 'Downloading…' : 'Download'}
 								</Button>
+								<Button
+									type="button"
+									size="xs"
+									color="red"
+									data-delete-button
+									disabled={deletingFilename !== null ||
+										downloadingFilename !== null ||
+										runningNow ||
+										saving}
+									onclick={() => handleDeleteClick(file.filename)}
+								>
+									{deletingFilename === file.filename
+										? 'Deleting…'
+										: confirmingDeleteFilename === file.filename
+											? 'Confirm delete'
+											: 'Delete'}
+								</Button>
+								{#if confirmingDeleteFilename === file.filename}
+									<Button
+										type="button"
+										size="xs"
+										color="alternative"
+										disabled={deletingFilename !== null}
+										onclick={() => cancelDeleteConfirm(file.filename)}
+									>
+										Cancel
+									</Button>
+								{/if}
 							</div>
 						</li>
 					{/each}

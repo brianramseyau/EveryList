@@ -5,6 +5,7 @@ import BackupSetting from '#models/backup_setting'
 import { updateBackupSettingValidator } from '#validators/backup_setting'
 import {
   backupDirectory,
+  deleteBackup,
   isBackupFilename,
   listBackups,
   runManualBackup,
@@ -106,5 +107,28 @@ export default class BackupSettingsController {
 
     logger.info({ filename }, 'admin downloaded backup file')
     return response.attachment(filePath, filename)
+  }
+
+  /** Deletes a single backup file. Like `download`, `filename` is validated against the
+   * exact pattern `performBackup` produces before being joined onto `backupDirectory()` —
+   * this is a user-supplied path segment and the only guard against traversal. Returns the
+   * resulting state so the caller's list reflects the delete without a second round trip. */
+  async destroy(ctx: HttpContext) {
+    if (!this.requireAdmin(ctx)) return
+    const { request, response, logger } = ctx
+
+    const filename = request.param('filename') as string
+    if (!isBackupFilename(filename)) {
+      return response.badRequest({ message: 'Invalid backup filename' })
+    }
+
+    const deleted = await deleteBackup(backupDirectory(), filename)
+    if (!deleted) {
+      return response.notFound({ message: 'Backup file not found' })
+    }
+
+    logger.info({ filename }, 'admin deleted backup file')
+    const setting = await BackupSetting.current()
+    return response.ok({ data: toState(setting) })
   }
 }

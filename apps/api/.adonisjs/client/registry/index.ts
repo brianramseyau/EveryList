@@ -606,6 +606,12 @@ const routes = {
     tokens: [{"old":"/api/v1/backup-settings/download/:filename","type":0,"val":"api","end":""},{"old":"/api/v1/backup-settings/download/:filename","type":0,"val":"v1","end":""},{"old":"/api/v1/backup-settings/download/:filename","type":0,"val":"backup-settings","end":""},{"old":"/api/v1/backup-settings/download/:filename","type":0,"val":"download","end":""},{"old":"/api/v1/backup-settings/download/:filename","type":1,"val":"filename","end":""}],
     types: placeholder as Registry['backupSettings.backup_settings.download']['types'],
   },
+  'backupSettings.backup_settings.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/backup-settings/:filename',
+    tokens: [{"old":"/api/v1/backup-settings/:filename","type":0,"val":"api","end":""},{"old":"/api/v1/backup-settings/:filename","type":0,"val":"v1","end":""},{"old":"/api/v1/backup-settings/:filename","type":0,"val":"backup-settings","end":""},{"old":"/api/v1/backup-settings/:filename","type":1,"val":"filename","end":""}],
+    types: placeholder as Registry['backupSettings.backup_settings.destroy']['types'],
+  },
   'serverConfig.server_config.show': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/server-config',

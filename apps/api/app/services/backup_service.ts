@@ -90,6 +90,32 @@ export function pruneToCount(backupDir: string, kind: BackupKind, count: number)
 }
 
 /**
+ * Deletes a single backup file by its exact filename. `filename` must already
+ * have passed `isBackupFilename` — this joins it straight onto `backupDir`, so
+ * that validation is the only thing keeping it inside the backups directory.
+ * Returns false when the file is already gone (or was never there), so a
+ * repeated/concurrent delete doesn't surface as an error: a plain
+ * `existsSync`-then-unlink would still throw ENOENT if another request removed
+ * the file in between, so the unlink is attempted directly and its ENOENT is
+ * folded into the same false result. Any other error (e.g. EACCES) rethrows.
+ *
+ * Async because this runs from a live request handler against `/config`, which
+ * can be slow storage — a synchronous unlink there would block the event loop.
+ */
+export async function deleteBackup(backupDir: string, filename: string): Promise<boolean> {
+  const filePath = path.join(backupDir, filename)
+  try {
+    await fs.promises.unlink(filePath)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+
+  logger.info({ filename }, 'backup file deleted')
+  return true
+}
+
+/**
  * Uses better-sqlite3's native online backup API (rather than copying the file)
  * so a backup can be taken safely while the app is live and writing — it
  * correctly captures a consistent snapshot under WAL mode without blocking or
