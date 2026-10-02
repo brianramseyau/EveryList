@@ -12,12 +12,14 @@ final class EveryListTests: XCTestCase {
         // iOS's Router receives the actual request path (unlike Android's RouteProcessor, which
         // gets the literal /index.html), so any extensionless path is a client route.
         XCTAssertEqual(spaFallbackPath(basePath: "", path: "/"), "/200.html")
-        XCTAssertEqual(spaFallbackPath(basePath: "", path: "/index.html"), "/200.html")
         XCTAssertEqual(spaFallbackPath(basePath: "", path: "/lists"), "/200.html")
+        XCTAssertEqual(spaFallbackPath(basePath: "", path: "/lists/74"), "/200.html")
         XCTAssertEqual(spaFallbackPath(basePath: "/app", path: "/lists/74"), "/app/200.html")
     }
 
     func testSpaFallbackPathPassesRealAssetPathsThrough() {
+        // Anything with a file extension is a real file, including index.html itself.
+        XCTAssertEqual(spaFallbackPath(basePath: "", path: "/index.html"), "/index.html")
         XCTAssertEqual(
             spaFallbackPath(basePath: "", path: "/_app/immutable/entry.js"),
             "/_app/immutable/entry.js")
