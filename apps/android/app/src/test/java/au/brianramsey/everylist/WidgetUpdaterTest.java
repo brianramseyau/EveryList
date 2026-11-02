@@ -12,6 +12,10 @@ import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;
 
+import com.capacitorjs.plugins.localnotifications.LocalNotification;
+import com.capacitorjs.plugins.localnotifications.NotificationStorage;
+import com.getcapacitor.JSObject;
+
 import org.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
@@ -20,8 +24,12 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
 
 /**
  * Unit tests for {@link WidgetUpdater} — the widget's whole refresh/toggle/render cycle. Runs
@@ -138,6 +146,38 @@ public class WidgetUpdaterTest {
         // The fetch then replaces the snapshot with the server's post-toggle view (checked, but
         // kept because this test's snapshot call reports the row).
         assertEquals(1, prefs.loadSnapshot().size());
+    }
+
+    @Test
+    public void checkingOffAnItemFromTheWidgetCancelsItsPendingDeadlineNotification() throws Exception {
+        long itemId = 9L;
+        savePendingDeadlineNotification(itemId);
+        assertEquals(1, new NotificationStorage(context).getSavedNotificationIds().size());
+        prefs.saveSnapshot(Collections.singletonList(new WidgetModels.WidgetItem(itemId, "Milk", false, null, null)));
+        respondWithSnapshot(false, new WidgetModels.WidgetItem(itemId, "Milk", true, null, null));
+
+        WidgetUpdater.handle(context, EveryListWidget.ACTION_ITEM, widgetId, LIST_ID, itemId);
+
+        assertTrue("checking an item off from the widget must cancel its pending deadline reminder",
+            new NotificationStorage(context).getSavedNotificationIds().isEmpty());
+    }
+
+    private void savePendingDeadlineNotification(long itemId) {
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+            sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+            JSObject schedule = new JSObject();
+            schedule.put("at", sdf.format(new Date(System.currentTimeMillis() + 3_600_000L)));
+            JSObject json = new JSObject();
+            json.put("id", (int) itemId);
+            json.put("title", "Milk");
+            json.put("body", "");
+            json.put("schedule", schedule);
+            new NotificationStorage(context).appendNotifications(Collections.singletonList(
+                LocalNotification.Companion.buildNotificationFromJSObject(json)));
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
     }
 
     @Test
