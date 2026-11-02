@@ -37,6 +37,7 @@ import java.util.TimeZone;
 public class DeadlineNotificationCancellerTest {
 
     private static final int ITEM_ID = 42;
+    private static final int OTHER_ITEM_ID = 43;
 
     private Context context;
     private AlarmManager alarmManager;
@@ -77,18 +78,22 @@ public class DeadlineNotificationCancellerTest {
     }
 
     @Test
-    public void cancelsThePendingAlarmAndForgetsItsStorageRecord() {
+    public void cancelsOnlyTheTargetedReminder() {
         armPendingAlarm(ITEM_ID);
+        armPendingAlarm(OTHER_ITEM_ID);
         savePendingRecord(ITEM_ID);
-        assertEquals(1, shadowOf(alarmManager).getScheduledAlarms().size());
-        assertEquals(1, new NotificationStorage(context).getSavedNotificationIds().size());
+        savePendingRecord(OTHER_ITEM_ID);
+        assertEquals(2, shadowOf(alarmManager).getScheduledAlarms().size());
+        assertEquals(2, new NotificationStorage(context).getSavedNotificationIds().size());
 
         DeadlineNotificationCanceller.cancel(context, ITEM_ID);
 
-        assertTrue("an item checked off early must not fire hours later",
-            shadowOf(alarmManager).getScheduledAlarms().isEmpty());
+        assertEquals("the checked-off item's reminder must not fire hours later",
+            1, shadowOf(alarmManager).getScheduledAlarms().size());
         assertTrue("a reboot must not restore the cancelled reminder",
-            new NotificationStorage(context).getSavedNotificationIds().isEmpty());
+            !new NotificationStorage(context).getSavedNotificationIds().contains(String.valueOf(ITEM_ID)));
+        assertTrue("another item's reminder must be left alone",
+            new NotificationStorage(context).getSavedNotificationIds().contains(String.valueOf(OTHER_ITEM_ID)));
     }
 
     @Test
