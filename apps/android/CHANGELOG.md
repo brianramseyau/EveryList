@@ -21,6 +21,16 @@ tag; see `foundational/PLAN_35_PHASE_NATIVE_RELEASE_STREAMS.md`). Each entry has
 `pnpm prepare-android-release android-vX.Y.Z` refuses to bump versions until this file has an
 entry for `vX.Y.Z`, so write (or update) the entry on the release branch before bumping.
 
+## v1.8.2
+
+<!-- whats-new:start -->
+Deadline reminders now stop when you tick an item off from the home-screen widget. Previously a reminder could still fire later even though the item was already completed.
+<!-- whats-new:end -->
+
+- **Widget check-offs cancel their reminder** (#286) — ticking an item off from the Android home-screen widget now cancels that item's scheduled deadline notification. Previously it only dismissed a notification that had already appeared, so an item completed hours early could still remind you later; the reminder is now also cleared from the plugin's stored schedule so a reboot can't restore it.
+
+**Upgrading:** no server or web change, no schema changes and no migration — this is an Android-shell fix. Update the Android app; it works against existing `v1.8.1` (or later) servers.
+
 ## v1.8.1
 
 <!-- whats-new:start -->
