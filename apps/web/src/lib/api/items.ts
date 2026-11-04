@@ -274,7 +274,22 @@ async function guessCategoryId(
 		if (tokens.length > 0) {
 			const cached = await db.categoryLearnings.get(listId);
 			if (cached) {
-				const learned = pickLearnedCategoryId(tokens, cached.learnings, Date.now());
+				// The server filters learnings to active categories before ranking; the
+				// cached copy is not pruned when a category is deleted offline, so drop
+				// only explicitly deleted ids here. A learning without a cached category
+				// row is still valid, so an active-id allow-list would be wrong.
+				const deletedCategoryIds = new Set(
+					(
+						await db.categories.bulkGet([
+							...new Set(cached.learnings.map((learning) => learning.categoryId))
+						])
+					).flatMap((category) => (category?.deletedAt ? [category.id] : []))
+				);
+				const learned = pickLearnedCategoryId(
+					tokens,
+					cached.learnings.filter((learning) => !deletedCategoryIds.has(learning.categoryId)),
+					Date.now()
+				);
 				if (learned !== null) return learned;
 			}
 		}

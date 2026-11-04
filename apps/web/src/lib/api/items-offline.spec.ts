@@ -276,6 +276,41 @@ describe('createItem (Dexie available)', () => {
 		expect(captured).toBe(99);
 	});
 
+	it('ignores cached learnings for explicitly deleted categories before ranking', async () => {
+		const db = getDb()!;
+		// Category 100 was deleted offline; its stale learning must not inflate
+		// "apple" to two categories and force the margin to abstain.
+		await db.categories.put({
+			id: 100,
+			name: 'Produce',
+			icon: 'fruit',
+			sortOrder: 0,
+			listId: 1,
+			isDefault: false,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: '2026-09-01T00:00:00.000Z',
+			version: 2
+		});
+		await db.categoryLearnings.put({
+			listId: 1,
+			learnings: [
+				{ categoryId: 99, token: 'apple', count: 3, lastSeenAt: '2026-10-01T00:00:00.000Z' },
+				{ categoryId: 100, token: 'apple', count: 2, lastSeenAt: '2026-10-01T00:00:00.000Z' }
+			]
+		});
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('Failed to fetch'));
+		let captured: number | null | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			captured = await capturedOptimisticCategoryId();
+			return { id: 42, name: 'Apples', version: 1 };
+		});
+
+		await createItem(1, { name: 'Apples' });
+
+		expect(captured).toBe(99);
+	});
+
 	it('falls back to the static table when the cached learned model has no matching token', async () => {
 		const db = getDb()!;
 		await db.categories.put({

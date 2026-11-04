@@ -132,8 +132,9 @@ without any phrase storage.
   `getCategoryLearnings` (and is the cached, active-filtered set offline). Soft-deleted categories
   must not inflate a token's `df`.
 - `df = 0` for a token with no rows: it is not matched, so no division occurs.
-- If every matched token is equally spread (e.g. all `df = 1`), scores reduce to the old sum and
-  the margin behaves as before — this is a re-weighting, not a new decision rule.
+- If every matched token has the same `df`, all scores receive the same `1 / df` scale; ordering
+  and the margin behave as before. Only `df = 1` preserves the old numeric scores — this is a
+  re-weighting, not a new decision rule.
 - `count` and decay still matter _within_ a category; only cross-category spread is new.
 - Single-category models (only one category has any learning) are unaffected — still uncontested.
 
@@ -179,7 +180,10 @@ without any phrase storage.
 …). `suggestCategoryId` then looks for a category whose `name` matches exactly; the web's
 `staticGuessCategoryId` does the same against Dexie. Renaming a seeded category — a first-class,
 supported action — silently disables the fallback for that category. The reported list's "Pantry"
-had been renamed, so `rice`/`cracker` resolved to `null`.
+had been renamed, so `rice`/`cracker` resolved to `null`. Because no reliable seed marker exists,
+pre-existing categories cannot be safely retro-labelled (see the scope note) — Phase A is what
+restores the already-learned names; Phase B keeps the fallback correct from the next seeded list
+onward.
 
 ### Design
 
@@ -199,17 +203,16 @@ that identity instead of the display name.
 **API (`apps/api`)**
 
 - Migration: add a nullable `starter_key` column to `categories` (plain string, **no FK** — the
-  safe `ALTER` shape) and backfill it with `this.defer(...)` (same-migration DDL + data writes must
-  never be a bare `this.db` call; see AGENTS.md):
-  - primary: case-insensitive `name` match against the starter names;
-  - secondary: `icon` match against the starter icons, for categories renamed by the user that kept
-    their starter icon (this catches the reported "Pantry → Grains, Pasta & Sides" case);
-  - skip ambiguous matches (two categories claiming the same key) rather than guessing.
+  safe `ALTER` shape). **Do not backfill existing rows**: nothing on a category records whether it
+  was created by `seedStarterCategories` (`isDefault` is `false` for seeds, and a user can create a
+  category with any name/icon), so a name- or icon-based backfill could label a user-created
+  category as a starter and break the plan's own "user categories are never matched" rule. Legacy
+  rows stay `null`; the learned tier (Phase A) is what serves them.
 - `STARTER_CATEGORIES` in `category_service.ts` gains the matching `key`, and
   `seedStarterCategories` writes `starterKey` on new lists.
 - `suggestCategoryId` tier 2: `suggestStarterCategoryKey` → find an **active** category whose
-  `starterKey` matches; fall back to the old exact-name lookup for rows the backfill couldn't
-  identify. `null` if neither resolves.
+  `starterKey` matches; `null` if none does. No exact-name fallback — it could select a
+  user-created category with a starter-sounding name.
 - `CategoryTransformer` + `CategoryDto` expose `starterKey` (nullable) so the client can resolve
   the same way offline. Additive response field — allowed under `/api/v1` without a version bump.
 
@@ -217,41 +220,42 @@ that identity instead of the display name.
 
 - Add `starterKey` to the cached category type (non-indexed field; no Dexie index bump needed).
 - `staticGuessCategoryId` resolves `suggestStarterCategoryKey` against cached categories by
-  `starterKey`, falling back to name, mirroring the server.
+  `starterKey` only, mirroring the server.
 
 **Scope note:** user-created categories have `starterKey = null` and are never matched by the
-static tier — that is correct; they are served by the learned tier. A category renamed _and_
-re-iconed before this migration cannot be identified by name or icon and stays unmapped; document
-that limitation rather than guessing.
+static tier — that is correct; they are served by the learned tier. Categories seeded before this
+migration also stay `null` (there is no reliable seed marker) and are not statically matched; they
+keep working through the learned tier. Lists created after Phase B get keys from the start, and
+renames of those categories are safe.
 
 ### Migration / footgun notes
 
 - `ALTER TABLE categories ADD COLUMN starter_key` is a plain nullable add — no inline FK, so it
-  does not trigger the table-rebuild cascade described in AGENTS.md. Still reproduce it against a
-  seeded SQLite file per the migration protocol (add representative categories, run only this
-  migration, confirm children and rows survive).
-- The backfill must run inside `this.defer(...)` because the column DDL is deferred until `up()`
-  returns.
+  does not trigger the table-rebuild cascade described in AGENTS.md. There is no data backfill, so
+  no `this.defer(...)` is needed. Still reproduce it against a seeded SQLite file per the migration
+  protocol (add representative categories, run only this migration, confirm children and rows
+  survive).
 - No route changes, so `.adonisjs` regeneration is not required for this phase.
 
 ### Testing
 
 - Shared: each keyword maps to the right `StarterCategoryKey`; longest keyword still wins;
   unknown names → `null`.
-- API: resolver finds a renamed category by `starterKey`; legacy rows with no key still resolve by
-  name; deleted categories are ignored; user categories are never matched; seed writes keys;
-  migration backfill covers name match and icon fallback and leaves ambiguous cases null.
-- Web: offline guess resolves by `starterKey` from Dexie and falls back to name.
+- API: resolver finds a renamed category by `starterKey`; legacy rows with no key are not matched;
+  deleted categories are ignored; user categories are never matched (including one named like a
+  starter, e.g. a user-created `Pantry`); seed writes keys.
+- Web: offline guess resolves by `starterKey` from Dexie only (no name fallback).
 - DTO/transformer: `starterKey` present and nullable.
 - Migration reproduction against a seeded SQLite file (above).
 - Maintain 100% coverage; `pnpm check --skip-e2e` clean.
 
 ### Verification
 
-- Rename `Pantry` → `Grains, Pasta & Sides` on a fresh list, then add an item with a static keyword
-  (`rice`) → resolves to the renamed category rather than `null`.
-- Existing lists upgraded by the migration: categories that still have their starter name or icon
-  gain the key; unrelated categories stay `null`.
+- Rename `Pantry` → `Grains, Pasta & Sides` on a list created after Phase B, then add an item with
+  a static keyword (`rice`) → resolves to the renamed category rather than `null`.
+- Existing lists upgraded by the migration: all categories stay `null` (no backfill); verify the
+  learned tier still categorises their previously-learned names and that no user category is
+  matched by the static tier.
 - Offline: same resolution from the cached categories.
 
 ---
