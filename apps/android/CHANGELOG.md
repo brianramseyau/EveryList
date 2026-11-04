@@ -21,6 +21,17 @@ tag; see `foundational/PLAN_35_PHASE_NATIVE_RELEASE_STREAMS.md`). Each entry has
 `pnpm prepare-android-release android-vX.Y.Z` refuses to bump versions until this file has an
 entry for `vX.Y.Z`, so write (or update) the entry on the release branch before bumping.
 
+## v1.8.3
+
+<!-- whats-new:start -->
+Category suggestions are better with longer item names. A distinctive word like "peckish" now outweighs a common one like "rice", so a new item can inherit the category of a similar earlier one instead of falling into Uncategorised. The old hard-coded keyword fallback is gone too, replaced by starter categories that seed the learned model, so renaming a category no longer breaks suggestions.
+<!-- whats-new:end -->
+
+- **Smarter learned category suggestions** (#288) — category suggestions now weight each word by how distinctive it is. A word only ever assigned to one category ("peckish") counts fully, while one spread across many ("rice") is down-weighted, so "Peckish Rice Crackers Original" can inherit Cookies & Biscuits from an earlier "Peckish rice crackers" instead of being pulled apart by the common word. Extra unmatched words remain harmless.
+- **One categorization model, not two** (#291) — the old hard-coded runtime keyword fallback is gone. New lists bootstrap the learned model from single-word starter keywords when they're created, so renaming a seeded category no longer silently disables suggestions. Existing lists keep their current learned rows and are not backfilled; an item that was only ever categorised by the old fallback may start uncategorised until it's assigned once.
+
+**Upgrading:** this build carries the updated web client (server `v1.8.2`). New-list starter seeding and the removal of the runtime fallback are server-side, so run server `v1.8.2` or later. No schema changes or migration on the Android side, and existing lists keep their learned data.
+
 ## v1.8.2
 
 <!-- whats-new:start -->
