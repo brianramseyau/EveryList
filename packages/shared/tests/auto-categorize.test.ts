@@ -5,32 +5,19 @@ import {
   MARGIN,
   pickLearnedCategoryId,
   rankCategoryLearnings,
-  suggestCategoryName,
+  STARTER_CATEGORY_KEYS,
+  STARTER_CATEGORY_KEYWORDS,
 } from '../src/auto-categorize.js';
 
-describe('suggestCategoryName', () => {
-	it('matches a keyword to its category', () => {
-		expect(suggestCategoryName('Bananas')).toBe('Produce');
-	});
-
-	it('prefers the longer of two matching keywords when it is found later', () => {
-		// "lime" (Produce) is checked before "cottage cheese" (Dairy); the longer,
-		// later match should win the category, not the first one found.
-		expect(suggestCategoryName('lime cottage cheese')).toBe('Dairy');
-	});
-
-	it('keeps the first match when a later, shorter keyword also matches', () => {
-		// "vegetable" (Produce) is checked before "milk" (Dairy); the shorter,
-		// later match should not override the longer first match.
-		expect(suggestCategoryName('vegetable milk')).toBe('Produce');
-	});
-
-	it('returns null when nothing matches', () => {
-		expect(suggestCategoryName('xyzzy nonsense')).toBeNull();
-	});
-
-	it('returns null for a blank name', () => {
-		expect(suggestCategoryName('   ')).toBeNull();
+describe('starter category seed keywords', () => {
+	it('has a non-empty single-word keyword list for every starter key', () => {
+		expect(Object.keys(STARTER_CATEGORY_KEYWORDS).sort()).toEqual([...STARTER_CATEGORY_KEYS].sort());
+		for (const key of STARTER_CATEGORY_KEYS) {
+			expect(STARTER_CATEGORY_KEYWORDS[key].length).toBeGreaterThan(0);
+			for (const keyword of STARTER_CATEGORY_KEYWORDS[key]) {
+				expect(keyword).not.toContain(' ');
+			}
+		}
 	});
 });
 

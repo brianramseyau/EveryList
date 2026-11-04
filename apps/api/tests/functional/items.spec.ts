@@ -4,6 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
 import type { CategoryDto, ItemDto, ListDto } from '@everylist/shared'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
+import { createOwnedList } from '#services/list_creation'
 
 async function createList(client: ApiClient, token: string, name = 'Test List') {
   const response = await client
@@ -18,6 +19,21 @@ async function createList(client: ApiClient, token: string, name = 'Test List') 
  * name/order the old global-default seeder used to provide, for tests that
  * rely on auto-categorization or on a specific category being present.
  */
+/**
+ * Creates a list through the real creation path so its starter categories and
+ * their seeded learned-model keywords exist together.
+ */
+async function createSeededList(ownerId: number, name = 'Test List') {
+  const list = await createOwnedList({
+    ownerId,
+    name,
+    color: '#3b82f6',
+    icon: null,
+    seedStarterCategories: true,
+  })
+  return list.id
+}
+
 async function seedStarterCategories(client: ApiClient, token: string, listId: number) {
   const names: Array<[string, string]> = [
     ['Produce', 'fruitCherries'],
@@ -47,9 +63,9 @@ test.group('Items CRUD', (group) => {
     client,
     assert,
   }) => {
-    const token = await signupAndGetToken(client)
-    const listId = await createList(client, token)
-    await seedStarterCategories(client, token, listId)
+    const user = await signupAndGetUser(client)
+    const token = user.token
+    const listId = await createSeededList(user.id)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const create = await auth(
@@ -425,9 +441,9 @@ TOILETRIES
     client,
     assert,
   }) => {
-    const token = await signupAndGetToken(client)
-    const listId = await createList(client, token)
-    await seedStarterCategories(client, token, listId)
+    const user = await signupAndGetUser(client)
+    const token = user.token
+    const listId = await createSeededList(user.id)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const response = await auth(
@@ -573,24 +589,42 @@ TOILETRIES
     create.assertStatus(422)
   })
 
-  test('leaves an item uncategorized when its suggested category no longer exists', async ({
-    client,
-    assert,
-  }) => {
-    const token = await signupAndGetToken(client)
-    const listId = await createList(client, token)
-    await seedStarterCategories(client, token, listId)
+  test('categorises an item with a renamed seeded category', async ({ client, assert }) => {
+    const user = await signupAndGetUser(client)
+    const token = user.token
+    const listId = await createSeededList(user.id)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))
     const produce = categories.body().data.find((c: { name: string }) => c.name === 'Produce')
 
-    // Renaming "Produce" removes that name from the list's effective
-    // categories, so "Bananas" (which suggests "Produce") should no longer
-    // resolve to a category.
+    // Seeded learnings are attached to the category id, so the rename is safe.
     await auth(
       client.patch(`/api/v1/lists/${listId}/categories/${produce.id}`).json({ name: 'Fruit & Veg' })
     )
+
+    const create = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bananas' })
+    )
+    create.assertStatus(200)
+    assert.equal(create.body().data.categoryId, produce.id)
+  })
+
+  test('leaves an item uncategorized when its seeded category is deleted', async ({
+    client,
+    assert,
+  }) => {
+    const user = await signupAndGetUser(client)
+    const token = user.token
+    const listId = await createSeededList(user.id)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))
+    const produce = categories.body().data.find((c: { name: string }) => c.name === 'Produce')
+
+    // Soft-deleting the category removes it from the active-category filter, so
+    // its seeded learnings can no longer resolve "Bananas".
+    await auth(client.delete(`/api/v1/lists/${listId}/categories/${produce.id}`))
 
     const create = await auth(
       client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bananas' })
@@ -686,14 +720,14 @@ TOILETRIES
 test.group('Move item to another list', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
 
-  test('moves an item to another list, re-resolving its category by name and clearing an unattached store', async ({
+  test('moves an item to another list, re-resolving its category from seed keywords and clearing an unattached store', async ({
     client,
     assert,
   }) => {
-    const token = await signupAndGetToken(client)
+    const user = await signupAndGetUser(client)
+    const token = user.token
     const listId = await createList(client, token, 'Source')
-    const destinationId = await createList(client, token, 'Destination')
-    await seedStarterCategories(client, token, destinationId)
+    const destinationId = await createSeededList(user.id, 'Destination')
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const store = bodyData<{ id: number }>(
@@ -867,13 +901,13 @@ test.group('Move item to another list', (group) => {
 test.group('Category suggestion (personalized + keyword fallback)', (group) => {
   group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
 
-  test('GET categorize falls back to the static keyword table with no history', async ({
+  test('GET categorize uses the seeded starter learnings with no history', async ({
     client,
     assert,
   }) => {
-    const token = await signupAndGetToken(client)
-    const listId = await createList(client, token)
-    await seedStarterCategories(client, token, listId)
+    const user = await signupAndGetUser(client)
+    const token = user.token
+    const listId = await createSeededList(user.id)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const suggestion = await auth(
@@ -889,13 +923,13 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
     assert.isNull(unknown.body().categoryId)
   })
 
-  test('personalized history for this exact item name wins over the static keyword table', async ({
+  test('personalized history wins over the seeded starter learnings', async ({
     client,
     assert,
   }) => {
-    const token = await signupAndGetToken(client)
-    const listId = await createList(client, token)
-    await seedStarterCategories(client, token, listId)
+    const user = await signupAndGetUser(client)
+    const token = user.token
+    const listId = await createSeededList(user.id)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
 
     const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))
@@ -903,14 +937,13 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
       .body()
       .data.find((category: { name: string }) => category.name === 'Household')
 
-    // "Banana" would normally auto-categorize under Produce (static table) —
-    // teach this list that its own "Banana" means something else 3 times so
-    // the frequency-based personalization has a clear majority.
-    for (let i = 0; i < 3; i++) {
+    // "Banana" is seeded toward Produce — teach this list that it means
+    // something else 3 times. Distinct names are required because store()
+    // returns an existing active row early on an exact name match (skipping
+    // the teach step); all three collapse to the same `banana` token.
+    for (const name of ['Banana', 'Bananas', 'Banana bread']) {
       await auth(
-        client
-          .post(`/api/v1/lists/${listId}/items`)
-          .json({ name: 'Banana', categoryId: household.id })
+        client.post(`/api/v1/lists/${listId}/items`).json({ name, categoryId: household.id })
       )
     }
 
@@ -922,7 +955,7 @@ test.group('Category suggestion (personalized + keyword fallback)', (group) => {
 
     // Item creation itself picks up the personalization too, not just the endpoint.
     const created = await auth(
-      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Banana' })
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Banana yellow' })
     )
     assert.equal(created.body().data.categoryId, household.id)
   })

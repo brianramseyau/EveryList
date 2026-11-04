@@ -5,6 +5,7 @@ import type { CategoryDto, CategoryLearningDto, ListDto } from '@everylist/share
 import { DateTime } from 'luxon'
 import CategoryLearning from '#models/category_learning'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
+import { createOwnedList } from '#services/list_creation'
 
 async function createList(client: ApiClient, token: string, name = 'Test List') {
   const response = await client
@@ -85,14 +86,17 @@ test.group('Category learnings (learned auto-categorization)', (group) => {
     assert.match(rows[0]!.lastSeenAt, /^\d{4}-\d{2}-\d{2}T/)
   })
 
-  test('a learned association wins over the static keyword table', async ({ client, assert }) => {
+  test('a learned association wins over the seeded starter learnings', async ({
+    client,
+    assert,
+  }) => {
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
     const categories = await seedStarterCategories(client, token, listId)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
     const household = categories.find((category) => category.name === 'Household')!
 
-    // "Banana" would static-suggest Produce, but the user explicitly chose Household.
+    // "Banana" is seeded toward Produce, but the user explicitly chose Household.
     await auth(
       client
         .post(`/api/v1/lists/${listId}/items`)
@@ -160,25 +164,141 @@ test.group('Category learnings (learned auto-categorization)', (group) => {
     assert.equal(plain.body().categoryId, cookies.id)
   })
 
-  test('falls back to the static table and returns null with no match', async ({
+  test('uses seeded starter learnings with no history and returns null with no match', async ({
+    client,
+    assert,
+  }) => {
+    const user = await signupAndGetUser(client)
+    const list = await createOwnedList({
+      ownerId: user.id,
+      name: 'Seeded',
+      color: '#3b82f6',
+      icon: null,
+      seedStarterCategories: true,
+    })
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${user.token}`)
+    const categories = bodyData<CategoryDto[]>(
+      await auth(client.get(`/api/v1/lists/${list.id}/categories`))
+    )
+    const dairy = categories.find((category) => category.name === 'Dairy')!
+
+    const milk = await auth(
+      client.get(`/api/v1/lists/${list.id}/items/categorize`).qs({ name: 'Milk' })
+    )
+    assert.equal(milk.body().categoryId, dairy.id)
+
+    const unknown = await auth(
+      client.get(`/api/v1/lists/${list.id}/items/categorize`).qs({ name: 'Xyzzy Widget' })
+    )
+    assert.isNull(unknown.body().categoryId)
+  })
+
+  test('returns null when the learned model has no matching token', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    await seedStarterCategories(client, token, listId)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    // Categories exist, but the helper creates them through the public endpoint
+    // (which does not seed the model): there is no runtime static tier to fall back on.
+    const milk = await auth(
+      client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Milk' })
+    )
+    assert.isNull(milk.body().categoryId)
+  })
+
+  test('seeding a list writes starter-keyword learnings, merging plurals', async ({
+    client,
+    assert,
+  }) => {
+    const user = await signupAndGetUser(client)
+    const list = await createOwnedList({
+      ownerId: user.id,
+      name: 'Seeded',
+      color: '#3b82f6',
+      icon: null,
+      seedStarterCategories: true,
+    })
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${user.token}`)
+    const categories = bodyData<CategoryDto[]>(
+      await auth(client.get(`/api/v1/lists/${list.id}/categories`))
+    )
+    const produce = categories.find((category) => category.name === 'Produce')!
+    const dairy = categories.find((category) => category.name === 'Dairy')!
+
+    const rows = await learnings(client, user.token, list.id)
+    const byToken = new Map(rows.map((row) => [row.token, row]))
+    assert.equal(byToken.get('banana')!.categoryId, produce.id)
+    assert.equal(byToken.get('milk')!.categoryId, dairy.id)
+    // "berry" and "berries" tokenize to the same key and merge their counts.
+    assert.equal(byToken.get('berry')!.categoryId, produce.id)
+    assert.equal(byToken.get('berry')!.count, 2)
+  })
+
+  test('a renamed seeded category keeps its learnings', async ({ client, assert }) => {
+    const user = await signupAndGetUser(client)
+    const list = await createOwnedList({
+      ownerId: user.id,
+      name: 'Seeded',
+      color: '#3b82f6',
+      icon: null,
+      seedStarterCategories: true,
+    })
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${user.token}`)
+    const categories = bodyData<CategoryDto[]>(
+      await auth(client.get(`/api/v1/lists/${list.id}/categories`))
+    )
+    const produce = categories.find((category) => category.name === 'Produce')!
+
+    await auth(
+      client
+        .patch(`/api/v1/lists/${list.id}/categories/${produce.id}`)
+        .json({ name: 'Fruit & Veg' })
+    )
+
+    const suggestion = await auth(
+      client.get(`/api/v1/lists/${list.id}/items/categorize`).qs({ name: 'Banana' })
+    )
+    assert.equal(suggestion.body().categoryId, produce.id)
+  })
+
+  test('a user-created category is never matched by the static keyword table', async ({
     client,
     assert,
   }) => {
     const token = await signupAndGetToken(client)
     const listId = await createList(client, token)
-    const categories = await seedStarterCategories(client, token, listId)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
-    const dairy = categories.find((category) => category.name === 'Dairy')!
 
-    const milk = await auth(
-      client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Milk' })
+    await auth(
+      client
+        .post(`/api/v1/lists/${listId}/categories`)
+        .json({ name: 'Produce', icon: 'fruitCherries' })
     )
-    assert.equal(milk.body().categoryId, dairy.id)
 
-    const unknown = await auth(
-      client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Xyzzy Widget' })
+    const suggestion = await auth(
+      client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Banana' })
     )
-    assert.isNull(unknown.body().categoryId)
+    assert.isNull(suggestion.body().categoryId)
+  })
+
+  test('seeding with learning disabled writes no learnings', async ({ client, assert }) => {
+    const user = await signupAndGetUser(client)
+    const list = await createOwnedList({
+      ownerId: user.id,
+      name: 'No learning',
+      color: '#3b82f6',
+      icon: null,
+      useCategoryLearning: false,
+      seedStarterCategories: true,
+    })
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${user.token}`)
+
+    assert.deepEqual(await CategoryLearning.query().where('listId', list.id), [])
+    const suggestion = await auth(
+      client.get(`/api/v1/lists/${list.id}/items/categorize`).qs({ name: 'Banana' })
+    )
+    assert.isNull(suggestion.body().categoryId)
   })
 
   test('a soft-deleted category is never suggested and drops out of the endpoint', async ({
@@ -391,7 +511,6 @@ test.group('Category learnings (learned auto-categorization)', (group) => {
     const listId = await createList(client, token)
     const categories = await seedStarterCategories(client, token, listId)
     const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
-    const produce = categories.find((category) => category.name === 'Produce')!
     const household = categories.find((category) => category.name === 'Household')!
 
     await auth(client.patch(`/api/v1/lists/${listId}`).json({ useCategoryLearning: false }))
@@ -411,12 +530,12 @@ test.group('Category learnings (learned auto-categorization)', (group) => {
     assert.deepEqual(await learnings(client, token, listId), [])
 
     // …and the suggestion endpoint skips the learned tier entirely: 'banana'
-    // would have won via the model, so it must fall back to the static
-    // keyword table (Produce), not the row's Household.
+    // would have won via the model, and there is no static tier to fall back on,
+    // so the result is uncategorised rather than the row's Household.
     const suggestion = await auth(
       client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Banana' })
     )
-    assert.equal(suggestion.body().categoryId, produce.id)
+    assert.isNull(suggestion.body().categoryId)
 
     // Lifting the gate exposes the row again — proving the gate, not a
     // missing row, was what the endpoint and suggestion skipped.

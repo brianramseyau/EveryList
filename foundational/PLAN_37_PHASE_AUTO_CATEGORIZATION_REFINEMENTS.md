@@ -7,12 +7,12 @@ This is a follow-up to
 split into two independent phases that must ship as **separate branches / PRs** — they fix
 unrelated problems and should not be mixed:
 
-- **Phase A — Rarity-weighted learned scoring. Implemented** on
-  `feature/auto-categorization-rarity-weighting` (shared scoring change, regression tests, no
-  schema change).
-- **Phase B — Static fallback rework. Not started.** Replaces the runtime lookup by hard-coded
-  category _display names_ with stable starter-category keys. Adds one nullable column;
-  independent of A.
+- **Phase A — Rarity-weighted learned scoring. Implemented and merged** (#288): shared scoring
+  change, regression tests, no schema change.
+- **Phase B — Remove the runtime static tier, seed the learned model. Implemented** on
+  `feature/seed-starter-category-learnings`: the keyword table becomes single-word seed data for
+  the learned model at list creation, and both the server and offline static resolvers are
+  deleted. No schema change; existing lists are ignored.
 
 Merge order: A first (it is the user-visible bug), then B.
 
@@ -61,9 +61,10 @@ Two distinct defects fall out of this:
 1. **Scoring ignores token distinctiveness.** "Peckish rice crackers" is effectively a sub-match of
    "Peckish Rice Crackers Original", but the additive equal-weight sum lets the generic word `rice`
    decide the outcome. Any future variant ("Peckish rice crackers plain") fails the same way.
-2. **The static fallback is keyed to hard-coded display names.** Renaming a seeded category breaks
-   it silently. It was not the immediate cause (tier 1 ran first and abstained), but it is not fit
-   for purpose.
+2. **The static fallback is a second, hard-coded matcher.** It is keyed to default category
+   identities, runs alongside the learned model, and needs its own plumbing. Renaming a seeded
+   category silently disables it (not the immediate cause here, but it is not fit for purpose).
+   Phase B removes it and seeds the learned model instead.
 
 ## Decisions
 
@@ -73,8 +74,9 @@ Two distinct defects fall out of this:
   as too costly for category matching (row explosion, SQLite limits); it belongs in a real search
   engine, not this model. Rarity weighting gets the same "sub-match wins" behaviour without storing
   phrases.
-- **Phase B replaces name-keyed lookup with stable starter-category keys**, not another name table.
-  Kept as a separate phase/PR.
+- **Phase B deletes the runtime static tier instead of re-keying it.** The keyword table becomes
+  one-time seed data attached to the created category IDs; there is no second matcher, no
+  stable-key column, and no runtime name/key lookup. Kept as a separate phase/PR.
 - `HALF_LIFE_MS`, `DECAY_FLOOR` and `MARGIN` stay as they are in Phase A.
 
 ---
@@ -172,93 +174,97 @@ without any phrase storage.
 
 ---
 
-## Phase B — Static fallback rework (stable starter-category keys)
+## Phase B — Seed the learned model instead of a runtime static tier
 
 ### Problem
 
-`KEYWORDS_BY_CATEGORY` maps keywords to hard-coded default category _names_ (`Pantry`, `Dairy`,
-…). `suggestCategoryId` then looks for a category whose `name` matches exactly; the web's
-`staticGuessCategoryId` does the same against Dexie. Renaming a seeded category — a first-class,
-supported action — silently disables the fallback for that category. The reported list's "Pantry"
-had been renamed, so `rice`/`cracker` resolved to `null`. Because no reliable seed marker exists,
-pre-existing categories cannot be safely retro-labelled (see the scope note) — Phase A is what
-restores the already-learned names; Phase B keeps the fallback correct from the next seeded list
-onward.
+Tier 2 is a second, parallel matcher keyed to hard-coded starter-category identities. Giving that
+mapping stable keys (the original proposal for this phase) fixes renames but keeps the real
+problem: two matchers, a hand-maintained keyword→category mapping, and extra schema/DTO/offline
+plumbing that exists only to keep the fallback alive. It also has no per-list signal, so it cannot
+learn from how the user actually categorises things.
+
+The learned model already has everything this tier needs: per-list storage attached to category
+IDs, decay, distinctiveness weighting, offline sync, and user-only learning. The right move is to
+seed that one model at list creation and delete the runtime static tier.
 
 ### Design
 
-Give seeded categories a **stable identity** that survives renames, and key the static table to
-that identity instead of the display name.
-
 **Shared (`packages/shared`)**
 
-- Introduce a `StarterCategoryKey` union: `'produce' | 'dairy' | 'meat' | 'bakery' | 'frozen' |
-'pantry' | 'household'`.
-- Re-key `KEYWORDS_BY_CATEGORY` by `StarterCategoryKey` (same keyword lists and the same
-  longest-keyword-wins matching).
-- Replace `suggestCategoryName(itemName)` with `suggestStarterCategoryKey(itemName)`, typed as
-  `StarterCategoryKey | null`. Keep the multi-word keyword matching (`'sour cream'`, `'ice cream'`,
-  …) — phrase precision is why this tier still exists.
+- Keep `StarterCategoryKey` / `STARTER_CATEGORY_KEYS` and export the keyword table as
+  `STARTER_CATEGORY_KEYWORDS: Record<StarterCategoryKey, readonly string[]>`. It is **seed data**
+  now, not a runtime matcher.
+- **Single-word keywords only.** Drop every multi-word phrase (`'sour cream'`, `'ice cream'`,
+  `'peanut butter'`, …). Phase A's distinctiveness weighting does the heavy lifting for names that
+  contain several common words, and this keeps the seed data aligned with the tokenizer the model
+  actually uses.
+- Remove `suggestCategoryName` / `suggestStarterCategoryKey`. There is no runtime keyword lookup.
 
 **API (`apps/api`)**
 
-- Migration: add a nullable `starter_key` column to `categories` (plain string, **no FK** — the
-  safe `ALTER` shape). **Do not backfill existing rows**: nothing on a category records whether it
-  was created by `seedStarterCategories` (`isDefault` is `false` for seeds, and a user can create a
-  category with any name/icon), so a name- or icon-based backfill could label a user-created
-  category as a starter and break the plan's own "user categories are never matched" rule. Legacy
-  rows stay `null`; the learned tier (Phase A) is what serves them.
-- `STARTER_CATEGORIES` in `category_service.ts` gains the matching `key`, and
-  `seedStarterCategories` writes `starterKey` on new lists.
-- `suggestCategoryId` tier 2: `suggestStarterCategoryKey` → find an **active** category whose
-  `starterKey` matches; `null` if none does. No exact-name fallback — it could select a
-  user-created category with a starter-sounding name.
-- `CategoryTransformer` + `CategoryDto` expose `starterKey` (nullable) so the client can resolve
-  the same way offline. Additive response field — allowed under `/api/v1` without a version bump.
+- `seedStarterCategories` keeps creating the 8 categories, and for each category with a starter
+  key seeds `category_learnings` from that key's keyword list:
+  - tokenise each keyword with `tokenizeItemName`, sum duplicate tokens per category (so
+    `berry`/`berries` become one `berry` row with count 2), and insert one row per token with
+    `lastSeenAt = now`;
+  - write through the same transaction client the categories are created with;
+  - skip when the list has `useCategoryLearning === false`.
+- `suggestCategoryId` drops tier 2 entirely: learned match, else `null`.
+- **No schema change** — no `starter_key` column, no DTO/transformer edits, no migration.
+- **Existing lists are ignored** (explicit decision): there is no safe seed marker, so no backfill.
+  They keep working from their existing learned rows; a keyword-only item that was never taught may
+  now be uncategorised until the user assigns it once.
 
 **Web (`apps/web`)**
 
-- Add `starterKey` to the cached category type (non-indexed field; no Dexie index bump needed).
-- `staticGuessCategoryId` resolves `suggestStarterCategoryKey` against cached categories by
-  `starterKey` only, mirroring the server.
+- Delete `staticGuessCategoryId`. The offline fallback reads the cached learned model (with the
+  existing explicit-deleted-category filtering) and returns `null` when nothing matches.
+- Seeded rows arrive through the existing `/category-learnings` sync; no new client plumbing.
 
-**Scope note:** user-created categories have `starterKey = null` and are never matched by the
-static tier — that is correct; they are served by the learned tier. Categories seeded before this
-migration also stay `null` (there is no reliable seed marker) and are not statically matched; they
-keep working through the learned tier. Lists created after Phase B get keys from the start, and
-renames of those categories are safe.
+**Why this is not just moving the problem:** the keyword table is resolved to category IDs exactly
+once, at seed time. Renames and deletes can no longer desync it (learnings follow the ID, and
+soft-deleted categories are excluded from suggestions), the runtime has one matcher instead of two,
+and user assignments strengthen or override the seeded prior through the normal learned path.
 
-### Migration / footgun notes
+### Edge cases
 
-- `ALTER TABLE categories ADD COLUMN starter_key` is a plain nullable add — no inline FK, so it
-  does not trigger the table-rebuild cascade described in AGENTS.md. There is no data backfill, so
-  no `this.defer(...)` is needed. Still reproduce it against a seeded SQLite file per the migration
-  protocol (add representative categories, run only this migration, confirm children and rows
-  survive).
-- No route changes, so `.adonisjs` regeneration is not required for this phase.
+- Seeded rows are ordinary learnings: they decay (floored, so they persist), increment when the
+  user confirms the same category, and lose to the `MARGIN` rule when a common token is contested.
+- A list created with learning disabled gets no seeded rows; enabling learning later starts from an
+  empty model rather than a stale keyword table.
+- Plural collapse means some keywords merge (berry/berries, bean/beans, egg/eggs) — intended, and
+  the count reflects both entries.
+- Soft-deleting a seeded category removes it from the active-category join, so its learned rows
+  stop contributing to suggestions (a hard delete would cascade them).
+
+### Files
+
+- `packages/shared/src/auto-categorize.ts` — export the keyword table, drop the static matcher.
+- `packages/shared/tests/auto-categorize.test.ts` — table/single-word guards, static-matcher tests
+  removed.
+- `apps/api/app/services/category_service.ts` — seed learnings alongside starter categories.
+- `apps/api/app/services/category_suggestion_service.ts` — remove the static tier.
+- `apps/api/tests/functional/category_learnings.spec.ts`, `items.spec.ts` — seeded-list coverage.
+- `apps/web/src/lib/api/items.ts`, `items-offline.spec.ts` — learned-only offline fallback.
 
 ### Testing
 
-- Shared: each keyword maps to the right `StarterCategoryKey`; longest keyword still wins;
-  unknown names → `null`.
-- API: resolver finds a renamed category by `starterKey`; legacy rows with no key are not matched;
-  deleted categories are ignored; user categories are never matched (including one named like a
-  starter, e.g. a user-created `Pantry`); seed writes keys.
-- Web: offline guess resolves by `starterKey` from Dexie only (no name fallback).
-- DTO/transformer: `starterKey` present and nullable.
-- Migration reproduction against a seeded SQLite file (above).
-- Maintain 100% coverage; `pnpm check --skip-e2e` clean.
+- Shared: every `StarterCategoryKey` has a non-empty keyword list; every keyword is a single word.
+- API: seeding writes the expected token→category rows (including plural merges); a renamed seeded
+  category still suggests; deleting it drops the rows and returns `null`; a user-created category
+  is never matched; learning disabled seeds nothing; a list with categories but no learnings returns
+  `null` (proving the static tier is gone).
+- Web: cached seeded learnings drive the offline guess; no match returns `null`; the
+  deleted-category filter still applies.
+- 100% statements/branches/functions/lines.
 
 ### Verification
 
-- Rename `Pantry` → `Grains, Pasta & Sides` on a list created after Phase B, then add an item with
-  a static keyword (`rice`) → resolves to the renamed category rather than `null`.
-- Existing lists upgraded by the migration: all categories stay `null` (no backfill); verify the
-  learned tier still categorises their previously-learned names and that no user category is
-  matched by the static tier.
-- Offline: same resolution from the cached categories.
-
----
+- New seeded list: "Bananas" → Produce; rename Produce → "Fruit & Veg" and add "Apples" → the
+  renamed category; delete it and add "Bananas" → uncategorised.
+- Existing list: no static bootstrap, but previously learned associations still work.
+- `pnpm check --skip-e2e` clean; CI runs the browser suite.
 
 ## Out of scope
 
@@ -266,21 +272,22 @@ renames of those categories are safe.
 - A user-facing keyword/alias editor per category (a possible later feature, not part of either
   phase).
 - Changing `MARGIN`, the decay half-life or the decay floor.
-- Recovering mappings for categories renamed _and_ re-iconed before Phase B.
+- Backfilling seeded learnings into existing lists (explicit decision: they are ignored).
+- Multi-word/phrase keywords (single words only, by decision).
 
 ## Implementation order
 
-1. **Phase A branch/PR:** shared formula + tests → API/web regression tests → docs. Merge first.
-2. **Phase B branch/PR:** shared keys → migration + model/schema/seed/transformer → service →
-   web → `pnpm check`.
+1. **Phase A branch/PR:** shared formula + tests → API/web regression tests → docs. Merged in #288.
+2. **Phase B branch/PR:** shared keyword table + single-word cleanup → API seeding and deletion of
+   the static tier → web learned-only offline fallback → tests → `pnpm check`.
 
 Each phase is independently releasable. Keep the diffs disjoint: Phase A touches scoring only;
-Phase B touches the static tier and category metadata only.
+Phase B touches the keyword seed data and removes the static tier only.
 
 ## Verification (both phases)
 
 - `pnpm check` (the full PR gate) on each branch before opening the PR; `pnpm check --skip-e2e` for
   iteration.
-- Run the migration reproduction for Phase B against a seeded SQLite file.
+- Phase B has no migration to reproduce.
 - Manual repro from the report: "Peckish Rice Crackers Original" and "Peckish rice crackers plain"
   both land in Cookies & Biscuits after Phase A.
