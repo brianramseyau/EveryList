@@ -141,47 +141,9 @@ describe('createItem (Dexie available)', () => {
 		expect(captured).toBe(77);
 	});
 
-	it('falls back to the static keyword table when the categorize endpoint fails (offline)', async () => {
-		const db = getDb()!;
-		await db.categories.put({
-			id: 9,
-			name: 'Produce',
-			icon: 'fruit',
-			sortOrder: 0,
-			listId: 1,
-			isDefault: true,
-			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		});
+	it('returns null offline when no learned model is cached', async () => {
 		vi.mocked(apiGet).mockRejectedValue(new TypeError('Failed to fetch'));
 		let captured: number | null | undefined;
-		vi.mocked(apiPost).mockImplementation(async (...args) => {
-			captured = await capturedOptimisticCategoryId();
-			return { id: 42, name: (args[1] as { name: string }).name, version: 1 };
-		});
-
-		await createItem(1, { name: 'Bananas' });
-
-		expect(captured).toBe(9);
-	});
-
-	it('falls back to a global-default category when no list-scoped match exists', async () => {
-		const db = getDb()!;
-		await db.categories.put({
-			id: 9,
-			name: 'Produce',
-			icon: 'fruit',
-			sortOrder: 0,
-			listId: null,
-			isDefault: true,
-			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		});
-		let captured: number | null | undefined;
 		vi.mocked(apiPost).mockImplementation(async () => {
 			captured = await capturedOptimisticCategoryId();
 			return { id: 42, name: 'Bananas', version: 1 };
@@ -189,32 +151,7 @@ describe('createItem (Dexie available)', () => {
 
 		await createItem(1, { name: 'Bananas' });
 
-		expect(captured).toBe(9);
-	});
-
-	it('falls back to a global-default category when no list-scoped match exists', async () => {
-		const db = getDb()!;
-		await db.categories.put({
-			id: 9,
-			name: 'Produce',
-			icon: 'fruit',
-			sortOrder: 0,
-			listId: null,
-			isDefault: true,
-			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		});
-		let captured: number | null | undefined;
-		vi.mocked(apiPost).mockImplementation(async () => {
-			captured = await capturedOptimisticCategoryId();
-			return { id: 42, name: 'Bananas', version: 1 };
-		});
-
-		await createItem(1, { name: 'Bananas' });
-
-		expect(captured).toBe(9);
+		expect(captured).toBeNull();
 	});
 
 	it('leaves categoryId null when nothing matches the guess', async () => {
@@ -229,7 +166,7 @@ describe('createItem (Dexie available)', () => {
 		expect(captured).toBeNull();
 	});
 
-	it('uses the cached learned category before the static table when the categorize endpoint fails', async () => {
+	it('uses the cached learned category when the categorize endpoint fails', async () => {
 		const db = getDb()!;
 		await db.categoryLearnings.put({
 			listId: 1,
@@ -311,20 +248,8 @@ describe('createItem (Dexie available)', () => {
 		expect(captured).toBe(99);
 	});
 
-	it('falls back to the static table when the cached learned model has no matching token', async () => {
+	it('returns null when the cached learned model has no matching token', async () => {
 		const db = getDb()!;
-		await db.categories.put({
-			id: 9,
-			name: 'Produce',
-			icon: 'fruit',
-			sortOrder: 0,
-			listId: 1,
-			isDefault: true,
-			createdAt: '2026-08-01T00:00:00.000Z',
-			updatedAt: null,
-			deletedAt: null,
-			version: 1
-		});
 		await db.categoryLearnings.put({
 			listId: 1,
 			learnings: [
@@ -340,7 +265,7 @@ describe('createItem (Dexie available)', () => {
 
 		await createItem(1, { name: 'Bananas' });
 
-		expect(captured).toBe(9);
+		expect(captured).toBeNull();
 	});
 
 	it('leaves categoryId null when the name tokenizes to nothing and the request fails', async () => {

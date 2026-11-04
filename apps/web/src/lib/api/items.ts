@@ -5,7 +5,7 @@ import type {
 	RecurrenceRule,
 	SubItemDto
 } from '@everylist/shared';
-import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared';
+import { pickLearnedCategoryId, tokenizeItemName } from '@everylist/shared';
 // Provably covered in isolation — see badge.ts's identical note for why a direct native-plugin
 // import is v8-ignored: the growing number of `vi.mock('@capacitor/core', …)` partial mocks
 // across the suite corrupts this import statement's V8 attribution once merged into the full run,
@@ -229,34 +229,12 @@ export function moveItemToList(
 	return apiPost(`/api/v1/lists/${listId}/items/${itemId}/move-to-list`, { destinationListId });
 }
 
-/** Purely local category guess against the static keyword table and whatever
- * categories are already cached in Dexie for this list — the offline fallback
- * for `fetchCategorySuggestion` below (PLAN_07_PHASE_POLISH.md §3), and mirrors the
- * server's own static-table fallback in `category_suggestion_service.ts`. */
-async function staticGuessCategoryId(
-	db: EveryListDB,
-	listId: number,
-	name: string
-): Promise<number | null> {
-	const suggestedName = suggestCategoryName(name);
-	if (!suggestedName) return null;
-
-	const listCategories = await db.categories.where('listId').equals(listId).toArray();
-	const listMatch = listCategories.find((category) => category.name === suggestedName);
-	if (listMatch) return listMatch.id;
-
-	const globalCategories = await db.categories
-		.filter((category) => category.listId === null)
-		.toArray();
-	const globalMatch = globalCategories.find((category) => category.name === suggestedName);
-	return globalMatch?.id ?? null;
-}
-
 /** Personalized (frequency-based) suggestion from the real backend service —
- * see PLAN_07_PHASE_POLISH.md §3. Falls back to the local learned-then-static-table
- * guess when the request fails (offline and this exact list+name was never
- * cached by the service worker's `StaleWhileRevalidate` rule for
- * `/api/v1/*`). */
+ * see PLAN_07_PHASE_POLISH.md §3. Falls back to the cached learned model when
+ * the request fails (offline and this exact list+name was never cached by the
+ * service worker's `StaleWhileRevalidate` rule for `/api/v1/*`); starter
+ * keywords are seeded into that same model at list creation, so there is no
+ * separate runtime static fallback (PLAN_37 Phase B). */
 async function guessCategoryId(
 	db: EveryListDB,
 	listId: number,
@@ -268,32 +246,30 @@ async function guessCategoryId(
 		);
 		return suggestion.categoryId;
 	} catch {
-		// Offline: replay the server's two-tier guess from the cached learned
-		// model, then the static keyword table (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md).
+		// Offline: the cached learned model is the only local source — the starter
+		// keywords were seeded into it at list creation (PLAN_37 Phase B).
 		const tokens = tokenizeItemName(name);
-		if (tokens.length > 0) {
-			const cached = await db.categoryLearnings.get(listId);
-			if (cached) {
-				// The server filters learnings to active categories before ranking; the
-				// cached copy is not pruned when a category is deleted offline, so drop
-				// only explicitly deleted ids here. A learning without a cached category
-				// row is still valid, so an active-id allow-list would be wrong.
-				const deletedCategoryIds = new Set(
-					(
-						await db.categories.bulkGet([
-							...new Set(cached.learnings.map((learning) => learning.categoryId))
-						])
-					).flatMap((category) => (category?.deletedAt ? [category.id] : []))
-				);
-				const learned = pickLearnedCategoryId(
-					tokens,
-					cached.learnings.filter((learning) => !deletedCategoryIds.has(learning.categoryId)),
-					Date.now()
-				);
-				if (learned !== null) return learned;
-			}
-		}
-		return staticGuessCategoryId(db, listId, name);
+		if (tokens.length === 0) return null;
+
+		const cached = await db.categoryLearnings.get(listId);
+		if (!cached) return null;
+
+		// The server filters learnings to active categories before ranking; the
+		// cached copy is not pruned when a category is deleted offline, so drop
+		// only explicitly deleted ids here. A learning without a cached category
+		// row is still valid, so an active-id allow-list would be wrong.
+		const deletedCategoryIds = new Set(
+			(
+				await db.categories.bulkGet([
+					...new Set(cached.learnings.map((learning) => learning.categoryId))
+				])
+			).flatMap((category) => (category?.deletedAt ? [category.id] : []))
+		);
+		return pickLearnedCategoryId(
+			tokens,
+			cached.learnings.filter((learning) => !deletedCategoryIds.has(learning.categoryId)),
+			Date.now()
+		);
 	}
 }
 

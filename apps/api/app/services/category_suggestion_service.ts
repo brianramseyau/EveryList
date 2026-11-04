@@ -1,16 +1,16 @@
 import type List from '#models/list'
 import CategoryLearning from '#models/category_learning'
-import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared'
+import { pickLearnedCategoryId, tokenizeItemName } from '@everylist/shared'
 import type { CategoryLearningDto } from '@everylist/shared'
-import { getEffectiveCategories } from '#services/category_service'
 import logger from '@adonisjs/core/services/logger'
 import { DateTime } from 'luxon'
 
 /**
  * Learned auto-categorization (PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md): a persisted, decayed model
- * that only learns from *explicit* user category assignments — never from the
- * auto-suggestion itself, avoiding self-reinforcement. The static keyword
- * table in packages/shared stays as the fallback. Server-authoritative: the
+ * that learns from *explicit* user category assignments — never from the
+ * auto-suggestion itself, avoiding self-reinforcement — plus the one-time
+ * starter-keyword bootstrap written when a list is seeded (PLAN_37 Phase B).
+ * Server-authoritative: the
  * web client caches a read-only copy for offline suggestions, but every
  * write to the model happens here.
  */
@@ -83,30 +83,27 @@ export async function getCategoryLearnings(list: List): Promise<CategoryLearning
   }))
 }
 
-/** Learned model first, falling back to the shared static keyword table. */
+/**
+ * The learned model is the only matcher. A new list's starter keywords are seeded into it by
+ * `seedStarterCategories` (PLAN_37 Phase B), so there is no separate runtime static tier.
+ */
 export async function suggestCategoryId(list: List, itemName: string): Promise<number | null> {
   const tokens = tokenizeItemName(itemName)
-
-  if (tokens.length > 0) {
-    const learnings = await getCategoryLearnings(list)
-    const learnedId = pickLearnedCategoryId(tokens, learnings, DateTime.now().toMillis())
-    if (learnedId !== null) {
-      logger.debug(
-        { listId: list.id, categoryId: learnedId, source: 'learned' },
-        'suggested category for item'
-      )
-      return learnedId
-    }
-  }
-
-  const suggestedName = suggestCategoryName(itemName)
-  if (!suggestedName) {
+  if (tokens.length === 0) {
     logger.debug({ listId: list.id }, 'no category suggestion matched item')
     return null
   }
 
-  const categories = await getEffectiveCategories(list)
-  const categoryId = categories.find((category) => category.name === suggestedName)?.id ?? null
-  logger.debug({ listId: list.id, categoryId, source: 'keyword' }, 'suggested category for item')
-  return categoryId
+  const learnings = await getCategoryLearnings(list)
+  const learnedId = pickLearnedCategoryId(tokens, learnings, DateTime.now().toMillis())
+  if (learnedId !== null) {
+    logger.debug(
+      { listId: list.id, categoryId: learnedId, source: 'learned' },
+      'suggested category for item'
+    )
+    return learnedId
+  }
+
+  logger.debug({ listId: list.id }, 'no category suggestion matched item')
+  return null
 }

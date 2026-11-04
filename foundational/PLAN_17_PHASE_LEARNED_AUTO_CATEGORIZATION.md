@@ -74,6 +74,7 @@ Decisions locked in with the user before implementation:
 
 [`PLAN_37_PHASE_AUTO_CATEGORIZATION_REFINEMENTS.md`](PLAN_37_PHASE_AUTO_CATEGORIZATION_REFINEMENTS.md)
 splits two later fixes into separate phases: rarity-weighted token scoring (so a distinctive token
-outweighs a common one instead of the `MARGIN` rule abstaining) and a static-fallback rework from
-hard-coded category names to stable starter-category keys. Phrase/n-gram learning was considered
-here and remains rejected — it belongs in a search engine, not this per-list token table.
+outweighs a common one instead of the `MARGIN` rule abstaining) and removal of the runtime static
+keyword tier, with the single-word starter-keyword table used only to seed this learned model when a
+list is created. Phrase/n-gram learning was considered here and remains rejected — it belongs in a
+search engine, not this per-list token table.

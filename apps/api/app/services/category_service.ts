@@ -1,8 +1,12 @@
 import type List from '#models/list'
 import Category from '#models/category'
+import CategoryLearning from '#models/category_learning'
 import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import { broadcastSync } from '#services/sync_broadcaster'
 import logger from '@adonisjs/core/services/logger'
+import { STARTER_CATEGORY_KEYWORDS, tokenizeItemName } from '@everylist/shared'
+import type { StarterCategoryKey } from '@everylist/shared'
+import { DateTime } from 'luxon'
 
 /** A list's own categories, in display order. */
 export async function getEffectiveCategories(list: List): Promise<Category[]> {
@@ -19,16 +23,51 @@ export async function getEffectiveCategories(list: List): Promise<Category[]> {
  * packing list) can freely rename or delete them since they're just
  * ordinary list-scoped categories from the moment they're created.
  */
-const STARTER_CATEGORIES = [
-  { name: 'Produce', icon: 'fruitCherries' },
-  { name: 'Dairy', icon: 'cheese' },
-  { name: 'Meat', icon: 'foodDrumstick' },
-  { name: 'Bakery', icon: 'breadSlice' },
-  { name: 'Frozen', icon: 'snowflake' },
-  { name: 'Pantry', icon: 'foodCanArrowUp' },
-  { name: 'Household', icon: 'spray' },
-  { name: 'Other', icon: 'dotsHorizontalCircle' },
-] as const
+const STARTER_CATEGORIES: ReadonlyArray<{
+  key: StarterCategoryKey | null
+  name: string
+  icon: string
+}> = [
+  { key: 'produce', name: 'Produce', icon: 'fruitCherries' },
+  { key: 'dairy', name: 'Dairy', icon: 'cheese' },
+  { key: 'meat', name: 'Meat', icon: 'foodDrumstick' },
+  { key: 'bakery', name: 'Bakery', icon: 'breadSlice' },
+  { key: 'frozen', name: 'Frozen', icon: 'snowflake' },
+  { key: 'pantry', name: 'Pantry', icon: 'foodCanArrowUp' },
+  { key: 'household', name: 'Household', icon: 'spray' },
+  // "Other" has no seed keywords, but it is still a seeded starter category.
+  { key: null, name: 'Other', icon: 'dotsHorizontalCircle' },
+]
+
+/**
+ * Bootstraps the learned model for a freshly seeded category: the keyword table is data for the
+ * model, not a runtime matcher (PLAN_37 Phase B). Rows are attached to the category id, so renames
+ * are safe and deletion cascades them away. Duplicate tokens across keywords (berry/berries) merge
+ * into one row whose count reflects both.
+ */
+async function seedStarterCategoryLearnings(
+  list: List,
+  category: Category,
+  key: StarterCategoryKey,
+  client?: QueryClientContract
+): Promise<void> {
+  if (list.useCategoryLearning === false) return
+
+  const counts = new Map<string, number>()
+  for (const keyword of STARTER_CATEGORY_KEYWORDS[key]) {
+    for (const token of tokenizeItemName(keyword)) {
+      counts.set(token, (counts.get(token) ?? 0) + 1)
+    }
+  }
+
+  const now = DateTime.now()
+  for (const [token, count] of counts) {
+    await CategoryLearning.create(
+      { listId: list.id, categoryId: category.id, token, count, lastSeenAt: now },
+      { client }
+    )
+  }
+}
 
 export async function seedStarterCategories(
   list: List,
@@ -49,6 +88,10 @@ export async function seedStarterCategories(
       { client }
     )
     categories.push(category)
+
+    if (starter.key) {
+      await seedStarterCategoryLearnings(list, category, starter.key, client)
+    }
 
     await broadcastSync({
       listId: list.id,
