@@ -105,6 +105,61 @@ test.group('Category learnings (learned auto-categorization)', (group) => {
     assert.equal(suggestion.body().categoryId, household.id)
   })
 
+  test('rarity weighting lets a distinctive token beat a widely-spread one', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const categories = await seedStarterCategories(client, token, listId)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    // Placeholder ids standing in for the reported categories: the name is
+    // irrelevant to the learned tier — only the token/category rows matter.
+    const cookies = categories.find((category) => category.name === 'Produce')!
+    const grains = categories.find((category) => category.name === 'Dairy')!
+    const breakfast = categories.find((category) => category.name === 'Meat')!
+    const stock = categories.find((category) => category.name === 'Bakery')!
+    const international = categories.find((category) => category.name === 'Frozen')!
+
+    const now = DateTime.now()
+    const rows = [
+      { categoryId: cookies.id, token: 'peckish', count: 1, days: 66 },
+      { categoryId: cookies.id, token: 'cracker', count: 3, days: 28 },
+      { categoryId: cookies.id, token: 'rice', count: 1, days: 66 },
+      { categoryId: grains.id, token: 'rice', count: 3, days: 32 },
+      { categoryId: breakfast.id, token: 'rice', count: 2, days: 32 },
+      { categoryId: stock.id, token: 'cracker', count: 1, days: 71 },
+      { categoryId: stock.id, token: 'rice', count: 1, days: 71 },
+      { categoryId: international.id, token: 'rice', count: 1, days: 52 },
+    ]
+    for (const row of rows) {
+      await CategoryLearning.create({
+        listId,
+        categoryId: row.categoryId,
+        token: row.token,
+        count: row.count,
+        lastSeenAt: now.minus({ days: row.days }),
+      })
+    }
+
+    // "rice" would otherwise lift Grains/Breakfast/Stock/International enough
+    // to fail the 2× margin; the distinctive "peckish" must win for Cookies.
+    const original = await auth(
+      client
+        .get(`/api/v1/lists/${listId}/items/categorize`)
+        .qs({ name: 'Peckish Rice Crackers Original' })
+    )
+    assert.equal(original.body().categoryId, cookies.id)
+
+    const plain = await auth(
+      client
+        .get(`/api/v1/lists/${listId}/items/categorize`)
+        .qs({ name: 'Peckish rice crackers plain' })
+    )
+    assert.equal(plain.body().categoryId, cookies.id)
+  })
+
   test('falls back to the static table and returns null with no match', async ({
     client,
     assert,
