@@ -1,4 +1,5 @@
 import type { RecurrenceDto } from './recurrence.js'
+import type { StarterCategoryKey } from './auto-categorize.js'
 
 /** Mirrors the field picks in apps/api's transformers — see PLAN_00_FOUNDATIONAL_PLAN.md §7-8. */
 
@@ -79,6 +80,10 @@ export interface CategoryDto {
   sortOrder: number
   listId: number | null
   isDefault: boolean
+  /** Stable identity of a seeded starter category, preserved across renames. Null/missing on
+   *  user-created categories and on categories seeded before PLAN_37 Phase B. Optional so existing
+   *  test fixtures don't all need updating — the server always returns it. */
+  starterKey?: StarterCategoryKey | null
   createdAt: string
   updatedAt: string | null
   deletedAt: string | null

@@ -12,12 +12,27 @@
  * category_suggestion_service.ts. Tier 2 is the static keyword table below, the
  * fallback when the model has no confident answer.
  *
- * NOTE: the category names in `KEYWORDS_BY_CATEGORY` must match a list's own
- * category names (seeded by apps/api's category_service.ts) for the fallback
- * to resolve — the static table maps a name to a category *name*, not an id.
+ * NOTE: `KEYWORDS_BY_CATEGORY` is keyed by the stable `StarterCategoryKey` of
+ * a seeded category, not its display name. Resolution finds the list's
+ * category whose `starterKey` matches, so renaming a seeded category no
+ * longer breaks the fallback — see PLAN_37_PHASE_AUTO_CATEGORIZATION_REFINEMENTS.md.
  */
-const KEYWORDS_BY_CATEGORY: Record<string, readonly string[]> = {
-	Produce: [
+
+/** A seeded starter category's stable identity, preserved across renames. */
+export const STARTER_CATEGORY_KEYS = [
+	'produce',
+	'dairy',
+	'meat',
+	'bakery',
+	'frozen',
+	'pantry',
+	'household',
+] as const;
+
+export type StarterCategoryKey = (typeof STARTER_CATEGORY_KEYS)[number];
+
+const KEYWORDS_BY_CATEGORY: Record<StarterCategoryKey, readonly string[]> = {
+	produce: [
 		'apple',
 		'banana',
 		'orange',
@@ -44,7 +59,7 @@ const KEYWORDS_BY_CATEGORY: Record<string, readonly string[]> = {
 		'kale',
 		'melon',
 	],
-	Dairy: [
+	dairy: [
 		'milk',
 		'cheese',
 		'yogurt',
@@ -56,7 +71,7 @@ const KEYWORDS_BY_CATEGORY: Record<string, readonly string[]> = {
 		'sour cream',
 		'cottage cheese',
 	],
-	Meat: [
+	meat: [
 		'chicken',
 		'beef',
 		'pork',
@@ -71,9 +86,9 @@ const KEYWORDS_BY_CATEGORY: Record<string, readonly string[]> = {
 		'shrimp',
 		'lamb',
 	],
-	Bakery: ['bread', 'bagel', 'bun', 'roll', 'muffin', 'croissant', 'tortilla', 'cake', 'donut'],
-	Frozen: ['frozen', 'ice cream', 'popsicle', 'freezer'],
-	Pantry: [
+	bakery: ['bread', 'bagel', 'bun', 'roll', 'muffin', 'croissant', 'tortilla', 'cake', 'donut'],
+	frozen: ['frozen', 'ice cream', 'popsicle', 'freezer'],
+	pantry: [
 		'rice',
 		'pasta',
 		'cereal',
@@ -100,7 +115,7 @@ const KEYWORDS_BY_CATEGORY: Record<string, readonly string[]> = {
 		'cereal bar',
 		'nuts',
 	],
-	Household: [
+	household: [
 		'soap',
 		'detergent',
 		'paper towel',
@@ -120,25 +135,29 @@ const KEYWORDS_BY_CATEGORY: Record<string, readonly string[]> = {
 };
 
 /**
- * Returns the best-matching default category name for the given item name,
- * or `null` when nothing matches (caller falls back to "Other" or leaves
- * the item uncategorized).
+ * Returns the best-matching seeded-category key for the given item name, or
+ * `null` when nothing matches. The caller resolves the key against a live
+ * category's `starterKey` (a pre-Phase-B row with no key is not matched).
  */
-export function suggestCategoryName(itemName: string): string | null {
+export function suggestStarterCategoryKey(itemName: string): StarterCategoryKey | null {
 	const normalized = itemName.trim().toLowerCase();
 	if (!normalized) return null;
 
-	let bestMatch: { category: string; keywordLength: number } | null = null;
+	let bestMatch: { key: StarterCategoryKey; keywordLength: number } | null = null;
 
-	for (const [category, keywords] of Object.entries(KEYWORDS_BY_CATEGORY)) {
+	const entries = Object.entries(KEYWORDS_BY_CATEGORY) as [
+		StarterCategoryKey,
+		readonly string[],
+	][];
+	for (const [key, keywords] of entries) {
 		for (const keyword of keywords) {
 			if (normalized.includes(keyword) && (!bestMatch || keyword.length > bestMatch.keywordLength)) {
-				bestMatch = { category, keywordLength: keyword.length };
+				bestMatch = { key, keywordLength: keyword.length };
 			}
 		}
 	}
 
-  return bestMatch?.category ?? null;
+	return bestMatch?.key ?? null;
 }
 
 /**

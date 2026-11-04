@@ -2,7 +2,8 @@ import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
-import type { CategoryDto, ItemDto, ListDto } from '@everylist/shared'
+import type { CategoryDto, ItemDto, ListDto, StarterCategoryKey } from '@everylist/shared'
+import Category from '#models/category'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
 
 async function createList(client: ApiClient, token: string, name = 'Test List') {
@@ -29,13 +30,31 @@ async function seedStarterCategories(client: ApiClient, token: string, listId: n
     ['Household', 'spray'],
     ['Other', 'dotsHorizontalCircle'],
   ]
+  const starterKeys: Record<string, StarterCategoryKey | null> = {
+    Produce: 'produce',
+    Dairy: 'dairy',
+    Meat: 'meat',
+    Bakery: 'bakery',
+    Frozen: 'frozen',
+    Pantry: 'pantry',
+    Household: 'household',
+    Other: null,
+  }
   const categories: CategoryDto[] = []
   for (const [name, icon] of names) {
     const response = await client
       .post(`/api/v1/lists/${listId}/categories`)
       .header('Authorization', `Bearer ${token}`)
       .json({ name, icon })
-    categories.push(bodyData<CategoryDto>(response))
+    const category = bodyData<CategoryDto>(response)
+    const starterKey = starterKeys[name] ?? null
+    // The public create endpoint intentionally can't set starterKey; mirror what
+    // seedStarterCategories does so the static fallback resolves by key, not name.
+    if (starterKey) {
+      await Category.query().where('id', category.id).update({ starterKey })
+    }
+    category.starterKey = starterKey
+    categories.push(category)
   }
   return categories
 }
@@ -573,6 +592,27 @@ TOILETRIES
     create.assertStatus(422)
   })
 
+  test('categorises an item with a renamed seeded category', async ({ client, assert }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    await seedStarterCategories(client, token, listId)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))
+    const produce = categories.body().data.find((c: { name: string }) => c.name === 'Produce')
+
+    // The stable starter key survives the rename, so "Bananas" still resolves.
+    await auth(
+      client.patch(`/api/v1/lists/${listId}/categories/${produce.id}`).json({ name: 'Fruit & Veg' })
+    )
+
+    const create = await auth(
+      client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bananas' })
+    )
+    create.assertStatus(200)
+    assert.equal(create.body().data.categoryId, produce.id)
+  })
+
   test('leaves an item uncategorized when its suggested category no longer exists', async ({
     client,
     assert,
@@ -585,12 +625,9 @@ TOILETRIES
     const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))
     const produce = categories.body().data.find((c: { name: string }) => c.name === 'Produce')
 
-    // Renaming "Produce" removes that name from the list's effective
-    // categories, so "Bananas" (which suggests "Produce") should no longer
-    // resolve to a category.
-    await auth(
-      client.patch(`/api/v1/lists/${listId}/categories/${produce.id}`).json({ name: 'Fruit & Veg' })
-    )
+    // Deleting "Produce" removes it from the list's effective categories, so
+    // "Bananas" (which suggests the produce key) has nothing to resolve to.
+    await auth(client.delete(`/api/v1/lists/${listId}/categories/${produce.id}`))
 
     const create = await auth(
       client.post(`/api/v1/lists/${listId}/items`).json({ name: 'Bananas' })

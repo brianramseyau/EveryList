@@ -10,6 +10,7 @@ export default class CategoryTransformer extends BaseTransformer<Category> {
       'sortOrder',
       'listId',
       'isDefault',
+      'starterKey',
       'createdAt',
       'updatedAt',
       'deletedAt',

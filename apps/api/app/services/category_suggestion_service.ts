@@ -1,6 +1,10 @@
 import type List from '#models/list'
 import CategoryLearning from '#models/category_learning'
-import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared'
+import {
+  pickLearnedCategoryId,
+  suggestStarterCategoryKey,
+  tokenizeItemName,
+} from '@everylist/shared'
 import type { CategoryLearningDto } from '@everylist/shared'
 import { getEffectiveCategories } from '#services/category_service'
 import logger from '@adonisjs/core/services/logger'
@@ -99,14 +103,16 @@ export async function suggestCategoryId(list: List, itemName: string): Promise<n
     }
   }
 
-  const suggestedName = suggestCategoryName(itemName)
-  if (!suggestedName) {
+  const starterKey = suggestStarterCategoryKey(itemName)
+  if (!starterKey) {
     logger.debug({ listId: list.id }, 'no category suggestion matched item')
     return null
   }
 
+  // Resolve by stable starter key only: a display-name match could select a user-created category
+  // with a starter-sounding name, and legacy pre-Phase-B rows deliberately have no key.
   const categories = await getEffectiveCategories(list)
-  const categoryId = categories.find((category) => category.name === suggestedName)?.id ?? null
+  const categoryId = categories.find((category) => category.starterKey === starterKey)?.id ?? null
   logger.debug({ listId: list.id, categoryId, source: 'keyword' }, 'suggested category for item')
   return categoryId
 }

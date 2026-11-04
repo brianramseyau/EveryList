@@ -146,6 +146,7 @@ describe('createItem (Dexie available)', () => {
 		await db.categories.put({
 			id: 9,
 			name: 'Produce',
+			starterKey: 'produce',
 			icon: 'fruit',
 			sortOrder: 0,
 			listId: 1,
@@ -172,6 +173,7 @@ describe('createItem (Dexie available)', () => {
 		await db.categories.put({
 			id: 9,
 			name: 'Produce',
+			starterKey: 'produce',
 			icon: 'fruit',
 			sortOrder: 0,
 			listId: null,
@@ -197,6 +199,7 @@ describe('createItem (Dexie available)', () => {
 		await db.categories.put({
 			id: 9,
 			name: 'Produce',
+			starterKey: 'produce',
 			icon: 'fruit',
 			sortOrder: 0,
 			listId: null,
@@ -215,6 +218,59 @@ describe('createItem (Dexie available)', () => {
 		await createItem(1, { name: 'Bananas' });
 
 		expect(captured).toBe(9);
+	});
+
+	it('resolves a renamed cached seeded category by starterKey', async () => {
+		const db = getDb()!;
+		await db.categories.put({
+			id: 9,
+			name: 'Chilled',
+			starterKey: 'produce',
+			icon: 'fruit',
+			sortOrder: 0,
+			listId: 1,
+			isDefault: false,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 2
+		});
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('Failed to fetch'));
+		let captured: number | null | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			captured = await capturedOptimisticCategoryId();
+			return { id: 42, name: 'Bananas', version: 1 };
+		});
+
+		await createItem(1, { name: 'Bananas' });
+
+		expect(captured).toBe(9);
+	});
+
+	it('does not match a keyless cached category by display name', async () => {
+		const db = getDb()!;
+		await db.categories.put({
+			id: 9,
+			name: 'Produce',
+			icon: 'fruit',
+			sortOrder: 0,
+			listId: 1,
+			isDefault: false,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: null,
+			version: 1
+		});
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('Failed to fetch'));
+		let captured: number | null | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			captured = await capturedOptimisticCategoryId();
+			return { id: 42, name: 'Bananas', version: 1 };
+		});
+
+		await createItem(1, { name: 'Bananas' });
+
+		expect(captured).toBeNull();
 	});
 
 	it('leaves categoryId null when nothing matches the guess', async () => {
@@ -283,6 +339,7 @@ describe('createItem (Dexie available)', () => {
 		await db.categories.put({
 			id: 100,
 			name: 'Produce',
+			starterKey: 'produce',
 			icon: 'fruit',
 			sortOrder: 0,
 			listId: 1,
@@ -316,6 +373,7 @@ describe('createItem (Dexie available)', () => {
 		await db.categories.put({
 			id: 9,
 			name: 'Produce',
+			starterKey: 'produce',
 			icon: 'fruit',
 			sortOrder: 0,
 			listId: 1,

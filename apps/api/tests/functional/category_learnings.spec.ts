@@ -1,10 +1,17 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import type { ApiClient, ApiRequest } from '@japa/api-client'
-import type { CategoryDto, CategoryLearningDto, ListDto } from '@everylist/shared'
+import type {
+  CategoryDto,
+  CategoryLearningDto,
+  ListDto,
+  StarterCategoryKey,
+} from '@everylist/shared'
 import { DateTime } from 'luxon'
+import Category from '#models/category'
 import CategoryLearning from '#models/category_learning'
 import { addMember, bodyData, signupAndGetToken, signupAndGetUser } from './helpers.js'
+import { createOwnedList } from '#services/list_creation'
 
 async function createList(client: ApiClient, token: string, name = 'Test List') {
   const response = await client
@@ -25,13 +32,31 @@ async function seedStarterCategories(client: ApiClient, token: string, listId: n
     ['Household', 'spray'],
     ['Other', 'dotsHorizontalCircle'],
   ]
+  const starterKeys: Record<string, StarterCategoryKey | null> = {
+    Produce: 'produce',
+    Dairy: 'dairy',
+    Meat: 'meat',
+    Bakery: 'bakery',
+    Frozen: 'frozen',
+    Pantry: 'pantry',
+    Household: 'household',
+    Other: null,
+  }
   const categories: CategoryDto[] = []
   for (const [name, icon] of names) {
     const response = await client
       .post(`/api/v1/lists/${listId}/categories`)
       .header('Authorization', `Bearer ${token}`)
       .json({ name, icon })
-    categories.push(bodyData<CategoryDto>(response))
+    const category = bodyData<CategoryDto>(response)
+    const starterKey = starterKeys[name] ?? null
+    // The public create endpoint intentionally can't set starterKey; mirror what
+    // seedStarterCategories does so the static fallback resolves by key, not name.
+    if (starterKey) {
+      await Category.query().where('id', category.id).update({ starterKey })
+    }
+    category.starterKey = starterKey
+    categories.push(category)
   }
   return categories
 }
@@ -179,6 +204,90 @@ test.group('Category learnings (learned auto-categorization)', (group) => {
       client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Xyzzy Widget' })
     )
     assert.isNull(unknown.body().categoryId)
+  })
+
+  test('the static fallback follows a renamed seeded category by starterKey', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const categories = await seedStarterCategories(client, token, listId)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+    const dairy = categories.find((category) => category.name === 'Dairy')!
+
+    // Renaming the seeded category must not break the keyword fallback: the
+    // stable starter_key, not the display name, is what resolves.
+    await auth(
+      client.patch(`/api/v1/lists/${listId}/categories/${dairy.id}`).json({ name: 'Chilled' })
+    )
+
+    const milk = await auth(
+      client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Milk' })
+    )
+    assert.equal(milk.body().categoryId, dairy.id)
+  })
+
+  test('the static fallback never matches a keyless category by display name', async ({
+    client,
+    assert,
+  }) => {
+    const token = await signupAndGetToken(client)
+    const listId = await createList(client, token)
+    const auth = (req: ApiRequest) => req.header('Authorization', `Bearer ${token}`)
+
+    // Both are user-created (and represent legacy pre-Phase-B rows): no starter_key.
+    for (const name of ['Pantry', 'Dairy']) {
+      await auth(
+        client
+          .post(`/api/v1/lists/${listId}/categories`)
+          .header('Authorization', `Bearer ${token}`)
+          .json({
+            name,
+            icon: 'dotsHorizontalCircle',
+          })
+      )
+    }
+
+    const rice = await auth(
+      client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Rice' })
+    )
+    assert.isNull(rice.body().categoryId)
+
+    const milk = await auth(
+      client.get(`/api/v1/lists/${listId}/items/categorize`).qs({ name: 'Milk' })
+    )
+    assert.isNull(milk.body().categoryId)
+  })
+
+  test('seeding a list writes stable starter keys', async ({ client, assert }) => {
+    const user = await signupAndGetUser(client)
+    const list = await createOwnedList({
+      ownerId: user.id,
+      name: 'Seeded',
+      color: '#3b82f6',
+      icon: null,
+      seedStarterCategories: true,
+    })
+
+    const response = await client
+      .get(`/api/v1/lists/${list.id}/categories`)
+      .header('Authorization', `Bearer ${user.token}`)
+    const categories = bodyData<CategoryDto[]>(response)
+
+    assert.deepEqual(
+      categories.map((category) => [category.name, category.starterKey]),
+      [
+        ['Produce', 'produce'],
+        ['Dairy', 'dairy'],
+        ['Meat', 'meat'],
+        ['Bakery', 'bakery'],
+        ['Frozen', 'frozen'],
+        ['Pantry', 'pantry'],
+        ['Household', 'household'],
+        ['Other', null],
+      ]
+    )
   })
 
   test('a soft-deleted category is never suggested and drops out of the endpoint', async ({

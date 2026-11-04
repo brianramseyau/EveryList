@@ -67,7 +67,7 @@ export class BackupSettingSchema extends BaseModel {
 }
 
 export class CategorySchema extends BaseModel {
-  static $columns = ['createdAt', 'deletedAt', 'forkedFromId', 'icon', 'id', 'isDefault', 'listId', 'name', 'sortOrder', 'updatedAt', 'version'] as const
+  static $columns = ['createdAt', 'deletedAt', 'forkedFromId', 'icon', 'id', 'isDefault', 'listId', 'name', 'sortOrder', 'starterKey', 'updatedAt', 'version'] as const
   $columns = CategorySchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -87,6 +87,8 @@ export class CategorySchema extends BaseModel {
   declare name: string
   @column()
   declare sortOrder: number
+  @column()
+  declare starterKey: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()

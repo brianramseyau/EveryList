@@ -5,7 +5,11 @@ import type {
 	RecurrenceRule,
 	SubItemDto
 } from '@everylist/shared';
-import { pickLearnedCategoryId, suggestCategoryName, tokenizeItemName } from '@everylist/shared';
+import {
+	pickLearnedCategoryId,
+	suggestStarterCategoryKey,
+	tokenizeItemName
+} from '@everylist/shared';
 // Provably covered in isolation — see badge.ts's identical note for why a direct native-plugin
 // import is v8-ignored: the growing number of `vi.mock('@capacitor/core', …)` partial mocks
 // across the suite corrupts this import statement's V8 attribution once merged into the full run,
@@ -238,17 +242,17 @@ async function staticGuessCategoryId(
 	listId: number,
 	name: string
 ): Promise<number | null> {
-	const suggestedName = suggestCategoryName(name);
-	if (!suggestedName) return null;
+	const starterKey = suggestStarterCategoryKey(name);
+	if (!starterKey) return null;
 
 	const listCategories = await db.categories.where('listId').equals(listId).toArray();
-	const listMatch = listCategories.find((category) => category.name === suggestedName);
+	const listMatch = listCategories.find((category) => category.starterKey === starterKey);
 	if (listMatch) return listMatch.id;
 
 	const globalCategories = await db.categories
 		.filter((category) => category.listId === null)
 		.toArray();
-	const globalMatch = globalCategories.find((category) => category.name === suggestedName);
+	const globalMatch = globalCategories.find((category) => category.starterKey === starterKey);
 	return globalMatch?.id ?? null;
 }
 

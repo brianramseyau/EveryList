@@ -7,12 +7,12 @@ This is a follow-up to
 split into two independent phases that must ship as **separate branches / PRs** — they fix
 unrelated problems and should not be mixed:
 
-- **Phase A — Rarity-weighted learned scoring. Implemented** on
-  `feature/auto-categorization-rarity-weighting` (shared scoring change, regression tests, no
-  schema change).
-- **Phase B — Static fallback rework. Not started.** Replaces the runtime lookup by hard-coded
-  category _display names_ with stable starter-category keys. Adds one nullable column;
-  independent of A.
+- **Phase A — Rarity-weighted learned scoring. Implemented and merged** (#288): shared scoring
+  change, regression tests, no schema change.
+- **Phase B — Static fallback rework. Implemented** on `feature/starter-category-keys`: stable
+  `starterKey` on seeded categories, key-only resolution (no name fallback/backfill), transformer/
+  DTO/offline plumbing, and the migration reproduction. Adds one nullable column; independent of
+  A.
 
 Merge order: A first (it is the user-visible bug), then B.
 
