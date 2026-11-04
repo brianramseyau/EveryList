@@ -249,6 +249,68 @@ describe('createItem (Dexie available)', () => {
 		expect(captured).toBe(99);
 	});
 
+	it('uses distinctiveness-weighted cached learnings so a distinctive token wins offline', async () => {
+		const db = getDb()!;
+		await db.categoryLearnings.put({
+			listId: 1,
+			learnings: [
+				{ categoryId: 99, token: 'peckish', count: 1, lastSeenAt: '2026-08-29T10:27:26.000Z' },
+				{ categoryId: 99, token: 'cracker', count: 3, lastSeenAt: '2026-10-06T18:52:41.000Z' },
+				{ categoryId: 99, token: 'rice', count: 1, lastSeenAt: '2026-08-29T10:27:26.000Z' },
+				{ categoryId: 100, token: 'rice', count: 3, lastSeenAt: '2026-10-02T17:43:23.000Z' },
+				{ categoryId: 101, token: 'rice', count: 2, lastSeenAt: '2026-10-02T10:56:35.000Z' },
+				{ categoryId: 102, token: 'cracker', count: 1, lastSeenAt: '2026-08-24T13:15:37.000Z' },
+				{ categoryId: 102, token: 'rice', count: 1, lastSeenAt: '2026-08-24T15:53:24.000Z' },
+				{ categoryId: 103, token: 'rice', count: 1, lastSeenAt: '2026-09-12T13:09:48.000Z' }
+			]
+		});
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('Failed to fetch'));
+		let captured: number | null | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			captured = await capturedOptimisticCategoryId();
+			return { id: 42, name: 'Peckish Rice Crackers Original', version: 1 };
+		});
+
+		await createItem(1, { name: 'Peckish Rice Crackers Original' });
+
+		expect(captured).toBe(99);
+	});
+
+	it('ignores cached learnings for explicitly deleted categories before ranking', async () => {
+		const db = getDb()!;
+		// Category 100 was deleted offline; its stale learning must not inflate
+		// "apple" to two categories and force the margin to abstain.
+		await db.categories.put({
+			id: 100,
+			name: 'Produce',
+			icon: 'fruit',
+			sortOrder: 0,
+			listId: 1,
+			isDefault: false,
+			createdAt: '2026-08-01T00:00:00.000Z',
+			updatedAt: null,
+			deletedAt: '2026-09-01T00:00:00.000Z',
+			version: 2
+		});
+		await db.categoryLearnings.put({
+			listId: 1,
+			learnings: [
+				{ categoryId: 99, token: 'apple', count: 3, lastSeenAt: '2026-10-01T00:00:00.000Z' },
+				{ categoryId: 100, token: 'apple', count: 2, lastSeenAt: '2026-10-01T00:00:00.000Z' }
+			]
+		});
+		vi.mocked(apiGet).mockRejectedValue(new TypeError('Failed to fetch'));
+		let captured: number | null | undefined;
+		vi.mocked(apiPost).mockImplementation(async () => {
+			captured = await capturedOptimisticCategoryId();
+			return { id: 42, name: 'Apples', version: 1 };
+		});
+
+		await createItem(1, { name: 'Apples' });
+
+		expect(captured).toBe(99);
+	});
+
 	it('falls back to the static table when the cached learned model has no matching token', async () => {
 		const db = getDb()!;
 		await db.categories.put({

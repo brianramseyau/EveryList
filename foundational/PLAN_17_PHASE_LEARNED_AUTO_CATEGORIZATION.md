@@ -69,3 +69,11 @@ Decisions locked in with the user before implementation:
 - `pnpm -r lint` / `pnpm -r typecheck` / `pnpm -r test` clean at 100% coverage; `pnpm check --skip-e2e` green.
 - Manual: add "Apples" and confirm it lands in the same category as "Apple"; add "2% milk" and confirm Dairy; delete/purge the items and confirm re-adding still categorizes (learned table survives); go offline and confirm a previously-learned custom category is still suggested.
 - `docker build` + boot smoke test unchanged.
+
+## Follow-up
+
+[`PLAN_37_PHASE_AUTO_CATEGORIZATION_REFINEMENTS.md`](PLAN_37_PHASE_AUTO_CATEGORIZATION_REFINEMENTS.md)
+splits two later fixes into separate phases: rarity-weighted token scoring (so a distinctive token
+outweighs a common one instead of the `MARGIN` rule abstaining) and a static-fallback rework from
+hard-coded category names to stable starter-category keys. Phrase/n-gram learning was considered
+here and remains rejected — it belongs in a search engine, not this per-list token table.

@@ -5,10 +5,12 @@
  *
  * Tier 1 is the learned model: explicit user category assignments are stored
  * server-side in `category_learnings` (one row per list/token/category) and
- * ranked here via exponential half-life decay with a floor — see
- * PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md and apps/api's category_suggestion_service.ts. Tier 2 is
- * the static keyword table below, the fallback when the model has no
- * confident answer.
+ * ranked here via exponential half-life decay with a floor, weighted by each
+ * token's distinctiveness across categories — see
+ * PLAN_17_PHASE_LEARNED_AUTO_CATEGORIZATION.md,
+ * PLAN_37_PHASE_AUTO_CATEGORIZATION_REFINEMENTS.md and apps/api's
+ * category_suggestion_service.ts. Tier 2 is the static keyword table below, the
+ * fallback when the model has no confident answer.
  *
  * NOTE: the category names in `KEYWORDS_BY_CATEGORY` must match a list's own
  * category names (seeded by apps/api's category_service.ts) for the fallback
@@ -182,8 +184,16 @@ function decayWeight(ageMs: number): number {
 
 /**
  * Ranks categories by summed, decay-weighted count across every learning whose
- * token appears in `tokens`. Sorted by score descending, ties broken by most
- * recent `lastSeenAt`.
+ * token appears in `tokens`, weighted by each token's *distinctiveness*.
+ *
+ * A token that has only ever been assigned to one category is a strong signal;
+ * one that is spread across many categories ("rice" under five different
+ * categories) is close to noise. Each contribution is therefore divided by
+ * `df(token)` — the number of distinct categories that token is learned under
+ * — so a longer name containing one specific token still inherits the category
+ * of a previously-matched shorter name instead of being pulled apart by its
+ * more common words. Sorted by score descending, ties broken by most recent
+ * `lastSeenAt`.
  */
 export function rankCategoryLearnings(
   tokens: readonly string[],
@@ -191,6 +201,17 @@ export function rankCategoryLearnings(
   now: number
 ): RankedCategory[] {
   const tokenSet = new Set(tokens);
+
+  // `df` counts distinct categories per token, not rows: two learnings for the
+  // same (token, category) pair are still one category.
+  const categoryIdsByToken = new Map<string, Set<number>>();
+  for (const learning of learnings) {
+    if (!tokenSet.has(learning.token)) continue;
+    const categoryIds = categoryIdsByToken.get(learning.token) ?? new Set<number>();
+    categoryIds.add(learning.categoryId);
+    categoryIdsByToken.set(learning.token, categoryIds);
+  }
+
   const byCategory = new Map<number, { score: number; lastSeenAt: number }>();
 
   for (const learning of learnings) {
@@ -201,15 +222,15 @@ export function rankCategoryLearnings(
         ? new Date(learning.lastSeenAt).getTime()
         : learning.lastSeenAt;
 
+    const df = categoryIdsByToken.get(learning.token)!.size;
+    const contribution = (learning.count * decayWeight(now - lastSeenAt)) / df;
+
     const entry = byCategory.get(learning.categoryId);
     if (entry) {
-      entry.score += learning.count * decayWeight(now - lastSeenAt);
+      entry.score += contribution;
       if (lastSeenAt > entry.lastSeenAt) entry.lastSeenAt = lastSeenAt;
     } else {
-      byCategory.set(learning.categoryId, {
-        score: learning.count * decayWeight(now - lastSeenAt),
-        lastSeenAt,
-      });
+      byCategory.set(learning.categoryId, { score: contribution, lastSeenAt });
     }
   }
 

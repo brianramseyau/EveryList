@@ -56,9 +56,50 @@ describe('learned category ranking', () => {
 			NOW
 		);
 
+		// "apple" is spread across two categories, so its contributions are halved:
+		// category 1 scores (2 / 2) + (1 / 1), category 2 scores 1 / 2.
 		expect(ranked).toEqual([
-			{ categoryId: 1, score: 3, lastSeenAt: NOW },
-			{ categoryId: 2, score: 1, lastSeenAt: NOW },
+			{ categoryId: 1, score: 2, lastSeenAt: NOW },
+			{ categoryId: 2, score: 0.5, lastSeenAt: NOW },
+		]);
+	});
+
+	it('weights a distinctive token above one spread across several categories', () => {
+		const ranked = rankCategoryLearnings(
+			['peckish', 'rice', 'cracker'],
+			[
+				{ categoryId: 1, token: 'peckish', count: 1, lastSeenAt: NOW },
+				{ categoryId: 1, token: 'rice', count: 1, lastSeenAt: NOW },
+				{ categoryId: 1, token: 'cracker', count: 1, lastSeenAt: NOW },
+				{ categoryId: 2, token: 'rice', count: 1, lastSeenAt: NOW },
+				{ categoryId: 2, token: 'cracker', count: 1, lastSeenAt: NOW },
+				{ categoryId: 3, token: 'rice', count: 1, lastSeenAt: NOW },
+			],
+			NOW
+		);
+
+		// df: peckish = 1, cracker = 2, rice = 3.
+		expect(ranked[0]!.categoryId).toBe(1);
+		expect(ranked[0]!.score).toBeCloseTo(1 + 1 / 2 + 1 / 3);
+		expect(ranked[1]!.score).toBeCloseTo(1 / 2 + 1 / 3);
+	});
+
+	it('counts a token\'s df by distinct categories, not rows', () => {
+		const ranked = rankCategoryLearnings(
+			['apple'],
+			[
+				{ categoryId: 1, token: 'apple', count: 1, lastSeenAt: NOW },
+				{ categoryId: 1, token: 'apple', count: 1, lastSeenAt: NOW },
+				{ categoryId: 2, token: 'apple', count: 1, lastSeenAt: NOW },
+			],
+			NOW
+		);
+
+		// Two categories, so both contributions are halved — the duplicate row
+		// must not make it look like a three-category spread.
+		expect(ranked).toEqual([
+			{ categoryId: 1, score: 1, lastSeenAt: NOW },
+			{ categoryId: 2, score: 0.5, lastSeenAt: NOW },
 		]);
 	});
 
@@ -97,8 +138,9 @@ describe('learned category ranking', () => {
 		);
 
 		expect(ranked.map((entry) => entry.categoryId)).toEqual([2, 1]);
-		// One half-life of age halves the weight.
-		expect(ranked[1]!.score).toBeCloseTo(0.5);
+		// One half-life of age halves the weight; "apple" is also halved by its
+		// two-category spread, so the older association scores 0.25.
+		expect(ranked[1]!.score).toBeCloseTo(0.25);
 	});
 
 	it('breaks a score tie by the most recent lastSeenAt', () => {
@@ -148,6 +190,31 @@ describe('pickLearnedCategoryId', () => {
 				NOW
 			)
 		).toBe(7);
+	});
+
+	it('inherits a shorter matched name\'s category despite common-token spread (Peckish regression)', () => {
+		// Mirrors the reported production rows for list 1: "peckish"/"cracker"/
+		// "rice" all once meant Cookies & Biscuits ("Peckish rice crackers"), but
+		// "rice" has since been assigned to four other categories. Without
+		// distinctiveness weighting the runner-up blocks the 2× margin.
+		const learnings = [
+			{ categoryId: 1, token: 'peckish', count: 1, lastSeenAt: NOW - 66 * DAY },
+			{ categoryId: 1, token: 'cracker', count: 3, lastSeenAt: NOW - 28 * DAY },
+			{ categoryId: 1, token: 'rice', count: 1, lastSeenAt: NOW - 66 * DAY },
+			{ categoryId: 2, token: 'rice', count: 3, lastSeenAt: NOW - 32 * DAY },
+			{ categoryId: 3, token: 'rice', count: 2, lastSeenAt: NOW - 32 * DAY },
+			{ categoryId: 4, token: 'cracker', count: 1, lastSeenAt: NOW - 71 * DAY },
+			{ categoryId: 4, token: 'rice', count: 1, lastSeenAt: NOW - 71 * DAY },
+			{ categoryId: 5, token: 'rice', count: 1, lastSeenAt: NOW - 52 * DAY },
+		];
+
+		expect(pickLearnedCategoryId(['peckish', 'rice', 'cracker', 'original'], learnings, NOW)).toBe(
+			1
+		);
+		// A trailing unmatched word must not change the outcome either.
+		expect(
+			pickLearnedCategoryId(['peckish', 'rice', 'cracker', 'plain'], learnings, NOW)
+		).toBe(1);
 	});
 
 	it('returns the top category when it beats the runner-up by MARGIN', () => {
