@@ -42,8 +42,9 @@ const STARTER_CATEGORIES: ReadonlyArray<{
 /**
  * Bootstraps the learned model for a freshly seeded category: the keyword table is data for the
  * model, not a runtime matcher (PLAN_37 Phase B). Rows are attached to the category id, so renames
- * are safe and deletion cascades them away. Duplicate tokens across keywords (berry/berries) merge
- * into one row whose count reflects both.
+ * are safe; a soft-deleted category's rows are filtered out of suggestions (a hard delete would
+ * cascade them). Duplicate tokens across keywords (berry/berries) merge into one row whose count
+ * reflects both.
  */
 async function seedStarterCategoryLearnings(
   list: List,

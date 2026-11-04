@@ -622,8 +622,8 @@ TOILETRIES
     const categories = await auth(client.get(`/api/v1/lists/${listId}/categories`))
     const produce = categories.body().data.find((c: { name: string }) => c.name === 'Produce')
 
-    // Deleting the category cascade-deletes its seeded learnings, so there is
-    // nothing left to resolve "Bananas" against.
+    // Soft-deleting the category removes it from the active-category filter, so
+    // its seeded learnings can no longer resolve "Bananas".
     await auth(client.delete(`/api/v1/lists/${listId}/categories/${produce.id}`))
 
     const create = await auth(

@@ -1,4 +1,5 @@
 import User from '#models/user'
+import db from '@adonisjs/lucid/services/db'
 import { signupValidator } from '#validators/user'
 import type { HttpContext } from '@adonisjs/core/http'
 import UserTransformer from '#transformers/user_transformer'
@@ -28,20 +29,33 @@ export default class NewAccountController {
       }
     }
 
-    const user = await User.create({ fullName, email, password })
-    const token = await User.accessTokens.create(user)
-    await createOwnedList({
-      ownerId: user.id,
-      ...TODOS_LIST,
-      useCategories: false,
-      useShops: false,
-      useFavorites: false,
-      useRecent: false,
-      useQuantity: false,
-      usePrice: false,
-      seedStarterTodoItems: true,
+    // The account and both starter lists (including their seeded learned-model keywords) commit
+    // together. Without this, a failure partway through seeding leaves a real account with a
+    // half-built model, and retrying signup then fails on the unique email index — this PR has no
+    // backfill for that case. Token minting stays outside, as in setup_controller.ts.
+    const user = await db.transaction(async (trx) => {
+      const created = await User.create({ fullName, email, password }, { client: trx })
+      await createOwnedList({
+        ownerId: created.id,
+        ...TODOS_LIST,
+        useCategories: false,
+        useShops: false,
+        useFavorites: false,
+        useRecent: false,
+        useQuantity: false,
+        usePrice: false,
+        seedStarterTodoItems: true,
+        client: trx,
+      })
+      await createOwnedList({
+        ownerId: created.id,
+        ...STARTER_LIST,
+        seedStarterCategories: true,
+        client: trx,
+      })
+      return created
     })
-    await createOwnedList({ ownerId: user.id, ...STARTER_LIST, seedStarterCategories: true })
+    const token = await User.accessTokens.create(user)
 
     logger.debug({ userId: user.id }, 'created new account')
 

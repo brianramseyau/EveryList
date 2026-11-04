@@ -223,9 +223,9 @@ seed that one model at list creation and delete the runtime static tier.
 - Seeded rows arrive through the existing `/category-learnings` sync; no new client plumbing.
 
 **Why this is not just moving the problem:** the keyword table is resolved to category IDs exactly
-once, at seed time. Renames and deletes can no longer desync it (learnings follow the ID and
-cascade on delete), the runtime has one matcher instead of two, and user assignments strengthen or
-override the seeded prior through the normal learned path.
+once, at seed time. Renames and deletes can no longer desync it (learnings follow the ID, and
+soft-deleted categories are excluded from suggestions), the runtime has one matcher instead of two,
+and user assignments strengthen or override the seeded prior through the normal learned path.
 
 ### Edge cases
 
@@ -235,7 +235,8 @@ override the seeded prior through the normal learned path.
   empty model rather than a stale keyword table.
 - Plural collapse means some keywords merge (berry/berries, bean/beans, egg/eggs) — intended, and
   the count reflects both entries.
-- Deleting a seeded category cascade-deletes its learned rows, so the suggestion disappears.
+- Soft-deleting a seeded category removes it from the active-category join, so its learned rows
+  stop contributing to suggestions (a hard delete would cascade them).
 
 ### Files
 
